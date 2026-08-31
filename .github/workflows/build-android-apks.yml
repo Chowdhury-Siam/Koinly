@@ -1,0 +1,670 @@
+name: Build Android APKs and Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "lib/**"
+      - "android/**"
+      - "windows/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - "CHANGELOG.md"
+      - ".github/workflows/build-android-apks.yml"
+
+concurrency:
+  group: koinly-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apks:
+    name: Build ARM32, ARM64, and universal APKs
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.jvmargs=-Xmx4g"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36 and NDK 28
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore Android Gradle wrapper files
+        run: |
+          flutter create --platforms=android --project-name koinly .
+          git checkout -- android/app/build.gradle android/build.gradle android/settings.gradle android/gradle.properties android/app/src/main/AndroidManifest.xml || true
+          rm -f android/build.gradle.kts android/settings.gradle.kts android/app/build.gradle.kts
+          find android/app/src/main/res -type f \( -name "ic_launcher.png" -o -name "ic_launcher_round.png" -o -name "ic_launcher_foreground.png" \) -delete
+          chmod +x android/gradlew
+
+      - name: Force Gradle wrapper 8.14.1
+        run: |
+          mkdir -p android/gradle/wrapper
+          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF_GRADLE'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.14.1-bin.zip
+          EOF_GRADLE
+
+      - name: Read app version
+        run: |
+          FULL_VERSION="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
+          VERSION_NAME="${FULL_VERSION%%+*}"
+          BUILD_NUMBER="${FULL_VERSION##*+}"
+          if ! [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::pubspec.yaml version must use semantic-version+positive-build-number, for example 1.2.3+123."
+            exit 1
+          fi
+          echo "KOINLY_APP_VERSION_NAME=${VERSION_NAME}" >> "$GITHUB_ENV"
+          echo "KOINLY_APP_BUILD_NUMBER=${BUILD_NUMBER}" >> "$GITHUB_ENV"
+          sed -i -E "s/versionCode = [0-9]+/versionCode = ${BUILD_NUMBER}/" android/app/build.gradle
+          sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"${VERSION_NAME}\"/" android/app/build.gradle
+          grep -nE "^(version:)|versionCode|versionName" pubspec.yaml android/app/build.gradle
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Prepare artifact folder
+        run: mkdir -p artifacts
+
+      - name: Prepare optional Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          configured=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -n "${!name}" ]; then
+              configured=$((configured + 1))
+            fi
+          done
+
+          if [ "$configured" -ne 0 ] && [ "$configured" -ne 4 ]; then
+            echo "::error::Android signing is only partially configured. Add all four ANDROID_KEYSTORE_* / ANDROID_KEY_* secrets, or remove all four to use a temporary CI key."
+            exit 1
+          fi
+
+          if [ "$configured" -eq 4 ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/koinly-release.jks"
+            echo "Using the configured Android release key."
+          else
+            ANDROID_KEYSTORE_PASSWORD=android
+            ANDROID_KEY_ALIAS=androiddebugkey
+            ANDROID_KEY_PASSWORD=android
+            keytool -genkeypair -noprompt \
+              -keystore "$RUNNER_TEMP/koinly-release.jks" \
+              -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+              -alias "$ANDROID_KEY_ALIAS" \
+              -keypass "$ANDROID_KEY_PASSWORD" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Koinly CI, O=Koinly, C=US"
+            echo "::warning::Android signing secrets are not configured. Artifacts use a temporary CI key and cannot update an installation from another workflow run."
+          fi
+
+          chmod 600 "$RUNNER_TEMP/koinly-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/koinly-release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/koinly-release.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Configure optional default sync backend
+        env:
+          KOINLY_SYNC_API_BASE_URL: ${{ secrets.KOINLY_SYNC_API_BASE_URL || vars.KOINLY_SYNC_API_BASE_URL }}
+        run: |
+          if [ -z "$KOINLY_SYNC_API_BASE_URL" ]; then
+            echo "::warning::KOINLY_SYNC_API_BASE_URL is not configured. Default cloud sync will be unavailable; users can still enter a self-hosted Worker URL in the app."
+          else
+            echo "KOINLY_SYNC_API_BASE_URL=$KOINLY_SYNC_API_BASE_URL" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build Android App Bundle
+        run: |
+          flutter build appbundle \
+            --release \
+            --target-platform android-arm,android-arm64,android-x64 \
+            --build-name="$KOINLY_APP_VERSION_NAME" \
+            --build-number="$KOINLY_APP_BUILD_NUMBER" \
+            --no-pub \
+            --no-tree-shake-icons \
+            --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME" \
+            --dart-define=KOINLY_SYNC_API_BASE_URL="$KOINLY_SYNC_API_BASE_URL"
+          cp build/app/outputs/bundle/release/app-release.aab "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}.aab"
+
+      - name: Generate universal APK from App Bundle
+        run: |
+          BUNDLETOOL_VERSION="1.18.1"
+          curl -L --retry 3 --retry-delay 5 \
+            -o bundletool.jar \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+
+          java -jar bundletool.jar build-apks \
+            --bundle=build/app/outputs/bundle/release/app-release.aab \
+            --output=artifacts/koinly-universal.apks \
+            --mode=universal \
+            --ks="$ANDROID_KEYSTORE_FILE" \
+            --ks-key-alias="$ANDROID_KEY_ALIAS" \
+            --ks-pass="pass:$ANDROID_KEYSTORE_PASSWORD" \
+            --key-pass="pass:$ANDROID_KEY_PASSWORD" \
+            --overwrite
+
+          unzip -p artifacts/koinly-universal.apks universal.apk > "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-universal.apk"
+          rm -f artifacts/koinly-universal.apks bundletool.jar
+
+      - name: Build ARM32, ARM64, and x86_64 split APKs
+        run: |
+          flutter build apk \
+            --release \
+            --split-per-abi \
+            --target-platform android-arm,android-arm64,android-x64 \
+            --build-name="$KOINLY_APP_VERSION_NAME" \
+            --build-number="$KOINLY_APP_BUILD_NUMBER" \
+            --no-pub \
+            --no-tree-shake-icons \
+            --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME" \
+            --dart-define=KOINLY_SYNC_API_BASE_URL="$KOINLY_SYNC_API_BASE_URL"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm32.apk"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-x86_64.apk"
+
+      - name: List APK artifacts
+        run: ls -lh artifacts
+
+      - name: Verify APK signatures
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          if [ ! -x "$APKSIGNER" ]; then
+            echo "::warning::apksigner was not found at $APKSIGNER; skipping signature verification."
+            exit 0
+          fi
+          for apk in artifacts/*.apk; do
+            echo "Verifying $apk"
+            "$APKSIGNER" verify --print-certs "$apk"
+          done
+
+      - name: Upload release APKs
+        uses: actions/upload-artifact@v5
+        with:
+          name: koinly-android-release-assets
+          path: |
+            artifacts/*.apk
+            artifacts/*.aab
+          if-no-files-found: error
+          compression-level: 0
+
+  build-windows:
+    name: Build Windows x64 installer EXE
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    runs-on: windows-2022
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Enable Windows desktop support
+        run: flutter config --enable-windows-desktop
+
+      - name: Generate Windows platform files
+        run: flutter create --platforms=windows --project-name koinly .
+
+      - name: Apply Koinly Windows window title
+        shell: pwsh
+        run: |
+          $mainCpp = "windows/runner/main.cpp"
+          if (!(Test-Path $mainCpp)) {
+            throw "Windows runner main.cpp was not generated: $mainCpp"
+          }
+          $main = Get-Content $mainCpp -Raw
+          $main = $main -replace 'CreateAndShow\(L"[^"]+"', 'CreateAndShow(L"Koinly"'
+          Set-Content -Path $mainCpp -Value $main -Encoding UTF8
+
+          $resourceRc = "windows/runner/Runner.rc"
+          if (Test-Path $resourceRc) {
+            $rc = Get-Content $resourceRc -Raw
+            $rc = $rc -replace 'VALUE "FileDescription", "[^"]+"', 'VALUE "FileDescription", "Koinly"'
+            $rc = $rc -replace 'VALUE "InternalName", "[^"]+"', 'VALUE "InternalName", "Koinly"'
+            $rc = $rc -replace 'VALUE "OriginalFilename", "[^"]+"', 'VALUE "OriginalFilename", "Koinly.exe"'
+            $rc = $rc -replace 'VALUE "ProductName", "[^"]+"', 'VALUE "ProductName", "Koinly"'
+            Set-Content -Path $resourceRc -Value $rc -Encoding UTF8
+          }
+
+      - name: Apply Koinly Windows app icon
+        shell: pwsh
+        run: |
+          $iconSource = "assets/icons/app_icon.ico"
+          $iconDest = "windows/runner/resources/app_icon.ico"
+          if (!(Test-Path $iconSource)) {
+            throw "Windows icon source was not found: $iconSource"
+          }
+          if (!(Test-Path "windows/runner/resources")) {
+            New-Item -ItemType Directory -Force "windows/runner/resources" | Out-Null
+          }
+          Copy-Item -Path $iconSource -Destination $iconDest -Force
+          if (!(Test-Path $iconDest)) {
+            throw "Windows icon was not copied: $iconDest"
+          }
+
+      - name: Read app version
+        shell: pwsh
+        run: |
+          $versionLine = Get-Content "pubspec.yaml" | Where-Object { $_ -match '^version:' } | Select-Object -First 1
+          $fullVersion = ($versionLine -replace '^version:\s*', '').Trim()
+          $parts = $fullVersion -split '\+', 2
+          if ($parts.Count -ne 2 -or $parts[0] -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$' -or $parts[1] -notmatch '^[1-9]\d*$') {
+            throw "pubspec.yaml version must use semantic-version+positive-build-number, for example 1.2.3+123."
+          }
+          $versionName = $parts[0]
+          $buildNumber = $parts[1]
+          "KOINLY_APP_VERSION_NAME=$versionName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "KOINLY_APP_BUILD_NUMBER=$buildNumber" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Select-String -Path "pubspec.yaml" -Pattern "^version:"
+
+      - name: Patch Windows CMake for CMake 4/Firebase compatibility
+        shell: pwsh
+        run: |
+          $cmakeFile = "windows/CMakeLists.txt"
+          if (!(Test-Path $cmakeFile)) {
+            throw "Windows CMakeLists.txt was not generated: $cmakeFile"
+          }
+
+          $content = Get-Content $cmakeFile -Raw
+          if ($content -notmatch "CMAKE_POLICY_VERSION_MINIMUM") {
+            $lines = Get-Content $cmakeFile
+            $patched = New-Object System.Collections.Generic.List[string]
+            $inserted = $false
+
+            foreach ($line in $lines) {
+              $patched.Add($line)
+              if (!$inserted -and $line -match "^cmake_minimum_required\(VERSION") {
+                $patched.Add("")
+                $patched.Add("# Firebase's bundled Windows C++ SDK still declares an older CMake policy.")
+                $patched.Add("# CMake 4 rejects that by default, so keep policy compatibility at 3.5.")
+                $patched.Add('set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "Minimum CMake policy version for legacy Firebase C++ SDK")')
+                $patched.Add("")
+                $patched.Add("# Older Flutter Windows plugins can include MSVC's deprecated experimental coroutine header.")
+                $patched.Add("# Visual Studio 2026/MSVC 14.51 treats that as a hard error unless this macro is defined.")
+                $patched.Add('add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)')
+                $patched.Add("")
+                $inserted = $true
+              }
+            }
+
+            Set-Content -Path $cmakeFile -Value $patched -Encoding UTF8
+          }
+
+          Get-Content $cmakeFile -TotalCount 24
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Configure optional default sync backend
+        shell: pwsh
+        env:
+          KOINLY_SYNC_API_BASE_URL: ${{ secrets.KOINLY_SYNC_API_BASE_URL || vars.KOINLY_SYNC_API_BASE_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:KOINLY_SYNC_API_BASE_URL)) {
+            Write-Host "::warning::KOINLY_SYNC_API_BASE_URL is not configured. Default cloud sync will be unavailable; users can still enter a self-hosted Worker URL in the app."
+          } else {
+            "KOINLY_SYNC_API_BASE_URL=$env:KOINLY_SYNC_API_BASE_URL" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+
+      - name: Prepare optional Windows code signing
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+          WINDOWS_CODESIGN_TIMESTAMP_URL: ${{ vars.WINDOWS_CODESIGN_TIMESTAMP_URL }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PFX_BASE64)) {
+            Write-Host "::warning::WINDOWS_CODESIGN_PFX_BASE64 is not configured. The installer will build unsigned, and Microsoft Defender SmartScreen can still show 'Windows protected your PC'."
+            "WINDOWS_SIGNING_ENABLED=false" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            exit 0
+          }
+
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CODESIGN_PASSWORD)) {
+            throw "WINDOWS_CODESIGN_PASSWORD is required when WINDOWS_CODESIGN_PFX_BASE64 is configured."
+          }
+
+          $timestampUrl = $env:WINDOWS_CODESIGN_TIMESTAMP_URL
+          if ([string]::IsNullOrWhiteSpace($timestampUrl)) {
+            $timestampUrl = "http://timestamp.digicert.com"
+          }
+
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\x64\\signtool.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+          if ($null -eq $signtool) {
+            throw "signtool.exe was not found in the Windows SDK installation."
+          }
+
+          New-Item -ItemType Directory -Force signing | Out-Null
+          $certPath = (Join-Path (Resolve-Path "signing").Path "windows-codesign.pfx")
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+
+          "WINDOWS_SIGNING_ENABLED=true" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WINDOWS_SIGNTOOL_PATH=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WINDOWS_CODESIGN_CERT=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "WINDOWS_CODESIGN_TIMESTAMP_URL=$timestampUrl" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Windows code signing is enabled. SignTool: $($signtool.FullName)"
+
+      - name: Build Windows release
+        run: |
+          $env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+          $env:CL = "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"
+          flutter build windows --release --no-pub --dart-define=KOINLY_APP_VERSION="$env:KOINLY_APP_VERSION_NAME" --dart-define=KOINLY_SYNC_API_BASE_URL="$env:KOINLY_SYNC_API_BASE_URL"
+
+      - name: Normalize Windows release executable name
+        shell: pwsh
+        run: |
+          $releaseDir = Resolve-Path "build/windows/x64/runner/Release"
+          $defaultExe = Join-Path $releaseDir "koinly.exe"
+          $namedExe = Join-Path $releaseDir "Koinly.exe"
+          if (Test-Path $defaultExe) {
+            Move-Item -Path $defaultExe -Destination $namedExe -Force
+          }
+          if (!(Test-Path $namedExe)) {
+            throw "Expected Windows executable was not found: $namedExe"
+          }
+          Get-ChildItem $releaseDir | Format-Table Name,Length
+
+      - name: Sign Windows app executable if certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+        run: |
+          if ($env:WINDOWS_SIGNING_ENABLED -ne "true") {
+            Write-Host "Skipping Windows app signing because WINDOWS_CODESIGN_PFX_BASE64 is not configured."
+            exit 0
+          }
+
+          $exe = (Resolve-Path "build/windows/x64/runner/Release/Koinly.exe").Path
+          & "$env:WINDOWS_SIGNTOOL_PATH" sign /f "$env:WINDOWS_CODESIGN_CERT" /p "$env:WINDOWS_CODESIGN_PASSWORD" /fd SHA256 /tr "$env:WINDOWS_CODESIGN_TIMESTAMP_URL" /td SHA256 "$exe"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to sign Koinly.exe" }
+
+          & "$env:WINDOWS_SIGNTOOL_PATH" verify /pa /v "$exe"
+          if ($LASTEXITCODE -ne 0) { throw "Koinly.exe signature verification failed" }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) {
+            throw "ISCC.exe was not found after installing Inno Setup: $iscc"
+          }
+          "ISCC_PATH=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build Windows installer EXE
+        shell: pwsh
+        run: |
+          $releaseDir = Resolve-Path "build/windows/x64/runner/Release"
+          if (!(Test-Path $releaseDir)) {
+            throw "Windows release directory was not found: $releaseDir"
+          }
+
+          $namedExe = Join-Path $releaseDir "Koinly.exe"
+          if (!(Test-Path $namedExe)) {
+            throw "Expected Windows executable was not found before installer packaging: $namedExe"
+          }
+
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $sourceDir = $releaseDir.Path
+          $outputDir = (Resolve-Path "artifacts").Path
+          $iconFile = (Resolve-Path "assets/icons/app_icon.ico").Path
+          $pubspecVersionLine = (Get-Content "pubspec.yaml" | Where-Object { $_ -match "^version:" } | Select-Object -First 1)
+          if ([string]::IsNullOrWhiteSpace($pubspecVersionLine)) {
+            throw "pubspec.yaml version was not found."
+          }
+          $fullAppVersion = ($pubspecVersionLine -replace "^version:\s*", "").Trim()
+          $appVersionName = ($fullAppVersion -split "\+")[0]
+          if ([string]::IsNullOrWhiteSpace($appVersionName)) {
+            throw "Could not parse installer version from pubspec.yaml version: $fullAppVersion"
+          }
+          Write-Host "Packaging Koinly Windows installer version $appVersionName from pubspec version $fullAppVersion"
+          $iss = @"
+          #define SourceDir "$sourceDir"
+          #define OutputDir "$outputDir"
+          #define IconFile "$iconFile"
+          #define MyAppName "Koinly"
+          #define MyAppVersion "$appVersionName"
+          #define MyAppExeName "Koinly.exe"
+
+          [Setup]
+          AppId={{D0F34749-64D8-4B0E-BBA3-026F8B4392C8}
+          AppName={#MyAppName}
+          AppVersion={#MyAppVersion}
+          AppPublisher=Koinly
+          DefaultDirName={localappdata}\Programs\Koinly
+          DefaultGroupName={#MyAppName}
+          DisableWelcomePage=no
+          DisableDirPage=no
+          DisableProgramGroupPage=no
+          DisableReadyPage=no
+          DisableFinishedPage=no
+          OutputDir={#OutputDir}
+          OutputBaseFilename=KoinlySetup
+          SetupIconFile={#IconFile}
+          UninstallDisplayIcon={app}\{#MyAppExeName}
+          VersionInfoDescription=Koinly Installer
+          VersionInfoProductName=Koinly
+          VersionInfoCompany=Koinly
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          PrivilegesRequired=lowest
+          ArchitecturesAllowed=x64
+          ArchitecturesInstallIn64BitMode=x64
+
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+
+          [Files]
+          Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+          [Run]
+          Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+          "@
+          $iss = ($iss -split "`r?`n" | ForEach-Object { $_.TrimStart() }) -join "`r`n"
+          Set-Content -Path "artifacts/koinly-installer.iss" -Value $iss -Encoding UTF8
+          & "$env:ISCC_PATH" "artifacts/koinly-installer.iss"
+          if (!(Test-Path "artifacts/KoinlySetup.exe")) {
+            throw "Installer was not created: artifacts/KoinlySetup.exe"
+          }
+          Get-ChildItem artifacts | Format-Table Name,Length
+
+      - name: Sign Windows installer if certificate is configured
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+        run: |
+          if ($env:WINDOWS_SIGNING_ENABLED -ne "true") {
+            Write-Host "Skipping Windows installer signing because WINDOWS_CODESIGN_PFX_BASE64 is not configured."
+          } else {
+            $installer = (Resolve-Path "artifacts/KoinlySetup.exe").Path
+            & "$env:WINDOWS_SIGNTOOL_PATH" sign /f "$env:WINDOWS_CODESIGN_CERT" /p "$env:WINDOWS_CODESIGN_PASSWORD" /fd SHA256 /tr "$env:WINDOWS_CODESIGN_TIMESTAMP_URL" /td SHA256 "$installer"
+            if ($LASTEXITCODE -ne 0) { throw "Failed to sign KoinlySetup.exe" }
+
+            & "$env:WINDOWS_SIGNTOOL_PATH" verify /pa /v "$installer"
+            if ($LASTEXITCODE -ne 0) { throw "KoinlySetup.exe signature verification failed" }
+          }
+          Copy-Item -Path "artifacts/KoinlySetup.exe" -Destination "artifacts/Koinly-v$env:KOINLY_APP_VERSION_NAME-Setup.exe" -Force
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: koinly-windows-installer
+          path: artifacts/Koinly-v*-Setup.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  publish-stable-release:
+    name: Publish stable GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-apks
+      - build-windows
+    if: >-
+      github.repository == 'Chowdhury-Siam/Koinly' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.ref == 'refs/heads/main' ||
+       github.ref == 'refs/heads/master')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-android-release-assets
+          path: release-assets
+
+      - name: Download Windows installer artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-windows-installer
+          path: release-assets
+
+      - name: List release assets
+        run: ls -lh release-assets
+
+      - name: Publish versioned stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          FULL_VERSION="$(awk '/^version:/ { print $2; exit }' pubspec.yaml)"
+          VERSION_NAME="${FULL_VERSION%%+*}"
+          BUILD_NUMBER="${FULL_VERSION##*+}"
+          if ! [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || ! [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid pubspec.yaml version: $FULL_VERSION"
+            exit 1
+          fi
+          RELEASE_TAG="v${VERSION_NAME}"
+          RELEASE_TITLE="Koinly Stable ${VERSION_NAME}"
+
+          # Prefer a real version section when it exists. Otherwise, fall back
+          # to only the first/current bullet in each top
+          # Unreleased category and stop before archived development history.
+          awk -v version="${VERSION_NAME}" '
+            BEGIN { capture=0; found=0 }
+            /^##[[:space:]]+\[?v?[0-9]+\.[0-9]+\.[0-9]+\]?/ {
+              if (capture) exit
+              if ($0 ~ version) { capture=1; found=1; next }
+            }
+            /^##[[:space:]]+/ && capture { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes-body.md
+
+          if [ ! -s release-notes-body.md ]; then
+            awk '
+              BEGIN { capture=0; in_section=0; emitted_any=0; emitted_in_section=0 }
+              /^##[[:space:]]+Unreleased/ { capture=1; next }
+              /^##[[:space:]]+/ && capture { exit }
+              /^###[[:space:]]+Previous development history/ && capture { exit }
+              capture && /^###[[:space:]]+/ {
+                if (emitted_any) print ""
+                print
+                print ""
+                in_section=1
+                emitted_in_section=0
+                next
+              }
+              capture && in_section && /^[[:space:]]*-[[:space:]]+/ && !emitted_in_section {
+                print
+                emitted_in_section=1
+                emitted_any=1
+                next
+              }
+            ' CHANGELOG.md > release-notes-body.md
+          fi
+
+          awk 'NF { seen=1 } seen { print }' release-notes-body.md > release-notes-trimmed.md
+          mv release-notes-trimmed.md release-notes-body.md
+          if [ ! -s release-notes-body.md ]; then
+            {
+              echo "### Changed"
+              echo
+              echo "- Stable Koinly ${VERSION_NAME} maintenance update."
+            } > release-notes-body.md
+          fi
+          cp release-notes-body.md release-notes.md
+
+          if ! git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            git tag "${RELEASE_TAG}" "$GITHUB_SHA"
+            git push origin "refs/tags/${RELEASE_TAG}"
+          fi
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" release-assets/* --clobber
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "${RELEASE_TAG}" release-assets/* \
+              --title "${RELEASE_TITLE}" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+          RELEASE_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq '.id')
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -f draft=false -f prerelease=false -f make_latest=true

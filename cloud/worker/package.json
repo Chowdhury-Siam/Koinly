@@ -1,0 +1,21 @@
+{
+  "name": "koinly-sync-worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "schema:apply": "node scripts/apply-schema.mjs",
+    "test": "node --test --experimental-transform-types test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.15"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.30.0"
+  }
+}

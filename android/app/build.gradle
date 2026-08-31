@@ -1,0 +1,85 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
+    id "com.google.firebase.crashlytics"
+}
+
+def releaseKeystorePath = System.getenv("ANDROID_KEYSTORE_FILE") ?: project.findProperty("ANDROID_KEYSTORE_FILE")
+def releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: project.findProperty("ANDROID_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: project.findProperty("ANDROID_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: project.findProperty("ANDROID_KEY_PASSWORD")
+def releaseSigningConfigured = [releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword].every { value -> value != null && value.toString().trim() }
+
+android {
+    namespace = "com.koinly.siam"
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
+
+    defaultConfig {
+        applicationId = "com.koinly.siam"
+        minSdk = 23
+        targetSdk = 36
+        versionCode = 90
+        versionName = "1.0.1046"
+        multiDexEnabled true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    signingConfigs {
+        release {
+            if (releaseSigningConfigured) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (releaseSigningConfigured) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+}
+
+
+gradle.taskGraph.whenReady { graph ->
+    def releaseTaskRequested = graph.allTasks.any { task ->
+        def name = task.name.toLowerCase()
+        name == "assemblerelease" || name == "bundlerelease" || name.endsWith("release") && (name.startsWith("assemble") || name.startsWith("bundle"))
+    }
+    if (releaseTaskRequested && !releaseSigningConfigured) {
+        throw new GradleException("Release signing is not configured. Set ANDROID_KEYSTORE_FILE, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD.")
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
+    implementation "androidx.core:core-ktx:1.13.1"
+}

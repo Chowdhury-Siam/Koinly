@@ -1,0 +1,9 @@
+name = "koinly-sync"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# Add these in Cloudflare Dashboard > Worker > Settings > Variables and Secrets:
+# TURSO_DATABASE_URL
+# TURSO_AUTH_TOKEN
+# SYNC_SECRET
+# ADMIN_KEY

@@ -1,0 +1,16 @@
+{
+  "name": "koinly-cloudflare-turso-sync",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.14.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.22.0"
+  }
+}

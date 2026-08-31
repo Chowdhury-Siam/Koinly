@@ -1,0 +1,28 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - cloud/worker/node_modules/**
+    - cloud/worker/.wrangler/**
+    - cloud/worker/dist/**
+    - cloud/worker/build/**
+    - outputs/**
+    - package_phase*/**
+  errors:
+    deprecated_member_use: ignore
+    prefer_const_declarations: ignore
+    prefer_const_literals_to_create_immutables: ignore
+    prefer_final_fields: ignore
+    unnecessary_import: ignore
+    use_build_context_synchronously: ignore
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    prefer_const_constructors: false
+    avoid_print: false
