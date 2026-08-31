@@ -300,6 +300,8 @@ class MoneyTransaction {
     return value == null || value.isBefore(createdOn) ? createdOn : value;
   }
 
+  DateTime get listOn => effectiveEndOn;
+
   bool get spansMultipleDays => !isSameCalendarDay(createdOn, effectiveEndOn);
 
   MoneyTransaction copyWith({

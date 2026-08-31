@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1052] - 2026-08-31
+
+### Fixed
+
+- Transaction history now filters and sorts ranged transactions by their end
+  date, so an Aug 25 to Aug 31 transaction appears with Aug 31 records.
+
 ## [1.0.1051] - 2026-08-31
 
 ### Fixed

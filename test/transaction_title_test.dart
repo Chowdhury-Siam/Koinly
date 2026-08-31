@@ -50,7 +50,35 @@ void main() {
 
     expect(restored.endOn, isNull);
     expect(restored.effectiveEndOn, restored.createdOn);
+    expect(restored.listOn, restored.createdOn);
     expect(restored.spansMultipleDays, isFalse);
+  });
+
+  test('ranged transactions list on their end date', () {
+    final end = DateTime.utc(2026, 8, 31, 12, 30);
+    final transaction = titledTransaction(endOn: end);
+
+    expect(transaction.listOn, end);
+  });
+
+  test('transaction history filtering and sorting use the ranged end date', () {
+    final controller = AppController()
+      ..transactions = [
+        titledTransaction(title: 'Starts earlier, ends today', endOn: DateTime.utc(2026, 8, 31, 12, 30)),
+        titledTransaction(title: 'Single date tomorrow', endOn: null).copyWith(
+          id: 'transaction-2',
+          createdOn: DateTime.utc(2026, 8, 29, 12, 30),
+          updatedOn: DateTime.utc(2026, 8, 29, 12, 30),
+        ),
+      ]
+      ..dateRangeType = DateRangeType.custom
+      ..customStart = DateTime.utc(2026, 8, 31)
+      ..customEnd = DateTime.utc(2026, 8, 31);
+
+    final filtered = controller.filteredTransactions();
+
+    expect(filtered, hasLength(1));
+    expect(filtered.single.title, 'Starts earlier, ends today');
   });
 
   test('transaction date labels include both ends of a multi-day range', () {

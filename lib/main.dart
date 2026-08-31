@@ -539,7 +539,10 @@ class KoinlyDatabase {
   }
 
   Future<List<MoneyTransaction>> transactions() async {
-    final maps = await (await db).query('transactions', orderBy: 'created_on DESC, updated_on DESC');
+    final maps = await (await db).query(
+      'transactions',
+      orderBy: 'CASE WHEN end_on IS NOT NULL AND end_on >= created_on THEN end_on ELSE created_on END DESC, created_on DESC, updated_on DESC',
+    );
     return maps.map(MoneyTransaction.fromMap).toList();
   }
 
@@ -3164,8 +3167,9 @@ class AppController extends ChangeNotifier {
     final range = activeRange();
     return transactions.where((tx) {
       if (!ignoreDate) {
-        if (range.start != null && tx.createdOn.isBefore(range.start!)) return false;
-        if (range.end != null && !tx.createdOn.isBefore(range.end!)) return false;
+        final listOn = tx.listOn;
+        if (range.start != null && listOn.isBefore(range.start!)) return false;
+        if (range.end != null && !listOn.isBefore(range.end!)) return false;
       }
       if (filterAccountIds.isNotEmpty && !filterAccountIds.contains(tx.fromAccountId) && !(tx.toAccountId != null && filterAccountIds.contains(tx.toAccountId))) return false;
       final isReportableCategoryTransaction = tx.countsAsIncome || tx.countsAsExpense;
@@ -3175,7 +3179,13 @@ class AppController extends ChangeNotifier {
       if (accountId != null && tx.fromAccountId != accountId && tx.toAccountId != accountId) return false;
       if (types != null && !types.contains(tx.type)) return false;
       return true;
-    }).toList();
+    }).toList()
+      ..sort((a, b) {
+        final byListDate = b.listOn.compareTo(a.listOn);
+        if (byListDate != 0) return byListDate;
+        final byStartDate = b.createdOn.compareTo(a.createdOn);
+        return byStartDate != 0 ? byStartDate : b.updatedOn.compareTo(a.updatedOn);
+      });
   }
 
   Summary summaryFor(List<MoneyTransaction> list) {
