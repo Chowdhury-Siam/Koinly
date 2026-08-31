@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1050] - 2026-08-31
+
+### Fixed
+
+- Added a targeted owner Worker deployment hint when Cloudflare returns `1042`
+  during the health check because a Worker route or backend URL is looping.
+
 ## [1.0.1049] - 2026-08-31
 
 ### Fixed

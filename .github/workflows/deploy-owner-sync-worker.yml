@@ -160,6 +160,9 @@ jobs:
             echo "::error::The owner Worker returned a non-JSON health response (HTTP $http_status)."
             head -c 1200 "$health_file"
             echo
+            if grep -q 'error code: 1042' "$health_file"; then
+              echo "::error::Cloudflare 1042 blocked a Worker loop. Confirm TURSO_DATABASE_URL is a libsql://*.turso.io URL, not a workers.dev URL, and remove any same-account proxy route in front of this Worker."
+            fi
             exit 1
           fi
           if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "invite-key"' "$health_file" >/dev/null; then
