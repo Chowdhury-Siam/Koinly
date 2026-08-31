@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1054] - 2026-08-31
+
+### Changed
+
+- Reworked mobile scrolling to use smoother Android-style clamping with tuned
+  fling momentum instead of the previous iOS-like bouncing behavior.
+- Added smoother desktop mouse-wheel/trackpad scrolling through the shared app
+  scroll behavior.
+
 ## [1.0.1053] - 2026-08-31
 
 ### Fixed

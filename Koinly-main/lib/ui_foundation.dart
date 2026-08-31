@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -131,16 +134,97 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
     if (kIsDesktopApp) return const RangeMaintainingScrollPhysics(parent: ClampingScrollPhysics());
-    return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+    return const KoinlyMobileScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  }
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
   }
 
   @override
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    if (kIsDesktopApp && details.controller != null) {
+      return _KoinlySmoothDesktopScroll(controller: details.controller!, child: child);
+    }
     return child;
   }
 }
 
 ScrollPhysics optimizedScrollPhysics(BuildContext context) {
   if (kIsDesktopApp) return const RangeMaintainingScrollPhysics(parent: ClampingScrollPhysics());
-  return const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+  return const KoinlyMobileScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+}
+
+class KoinlyMobileScrollPhysics extends ClampingScrollPhysics {
+  const KoinlyMobileScrollPhysics({super.parent});
+
+  @override
+  KoinlyMobileScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return KoinlyMobileScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double get minFlingDistance => 3.5;
+
+  @override
+  double get minFlingVelocity => 30;
+
+  @override
+  double carriedMomentum(double existingVelocity) {
+    final boost = (0.000816 * math.pow(existingVelocity.abs(), 1.967)).toDouble();
+    return existingVelocity.sign * math.min<double>(boost, 40000.0);
+  }
+}
+
+class _KoinlySmoothDesktopScroll extends StatefulWidget {
+  const _KoinlySmoothDesktopScroll({required this.controller, required this.child});
+
+  final ScrollController controller;
+  final Widget child;
+
+  @override
+  State<_KoinlySmoothDesktopScroll> createState() => _KoinlySmoothDesktopScrollState();
+}
+
+class _KoinlySmoothDesktopScrollState extends State<_KoinlySmoothDesktopScroll> {
+  static const Duration _duration = Duration(milliseconds: 130);
+
+  Timer? _targetResetTimer;
+  double? _targetOffset;
+
+  @override
+  void dispose() {
+    _targetResetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !widget.controller.hasClients) return;
+    final delta = event.scrollDelta.dy;
+    if (delta == 0) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted || !widget.controller.hasClients) return;
+      final position = widget.controller.position;
+      if (!position.hasPixels) return;
+      final viewportScale = (position.viewportDimension / 720).clamp(.85, 1.35).toDouble();
+      final currentTarget = _targetOffset ?? position.pixels;
+      final target = (currentTarget + delta * viewportScale)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      _targetOffset = target;
+      _targetResetTimer?.cancel();
+      _targetResetTimer = Timer(_duration, () => _targetOffset = null);
+      widget.controller.animateTo(target, duration: _duration, curve: Curves.easeOutCubic);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: widget.child,
+    );
+  }
 }
