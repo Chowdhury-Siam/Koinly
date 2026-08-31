@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1048] - 2026-08-31
+
+### Changed
+
+- Removed the committed Firebase Android config and restored it during Android
+  CI builds from the `GOOGLE_SERVICES_JSON_BASE64` GitHub secret.
+
 ## [1.0.1047] - 2026-08-30
 
 ### Changed

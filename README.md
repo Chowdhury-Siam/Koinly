@@ -464,6 +464,11 @@ copy the URL reported by the owner deployment into this value before building
 the app. User self-hosting does not need a matching `_U` build value because
 users paste their Worker URL inside the app.
 
+`android/app/google-services.json` is intentionally excluded from the source
+package. For GitHub Actions Android builds, add a repository secret named
+`GOOGLE_SERVICES_JSON_BASE64` containing the Base64 representation of the
+downloaded Firebase `google-services.json` file.
+
 The owner workflow continues using existing unprefixed entries. Create the
 six `_U` values only for user self-hosting; the two workflows never read each
 other's Cloudflare, Turso, or JWT configuration.

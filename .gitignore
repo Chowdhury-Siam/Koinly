@@ -26,6 +26,6 @@ package_phase*/
 # Local Android signing and machine-specific configuration
 android/app/*.jks
 android/app/*.keystore
+android/app/google-services.json
 android/key.properties
 android/local.properties
-
