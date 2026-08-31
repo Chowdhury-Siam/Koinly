@@ -94,6 +94,11 @@ account and created from the **Edit Cloudflare Workers** template. A standard
 membership read access. Custom routes or domains may need Workers Routes edit
 access too.
 
+`MAX_SYNC_BATCH_SIZE` controls normal incremental sync pages and defaults to
+`100`. `MAX_SYNC_REPLACE_SIZE` controls full cloud replacement after a backup
+restore and defaults to `25000`, so larger restored local datasets can upload
+without lowering the normal incremental sync batch size.
+
 ## Health check
 
 Open `https://<worker-name>.<account-subdomain>.workers.dev/health`. A ready

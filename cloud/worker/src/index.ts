@@ -10,6 +10,7 @@ type Env = {
   ACCESS_TOKEN_TTL_SECONDS?: string;
   REFRESH_TOKEN_TTL_SECONDS?: string;
   MAX_SYNC_BATCH_SIZE?: string;
+  MAX_SYNC_REPLACE_SIZE?: string;
   REGISTRATION_KEY_TTL_SECONDS?: string;
 };
 
@@ -670,7 +671,7 @@ async function replaceAll(request: Request, env: Env, db: Client, auth: AuthCont
   const body = await readJson(request);
   const rawOperations = body.operations;
   if (!Array.isArray(rawOperations)) throw new HttpError(400, 'operations must be an array.');
-  const maxBatch = Math.max(numberEnv(env.MAX_SYNC_BATCH_SIZE, 100), 1000);
+  const maxBatch = Math.max(numberEnv(env.MAX_SYNC_REPLACE_SIZE, 25000), 1000);
   if (rawOperations.length > maxBatch) throw new HttpError(413, `Replace limit is ${maxBatch} operations.`);
 
   const latestUpsertByEntity = new Map<string, SyncOperation>();

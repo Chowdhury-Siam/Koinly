@@ -8,6 +8,7 @@ workers_dev = true
 ACCESS_TOKEN_TTL_SECONDS = "900"
 REFRESH_TOKEN_TTL_SECONDS = "2592000"
 MAX_SYNC_BATCH_SIZE = "100"
+MAX_SYNC_REPLACE_SIZE = "25000"
 REGISTRATION_KEY_TTL_SECONDS = "2592000"
 
 # Set these as Cloudflare Worker secrets, not committed vars:

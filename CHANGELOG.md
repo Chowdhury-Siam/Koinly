@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1051] - 2026-08-31
+
+### Fixed
+
+- Raised the full cloud replacement upload limit to 25000 operations with a
+  dedicated `MAX_SYNC_REPLACE_SIZE` Worker setting.
+
 ## [1.0.1050] - 2026-08-31
 
 ### Fixed

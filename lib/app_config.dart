@@ -14,7 +14,7 @@ const Color kSleekWarning = Color(0xFFF59E0B);
 const Color kSleekMuted = Color(0xFF90A4AD);
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1050');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1051');
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';
 const int kHomeTabIndex = 0;
