@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1049] - 2026-08-31
+
+### Fixed
+
+- Made Worker deployment health checks wait through fresh workers.dev TLS and
+  route propagation instead of failing immediately on transient curl TLS exits.
+
 ## [1.0.1048] - 2026-08-31
 
 ### Changed

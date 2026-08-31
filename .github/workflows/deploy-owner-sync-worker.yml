@@ -135,10 +135,26 @@ jobs:
       - name: Check owner Worker health
         run: |
           health_file="$RUNNER_TEMP/koinly-owner-worker-health"
-          http_status="$(curl --silent --show-error --location \
-            --retry 5 --retry-delay 2 --retry-all-errors \
-            --output "$health_file" --write-out '%{http_code}' \
-            "$WORKER_URL/health")"
+          http_status=""
+          curl_exit=0
+          for attempt in {1..18}; do
+            set +e
+            http_status="$(curl --silent --show-error --location \
+              --retry 2 --retry-delay 3 --retry-all-errors \
+              --output "$health_file" --write-out '%{http_code}' \
+              "$WORKER_URL/health")"
+            curl_exit=$?
+            set -e
+            if [ "$curl_exit" -eq 0 ]; then
+              break
+            fi
+            echo "Health check attempt $attempt failed with curl exit $curl_exit. Waiting for workers.dev TLS and route propagation..."
+            sleep 10
+          done
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::error::Could not reach $WORKER_URL/health after waiting for workers.dev TLS and route propagation."
+            exit "$curl_exit"
+          fi
 
           if ! jq -e 'type == "object"' "$health_file" >/dev/null 2>&1; then
             echo "::error::The owner Worker returned a non-JSON health response (HTTP $http_status)."
