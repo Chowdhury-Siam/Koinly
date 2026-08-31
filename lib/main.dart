@@ -4011,17 +4011,26 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
-  bool _startupUpdateCheckScheduled = false;
+  static const Duration _startupUpdateCheckDelay = Duration(milliseconds: 1400);
+  static const Duration _automaticUpdateCheckInterval = Duration(minutes: 15);
+  static const Duration _automaticUpdateRetryDelay = Duration(seconds: 30);
+  static const Duration _blockedUpdatePromptRetryDelay = Duration(seconds: 8);
+
+  bool _automaticUpdateCheckInFlight = false;
+  Timer? _automaticUpdateRetryTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupUpdateCheck());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleAutomaticUpdateCheck(delay: _startupUpdateCheckDelay);
+    });
   }
 
   @override
   void dispose() {
+    _automaticUpdateRetryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -4033,17 +4042,63 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       unawaited(controller.resumePendingAndroidInstallIfAllowed());
       unawaited(controller.syncCloudChangesIfIdle(force: true));
       unawaited(controller.refreshLoanReminders());
+      _scheduleAutomaticUpdateCheck();
     }
   }
 
-  Future<void> _runStartupUpdateCheck() async {
-    if (_startupUpdateCheckScheduled || !mounted) return;
-    _startupUpdateCheckScheduled = true;
+  void _scheduleAutomaticUpdateCheck({Duration delay = Duration.zero}) {
+    if (!mounted || _automaticUpdateRetryTimer?.isActive == true) return;
+    if (delay == Duration.zero) {
+      unawaited(_runAutomaticUpdateCheck());
+      return;
+    }
+    _automaticUpdateRetryTimer = Timer(delay, () {
+      _automaticUpdateRetryTimer = null;
+      unawaited(_runAutomaticUpdateCheck());
+    });
+  }
+
+  Future<void> _runAutomaticUpdateCheck() async {
+    if (_automaticUpdateCheckInFlight || !mounted) return;
     final state = context.read<AppController>();
-    final result = await state.checkForUpdates();
-    if (!mounted || !result.hasUpdate || result.release == null) return;
-    if (!state.canShowStartupUpdateDialog(result.release!)) return;
-    state.markStartupUpdateDialogShown(result.release!);
+    final lastCheckedAt = state.updateLastCheckedAt;
+    final checkedRecently = lastCheckedAt != null && DateTime.now().difference(lastCheckedAt) < _automaticUpdateCheckInterval;
+    final canRetryRecentFailure = checkedRecently && _shouldRetryAutomaticUpdateCheck(state.updateCheckOutcome);
+    if (checkedRecently && !canRetryRecentFailure) {
+      final release = state.latestGithubRelease;
+      if (state.hasAvailableUpdate && release != null) {
+        await _showAutomaticUpdateDialogIfReady(state, release);
+      }
+      return;
+    }
+
+    _automaticUpdateCheckInFlight = true;
+    try {
+      final result = await state.checkForUpdates();
+      if (!mounted) return;
+      if (result.hasUpdate && result.release != null) {
+        await _showAutomaticUpdateDialogIfReady(state, result.release!);
+      } else if (_shouldRetryAutomaticUpdateCheck(result.outcome)) {
+        _scheduleAutomaticUpdateCheck(delay: _automaticUpdateRetryDelay);
+      }
+    } finally {
+      _automaticUpdateCheckInFlight = false;
+    }
+  }
+
+  bool _shouldRetryAutomaticUpdateCheck(UpdateCheckOutcome outcome) {
+    return outcome == UpdateCheckOutcome.networkError ||
+        outcome == UpdateCheckOutcome.httpError;
+  }
+
+  Future<void> _showAutomaticUpdateDialogIfReady(AppController state, GithubRelease release) async {
+    if (!mounted || !state.canShowStartupUpdateDialog(release)) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      _scheduleAutomaticUpdateCheck(delay: _blockedUpdatePromptRetryDelay);
+      return;
+    }
+    state.markStartupUpdateDialogShown(release);
     await showUpdateBottomSheet(context);
   }
 

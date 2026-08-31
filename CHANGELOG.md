@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1053] - 2026-08-31
+
+### Fixed
+
+- Made the update prompt appear automatically after startup and retry on app
+  resume when the first background check hits a temporary GitHub/network issue.
+- Aligned the native Android version name/code with the Flutter release version.
+
 ## [1.0.1052] - 2026-08-31
 
 ### Fixed
