@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/koinly-readme-banner.png" alt="Koinly personal finance tracker banner" width="100%">
+</p>
+
 # Koinly
 
 <p align="center">
