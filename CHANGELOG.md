@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1056] - 2026-09-01
+
+### Fixed
+
+- Update checks now read a public release manifest before using the GitHub API,
+  avoiding GitHub API rate-limit failures for normal in-app update checks.
+
 ## [1.0.1055] - 2026-09-01
 
 ### Changed

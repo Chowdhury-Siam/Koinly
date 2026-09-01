@@ -90,6 +90,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Savings Suggestion preferences grouped with profile information in one screen
 - Android daily reminder notifications
 - GitHub Releases-based update checks
+- Public release manifest checks that avoid GitHub API rate limits
 - Architecture-specific Android downloads and Windows installer updates
 - Low-end-friendly rendering defaults with reduced heavy motion and effects
 

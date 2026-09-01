@@ -662,6 +662,53 @@ jobs:
           fi
           cp release-notes-body.md release-notes.md
 
+          VERSION_NAME="$VERSION_NAME" RELEASE_TAG="$RELEASE_TAG" RELEASE_TITLE="$RELEASE_TITLE" python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import pathlib
+
+          release_assets = pathlib.Path("release-assets")
+          notes = pathlib.Path("release-notes.md").read_text(encoding="utf-8")
+          version_name = os.environ["VERSION_NAME"]
+          release_tag = os.environ["RELEASE_TAG"]
+          release_title = os.environ["RELEASE_TITLE"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          content_types = {
+              ".apk": "application/vnd.android.package-archive",
+              ".aab": "application/octet-stream",
+              ".exe": "application/vnd.microsoft.portable-executable",
+          }
+
+          assets = []
+          for path in sorted(release_assets.iterdir()):
+              if not path.is_file() or path.name == "koinly-update.json":
+                  continue
+              assets.append({
+                  "id": 0,
+                  "name": path.name,
+                  "size": path.stat().st_size,
+                  "browser_download_url": f"https://github.com/{repository}/releases/download/{release_tag}/{path.name}",
+                  "content_type": content_types.get(path.suffix.lower(), "application/octet-stream"),
+              })
+
+          published_at = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+          manifest = {
+              "id": 0,
+              "tag_name": release_tag,
+              "name": release_title,
+              "body": notes,
+              "html_url": f"https://github.com/{repository}/releases/tag/{release_tag}",
+              "draft": False,
+              "prerelease": False,
+              "published_at": published_at,
+              "assets": assets,
+          }
+          manifest_path = release_assets / "koinly-update.json"
+          manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+          print(f"Wrote {manifest_path} for Koinly {version_name} with {len(assets)} release assets.")
+          PY
+
           if ! git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
             git tag "${RELEASE_TAG}" "$GITHUB_SHA"
             git push origin "refs/tags/${RELEASE_TAG}"

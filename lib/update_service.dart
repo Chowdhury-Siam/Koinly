@@ -12,7 +12,10 @@ import 'package:path_provider/path_provider.dart';
 const updateGithubOwner = 'Chowdhury-Siam';
 const updateGithubRepo = 'Koinly';
 const updateGithubApiBase = 'https://api.github.com';
+const updateGithubWebBase = 'https://github.com';
 const updateRepositorySlug = '$updateGithubOwner/$updateGithubRepo';
+const updateManifestAssetName = 'koinly-update.json';
+const updateManifestUrl = '$updateGithubWebBase/$updateRepositorySlug/releases/latest/download/$updateManifestAssetName';
 const includePrereleaseUpdates = bool.fromEnvironment(
   'KOINLY_INCLUDE_PRERELEASE_UPDATES',
   defaultValue: false,
@@ -204,6 +207,13 @@ class GithubUpdateService {
     bool includePrereleases = includePrereleaseUpdates,
   }) async {
     final installed = SemanticVersion.tryParse(installedVersion);
+    if (!includePrereleases) {
+      final manifestRelease = await _fetchStableReleaseManifest();
+      if (manifestRelease != null) {
+        return _resultForRelease(manifestRelease, installed: installed);
+      }
+    }
+
     final releasePath = includePrereleases ? 'releases' : 'releases/latest';
     final uri = Uri.parse('$updateGithubApiBase/repos/$updateRepositorySlug/$releasePath');
     http.Response response;
@@ -223,7 +233,7 @@ class GithubUpdateService {
       return UpdateCheckResult(outcome: UpdateCheckOutcome.noReleaseAvailable, installedVersion: installed, message: 'No GitHub release is available yet.');
     }
     if (response.statusCode == 403 || response.statusCode == 429) {
-      return UpdateCheckResult(outcome: UpdateCheckOutcome.rateLimited, installedVersion: installed, message: 'GitHub rate limit reached. Please try again later.');
+      return UpdateCheckResult(outcome: UpdateCheckOutcome.rateLimited, installedVersion: installed, message: 'GitHub API rate limit reached. Please try again later.');
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       return UpdateCheckResult(outcome: UpdateCheckOutcome.httpError, installedVersion: installed, message: 'GitHub returned HTTP ${response.statusCode}.');
@@ -259,6 +269,36 @@ class GithubUpdateService {
     }
 
     final latest = releases.first;
+    return _resultForRelease(latest, installed: installed);
+  }
+
+  Future<GithubRelease?> _fetchStableReleaseManifest() async {
+    http.Response response;
+    try {
+      response = await _client
+          .get(Uri.parse(updateManifestUrl), headers: const {'Accept': 'application/json', 'User-Agent': 'Koinly-Updater'})
+          .timeout(const Duration(seconds: 12));
+    } catch (_) {
+      return null;
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return null;
+    }
+
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } catch (_) {
+      return null;
+    }
+    if (decoded is! Map) return null;
+    final release = GithubRelease.fromJson(Map<String, dynamic>.from(decoded));
+    if (release.draft || release.prerelease || release.semanticVersion == null) return null;
+    return release;
+  }
+
+  UpdateCheckResult _resultForRelease(GithubRelease latest, {required SemanticVersion? installed}) {
     final latestVersion = latest.semanticVersion;
     if (installed == null || latestVersion == null) {
       return UpdateCheckResult(outcome: UpdateCheckOutcome.malformedData, release: latest, installedVersion: installed, latestVersion: latestVersion, message: 'Could not compare app versions.');

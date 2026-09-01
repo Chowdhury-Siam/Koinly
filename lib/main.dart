@@ -1905,7 +1905,7 @@ class AppController extends ChangeNotifier {
       return UpdateCheckResult(outcome: updateCheckOutcome, release: latestGithubRelease, message: updateStatusMessage);
     }
     updateCheckBusy = true;
-    updateStatusMessage = manual ? 'Checking GitHub releases now...' : 'Checking GitHub releases...';
+    updateStatusMessage = manual ? 'Checking Koinly releases now...' : 'Checking Koinly releases...';
     notifyListeners();
     final result = await updateService.check(installedVersion: appVersion);
     updateCheckBusy = false;
@@ -1942,7 +1942,7 @@ class AppController extends ChangeNotifier {
       case UpdateCheckOutcome.networkError:
         return 'Could not connect to GitHub. Check your internet and try again.';
       case UpdateCheckOutcome.rateLimited:
-        return 'GitHub rate limit reached. Please try again later.';
+        return 'GitHub API rate limit reached. Please try again later.';
       case UpdateCheckOutcome.malformedData:
         return 'GitHub returned release data that Koinly could not read.';
       case UpdateCheckOutcome.httpError:
