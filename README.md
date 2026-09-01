@@ -91,7 +91,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Android daily reminder notifications
 - GitHub Releases-based update checks
 - Architecture-specific Android downloads and Windows installer updates
-- Optional performance mode for desktop devices
+- Low-end-friendly rendering defaults with reduced heavy motion and effects
 
 ### Synchronization
 

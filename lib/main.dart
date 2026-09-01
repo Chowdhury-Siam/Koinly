@@ -1291,7 +1291,6 @@ class AppController extends ChangeNotifier {
   String? defaultExpenseCategoryId;
   String? defaultIncomeCategoryId;
   bool compactHomeSummary = false;
-  bool reducedMotion = kIsDesktopApp;
   bool reminderEnabled = false;
   TimeOfDay reminderTime = const TimeOfDay(hour: 21, minute: 0);
   bool loanRecordTransactionsByDefault = true;
@@ -1439,7 +1438,8 @@ class AppController extends ChangeNotifier {
     defaultIncomeCategoryId = await prefs.getString('defaultIncomeCategoryId', '');
     if (defaultIncomeCategoryId?.isEmpty == true) defaultIncomeCategoryId = null;
     compactHomeSummary = await prefs.getBool('compactHomeSummary', false);
-    reducedMotion = await prefs.getBool('reducedMotion', kIsDesktopApp);
+    final sharedPreferences = await prefs.prefs;
+    await sharedPreferences.remove('reducedMotion');
     reminderEnabled = await prefs.getBool('reminderEnabled', false);
     final hour = await prefs.getInt('reminderHour', 21);
     final minute = await prefs.getInt('reminderMinute', 0);
@@ -1733,7 +1733,7 @@ class AppController extends ChangeNotifier {
       ..writeln('- Onboarding completed: $onboardingCompleted')
       ..writeln('- Current platform setup completed: $setupCompletedForCurrentPlatform')
       ..writeln('- Starter accounts skipped: $starterAccountsSkipped')
-      ..writeln('- Performance mode: $reducedMotion')
+      ..writeln('- Low-end friendly UI: $kLowEndFriendlyUi')
       ..writeln('')
       ..writeln('Local data')
       ..writeln('- Accounts: ${report.accountCount}')
@@ -3288,12 +3288,6 @@ class AppController extends ChangeNotifier {
     await queuePreferenceSync();
   }
 
-  Future<void> setReducedMotion(bool value) async {
-    reducedMotion = value;
-    await prefs.setBool('reducedMotion', value);
-    notifyListeners();
-  }
-
   Future<void> setReminder(bool enabled, TimeOfDay time) async {
     reminderEnabled = enabled;
     reminderTime = time;
@@ -3492,12 +3486,12 @@ class KoinlyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.select<AppController, ({ThemeMode themeMode, bool reducedMotion})>((state) => (themeMode: state.themeMode, reducedMotion: state.reducedMotion));
+    final themeMode = context.select<AppController, ThemeMode>((state) => state.themeMode);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       scrollBehavior: const KoinlyScrollBehavior(),
       title: appTitle,
-      themeMode: settings.themeMode,
+      themeMode: themeMode,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
       home: const StartupGate(),
@@ -3506,7 +3500,10 @@ class KoinlyApp extends StatelessWidget {
         final width = media.size.width;
         final maxScale = width < 360 ? 1.04 : width < 600 ? 1.14 : width < 900 ? 1.22 : 1.30;
         return MediaQuery(
-          data: media.copyWith(textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale), disableAnimations: settings.reducedMotion || media.disableAnimations),
+          data: media.copyWith(
+            textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
+            disableAnimations: kLowEndFriendlyUi || media.disableAnimations,
+          ),
           child: child ?? const SizedBox.shrink(),
         );
       },
@@ -10973,7 +10970,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
-            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, performance, backup', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
+            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
           ],
         ),
@@ -13568,41 +13565,6 @@ class AdvancedSettingsScreen extends StatelessWidget {
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
           SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: ExpressiveCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: colorFromHex('#00D7E8').withOpacity(.16),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: colorFromHex('#00D7E8').withOpacity(.20)),
-                    ),
-                    child: Icon(Icons.speed_rounded, color: colorFromHex('#00D7E8')),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Performance mode', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 4),
-                        Text(
-                          kIsDesktopApp ? 'On by default on desktop. Reduces transitions, press animations, gradients, and heavy shadows.' : 'Reduces transitions, press animations, gradients, and heavy shadows.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch(value: state.reducedMotion, onChanged: state.setReducedMotion),
-                ],
-              ),
-            ),
-          ),
           SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
           SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and overwrite this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(

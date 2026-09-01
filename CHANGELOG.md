@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1055] - 2026-09-01
+
+### Changed
+
+- Removed the Advanced settings performance toggle.
+- Made low-end-friendly UI rendering the default by reducing heavy motion,
+  press animations, gradients, and shadows automatically.
+
 ## [1.0.1054] - 2026-08-31
 
 ### Changed
@@ -352,7 +360,7 @@
 - Added Phase 3 data safety: automatic local safety backups are created before manual restores, legacy cloud restores, full cloud-overwrite syncs, and server reset sync operations.
 - Koinly now keeps the newest 3 safety backups and exposes Restore last safety backup in Advanced settings.
 - Login/cloud-restore no longer clears local data before a successful cloud download; the app downloads first, saves a safety backup, then overwrites local finance data.
-- Started Phase 2 polish with a desktop-default Performance mode that reduces transitions, card animations, update-wave animation, gradients, and heavy shadows.
+- Started Phase 2 polish by reducing desktop transitions, card animations, update-wave animation, gradients, and heavy shadows.
 - Made desktop page headers more compact for a less oversized Windows layout.
 - Started Phase 1 polish with clearer sync stages, explicit Restore cloud copy vs Upload local changes actions, and a Home empty-state recovery card for no-account/offline setups.
 - Setup Login now signs in, cloud-overwrites local setup/default data, completes setup, and opens the app immediately.
