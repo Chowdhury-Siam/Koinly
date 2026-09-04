@@ -146,32 +146,24 @@ Widget iconGlyph(
 }
 
 Widget iconBubble(BuildContext context, String icon, String color, {double size = 44}) {
-  final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
+  final scheme = Theme.of(context).colorScheme;
+  final c = colorFromHex(color, fallback: scheme.primary);
   final dark = Theme.of(context).brightness == Brightness.dark;
   return Container(
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: c.withOpacity(dark ? .20 : .16),
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          c.withOpacity(dark ? .26 : .18),
-          c.withOpacity(dark ? .10 : .08),
-        ],
-      ),
-      borderRadius: BorderRadius.circular(size * .32),
-      border: Border.all(color: c.withOpacity(dark ? .34 : .25), width: 1),
-      boxShadow: kIsDesktopApp ? null : [BoxShadow(color: c.withOpacity(.15), blurRadius: 14, offset: const Offset(0, 6))],
+      color: Color.alphaBlend(c.withOpacity(dark ? .18 : .11), scheme.surfaceContainerHigh),
+      borderRadius: BorderRadius.circular(size * .28),
+      border: Border.all(color: c.withOpacity(dark ? .30 : .22), width: 1),
     ),
     child: Center(
       child: iconGlyph(
         context,
         icon,
         color: c,
-        size: size * .56,
-        imageBackground: Colors.white.withOpacity(.84),
+        size: size * .52,
+        imageBackground: scheme.surface,
       ),
     ),
   );

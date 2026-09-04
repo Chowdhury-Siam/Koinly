@@ -157,8 +157,8 @@ class _LoansScreenState extends State<LoansScreen> {
               padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
               child: Row(
                 children: [
-                  Expanded(child: Text(item.contact.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
-                  Text(_signedLoanAmount(state, net), style: const TextStyle(color: kSleekMuted, fontWeight: FontWeight.w900)),
+                  Expanded(child: Text(item.contact.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                  Text(_signedLoanAmount(state, net), style: const TextStyle(color: kSleekMuted, fontWeight: FontWeight.w700)),
                 ],
               ),
             );
@@ -184,18 +184,18 @@ class _LoanSummaryHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
     return ExpressiveCard(
-      color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF08242B) : null,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: Text('Portfolio', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(child: Text('Portfolio', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
               if (summary.overdueCount > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(color: kSleekWarning.withOpacity(.14), borderRadius: BorderRadius.circular(999)),
-                  child: Text('${summary.overdueCount} overdue', style: const TextStyle(color: kSleekWarning, fontWeight: FontWeight.w900)),
+                  child: Text('${summary.overdueCount} overdue', style: const TextStyle(color: kSleekWarning, fontWeight: FontWeight.w700)),
                 ),
             ],
           ),
@@ -235,7 +235,7 @@ class _LoanTile extends StatelessWidget {
         child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: iconBubble(context, loan.isLent ? 'gift' : 'cash', loan.isLent ? '#27D17F' : '#FF5353', size: 48),
-          title: Text(contact?.name ?? 'Unknown person', style: const TextStyle(fontWeight: FontWeight.w900)),
+          title: Text(contact?.name ?? 'Unknown person', style: const TextStyle(fontWeight: FontWeight.w700)),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -257,7 +257,7 @@ class _LoanTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(state.format(loanNonNegative(computation.outstanding)), style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
+              Text(state.format(loanNonNegative(computation.outstanding)), style: TextStyle(color: accent, fontWeight: FontWeight.w700)),
               const SizedBox(height: 3),
               Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ],
@@ -372,7 +372,7 @@ class LoanDetailScreen extends StatelessWidget {
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               leading: iconBubble(context, 'receipt', '#A6E3A1', size: 44),
-              title: Text(state.format(payment.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
+              title: Text(state.format(payment.amount), style: const TextStyle(fontWeight: FontWeight.w700)),
               subtitle: Text(
                 '${DateFormat('MMM d, yyyy').format(payment.paidOn)} · ${state.format(payment.interestComponent)} interest + ${state.format(payment.principalComponent)} principal',
                 maxLines: 2,
@@ -405,18 +405,18 @@ class _LoanDetailHero extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(loan.isLent ? 'They will pay you' : 'You will pay them', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
+          Text(loan.isLent ? 'They will pay you' : 'You will pay them', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text(state.format(loanNonNegative(computation.outstanding)), style: Theme.of(context).textTheme.displaySmall?.copyWith(color: color, fontWeight: FontWeight.w900)),
+          Text(state.format(loanNonNegative(computation.outstanding)), style: Theme.of(context).textTheme.displaySmall?.copyWith(color: color, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
-          Text(_loanDueLabel(loan, computation), style: TextStyle(color: computation.overdue ? kSleekWarning : kSleekMuted, fontWeight: FontWeight.w800)),
+          Text(_loanDueLabel(loan, computation), style: TextStyle(color: computation.overdue ? kSleekWarning : kSleekMuted, fontWeight: FontWeight.w600)),
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(value: computation.progress, minHeight: 9, color: color, backgroundColor: color.withOpacity(.13)),
           ),
           const SizedBox(height: 6),
-          Text('${(computation.progress * 100).round()}% repaid', textAlign: TextAlign.right, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
+          Text('${(computation.progress * 100).round()}% repaid', textAlign: TextAlign.right, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600)),
         ],
       ),
     );

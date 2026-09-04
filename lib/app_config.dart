@@ -3,18 +3,21 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-const Color kSleekBackground = Color(0xFF020B0F);
-const Color kSleekSurface = Color(0xFF07171D);
-const Color kSleekSurfaceHigh = Color(0xFF0C2028);
-const Color kSleekSurfaceHigher = Color(0xFF132B34);
-const Color kSleekAccent = Color(0xFF00D7E8);
-const Color kSleekIncome = Color(0xFF27D17F);
-const Color kSleekExpense = Color(0xFFFF5353);
-const Color kSleekWarning = Color(0xFFF59E0B);
-const Color kSleekMuted = Color(0xFF90A4AD);
+// UI palette adapted from the reference app's Material 3 dark theme.
+// The finance-specific semantic colors remain distinct, while the chrome,
+// surfaces, controls, and navigation use the softer mauve/rose language.
+const Color kSleekBackground = Color(0xFF161217);
+const Color kSleekSurface = Color(0xFF1F1A1F);
+const Color kSleekSurfaceHigh = Color(0xFF231E23);
+const Color kSleekSurfaceHigher = Color(0xFF2E282E);
+const Color kSleekAccent = Color(0xFFB76AC2);
+const Color kSleekIncome = Color(0xFF39A96B);
+const Color kSleekExpense = Color(0xFFE45D67);
+const Color kSleekWarning = Color(0xFFD99A2B);
+const Color kSleekMuted = Color(0xFF988E97);
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1062');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1063');
 const kLowEndFriendlyUi = true;
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';

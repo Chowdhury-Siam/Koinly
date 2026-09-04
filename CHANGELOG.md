@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.1063] - 2026-09-05
+
+### Changed
+- Rebuilt Koinly's shared visual system around the supplied reference app's Material 3 design language: warm mauve/rose color tokens, flatter tinted surfaces, smaller radii, compact spacing, restrained elevation, and lighter typography.
+- Reworked Android and Windows navigation into a denser Material 3 layout with compact selected states and an icon-only transaction action.
+- Restyled shared cards, settings rows, form controls, segmented controls, dialogs, bottom sheets, selection popups, icon containers, and feedback surfaces so the redesign is consistent across the app rather than limited to one screen.
+- Updated Home, Accounts, Categories, Transactions, Profile, onboarding, and analytics presentation to use the new surface hierarchy while preserving existing data, workflows, sync, updates, and validation behavior.
+- Desktop layouts retain responsive max-width behavior while using the same visual language as mobile instead of stretching mobile components across wide windows.
+
+### Fixed
+- Removed legacy cyan/teal surface treatments and excessive glow/gradient styling from shared components that conflicted with the new UI.
+- Reduced explicit ultra-heavy text weights and size-changing selection effects for a calmer, more stable interface on both touch and desktop input.
+
 ## [1.0.1062] - 2026-09-04
 
 ### Fixed
