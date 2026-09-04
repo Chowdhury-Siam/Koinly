@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1058] - 2026-09-04
+
+### Fixed
+
+- Reworked the appearance-color screens for Windows/large displays so the preset palette uses compact fixed-density rows instead of oversized empty grid cells.
+- Rebuilt the custom color picker with a desktop two-column layout and a capped color wheel, preventing the wheel and controls from stretching far beyond usable desktop sizes.
+- Constrained the photo color picker on desktop so the complete appearance-color workflow remains readable at wide window sizes.
+- Made the generated Windows runner title patch handle both Flutter runner templates so the title bar consistently shows `Koinly` instead of the lowercase generated project name.
+
+### Changed
+
+- Reduced CI release work by building only the requested ARM32, ARM64, and Universal Android APKs; removed the unnecessary x86_64 APK and AAB release artifacts.
+- Added reusable Dart package caching, cached Windows extracted native dependencies, skipped already-installed Android SDK/NDK packages, and avoided reinstalling Inno Setup when it is already present.
+- Universal Android APKs are now produced directly by Flutter instead of building an AAB and running bundletool, reducing release-job overhead.
+
 ## [1.0.1057] - 2026-09-04
 
 ### Fixed

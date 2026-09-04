@@ -126,7 +126,7 @@ database operation to the authenticated user.
 
 | Platform | Status | Release output |
 | --- | --- | --- |
-| Android | Supported | ARM32, ARM64, x86_64, Universal APK, and AAB |
+| Android | Supported | ARM32, ARM64, and Universal APK |
 | Windows x64 | Supported | Inno Setup installer |
 
 Other Flutter platform folders may be generated during development, but the
@@ -414,7 +414,7 @@ again after the rotation.
 | --- | --- | --- |
 | `deploy-sync-worker.yml` | Manual everywhere; automatic Worker changes on `main`/`master` in forks only | User-owned Worker in first-user registration mode |
 | `deploy-owner-sync-worker.yml` | Manual or automatic Worker changes on `main`/`master` in the original repository only | Owner/default-service Worker in invite-key mode with Telegram key delivery |
-| `build-android-apks.yml` | Manual everywhere; app changes on `main`/`master` only in the original repository | Android APK/AAB files, Windows installer, and stable GitHub Release |
+| `build-android-apks.yml` | Manual everywhere; app changes on `main`/`master` only in the original repository | Android APK files, Windows installer, and stable GitHub Release |
 
 Automatic Android and Windows builds run only in
 `Chowdhury-Siam/Koinly`. Pushes in forks create a skipped Actions entry and

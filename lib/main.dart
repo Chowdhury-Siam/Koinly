@@ -7253,75 +7253,101 @@ class ColorSelectionPage extends StatelessWidget {
     final selectedNormalized = _normalizeColor(selectedColor);
     final presetColors = IconColorPicker.colors.map(_normalizeColor).where((c) => c.isNotEmpty).toList();
     final customSelected = selectedNormalized.isNotEmpty && !presetColors.map((c) => c.toLowerCase()).contains(selectedNormalized.toLowerCase());
+    final desktop = AppBreakpoints.isExpanded(context);
 
     return PageScaffold(
       title: 'Choose color',
       subtitle: 'Select the appearance color',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        desktopMaxWidth: 920,
+        padding: EdgeInsets.fromLTRB(desktop ? 24 : 16, desktop ? 18 : 12, desktop ? 24 : 16, 32),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
-            final columns = width < 360
-                ? 4
-                : width < 500
-                    ? 5
-                    : 6;
-            final spacing = width < 360 ? 12.0 : 14.0;
-            final itemSize = ((width - (spacing * (columns - 1))) / columns).clamp(52.0, 68.0).toDouble();
+            final columns = desktop
+                ? (width / 108).floor().clamp(7, 10).toInt()
+                : width < 360
+                    ? 4
+                    : width < 500
+                        ? 5
+                        : 6;
+            final spacing = desktop ? 18.0 : width < 360 ? 12.0 : 14.0;
+            final itemSize = desktop
+                ? 58.0
+                : ((width - (spacing * (columns - 1))) / columns).clamp(52.0, 68.0).toDouble();
+
+            final customCard = Material(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
+              borderRadius: BorderRadius.circular(22),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () async {
+                  final custom = await _showCustomColorOptions(context);
+                  if (custom != null && context.mounted) Navigator.pop(context, custom);
+                },
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: desktop ? 18 : 16, vertical: desktop ? 13 : 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: customSelected ? kSleekAccent.withOpacity(.45) : Theme.of(context).colorScheme.outline.withOpacity(.24),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: desktop ? 44 : 48,
+                        height: desktop ? 44 : 48,
+                        decoration: BoxDecoration(
+                          color: customSelected ? colorFromHex(selectedNormalized) : kSleekAccent.withOpacity(.18),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kSleekAccent.withOpacity(.45), width: 1.5),
+                          boxShadow: customSelected ? [BoxShadow(color: colorFromHex(selectedNormalized).withOpacity(.32), blurRadius: 16)] : null,
+                        ),
+                        child: Icon(customSelected ? Icons.check_rounded : Icons.color_lens_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 2),
+                            Text(
+                              customSelected ? selectedNormalized : 'Color picker or pick from photo',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
+                  ),
+                ),
+              ),
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Material(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
-                  borderRadius: BorderRadius.circular(22),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(22),
-                    onTap: () async {
-                      final custom = await _showCustomColorOptions(context);
-                      if (custom != null && context.mounted) Navigator.pop(context, custom);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: customSelected ? kSleekAccent.withOpacity(.45) : Theme.of(context).colorScheme.outline.withOpacity(.24), width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: customSelected ? colorFromHex(selectedNormalized) : kSleekAccent.withOpacity(.18),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: kSleekAccent.withOpacity(.45), width: 1.5),
-                              boxShadow: customSelected ? [BoxShadow(color: colorFromHex(selectedNormalized).withOpacity(.32), blurRadius: 16)] : null,
-                            ),
-                            child: Icon(customSelected ? Icons.check_rounded : Icons.color_lens_rounded, color: Colors.white),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  customSelected ? selectedNormalized : 'Color picker or pick from photo',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right_rounded),
-                        ],
-                      ),
-                    ),
+                if (desktop)
+                  Align(
+                    alignment: Alignment.center,
+                    child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720), child: customCard),
+                  )
+                else
+                  customCard,
+                SizedBox(height: desktop ? 24 : 18),
+                if (desktop) ...[
+                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Choose a ready-made accent color.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
-                ),
-                const SizedBox(height: 18),
+                  const SizedBox(height: 14),
+                ],
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -7330,7 +7356,7 @@ class ColorSelectionPage extends StatelessWidget {
                     crossAxisCount: columns,
                     mainAxisSpacing: spacing,
                     crossAxisSpacing: spacing,
-                    childAspectRatio: 1,
+                    childAspectRatio: desktop ? 1.22 : 1,
                   ),
                   itemBuilder: (context, index) {
                     final color = presetColors[index];
@@ -7352,6 +7378,7 @@ class ColorSelectionPage extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _CustomColorOptionCard extends StatelessWidget {
@@ -7469,90 +7496,172 @@ class _ColorWheelPickerPageState extends State<ColorWheelPickerPage> {
   @override
   Widget build(BuildContext context) {
     final validHex = RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(hexController.text);
+
+    Widget previewCard() {
+      return ExpressiveCard(
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 78,
+              height: 78,
+              decoration: BoxDecoration(
+                color: selectedColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withOpacity(.35), width: 2),
+                boxShadow: [BoxShadow(color: selectedColor.withOpacity(.40), blurRadius: 22, spreadRadius: 1)],
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: hexController,
+              textAlign: TextAlign.center,
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F#]')),
+                LengthLimitingTextInputFormatter(7),
+              ],
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.tag_rounded),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.check_rounded),
+                  onPressed: validHex ? () => _setFromHex(hexController.text) : null,
+                ),
+                labelText: 'HEX color',
+                errorText: validHex ? null : 'Use #RRGGBB',
+              ),
+              onChanged: (value) {
+                if (RegExp(r'^#?[0-9A-Fa-f]{6}$').hasMatch(value)) {
+                  _setFromHex(value);
+                } else {
+                  setState(() {});
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget wheelCard({double? desktopWheelSize}) {
+      final wheel = desktopWheelSize == null
+          ? AspectRatio(
+              aspectRatio: 1,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final wheelSize = Size(constraints.maxWidth, constraints.maxHeight);
+                  return GestureDetector(
+                    onPanDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                    onPanUpdate: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                    onTapDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                    child: CustomPaint(
+                      painter: _HueSaturationWheelPainter(value: value),
+                      foregroundPainter: _HueWheelHandlePainter(hue: hue, saturation: saturation),
+                    ),
+                  );
+                },
+              ),
+            )
+          : Center(
+              child: SizedBox.square(
+                dimension: desktopWheelSize,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final wheelSize = Size(constraints.maxWidth, constraints.maxHeight);
+                    return GestureDetector(
+                      onPanDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                      onPanUpdate: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                      onTapDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
+                      child: CustomPaint(
+                        painter: _HueSaturationWheelPainter(value: value),
+                        foregroundPainter: _HueWheelHandlePainter(hue: hue, saturation: saturation),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+
+      return ExpressiveCard(
+        child: Column(
+          children: [
+            wheel,
+            const SizedBox(height: 16),
+            _ValueSlider(
+              color: selectedColor,
+              value: value,
+              onChanged: (v) {
+                setState(() => value = v);
+                _setColor(HSVColor.fromAHSV(1, hue, saturation, value).toColor(), updateHsv: false);
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
     return PageScaffold(
       title: 'Color picker',
       subtitle: 'Create a custom color',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ExpressiveCard(
-              child: Column(
+        desktopMaxWidth: 1000,
+        padding: EdgeInsets.fromLTRB(AppBreakpoints.isExpanded(context) ? 24 : 16, AppBreakpoints.isExpanded(context) ? 18 : 12, AppBreakpoints.isExpanded(context) ? 24 : 16, 32),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktopLayout = constraints.maxWidth >= 760;
+            if (!desktopLayout) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 78,
-                    height: 78,
-                    decoration: BoxDecoration(
-                      color: selectedColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(.35), width: 2),
-                      boxShadow: [BoxShadow(color: selectedColor.withOpacity(.40), blurRadius: 22, spreadRadius: 1)],
-                    ),
-                  ),
+                  previewCard(),
                   const SizedBox(height: 14),
-                  TextField(
-                    controller: hexController,
-                    textAlign: TextAlign.center,
-                    textCapitalization: TextCapitalization.characters,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9a-fA-F#]')),
-                      LengthLimitingTextInputFormatter(7),
-                    ],
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.tag_rounded),
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.check_rounded),
-                        onPressed: validHex ? () => _setFromHex(hexController.text) : null,
+                  wheelCard(),
+                  const SizedBox(height: 18),
+                  FilledButton(
+                    onPressed: validHex ? () => Navigator.pop(context, _hex(selectedColor)) : null,
+                    child: const Text('Apply color'),
+                  ),
+                ],
+              );
+            }
+
+            final wheelSize = math.min(430.0, math.max(330.0, constraints.maxWidth - 390.0)).toDouble();
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 320,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      previewCard(),
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.34),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.18)),
+                        ),
+                        child: Text(
+                          'Drag on the wheel to choose hue and saturation, then fine-tune brightness.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.4),
+                        ),
                       ),
-                      labelText: 'HEX color',
-                      errorText: validHex ? null : 'Use #RRGGBB',
-                    ),
-                    onChanged: _setFromHex,
+                      const SizedBox(height: 14),
+                      FilledButton.icon(
+                        onPressed: validHex ? () => Navigator.pop(context, _hex(selectedColor)) : null,
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('Apply color'),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            ExpressiveCard(
-              child: Column(
-                children: [
-                  AspectRatio(
-                    aspectRatio: 1,
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final wheelSize = Size(constraints.maxWidth, constraints.maxHeight);
-                        return GestureDetector(
-                          onPanDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
-                          onPanUpdate: (details) => _pickFromWheel(details.localPosition, wheelSize),
-                          onTapDown: (details) => _pickFromWheel(details.localPosition, wheelSize),
-                          child: CustomPaint(
-                            painter: _HueSaturationWheelPainter(value: value),
-                            foregroundPainter: _HueWheelHandlePainter(hue: hue, saturation: saturation),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _ValueSlider(
-                    color: selectedColor,
-                    value: value,
-                    onChanged: (v) {
-                      setState(() => value = v);
-                      _setColor(HSVColor.fromAHSV(1, hue, saturation, value).toColor(), updateHsv: false);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: validHex ? () => Navigator.pop(context, _hex(selectedColor)) : null,
-              child: const Text('Apply color'),
-            ),
-          ],
+                ),
+                const SizedBox(width: 18),
+                Expanded(child: wheelCard(desktopWheelSize: wheelSize)),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -7651,6 +7760,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
       title: 'Pick from photo',
       subtitle: 'Tap or drag on a photo to sample color',
       child: ResponsiveContent(
+        desktopMaxWidth: 900,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

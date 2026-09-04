@@ -29,6 +29,7 @@ jobs:
       contents: read
     env:
       GRADLE_OPTS: "-Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dorg.gradle.jvmargs=-Xmx4g"
+      PUB_CACHE: ${{ github.workspace }}/.pub-cache
 
     steps:
       - name: Checkout repository
@@ -44,10 +45,20 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 36 and NDK 28
+      - name: Ensure Android SDK 36 and NDK 28
+        shell: bash
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+          packages=()
+          [ -d "$ANDROID_HOME/platforms/android-36" ] || packages+=("platforms;android-36")
+          [ -d "$ANDROID_HOME/build-tools/36.0.0" ] || packages+=("build-tools;36.0.0")
+          [ -d "$ANDROID_HOME/ndk/28.2.13676358" ] || packages+=("ndk;28.2.13676358")
+          if [ ${#packages[@]} -gt 0 ]; then
+            echo "Installing missing Android SDK packages: ${packages[*]}"
+            yes | sdkmanager --licenses >/dev/null 2>&1 || true
+            sdkmanager "${packages[@]}"
+          else
+            echo "Required Android SDK/NDK packages are already available on the runner."
+          fi
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -55,9 +66,17 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Restore Dart package cache
+        uses: actions/cache@v4
+        with:
+          path: .pub-cache
+          key: koinly-${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            koinly-${{ runner.os }}-pub-
+
       - name: Restore Android Gradle wrapper files
         run: |
-          flutter create --platforms=android --project-name koinly .
+          flutter create --platforms=android --project-name koinly --no-pub .
           git checkout -- android/app/build.gradle android/build.gradle android/settings.gradle android/gradle.properties android/app/src/main/AndroidManifest.xml || true
           rm -f android/build.gradle.kts android/settings.gradle.kts android/app/build.gradle.kts
           find android/app/src/main/res -type f \( -name "ic_launcher.png" -o -name "ic_launcher_round.png" -o -name "ic_launcher_foreground.png" \) -delete
@@ -164,45 +183,25 @@ jobs:
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
           test -s android/app/google-services.json
 
-      - name: Build Android App Bundle
+      - name: Build universal APK
         run: |
-          flutter build appbundle \
+          flutter build apk \
             --release \
-            --target-platform android-arm,android-arm64,android-x64 \
+            --target-platform android-arm,android-arm64 \
             --build-name="$KOINLY_APP_VERSION_NAME" \
             --build-number="$KOINLY_APP_BUILD_NUMBER" \
             --no-pub \
             --no-tree-shake-icons \
             --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME" \
             --dart-define=KOINLY_SYNC_API_BASE_URL="$KOINLY_SYNC_API_BASE_URL"
-          cp build/app/outputs/bundle/release/app-release.aab "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}.aab"
+          cp build/app/outputs/flutter-apk/app-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-universal.apk"
 
-      - name: Generate universal APK from App Bundle
-        run: |
-          BUNDLETOOL_VERSION="1.18.1"
-          curl -L --retry 3 --retry-delay 5 \
-            -o bundletool.jar \
-            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
-
-          java -jar bundletool.jar build-apks \
-            --bundle=build/app/outputs/bundle/release/app-release.aab \
-            --output=artifacts/koinly-universal.apks \
-            --mode=universal \
-            --ks="$ANDROID_KEYSTORE_FILE" \
-            --ks-key-alias="$ANDROID_KEY_ALIAS" \
-            --ks-pass="pass:$ANDROID_KEYSTORE_PASSWORD" \
-            --key-pass="pass:$ANDROID_KEY_PASSWORD" \
-            --overwrite
-
-          unzip -p artifacts/koinly-universal.apks universal.apk > "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-universal.apk"
-          rm -f artifacts/koinly-universal.apks bundletool.jar
-
-      - name: Build ARM32, ARM64, and x86_64 split APKs
+      - name: Build ARM32 and ARM64 split APKs
         run: |
           flutter build apk \
             --release \
             --split-per-abi \
-            --target-platform android-arm,android-arm64,android-x64 \
+            --target-platform android-arm,android-arm64 \
             --build-name="$KOINLY_APP_VERSION_NAME" \
             --build-number="$KOINLY_APP_BUILD_NUMBER" \
             --no-pub \
@@ -211,7 +210,6 @@ jobs:
             --dart-define=KOINLY_SYNC_API_BASE_URL="$KOINLY_SYNC_API_BASE_URL"
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm32.apk"
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm64.apk"
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-x86_64.apk"
 
       - name: List APK artifacts
         run: ls -lh artifacts
@@ -232,9 +230,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: koinly-android-release-assets
-          path: |
-            artifacts/*.apk
-            artifacts/*.aab
+          path: artifacts/*.apk
           if-no-files-found: error
           compression-level: 0
 
@@ -244,6 +240,8 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: read
+    env:
+      PUB_CACHE: ${{ github.workspace }}\.pub-cache
 
     steps:
       - name: Checkout repository
@@ -255,6 +253,16 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Restore Windows dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pub-cache
+            build/windows/x64/extracted
+          key: koinly-${{ runner.os }}-deps-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            koinly-${{ runner.os }}-deps-
+
       - name: Show Flutter version
         run: flutter --version
 
@@ -262,7 +270,7 @@ jobs:
         run: flutter config --enable-windows-desktop
 
       - name: Generate Windows platform files
-        run: flutter create --platforms=windows --project-name koinly .
+        run: flutter create --platforms=windows --project-name koinly --no-pub .
 
       - name: Apply Koinly Windows window title
         shell: pwsh
@@ -273,6 +281,7 @@ jobs:
           }
           $main = Get-Content $mainCpp -Raw
           $main = $main -replace 'CreateAndShow\(L"[^"]+"', 'CreateAndShow(L"Koinly"'
+          $main = $main -replace '\.Create\(L"[^"]+"', '.Create(L"Koinly"'
           Set-Content -Path $mainCpp -Value $main -Encoding UTF8
 
           $resourceRc = "windows/runner/Runner.rc"
@@ -443,13 +452,17 @@ jobs:
           & "$env:WINDOWS_SIGNTOOL_PATH" verify /pa /v "$exe"
           if ($LASTEXITCODE -ne 0) { throw "Koinly.exe signature verification failed" }
 
-      - name: Install Inno Setup
+      - name: Ensure Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --no-progress -y
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (!(Test-Path $iscc)) {
-            throw "ISCC.exe was not found after installing Inno Setup: $iscc"
+            choco install innosetup --no-progress -y
+          } else {
+            Write-Host "Using preinstalled Inno Setup: $iscc"
+          }
+          if (!(Test-Path $iscc)) {
+            throw "ISCC.exe was not found: $iscc"
           }
           "ISCC_PATH=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
@@ -676,7 +689,6 @@ jobs:
           repository = os.environ["GITHUB_REPOSITORY"]
           content_types = {
               ".apk": "application/vnd.android.package-archive",
-              ".aab": "application/octet-stream",
               ".exe": "application/vnd.microsoft.portable-executable",
           }
 
