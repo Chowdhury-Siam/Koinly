@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-const int kProfileMediaMaxBytes = 500 * 1024;
-const String kProfileMediaSizeMessage = 'Profile media must be 500 KB or smaller.';
+const int kProfileMediaMaxBytes = 1000 * 1024;
+const String kProfileMediaSizeMessage = 'Profile media must be 1000 KB or smaller.';
 
 enum ProfileMediaKind { photo, gif, video }
 

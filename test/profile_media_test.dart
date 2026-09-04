@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:koinly/profile/profile_media.dart';
 
 void main() {
-  test('profile media accepts exactly 500 KB', () {
+  test('profile media accepts exactly 1000 KB', () {
     expect(
       () => ProfileMediaStorage.validateSelection(
         name: 'avatar.gif',
@@ -12,7 +12,7 @@ void main() {
     );
   });
 
-  test('profile media rejects files larger than 500 KB', () {
+  test('profile media rejects files larger than 1000 KB', () {
     expect(
       () => ProfileMediaStorage.validateSelection(
         name: 'avatar.mp4',

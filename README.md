@@ -86,7 +86,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Light, dark, and system themes
 - Responsive Android and Windows layouts
 - Customizable profiles with photo, animated GIF, or short-video media previews
-- Private profile-media storage with an enforced 500 KB maximum file size
+- Private profile-media storage with an enforced 1000 KB maximum file size
 - Savings Suggestion preferences grouped with profile information in one screen
 - Android daily reminder notifications
 - GitHub Releases-based update checks

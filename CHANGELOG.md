@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.1057] - 2026-09-04
+
+### Fixed
+
+- New sync-account registration during first-run setup now always continues through Currency and Accounts instead of accidentally completing onboarding when registration was selected from the Login screen.
+- The Accounts setup step now makes add, edit, and remove actions explicit.
+
+### Changed
+
+- Replaced the previous Analysis Trend card with a cleaner cash-flow trend that includes Income/Expense/Net summaries, Both/Income/Expense views, clearer date labels, touch values, and an improved empty state.
+- Increased the profile photo/GIF/video limit from 500 KB to 1000 KB across validation, UI guidance, and tests.
+
 ## [1.0.1056] - 2026-09-01
 
 ### Fixed

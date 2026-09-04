@@ -5518,7 +5518,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int index = 0;
 
   Future<void> _openAccountSync({required bool createAccount}) async {
-    await Navigator.push(
+    final createdAccount = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => MultiDeviceSyncScreen(
@@ -5529,6 +5529,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ),
     );
+    if (!mounted || createdAccount != true) return;
+
+    // A newly registered sync account must continue through the local setup
+    // pages. This also covers users who entered through Login and then switched
+    // to "Create account instead" inside the auth screen.
+    await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
   }
 
   @override
@@ -5743,9 +5749,9 @@ class AccountSetupPane extends StatelessWidget {
         children: [
           const KoinlyAppIcon(size: 82, borderRadius: 26),
           const SizedBox(height: 24),
-          Text('Accounts are ready', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
-          const Text('Use the starter accounts, create your own, or skip this step to start with no accounts.', textAlign: TextAlign.center),
+          const Text('Keep the starter accounts, add your own, or remove any account you do not need. Tap an account to edit or delete it.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
           ...state.accounts.map((a) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -5759,7 +5765,7 @@ class AccountSetupPane extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Create account'),
+                label: const Text('Add account'),
               ),
               TextButton.icon(
                 onPressed: onSkip,
@@ -8652,7 +8658,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
             ]),
             const SizedBox(height: 10),
             MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
-            const SectionHeader('Trend'),
+            const SectionHeader('Cash flow'),
             RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
             const SectionHeader('Averages'),
             Row(children: [
@@ -9626,7 +9632,9 @@ class MonthBreakdownTile extends StatelessWidget {
   }
 }
 
-class AnalysisTrendChart extends StatelessWidget {
+enum _TrendView { both, income, expense }
+
+class AnalysisTrendChart extends StatefulWidget {
   const AnalysisTrendChart({
     super.key,
     required this.days,
@@ -9638,346 +9646,429 @@ class AnalysisTrendChart extends StatelessWidget {
   final Map<DateTime, Summary> daily;
   final String rangeLabel;
 
-  static const Color _chartCard = Color(0xFF242A35);
-  static const Color _chartPanel = Color(0xFF222832);
-  static const Color _incomeStart = Color(0xFFFF7A1A);
-  static const Color _incomeEnd = Color(0xFFFF2E2E);
-  static const Color _expenseStart = Color(0xFF8A2BFF);
-  static const Color _expenseEnd = Color(0xFFFF6CAD);
-  static const Color _axisText = Color(0xFFB7BEC9);
-  static const Color _softGrid = Color(0xFF59616E);
+  @override
+  State<AnalysisTrendChart> createState() => _AnalysisTrendChartState();
+}
+
+class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
+  _TrendView _view = _TrendView.both;
 
   List<FlSpot> _spotsFor(bool income) {
-    if (days.isEmpty) return const [FlSpot(0, 0), FlSpot(1, 0)];
-    final result = <FlSpot>[];
-    for (var i = 0; i < days.length; i++) {
-      final summary = daily[days[i]] ?? const Summary(income: 0, expense: 0);
-      result.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
+    if (widget.days.isEmpty) return const [FlSpot(0, 0), FlSpot(1, 0)];
+    final spots = <FlSpot>[];
+    for (var i = 0; i < widget.days.length; i++) {
+      final summary = widget.daily[widget.days[i]] ?? const Summary(income: 0, expense: 0);
+      spots.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
     }
-    if (result.length == 1) result.add(FlSpot(1, result.first.y));
-    return result;
+    if (spots.length == 1) spots.add(FlSpot(1, spots.first.y));
+    return spots;
   }
 
-  ({double minY, double maxY}) _bounds(List<FlSpot> incomeSpots, List<FlSpot> expenseSpots) {
-    final values = <double>[
-      ...incomeSpots.map((spot) => spot.y),
-      ...expenseSpots.map((spot) => spot.y),
-    ];
-    final high = values.fold<double>(0, (max, value) => math.max(max, value));
-    if (high <= 0) return (minY: 0, maxY: 100);
-
-    final padded = high * 1.22;
+  double _niceMaxY(Iterable<double> values) {
+    final highest = values.fold<double>(0, (current, value) => math.max(current, value).toDouble());
+    if (highest <= 0) return 100;
+    final padded = highest * 1.18;
     final magnitude = math.pow(10, (math.log(padded) / math.ln10).floor()).toDouble();
     final normalized = padded / magnitude;
-    final rounded = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-    return (minY: 0, maxY: rounded * magnitude);
-  }
-
-  double _highlightX(List<FlSpot> incomeSpots, List<FlSpot> expenseSpots) {
-    final length = math.min(incomeSpots.length, expenseSpots.length);
-    for (var i = length - 1; i >= 0; i--) {
-      if (incomeSpots[i].y != 0 || expenseSpots[i].y != 0) return incomeSpots[i].x;
-    }
-    return length <= 1 ? 0 : incomeSpots.last.x;
+    final rounded = normalized <= 2
+        ? 2
+        : normalized <= 5
+            ? 5
+            : 10;
+    return rounded * magnitude;
   }
 
   String _compactCurrency(AppController state, double value) {
     if (state.amountsHidden) {
-      return state.currencyPosition == CurrencyPosition.prefix ? '${state.currencySymbol}••••' : '••••${state.currencySymbol}';
+      return state.currencyPosition == CurrencyPosition.prefix
+          ? '${state.currencySymbol}••••'
+          : '••••${state.currencySymbol}';
     }
-    final absValue = value.abs();
+    final absolute = value.abs();
     String number;
-    if (absValue >= 1000000) {
-      number = '${(absValue / 1000000).toStringAsFixed(absValue % 1000000 == 0 ? 0 : 1)}M';
-    } else if (absValue >= 1000) {
-      number = '${(absValue / 1000).toStringAsFixed(absValue % 1000 == 0 ? 0 : 1)}K';
+    if (absolute >= 1000000) {
+      number = '${(absolute / 1000000).toStringAsFixed(absolute % 1000000 == 0 ? 0 : 1)}M';
+    } else if (absolute >= 1000) {
+      number = '${(absolute / 1000).toStringAsFixed(absolute % 1000 == 0 ? 0 : 1)}K';
     } else {
-      number = absValue.toStringAsFixed(absValue % 1 == 0 ? 0 : 1);
+      number = absolute.toStringAsFixed(absolute % 1 == 0 ? 0 : 1);
     }
-
     final sign = value < 0 ? '-' : '';
     return state.currencyPosition == CurrencyPosition.prefix
         ? '$sign${state.currencySymbol}$number'
         : '$sign$number${state.currencySymbol}';
   }
 
-  Widget _leftTitle(BuildContext context, double value, TitleMeta meta, double maxY, Color axisColor) {
+  Set<int> _bottomLabelIndexes() {
+    final count = widget.days.length;
+    if (count <= 1) return {0};
+    if (count <= 4) return {for (var i = 0; i < count; i++) i};
+    return {
+      0,
+      ((count - 1) / 3).round(),
+      (((count - 1) * 2) / 3).round(),
+      count - 1,
+    };
+  }
+
+  String _dateLabel(DateTime day) {
+    if (widget.days.length <= 1) return DateFormat('MMM d').format(day);
+    final first = widget.days.first;
+    final last = widget.days.last;
+    final span = last.difference(first).inDays.abs();
+    if (span > 365) return DateFormat('MMM yy').format(day);
+    if (span > 62) return DateFormat('MMM').format(day);
+    return DateFormat('MMM d').format(day);
+  }
+
+  Widget _leftTitle(BuildContext context, double value, TitleMeta meta, double maxY) {
     final interval = maxY / 4;
     if (interval <= 0) return const SizedBox.shrink();
-    final roundedSlot = (value / interval).round();
-    final expected = roundedSlot * interval;
-    if ((value - expected).abs() > 0.01) return const SizedBox.shrink();
+    final slot = (value / interval).round();
+    if ((value - slot * interval).abs() > .01) return const SizedBox.shrink();
     final state = context.read<AppController>();
     return Text(
       _compactCurrency(state, value),
+      maxLines: 1,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: axisColor.withOpacity(.72),
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
             fontWeight: FontWeight.w800,
           ),
     );
   }
 
-  Widget _bottomTitle(BuildContext context, double value, TitleMeta meta, Color axisColor) {
-    if (days.isEmpty) return const SizedBox.shrink();
-    final indexes = <int>{
-      0,
-      if (days.length > 2) (days.length * .5).round(),
-      days.length - 1,
-    }.where((i) => i >= 0 && i < days.length).toList()
-      ..sort();
-
+  Widget _bottomTitle(BuildContext context, double value, TitleMeta meta) {
+    if (widget.days.isEmpty) return const SizedBox.shrink();
     final index = value.round();
-    if (!indexes.contains(index)) return const SizedBox.shrink();
-    final day = days[index];
-    final label = days.length > 45 ? DateFormat('MMM').format(day).toUpperCase() : DateFormat('MMM d').format(day);
+    if (index < 0 || index >= widget.days.length || !_bottomLabelIndexes().contains(index)) {
+      return const SizedBox.shrink();
+    }
     return SideTitleWidget(
       axisSide: meta.axisSide,
       space: 10,
       child: Text(
-        label,
+        _dateLabel(widget.days[index]),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: axisColor.withOpacity(.78),
-              fontWeight: FontWeight.w900,
-              letterSpacing: .2,
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
+              fontWeight: FontWeight.w800,
             ),
       ),
     );
-  }
-
-  List<FlSpot> _animatedSpots(List<FlSpot> spots, double animation) {
-    return spots.map((spot) => FlSpot(spot.x, spot.y * animation)).toList(growable: false);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chartCardColor = isDark ? _chartCard : const Color(0xFFFBFEFF);
-    final chartPanelColor = isDark ? _chartPanel : const Color(0xFFF7FCFD);
-    final titleColor = isDark ? Colors.white : scheme.onSurface;
-    final axisColor = isDark ? _axisText : scheme.onSurfaceVariant;
-    final gridColor = isDark ? _softGrid : const Color(0xFFD8E6EA);
-    final chartBorderColor = isDark ? Colors.white.withOpacity(.045) : const Color(0xFFDCEBEE);
-    final panelShadowColor = isDark ? Colors.black.withOpacity(.22) : Colors.black.withOpacity(.045);
-    final buttonBackground = isDark ? Colors.white.withOpacity(.08) : const Color(0xFFEAF3F5);
-    final buttonForeground = isDark ? Colors.white : scheme.onSurface;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final incomeSpots = _spotsFor(true);
     final expenseSpots = _spotsFor(false);
-    final bounds = _bounds(incomeSpots, expenseSpots);
-    final minY = bounds.minY;
-    final maxY = bounds.maxY;
-    final maxX = math.max(1.0, (days.length - 1).toDouble());
-    final highlightX = _highlightX(incomeSpots, expenseSpots).clamp(0, maxX).toDouble();
-    final hasData = incomeSpots.any((spot) => spot.y != 0) || expenseSpots.any((spot) => spot.y != 0);
+    final showIncome = _view != _TrendView.expense;
+    final showExpense = _view != _TrendView.income;
+    final visibleValues = <double>[
+      if (showIncome) ...incomeSpots.map((spot) => spot.y),
+      if (showExpense) ...expenseSpots.map((spot) => spot.y),
+    ];
+    final maxY = _niceMaxY(visibleValues);
+    final maxX = math.max(1.0, (widget.days.length - 1).toDouble());
+    final totalIncome = widget.days.fold<double>(
+      0,
+      (sum, day) => sum + (widget.daily[day]?.income ?? 0),
+    );
+    final totalExpense = widget.days.fold<double>(
+      0,
+      (sum, day) => sum + (widget.daily[day]?.expense ?? 0),
+    );
+    final net = totalIncome - totalExpense;
+    final hasData = totalIncome != 0 || totalExpense != 0;
+    final gridColor = scheme.outlineVariant.withOpacity(dark ? .16 : .42);
+    final panelColor = dark
+        ? scheme.surfaceContainerHigh.withOpacity(.46)
+        : scheme.surface.withOpacity(.94);
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 720),
-      curve: Curves.easeOutCubic,
-      builder: (context, animation, child) {
-        final animatedIncome = _animatedSpots(incomeSpots, animation);
-        final animatedExpense = _animatedSpots(expenseSpots, animation);
+    final bars = <LineChartBarData>[
+      if (showIncome)
+        LineChartBarData(
+          spots: incomeSpots,
+          isCurved: widget.days.length > 2,
+          preventCurveOverShooting: true,
+          barWidth: 3.2,
+          isStrokeCapRound: true,
+          color: kSleekIncome,
+          dotData: FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.income,
+            color: kSleekIncome.withOpacity(dark ? .10 : .08),
+          ),
+        ),
+      if (showExpense)
+        LineChartBarData(
+          spots: expenseSpots,
+          isCurved: widget.days.length > 2,
+          preventCurveOverShooting: true,
+          barWidth: 3.2,
+          isStrokeCapRound: true,
+          color: kSleekExpense,
+          dotData: FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.expense,
+            color: kSleekExpense.withOpacity(dark ? .10 : .08),
+          ),
+        ),
+    ];
 
-        return Opacity(
-          opacity: animation,
-          child: Transform.translate(
-            offset: Offset(0, (1 - animation) * 18),
-            child: ExpressiveCard(
-              color: chartCardColor,
-              surfaceTint: false,
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Income & Expenses',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: titleColor,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -.2,
-                              ),
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        onPressed: () => showDateRangeSheet(context),
-                        icon: const Icon(Icons.chevron_right_rounded),
-                        style: IconButton.styleFrom(
-                          backgroundColor: buttonBackground,
-                          foregroundColor: buttonForeground,
-                        ),
-                        tooltip: 'Change date range',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    height: 300,
-                    padding: const EdgeInsets.fromLTRB(4, 8, 10, 4),
-                    decoration: BoxDecoration(
-                      color: chartPanelColor,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: chartBorderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: panelShadowColor,
-                          blurRadius: isDark ? 24.0 : 18.0,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
+    return ExpressiveCard(
+      surfaceTint: false,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cash flow trend',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                     ),
-                    child: hasData
-                        ? RepaintBoundary(
-                            child: LineChart(
-                              LineChartData(
-                              minX: 0,
-                              maxX: maxX,
-                              minY: minY,
-                              maxY: maxY,
-                              clipData: const FlClipData.all(),
-                              lineTouchData: LineTouchData(
-                                handleBuiltInTouches: true,
-                                touchTooltipData: LineTouchTooltipData(
-                                  tooltipRoundedRadius: 16,
-                                  tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  tooltipMargin: 12,
-                                  getTooltipColor: (_) => Colors.black.withOpacity(.88),
-                                  getTooltipItems: (items) => items.map((item) {
-                                    final index = item.x.round().clamp(0, days.length - 1).toInt();
-                                    final label = item.barIndex == 0 ? 'Income' : 'Expenses';
-                                    return LineTooltipItem(
-                                      '$label\n${DateFormat('MMM d').format(days[index])}  ${_compactCurrency(state, item.y)}',
-                                      const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                              borderData: FlBorderData(show: false),
-                              gridData: FlGridData(
-                                show: true,
-                                drawVerticalLine: true,
-                                horizontalInterval: maxY / 4,
-                                verticalInterval: math.max(1, (maxX / 4).round()).toDouble(),
-                                getDrawingHorizontalLine: (value) => FlLine(
-                                  color: gridColor.withOpacity(isDark ? .20 : .44),
-                                  strokeWidth: 1,
-                                ),
-                                getDrawingVerticalLine: (value) => FlLine(
-                                  color: gridColor.withOpacity(isDark ? .16 : .34),
-                                  strokeWidth: 1,
-                                ),
-                              ),
-                              extraLinesData: ExtraLinesData(
-                                verticalLines: [
-                                  VerticalLine(
-                                    x: highlightX,
-                                    color: (isDark ? Colors.white : scheme.onSurface).withOpacity(isDark ? .34 : .42),
-                                    strokeWidth: 1.6,
-                                  ),
-                                ],
-                              ),
-                              titlesData: FlTitlesData(
-                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 58,
-                                    interval: maxY / 4,
-                                    getTitlesWidget: (value, meta) => _leftTitle(context, value, meta, maxY, axisColor),
-                                  ),
-                                ),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 34,
-                                    interval: 1,
-                                    getTitlesWidget: (value, meta) => _bottomTitle(context, value, meta, axisColor),
-                                  ),
-                                ),
-                              ),
-                              lineBarsData: [
-                                LineChartBarData(
-                                  spots: animatedIncome,
-                                  isCurved: true,
-                                  preventCurveOverShooting: true,
-                                  barWidth: 3.6,
-                                  isStrokeCapRound: true,
-                                  gradient: const LinearGradient(colors: [_incomeStart, _incomeEnd]),
-                                  dotData: FlDotData(
-                                    show: true,
-                                    checkToShowDot: (spot, barData) => (spot.x - highlightX).abs() < .01,
-                                    getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                                      radius: 6,
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                      strokeColor: _incomeEnd,
-                                    ),
-                                  ),
-                                  belowBarData: BarAreaData(show: false),
-                                ),
-                                LineChartBarData(
-                                  spots: animatedExpense,
-                                  isCurved: true,
-                                  preventCurveOverShooting: true,
-                                  barWidth: 3.6,
-                                  isStrokeCapRound: true,
-                                  gradient: const LinearGradient(colors: [_expenseStart, _expenseEnd]),
-                                  dotData: FlDotData(
-                                    show: true,
-                                    checkToShowDot: (spot, barData) => (spot.x - highlightX).abs() < .01,
-                                    getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
-                                      radius: 6,
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                      strokeColor: _expenseEnd,
-                                    ),
-                                  ),
-                                  belowBarData: BarAreaData(show: false),
-                                ),
-                              ],
-                              ),
-                            ),
-                          )
-                        : Center(
-                            child: Text(
-                              'No chart data exists for this range.',
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: axisColor, fontWeight: FontWeight.w800),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.rangeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton.filledTonal(
+                onPressed: () => showDateRangeSheet(context),
+                tooltip: 'Change date range',
+                icon: const Icon(Icons.date_range_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _TrendMetricPill(
+                label: 'Income',
+                value: state.format(totalIncome),
+                icon: Icons.south_west_rounded,
+                color: kSleekIncome,
+              ),
+              _TrendMetricPill(
+                label: 'Expense',
+                value: state.format(totalExpense),
+                icon: Icons.north_east_rounded,
+                color: kSleekExpense,
+              ),
+              _TrendMetricPill(
+                label: 'Net',
+                value: state.format(net),
+                icon: net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                color: net >= 0 ? kSleekIncome : kSleekExpense,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SegmentedButton<_TrendView>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _TrendView.both, label: Text('Both')),
+              ButtonSegment(value: _TrendView.income, label: Text('Income')),
+              ButtonSegment(value: _TrendView.expense, label: Text('Expense')),
+            ],
+            selected: {_view},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) setState(() => _view = selection.first);
+            },
+          ),
+          const SizedBox(height: 14),
+          Container(
+            height: 278,
+            padding: const EdgeInsets.fromLTRB(6, 12, 10, 4),
+            decoration: BoxDecoration(
+              color: panelColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .14 : .48)),
+            ),
+            child: hasData
+                ? RepaintBoundary(
+                    child: LineChart(
+                      LineChartData(
+                        minX: 0,
+                        maxX: maxX,
+                        minY: 0,
+                        maxY: maxY,
+                        clipData: const FlClipData.all(),
+                        borderData: FlBorderData(show: false),
+                        gridData: FlGridData(
+                          show: true,
+                          drawVerticalLine: false,
+                          horizontalInterval: maxY / 4,
+                          getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
+                        ),
+                        titlesData: FlTitlesData(
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 58,
+                              interval: maxY / 4,
+                              getTitlesWidget: (value, meta) => _leftTitle(context, value, meta, maxY),
                             ),
                           ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 36,
+                              interval: 1,
+                              getTitlesWidget: (value, meta) => _bottomTitle(context, value, meta),
+                            ),
+                          ),
+                        ),
+                        lineTouchData: LineTouchData(
+                          handleBuiltInTouches: true,
+                          touchTooltipData: LineTouchTooltipData(
+                            tooltipRoundedRadius: 14,
+                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            tooltipMargin: 12,
+                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
+                            getTooltipItems: (items) => items.map((item) {
+                              final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
+                              final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
+                              final label = item.barIndex == 0 && showIncome ? 'Income' : 'Expense';
+                              return LineTooltipItem(
+                                '$date\n$label  ${_compactCurrency(state, item.y)}',
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, height: 1.35),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        lineBarsData: bars,
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.show_chart_rounded, size: 34, color: scheme.onSurfaceVariant.withOpacity(.65)),
+                          const SizedBox(height: 10),
+                          Text(
+                            'No income or expense data in this range',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add transactions or choose another date range to see a trend.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      _TrendLegend(color: _incomeEnd, label: 'Income', textColor: titleColor),
-                      const SizedBox(width: 18),
-                      _TrendLegend(color: _expenseStart, label: 'Expenses', textColor: titleColor),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ),
-        );
-      },
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
+              if (showIncome && showExpense) const SizedBox(width: 16),
+              if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
+              const Spacer(),
+              if (hasData)
+                Flexible(
+                  child: Text(
+                    'Tap or drag for exact values',
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _TrendLegend extends StatelessWidget {
-  const _TrendLegend({required this.color, required this.label, required this.textColor});
+class _TrendMetricPill extends StatelessWidget {
+  const _TrendMetricPill({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 112),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withOpacity(Theme.of(context).brightness == Brightness.dark ? .10 : .08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 17, color: color),
+          const SizedBox(width: 7),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendLegendDot extends StatelessWidget {
+  const _TrendLegendDot({required this.color, required this.label});
 
   final Color color;
   final String label;
-  final Color textColor;
 
   @override
   Widget build(BuildContext context) {
@@ -9985,27 +10076,16 @@ class _TrendLegend extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 30,
-          height: 6,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [BoxShadow(color: color.withOpacity(.36), blurRadius: 10)],
-          ),
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: textColor.withOpacity(.88),
-                fontWeight: FontWeight.w800,
-              ),
-        ),
+        const SizedBox(width: 7),
+        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800)),
       ],
     );
   }
 }
-
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -11634,11 +11714,20 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       _passwordController.clear();
       _registrationKeyController.clear();
       showSnack(context, register ? 'Account created. Sync started.' : 'Signed in. Cloud data loaded.');
-      if (widget.completeOnAuth) {
+      final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
+      if (register && onboardingAuthFlow) {
+        // Registration is only the first onboarding step. Never mark setup as
+        // complete here, even when the user opened Login first and then changed
+        // to registration. Return a result so onboarding advances to Currency
+        // and then Accounts, where accounts can be added, edited, or removed.
+        if (mounted) Navigator.pop(context, true);
+      } else if (!register && widget.completeOnAuth) {
+        // Existing-account login intentionally restores the cloud copy and can
+        // finish setup immediately.
         await state.completeOnboarding();
-        if (mounted) Navigator.pop(context);
+        if (mounted) Navigator.pop(context, false);
       } else if (widget.returnOnAuth) {
-        if (mounted) Navigator.pop(context);
+        if (mounted) Navigator.pop(context, false);
       }
     }
   }
