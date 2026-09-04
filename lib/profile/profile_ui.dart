@@ -480,27 +480,13 @@ class _ProfileMediaCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          if (hasMedia && mediaKind != null) ...[
-            Text(
-              '${profileMediaKindLabel(mediaKind)} • ${formatProfileMediaSize(state.profileMediaSizeBytes)}',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              state.profileMediaOriginalName,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-            ),
-          ] else
+          if (!hasMedia)
             Text(
               'Add a photo, animated GIF, or short video.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
             ),
-          const SizedBox(height: 16),
+          SizedBox(height: hasMedia ? 10 : 16),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -527,12 +513,14 @@ class _ProfileMediaCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-          ),
+          if (!hasMedia) ...[
+            const SizedBox(height: 12),
+            Text(
+              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+          ],
         ],
       ),
     );

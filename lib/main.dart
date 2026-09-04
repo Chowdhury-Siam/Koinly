@@ -5073,7 +5073,7 @@ Future<String?> showAppleWheelSelectionSheet(
                       perspective: 0.0001,
                       squeeze: 1.0,
                       physics: const FixedExtentScrollPhysics(),
-                      overAndUnderCenterOpacity: .34,
+                      overAndUnderCenterOpacity: .58,
                       onSelectedItemChanged: (index) => setModalState(() => selectedIndex = index),
                       childDelegate: ListWheelChildBuilderDelegate(
                         childCount: options.length,
@@ -5157,29 +5157,45 @@ class _AppleWheelOptionRow extends StatelessWidget {
           fontWeight: FontWeight.w700,
         );
 
-    return Align(
-      alignment: Alignment.center,
-      child: SizedBox(
-        height: 72,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              iconBubble(context, option.iconName, option.iconColor, size: selected ? 46 : 40),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
-                    const SizedBox(height: 3),
-                    Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
-                  ],
-                ),
+    return AnimatedOpacity(
+      duration: AppMotion.medium,
+      curve: AppMotion.standard,
+      opacity: selected ? 1 : .82,
+      child: AnimatedScale(
+        duration: AppMotion.slow,
+        curve: AppMotion.emphasized,
+        scale: selected ? 1 : .965,
+        alignment: Alignment.centerLeft,
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            height: 72,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  AnimatedScale(
+                    duration: AppMotion.slow,
+                    curve: AppMotion.emphasized,
+                    scale: selected ? 1.08 : .94,
+                    child: iconBubble(context, option.iconName, option.iconColor, size: 42),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                        const SizedBox(height: 3),
+                        Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -5954,7 +5970,7 @@ class AccountSetupPane extends StatelessWidget {
             runSpacing: 12,
             children: [
               OutlinedButton.icon(
-                onPressed: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
+                onPressed: () => showAccountEditor(context, allowedTypes: AccountType.values),
                 icon: const Icon(Icons.add_rounded),
                 label: const Text('Add account'),
               ),
@@ -13676,9 +13692,6 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
   required String selectedSymbol,
 }) async {
   var search = '';
-  var selectedIndex = countries.indexWhere((c) => c[2] == selectedCode && c[1] == selectedSymbol);
-  if (selectedIndex < 0) selectedIndex = countries.indexWhere((c) => c[2] == selectedCode);
-  if (selectedIndex < 0) selectedIndex = 0;
 
   List<List<String>> filteredCountries() {
     final query = search.trim().toLowerCase();
@@ -13689,7 +13702,13 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
     return filtered;
   }
 
-  return showKoinlyPopup<List<String>>(
+  final initialCountries = filteredCountries();
+  var selectedIndex = initialCountries.indexWhere((c) => c[2] == selectedCode && c[1] == selectedSymbol);
+  if (selectedIndex < 0) selectedIndex = initialCountries.indexWhere((c) => c[2] == selectedCode);
+  if (selectedIndex < 0) selectedIndex = 0;
+  final pickerController = FixedExtentScrollController(initialItem: selectedIndex);
+
+  final result = await showKoinlyPopup<List<String>>(
     context,
     maxWidth: 560,
     maxHeight: 660,
@@ -13723,10 +13742,13 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                   prefixIcon: Icon(Icons.search_rounded),
                   hintText: 'Search countries or currency code',
                 ),
-                onChanged: (value) => setModalState(() {
-                  search = value;
-                  selectedIndex = 0;
-                }),
+                onChanged: (value) {
+                  if (pickerController.hasClients) pickerController.jumpToItem(0);
+                  setModalState(() {
+                    search = value;
+                    selectedIndex = 0;
+                  });
+                },
               ),
               const SizedBox(height: 12),
               Container(
@@ -13758,13 +13780,13 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                             ),
                           ),
                           ListWheelScrollView.useDelegate(
-                            key: ValueKey(search),
+                            controller: pickerController,
                             itemExtent: 72,
                             diameterRatio: 100000,
                             perspective: 0.0001,
                             squeeze: 1.0,
                             physics: const FixedExtentScrollPhysics(),
-                            overAndUnderCenterOpacity: .34,
+                            overAndUnderCenterOpacity: .58,
                             onSelectedItemChanged: (index) => setModalState(() => selectedIndex = index),
                             childDelegate: ListWheelChildBuilderDelegate(
                               childCount: filtered.length,
@@ -13828,6 +13850,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
       },
     ),
   );
+
+  pickerController.dispose();
+  return result;
 }
 
 class _CurrencyWheelRow extends StatelessWidget {
@@ -13838,45 +13863,56 @@ class _CurrencyWheelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.center,
-      child: SizedBox(
-        height: 72,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _CurrencySymbolBubble(symbol: country[1], selected: selected),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      country[0],
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            color: selected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withOpacity(.72),
-                          ),
+    return AnimatedOpacity(
+      duration: AppMotion.medium,
+      curve: AppMotion.standard,
+      opacity: selected ? 1 : .82,
+      child: AnimatedScale(
+        duration: AppMotion.slow,
+        curve: AppMotion.emphasized,
+        scale: selected ? 1 : .965,
+        alignment: Alignment.centerLeft,
+        child: Align(
+          alignment: Alignment.center,
+          child: SizedBox(
+            height: 72,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _CurrencySymbolBubble(symbol: country[1], selected: selected),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          country[0],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: selected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withOpacity(.72),
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${country[1]} • ${country[2]}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${country[1]} • ${country[2]}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

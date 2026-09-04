@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1060] - 2026-09-04
+
+### Fixed
+- First-run account creation now offers Savings alongside Regular and Credit, so a savings account can be created directly during onboarding.
+- Choice-wheel scrolling now uses a dedicated fixed-item desktop animator instead of the generic page-scroll handler; Theme, Currency, and other wheel selectors move and snap cleanly without visible jumps.
+- Profile media no longer shows technical file metadata or the supported-format/size helper after media has been added.
+
+### Changed
+- Improved selection motion in wheel-based pickers with consistent scale/opacity transitions across the app.
+
 ## [1.0.1059] - 2026-09-04
 
 ### Fixed

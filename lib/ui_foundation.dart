@@ -144,6 +144,12 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    if (kIsDesktopApp && details.controller is FixedExtentScrollController) {
+      return _KoinlySmoothDesktopWheelScroll(
+        controller: details.controller! as FixedExtentScrollController,
+        child: child,
+      );
+    }
     if (kIsDesktopApp && details.controller != null) {
       return _KoinlySmoothDesktopScroll(controller: details.controller!, child: child);
     }
@@ -174,6 +180,63 @@ class KoinlyMobileScrollPhysics extends ClampingScrollPhysics {
   double carriedMomentum(double existingVelocity) {
     final boost = (0.000816 * math.pow(existingVelocity.abs(), 1.967)).toDouble();
     return existingVelocity.sign * math.min<double>(boost, 40000.0);
+  }
+}
+
+class _KoinlySmoothDesktopWheelScroll extends StatefulWidget {
+  const _KoinlySmoothDesktopWheelScroll({required this.controller, required this.child});
+
+  final FixedExtentScrollController controller;
+  final Widget child;
+
+  @override
+  State<_KoinlySmoothDesktopWheelScroll> createState() => _KoinlySmoothDesktopWheelScrollState();
+}
+
+class _KoinlySmoothDesktopWheelScrollState extends State<_KoinlySmoothDesktopWheelScroll> {
+  static const Duration _duration = Duration(milliseconds: 180);
+
+  Timer? _targetResetTimer;
+  int? _targetItem;
+
+  @override
+  void dispose() {
+    _targetResetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !widget.controller.hasClients) return;
+    final rawDelta = event.scrollDelta.dy.abs() >= event.scrollDelta.dx.abs()
+        ? event.scrollDelta.dy
+        : event.scrollDelta.dx;
+    if (rawDelta == 0) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
+      if (!mounted || !widget.controller.hasClients) return;
+      final direction = rawDelta > 0 ? 1 : -1;
+      final magnitude = rawDelta.abs();
+      final steps = magnitude >= 240 ? 3 : magnitude >= 140 ? 2 : 1;
+      final current = _targetItem ?? widget.controller.selectedItem;
+      final requestedTarget = current + (direction * steps);
+      final target = requestedTarget < 0 ? 0 : requestedTarget;
+      _targetItem = target;
+      _targetResetTimer?.cancel();
+      _targetResetTimer = Timer(_duration, () => _targetItem = null);
+      widget.controller.animateToItem(
+        target,
+        duration: _duration,
+        curve: AppMotion.emphasized,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: widget.child,
+    );
   }
 }
 
