@@ -507,6 +507,18 @@ class UpdateDownloadStore {
     return File(p.join(dir.path, name));
   }
 
+
+  static Future<File> windowsInstallerFile({
+    required GithubRelease release,
+    required ReleaseAsset asset,
+  }) async {
+    final dir = await updatesDirectory();
+    final version = safeFileName(release.displayVersion);
+    final assetName = safeFileName(asset.name.isEmpty ? 'Koinly-Setup.exe' : asset.name);
+    final name = assetName.contains(version) ? assetName : 'Koinly-v$version-$assetName';
+    return File(p.join(dir.path, name));
+  }
+
   static Future<void> cleanupPartialFiles({Directory? directory}) async {
     final dir = directory ?? await updatesDirectory();
     if (!await dir.exists()) return;
@@ -532,6 +544,44 @@ class UpdateDownloadStore {
           await entity.delete();
         } catch (_) {}
       }
+    }
+  }
+
+  static Future<void> cleanupStaleWindowsUpdates({
+    required String keepVersion,
+    Directory? directory,
+  }) async {
+    final dir = directory ?? await updatesDirectory();
+    if (!await dir.exists()) return;
+    final keep = safeFileName(keepVersion);
+    await for (final entity in dir.list()) {
+      if (entity is File && (entity.path.toLowerCase().endsWith('.exe') || entity.path.endsWith('.part')) && !p.basename(entity.path).contains(keep)) {
+        try {
+          await entity.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+}
+
+class WindowsUpdateInstaller {
+  const WindowsUpdateInstaller._();
+
+  static Future<bool> install(String path) async {
+    if (!Platform.isWindows) return false;
+    final file = File(path);
+    if (!await file.exists()) return false;
+    try {
+      await Process.start(
+        file.path,
+        const <String>[],
+        mode: ProcessStartMode.detached,
+        runInShell: false,
+      );
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

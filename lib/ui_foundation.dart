@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -144,15 +142,11 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
-    if (kIsDesktopApp && details.controller is FixedExtentScrollController) {
-      return _KoinlySmoothDesktopWheelScroll(
-        controller: details.controller! as FixedExtentScrollController,
-        child: child,
-      );
-    }
-    if (kIsDesktopApp && details.controller != null) {
-      return _KoinlySmoothDesktopScroll(controller: details.controller!, child: child);
-    }
+    // Keep desktop scrolling native. Intercepting pointer-wheel signals and
+    // repeatedly calling animateTo/animateToItem caused queued animations,
+    // overshoot, and visible jumps with fast mouse-wheel or touchpad input.
+    // Flutter's normal scroll pipeline is smoother and preserves precise
+    // trackpad deltas while FixedExtentScrollPhysics still snaps wheel pickers.
     return child;
   }
 }
@@ -180,114 +174,5 @@ class KoinlyMobileScrollPhysics extends ClampingScrollPhysics {
   double carriedMomentum(double existingVelocity) {
     final boost = (0.000816 * math.pow(existingVelocity.abs(), 1.967)).toDouble();
     return existingVelocity.sign * math.min<double>(boost, 40000.0);
-  }
-}
-
-class _KoinlySmoothDesktopWheelScroll extends StatefulWidget {
-  const _KoinlySmoothDesktopWheelScroll({required this.controller, required this.child});
-
-  final FixedExtentScrollController controller;
-  final Widget child;
-
-  @override
-  State<_KoinlySmoothDesktopWheelScroll> createState() => _KoinlySmoothDesktopWheelScrollState();
-}
-
-class _KoinlySmoothDesktopWheelScrollState extends State<_KoinlySmoothDesktopWheelScroll> {
-  static const Duration _duration = Duration(milliseconds: 180);
-
-  Timer? _targetResetTimer;
-  int? _targetItem;
-
-  @override
-  void dispose() {
-    _targetResetTimer?.cancel();
-    super.dispose();
-  }
-
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !widget.controller.hasClients) return;
-    final rawDelta = event.scrollDelta.dy.abs() >= event.scrollDelta.dx.abs()
-        ? event.scrollDelta.dy
-        : event.scrollDelta.dx;
-    if (rawDelta == 0) return;
-
-    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      if (!mounted || !widget.controller.hasClients) return;
-      final direction = rawDelta > 0 ? 1 : -1;
-      final magnitude = rawDelta.abs();
-      final steps = magnitude >= 240 ? 3 : magnitude >= 140 ? 2 : 1;
-      final current = _targetItem ?? widget.controller.selectedItem;
-      final requestedTarget = current + (direction * steps);
-      final target = requestedTarget < 0 ? 0 : requestedTarget;
-      _targetItem = target;
-      _targetResetTimer?.cancel();
-      _targetResetTimer = Timer(_duration, () => _targetItem = null);
-      widget.controller.animateToItem(
-        target,
-        duration: _duration,
-        curve: AppMotion.emphasized,
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      onPointerSignal: _handlePointerSignal,
-      child: widget.child,
-    );
-  }
-}
-
-class _KoinlySmoothDesktopScroll extends StatefulWidget {
-  const _KoinlySmoothDesktopScroll({required this.controller, required this.child});
-
-  final ScrollController controller;
-  final Widget child;
-
-  @override
-  State<_KoinlySmoothDesktopScroll> createState() => _KoinlySmoothDesktopScrollState();
-}
-
-class _KoinlySmoothDesktopScrollState extends State<_KoinlySmoothDesktopScroll> {
-  static const Duration _duration = Duration(milliseconds: 130);
-
-  Timer? _targetResetTimer;
-  double? _targetOffset;
-
-  @override
-  void dispose() {
-    _targetResetTimer?.cancel();
-    super.dispose();
-  }
-
-  void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !widget.controller.hasClients) return;
-    final delta = event.scrollDelta.dy;
-    if (delta == 0) return;
-
-    GestureBinding.instance.pointerSignalResolver.register(event, (_) {
-      if (!mounted || !widget.controller.hasClients) return;
-      final position = widget.controller.position;
-      if (!position.hasPixels) return;
-      final viewportScale = (position.viewportDimension / 720).clamp(.85, 1.35).toDouble();
-      final currentTarget = _targetOffset ?? position.pixels;
-      final target = (currentTarget + delta * viewportScale)
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
-      _targetOffset = target;
-      _targetResetTimer?.cancel();
-      _targetResetTimer = Timer(_duration, () => _targetOffset = null);
-      widget.controller.animateTo(target, duration: _duration, curve: Curves.easeOutCubic);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      onPointerSignal: _handlePointerSignal,
-      child: widget.child,
-    );
   }
 }

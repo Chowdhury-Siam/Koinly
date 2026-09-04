@@ -1341,12 +1341,15 @@ class AppController extends ChangeNotifier {
   String pendingAndroidUpdatePath = '';
   String pendingAndroidUpdateVersion = '';
   UpdateAssetKind? pendingAndroidUpdateKind;
+  String pendingWindowsUpdatePath = '';
+  String pendingWindowsUpdateVersion = '';
   String lastSafetyBackupPath = '';
   DateTime? lastSafetyBackupAt;
   DataHealthReport? dataHealthReport;
   bool dataHealthBusy = false;
   String? _shownUpdateDialogVersionThisSession;
   http.Client? _updateDownloadClient;
+  bool _updateDownloadCancelled = false;
 
   bool get setupCompletedForCurrentPlatform {
     if (!onboardingCompleted) return false;
@@ -1499,6 +1502,13 @@ class AppController extends ChangeNotifier {
       await _clearPendingAndroidUpdate(deleteFile: true);
     } else if (pendingAndroidUpdatePath.isNotEmpty && !await File(pendingAndroidUpdatePath).exists()) {
       await _clearPendingAndroidUpdate();
+    }
+    pendingWindowsUpdatePath = await prefs.getString('pendingWindowsUpdatePath', '');
+    pendingWindowsUpdateVersion = await prefs.getString('pendingWindowsUpdateVersion', '');
+    if (pendingWindowsUpdatePath.isNotEmpty && _isPendingWindowsUpdateAlreadyInstalled()) {
+      await _clearPendingWindowsUpdate(deleteFile: true);
+    } else if (pendingWindowsUpdatePath.isNotEmpty && !await File(pendingWindowsUpdatePath).exists()) {
+      await _clearPendingWindowsUpdate();
     }
     lastSafetyBackupPath = await prefs.getString('lastSafetyBackupPath', '');
     final safetyAtRaw = await prefs.getString('lastSafetyBackupAt', '');
@@ -1874,6 +1884,7 @@ class AppController extends ChangeNotifier {
 
   bool get hasAvailableUpdate => updateCheckOutcome == UpdateCheckOutcome.updateAvailable && latestGithubRelease != null;
   bool get hasPendingAndroidUpdate => pendingAndroidUpdatePath.isNotEmpty && pendingAndroidUpdateVersion.isNotEmpty && !_isPendingAndroidUpdateAlreadyInstalled();
+  bool get hasPendingWindowsUpdate => pendingWindowsUpdatePath.isNotEmpty && pendingWindowsUpdateVersion.isNotEmpty && !_isPendingWindowsUpdateAlreadyInstalled();
 
   Map<UpdateAssetKind, ReleaseAsset> get availableAndroidUpdateAssets {
     final release = latestGithubRelease;
@@ -1926,6 +1937,14 @@ class AppController extends ChangeNotifier {
       }
     } else if (Platform.isAndroid && _isPendingAndroidUpdateAlreadyInstalled()) {
       await _clearPendingAndroidUpdate(deleteFile: true);
+    }
+    if (result.hasUpdate && Platform.isWindows) {
+      if (pendingWindowsUpdateVersion.isNotEmpty && pendingWindowsUpdateVersion != result.release!.displayVersion) {
+        await _clearPendingWindowsUpdate(deleteFile: true);
+      }
+      await UpdateDownloadStore.cleanupStaleWindowsUpdates(keepVersion: result.release!.displayVersion);
+    } else if (Platform.isWindows && _isPendingWindowsUpdateAlreadyInstalled()) {
+      await _clearPendingWindowsUpdate(deleteFile: true);
     }
     notifyListeners();
     return result;
@@ -1981,6 +2000,7 @@ class AppController extends ChangeNotifier {
 
     _updateDownloadClient?.close();
     _updateDownloadClient = http.Client();
+    _updateDownloadCancelled = false;
     updateDownloadBusy = true;
     final startedAt = DateTime.now();
     updateDownloadProgress = DownloadProgressSnapshot(
@@ -2041,7 +2061,9 @@ class AppController extends ChangeNotifier {
       } catch (_) {}
       updateDownloadBusy = false;
       updateDownloadProgress = null;
-      updateStatusMessage = 'Download failed or was interrupted. Please try again.';
+      if (!_updateDownloadCancelled) {
+        updateStatusMessage = 'Download failed or was interrupted. Please try again.';
+      }
       if (await partialFile.exists()) {
         try {
           await partialFile.delete();
@@ -2052,6 +2074,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> cancelUpdateDownload() async {
+    _updateDownloadCancelled = true;
     _updateDownloadClient?.close();
     _updateDownloadClient = null;
     updateDownloadBusy = false;
@@ -2109,23 +2132,172 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> openWindowsUpdate() async {
+  Future<void> downloadWindowsUpdate({bool force = false}) async {
+    if (!Platform.isWindows) {
+      updateStatusMessage = 'In-app Windows installer download is available on Windows only.';
+      notifyListeners();
+      return;
+    }
     final release = latestGithubRelease;
-    if (release == null) {
-      updateStatusMessage = 'No release is available to open.';
-      notifyListeners();
-      return;
-    }
     final asset = windowsUpdateInstallerAsset;
-    final url = asset?.browserDownloadUrl ?? release.htmlUrl;
-    if (url.trim().isEmpty) {
-      updateStatusMessage = 'This release does not include a Windows installer link.';
+    if (release == null || asset == null) {
+      updateStatusMessage = 'This release does not include a Windows installer.';
       notifyListeners();
       return;
     }
-    final launched = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    updateStatusMessage = launched ? 'Windows installer opened externally.' : 'Could not open the Windows update link.';
+    if (!ReleaseAssetMatcher.isTrustedReleaseAssetUrl(asset.browserDownloadUrl)) {
+      updateStatusMessage = 'Update asset is not from the configured GitHub release repository.';
+      notifyListeners();
+      return;
+    }
+
+    await UpdateDownloadStore.cleanupStaleWindowsUpdates(keepVersion: release.displayVersion);
+    await UpdateDownloadStore.cleanupPartialFiles();
+    final installerFile = await UpdateDownloadStore.windowsInstallerFile(release: release, asset: asset);
+    final partialFile = File('${installerFile.path}.part');
+    if (await installerFile.exists()) {
+      if (force) {
+        try {
+          await installerFile.delete();
+        } catch (_) {
+          updateStatusMessage = 'Could not replace the previously downloaded installer. Please try again.';
+          notifyListeners();
+          return;
+        }
+        await _clearPendingWindowsUpdate();
+      } else {
+        await _savePendingWindowsUpdate(path: installerFile.path, version: release.displayVersion);
+        await installPendingWindowsUpdate();
+        return;
+      }
+    }
+
+    _updateDownloadClient?.close();
+    _updateDownloadClient = http.Client();
+    _updateDownloadCancelled = false;
+    updateDownloadBusy = true;
+    final startedAt = DateTime.now();
+    updateDownloadProgress = DownloadProgressSnapshot(
+      receivedBytes: 0,
+      totalBytes: asset.sizeBytes,
+      startedAt: startedAt,
+      now: startedAt,
+    );
+    updateStatusMessage = 'Downloading Windows installer...';
     notifyListeners();
+
+    IOSink? sink;
+    try {
+      final request = http.Request('GET', Uri.parse(asset.browserDownloadUrl))
+        ..headers.addAll(const {'Accept': 'application/octet-stream', 'User-Agent': 'Koinly-Updater'});
+      final response = await _updateDownloadClient!.send(request).timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('HTTP ${response.statusCode}');
+      }
+      final total = response.contentLength ?? asset.sizeBytes;
+      sink = partialFile.openWrite();
+      var received = 0;
+      var lastNotify = DateTime.now();
+      await for (final chunk in response.stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        final now = DateTime.now();
+        if (now.difference(lastNotify).inMilliseconds >= 140 || (total > 0 && received >= total)) {
+          updateDownloadProgress = DownloadProgressSnapshot(
+            receivedBytes: received,
+            totalBytes: total,
+            startedAt: startedAt,
+            now: now,
+          );
+          lastNotify = now;
+          notifyListeners();
+        }
+      }
+      await sink.close();
+      sink = null;
+      if (await installerFile.exists()) await installerFile.delete();
+      await partialFile.rename(installerFile.path);
+      final completedTotal = total <= 0 ? received : total;
+      updateDownloadProgress = DownloadProgressSnapshot(
+        receivedBytes: completedTotal,
+        totalBytes: completedTotal,
+        startedAt: startedAt,
+        now: DateTime.now(),
+        status: 'Complete',
+      );
+      updateDownloadBusy = false;
+      updateStatusMessage = 'Download complete. Opening Windows installer...';
+      await _savePendingWindowsUpdate(path: installerFile.path, version: release.displayVersion);
+      notifyListeners();
+      await installPendingWindowsUpdate();
+    } catch (_) {
+      try {
+        await sink?.close();
+      } catch (_) {}
+      updateDownloadBusy = false;
+      updateDownloadProgress = null;
+      if (!_updateDownloadCancelled) {
+        updateStatusMessage = 'Windows update download failed or was interrupted. Please try again.';
+      }
+      if (await partialFile.exists()) {
+        try {
+          await partialFile.delete();
+        } catch (_) {}
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> installPendingWindowsUpdate() async {
+    if (!Platform.isWindows) return;
+    if (_isPendingWindowsUpdateAlreadyInstalled()) {
+      await _clearPendingWindowsUpdate(deleteFile: true);
+      updateStatusMessage = 'Koinly is already updated.';
+      notifyListeners();
+      return;
+    }
+    if (pendingWindowsUpdatePath.isEmpty || !await File(pendingWindowsUpdatePath).exists()) {
+      await _clearPendingWindowsUpdate();
+      updateStatusMessage = 'Downloaded Windows installer was not found. Please download it again.';
+      notifyListeners();
+      return;
+    }
+    final opened = await WindowsUpdateInstaller.install(pendingWindowsUpdatePath);
+    updateStatusMessage = opened
+        ? 'Windows installer opened. Complete installation to update Koinly.'
+        : 'Could not open the downloaded Windows installer. Please try again.';
+    notifyListeners();
+  }
+
+  Future<void> _savePendingWindowsUpdate({required String path, required String version}) async {
+    pendingWindowsUpdatePath = path;
+    pendingWindowsUpdateVersion = version;
+    await prefs.setString('pendingWindowsUpdatePath', path);
+    await prefs.setString('pendingWindowsUpdateVersion', version);
+  }
+
+  bool _isPendingWindowsUpdateAlreadyInstalled() {
+    if (pendingWindowsUpdateVersion.trim().isEmpty) return false;
+    final installed = SemanticVersion.tryParse(appVersion);
+    final pending = SemanticVersion.tryParse(pendingWindowsUpdateVersion);
+    if (installed == null || pending == null) return false;
+    return pending.compareTo(installed) <= 0;
+  }
+
+  Future<void> _clearPendingWindowsUpdate({bool deleteFile = false}) async {
+    if (deleteFile && pendingWindowsUpdatePath.isNotEmpty) {
+      final file = File(pendingWindowsUpdatePath);
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+    }
+    pendingWindowsUpdatePath = '';
+    pendingWindowsUpdateVersion = '';
+    final sp = await prefs.prefs;
+    await sp.remove('pendingWindowsUpdatePath');
+    await sp.remove('pendingWindowsUpdateVersion');
   }
 
   Future<void> _savePendingAndroidUpdate({required String path, required String version, required UpdateAssetKind kind}) async {
@@ -5157,44 +5329,31 @@ class _AppleWheelOptionRow extends StatelessWidget {
           fontWeight: FontWeight.w700,
         );
 
-    return AnimatedOpacity(
-      duration: AppMotion.medium,
-      curve: AppMotion.standard,
+    return Opacity(
       opacity: selected ? 1 : .82,
-      child: AnimatedScale(
-        duration: AppMotion.slow,
-        curve: AppMotion.emphasized,
-        scale: selected ? 1 : .965,
-        alignment: Alignment.centerLeft,
-        child: Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            height: 72,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  AnimatedScale(
-                    duration: AppMotion.slow,
-                    curve: AppMotion.emphasized,
-                    scale: selected ? 1.08 : .94,
-                    child: iconBubble(context, option.iconName, option.iconColor, size: 42),
+      child: Align(
+        alignment: Alignment.center,
+        child: SizedBox(
+          height: 72,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                iconBubble(context, option.iconName, option.iconColor, size: 42),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                      const SizedBox(height: 3),
+                      Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                    ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
-                        const SizedBox(height: 3),
-                        Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -11652,6 +11811,42 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final asset = state.windowsUpdateInstallerAsset;
+    if (state.updateDownloadBusy && state.updateDownloadProgress != null) {
+      return DownloadProgressCard(
+        architecture: 'Windows installer',
+        progress: state.updateDownloadProgress!,
+        onCancel: () => unawaited(state.cancelUpdateDownload()),
+      );
+    }
+    if (asset == null) {
+      return ExpressiveCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 8),
+            Text(
+              'This release does not include a Windows installer asset.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () {
+                final url = state.latestGithubRelease?.htmlUrl;
+                if (url != null && url.isNotEmpty) {
+                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                }
+              },
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Open release page'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final pendingForThisRelease = state.hasPendingWindowsUpdate &&
+        state.pendingWindowsUpdateVersion == state.latestGithubRelease?.displayVersion;
     return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -11659,14 +11854,22 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
           Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(
-            asset == null ? 'No installer asset was found. The GitHub release page will open instead.' : '${asset.name}${asset.sizeBytes > 0 ? ' • ${formatBytes(asset.sizeBytes)}' : ''}',
+            '${asset.name}${asset.sizeBytes > 0 ? ' • ${formatBytes(asset.sizeBytes)}' : ''}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
           ),
+          if (pendingForThisRelease) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => unawaited(state.installPendingWindowsUpdate()),
+              icon: const Icon(Icons.install_desktop_rounded),
+              label: const Text('Install downloaded update'),
+            ),
+          ],
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: () => unawaited(state.openWindowsUpdate()),
-            icon: const Icon(Icons.open_in_new_rounded),
-            label: Text(asset == null ? 'Open release page' : 'Open Windows installer'),
+            onPressed: () => unawaited(state.downloadWindowsUpdate(force: pendingForThisRelease)),
+            icon: const Icon(Icons.download_rounded),
+            label: Text(pendingForThisRelease ? 'Re-download installer' : 'Download update'),
           ),
         ],
       ),
@@ -13863,55 +14066,47 @@ class _CurrencyWheelRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      duration: AppMotion.medium,
-      curve: AppMotion.standard,
+    return Opacity(
       opacity: selected ? 1 : .82,
-      child: AnimatedScale(
-        duration: AppMotion.slow,
-        curve: AppMotion.emphasized,
-        scale: selected ? 1 : .965,
-        alignment: Alignment.centerLeft,
-        child: Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            height: 72,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _CurrencySymbolBubble(symbol: country[1], selected: selected),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          country[0],
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: selected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withOpacity(.72),
-                              ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${country[1]} • ${country[2]}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      ],
-                    ),
+      child: Align(
+        alignment: Alignment.center,
+        child: SizedBox(
+          height: 72,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _CurrencySymbolBubble(symbol: country[1], selected: selected),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        country[0],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: selected ? Theme.of(context).colorScheme.onSurface : Theme.of(context).colorScheme.onSurface.withOpacity(.72),
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${country[1]} • ${country[2]}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -13930,11 +14125,11 @@ class _CurrencySymbolBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      width: selected ? 46 : 40,
-      height: selected ? 46 : 40,
+      width: 44,
+      height: 44,
       decoration: BoxDecoration(
         color: kSleekAccent.withOpacity(selected ? .20 : .12),
-        borderRadius: BorderRadius.circular(selected ? 16 : 14),
+        borderRadius: BorderRadius.circular(15),
         border: Border.all(color: kSleekAccent.withOpacity(selected ? .36 : .18), width: selected ? 1.3 : 1),
       ),
       alignment: Alignment.center,

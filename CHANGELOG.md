@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1061] - 2026-09-04
+
+### Fixed
+- Removed the custom desktop pointer-wheel animation layer that queued `animateTo` calls and caused jerky, overshooting, or jumping scroll behavior. Desktop pages, mouse wheels, touchpads, and fixed-item Choose pickers now use Flutter's native scrolling pipeline.
+- Removed selection-size changes from wheel rows so Theme, Currency, account/category selectors, and other Choose pickers no longer resize items while they are moving.
+- Windows updates now download inside Koinly instead of opening the GitHub installer URL directly. The Windows updater now shows the same live percentage, transferred size, speed, animated progress panel, cancel state, and retry behavior used by Android.
+- Downloaded Windows installers are retained as pending updates and can be launched again if installation is not completed on the first attempt.
+
+### Changed
+- Windows update downloads now verify that the installer comes from the configured Koinly GitHub release before saving or launching it.
+
 ## [1.0.1060] - 2026-09-04
 
 ### Fixed
