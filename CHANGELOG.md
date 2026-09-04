@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1062] - 2026-09-04
+
+### Fixed
+- Rebuilt the shared Choose picker layout so the active option is rendered only once; removed the duplicate selected-value preview row below the picker.
+- Choose Date Filter, Theme, Account, Category, and other shared selectors now shrink to the number of available options instead of leaving a large empty wheel viewport on desktop.
+- Replaced the fragile fixed-center wheel presentation in shared selectors with a compact native-scrolling list that keeps the selected row highlighted and preserves smooth mouse-wheel, touchpad, and touch scrolling.
+- Currency selection now uses the same compact selectable-list behavior, with search retained and no duplicate selected-value summary.
+
+### Changed
+- Long Choose lists show up to four rows at once with a desktop scrollbar; short lists stay compact while Cancel and Done remain fixed below the options.
+
 ## [1.0.1061] - 2026-09-04
 
 ### Fixed
