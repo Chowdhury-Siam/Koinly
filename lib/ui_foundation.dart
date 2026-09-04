@@ -24,13 +24,13 @@ class AppMotion {
   const AppMotion._();
 
   static const Duration fast = Duration(milliseconds: 110);
-  static const Duration medium = Duration(milliseconds: 170);
-  static const Duration slow = Duration(milliseconds: 230);
+  static const Duration medium = Duration(milliseconds: 180);
+  static const Duration slow = Duration(milliseconds: 260);
 
   static const Curve standard = Cubic(0.2, 0.0, 0.0, 1.0);
   static const Curve emphasized = Cubic(0.05, 0.7, 0.1, 1.0);
   static const Curve emphasizedAccelerate = Cubic(0.3, 0.0, 0.8, 0.15);
-  static const Curve spring = Cubic(0.16, 1.0, 0.3, 1.0);
+  static const Curve spring = Curves.easeOutCubic;
 }
 
 class AppShapes {
@@ -39,8 +39,8 @@ class AppShapes {
   static BorderRadius extraSmall = BorderRadius.circular(10);
   static BorderRadius small = BorderRadius.circular(14);
   static BorderRadius medium = BorderRadius.circular(18);
-  static BorderRadius large = BorderRadius.circular(22);
-  static BorderRadius extraLarge = BorderRadius.circular(26);
+  static BorderRadius large = BorderRadius.circular(24);
+  static BorderRadius extraLarge = BorderRadius.circular(30);
   static BorderRadius dialog = BorderRadius.circular(28);
   static BorderRadius full = BorderRadius.circular(999);
 
@@ -61,8 +61,11 @@ class KoinlyPageTransitionsBuilder extends PageTransitionsBuilder {
     if (route.isFirst) return child;
     if (MediaQuery.of(context).disableAnimations) return child;
     final fade = CurvedAnimation(parent: animation, curve: AppMotion.standard, reverseCurve: AppMotion.emphasizedAccelerate);
-    final slide = Tween<Offset>(begin: const Offset(.018, 0), end: Offset.zero).animate(fade);
-    return FadeTransition(opacity: fade, child: SlideTransition(position: slide, child: child));
+    final offset = Tween<Offset>(begin: const Offset(.028, 0), end: Offset.zero).animate(fade);
+    return FadeTransition(
+      opacity: fade,
+      child: SlideTransition(position: offset, child: child),
+    );
   }
 }
 
@@ -72,7 +75,7 @@ class MotionPressable extends StatefulWidget {
     required this.child,
     this.onTap,
     this.borderRadius,
-    this.scale = .985,
+    this.scale = .975,
   });
 
   final Widget child;

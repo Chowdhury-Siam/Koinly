@@ -155,20 +155,24 @@ class ProfileAvatarButton extends StatelessWidget {
         label: 'Open profile',
         child: MotionPressable(
           borderRadius: AppShapes.full,
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfileScreen()),
+          ),
           child: Container(
-            width: 46,
-            height: 46,
+            width: 48,
+            height: 48,
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(17),
+              shape: BoxShape.circle,
+              color: kSleekAccent.withOpacity(.14),
+              border: Border.all(color: kSleekAccent.withOpacity(.70), width: 1.4),
             ),
             child: ProfileMediaView(
               path: state.hasProfileMedia ? state.profileMediaPath : '',
               kind: state.hasProfileMedia ? state.profileMediaKind : null,
               displayName: state.profileDisplayLabel,
-              borderRadius: 15,
+              borderRadius: 999,
             ),
           ),
         ),
@@ -176,8 +180,6 @@ class ProfileAvatarButton extends StatelessWidget {
     );
   }
 }
-
-
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -364,13 +366,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     return PageScaffold(
-      title: 'You',
-      subtitle: state.profileDisplayLabel,
+      title: 'Profile',
+      subtitle: 'Personal details, media, and savings preferences',
       child: ResponsiveContent(
         mobileMaxWidth: 760,
         desktopMaxWidth: 1180,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         child: LayoutBuilder(
           builder: (context, constraints) {
             final mediaCard = _ProfileMediaCard(
@@ -399,62 +401,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onReset: _resetSavings,
             );
 
-            final intro = PixelFinanceSurface(
-              radius: 28,
-              color: scheme.secondaryContainer,
-              padding: const EdgeInsets.all(20),
-              child: Row(
+            if (constraints.maxWidth >= 820) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: ProfileMediaView(
-                      path: state.hasProfileMedia ? state.profileMediaPath : '',
-                      kind: state.hasProfileMedia ? state.profileMediaKind : null,
-                      displayName: state.profileDisplayLabel,
-                      borderRadius: 23,
-                    ),
+                  Expanded(
+                    child: Column(children: [mediaCard, const SizedBox(height: 14), informationCard]),
                   ),
                   const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(state.profileDisplayLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.65)),
-                        const SizedBox(height: 4),
-                        Text(
-                          state.profileBio.trim().isEmpty ? 'Shape Koinly around the way you save and spend.' : state.profileBio,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSecondaryContainer.withOpacity(.78), fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-
-            if (constraints.maxWidth >= 860) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  intro,
-                  const SizedBox(height: 14),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: Column(children: [mediaCard, const SizedBox(height: 12), informationCard])),
-                      const SizedBox(width: 14),
-                      Expanded(child: savingsCard),
-                    ],
-                  ),
+                  Expanded(child: savingsCard),
                 ],
               );
             }
             return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [intro, const SizedBox(height: 12), mediaCard, const SizedBox(height: 12), informationCard, const SizedBox(height: 12), savingsCard],
+              children: [
+                mediaCard,
+                const SizedBox(height: 14),
+                informationCard,
+                const SizedBox(height: 14),
+                savingsCard,
+              ],
             );
           },
         ),
@@ -481,61 +447,85 @@ class _ProfileMediaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMedia = state.hasProfileMedia;
-    final scheme = Theme.of(context).colorScheme;
-    return PixelFinanceSurface(
-      radius: 24,
-      padding: const EdgeInsets.all(17),
+    final mediaKind = state.profileMediaKind;
+    return ExpressiveCard(
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.35))),
-              Icon(Icons.perm_media_rounded, color: scheme.primary),
+              const Icon(Icons.perm_media_rounded, color: kSleekAccent),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
             ],
           ),
-          const SizedBox(height: 14),
-          AspectRatio(
-            aspectRatio: 16 / 10,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: ColoredBox(
-                color: Theme.of(context).brightness == Brightness.dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
-                child: ProfileMediaView(
-                  path: hasMedia ? state.profileMediaPath : '',
-                  kind: hasMedia ? state.profileMediaKind : null,
-                  displayName: state.profileDisplayLabel,
-                  fit: hasMedia ? BoxFit.cover : BoxFit.contain,
-                  borderRadius: 22,
-                ),
+          const SizedBox(height: 16),
+          Center(
+            child: Container(
+              width: 156,
+              height: 156,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: kSleekAccent.withOpacity(.62), width: 2),
+                boxShadow: [BoxShadow(color: kSleekAccent.withOpacity(.14), blurRadius: 28, offset: const Offset(0, 12))],
+              ),
+              child: ProfileMediaView(
+                path: hasMedia ? state.profileMediaPath : '',
+                kind: hasMedia ? mediaKind : null,
+                displayName: state.profileDisplayLabel,
+                borderRadius: 999,
               ),
             ),
           ),
-          if (!hasMedia) ...[
-            const SizedBox(height: 10),
-            Text('JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-          ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
+          if (!hasMedia)
+            Text(
+              'Add a photo, animated GIF, or short video.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+          SizedBox(height: hasMedia ? 10 : 16),
           Wrap(
+            alignment: WrapAlignment.center,
             spacing: 8,
             runSpacing: 8,
             children: [
               FilledButton.icon(
                 onPressed: busy ? null : onPick,
-                icon: busy ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
+                icon: busy
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
                 label: Text(hasMedia ? 'Replace' : 'Add media'),
               ),
-              if (hasMedia) OutlinedButton.icon(onPressed: busy ? null : onPreview, icon: const Icon(Icons.visibility_rounded), label: const Text('Preview')),
-              if (hasMedia) TextButton.icon(onPressed: busy ? null : onRemove, icon: const Icon(Icons.delete_outline_rounded), label: const Text('Remove')),
+              if (hasMedia)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onPreview,
+                  icon: const Icon(Icons.visibility_rounded),
+                  label: const Text('Preview'),
+                ),
+              if (hasMedia)
+                TextButton.icon(
+                  onPressed: busy ? null : onRemove,
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Remove'),
+                ),
             ],
           ),
+          if (!hasMedia) ...[
+            const SizedBox(height: 12),
+            Text(
+              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+          ],
         ],
       ),
     );
   }
 }
-
-
 
 class _ProfileInformationCard extends StatelessWidget {
   const _ProfileInformationCard({

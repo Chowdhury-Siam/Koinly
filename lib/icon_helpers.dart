@@ -152,16 +152,17 @@ Widget iconBubble(BuildContext context, String icon, String color, {double size 
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: c.withOpacity(dark ? .17 : .12),
-      borderRadius: BorderRadius.circular(size * .30),
+      color: c.withOpacity(dark ? .24 : .17),
+      shape: BoxShape.circle,
+      border: Border.all(color: c.withOpacity(dark ? .22 : .18), width: 1),
     ),
     child: Center(
       child: iconGlyph(
         context,
         icon,
-        color: c,
-        size: size * .54,
-        imageBackground: Colors.white.withOpacity(.88),
+        color: dark ? Color.lerp(c, Colors.white, .12)! : Color.lerp(c, Colors.black, .08)!,
+        size: size * .52,
+        imageBackground: null,
       ),
     ),
   );

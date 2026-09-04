@@ -3,15 +3,18 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-const Color kSleekBackground = Color(0xFF140E12);
-const Color kSleekSurface = Color(0xFF20161C);
-const Color kSleekSurfaceHigh = Color(0xFF2A1C24);
-const Color kSleekSurfaceHigher = Color(0xFF35242E);
-const Color kSleekAccent = Color(0xFFF0A6C5);
-const Color kSleekIncome = Color(0xFF83D6A9);
-const Color kSleekExpense = Color(0xFFFF8D9B);
-const Color kSleekWarning = Color(0xFFF2C879);
-const Color kSleekMuted = Color(0xFFB7AAB1);
+// PixelPlayer-inspired finance palette. The names are intentionally retained so
+// the business/UI code that already depends on these shared tokens keeps working.
+// The visual language is now warm, editorial and high-contrast rather than teal.
+const Color kSleekBackground = Color(0xFF0C080D);
+const Color kSleekSurface = Color(0xFF1A1218);
+const Color kSleekSurfaceHigh = Color(0xFF241820);
+const Color kSleekSurfaceHigher = Color(0xFF302029);
+const Color kSleekAccent = Color(0xFFE6B8F5);
+const Color kSleekIncome = Color(0xFF78D7A9);
+const Color kSleekExpense = Color(0xFFFF8594);
+const Color kSleekWarning = Color(0xFFFFC26B);
+const Color kSleekMuted = Color(0xFFA999A5);
 
 const appTitle = 'Koinly';
 const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1063');

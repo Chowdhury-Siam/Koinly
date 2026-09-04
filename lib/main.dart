@@ -41,7 +41,6 @@ import 'reminder_service.dart';
 import 'sync_models.dart';
 import 'sync_services.dart';
 import 'ui_foundation.dart';
-import 'ui/pixel_finance_ui.dart';
 import 'update_service.dart';
 
 part 'loans/loan_controller_part.dart';
@@ -3671,13 +3670,10 @@ class KoinlyApp extends StatelessWidget {
       builder: (context, child) {
         final media = MediaQuery.of(context);
         final width = media.size.width;
-        final maxScale = width < 360 ? 1.04 : width < 600 ? 1.14 : width < 900 ? 1.20 : 1.28;
+        final maxScale = width < 360 ? 1.04 : width < 600 ? 1.14 : width < 900 ? 1.22 : 1.30;
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
-            // Low-end mode no longer disables motion globally. Instead, the new
-            // UI uses short transform/color animations and avoids blur-heavy or
-            // continuously-running effects.
             disableAnimations: media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
@@ -3687,69 +3683,98 @@ class KoinlyApp extends StatelessWidget {
   }
 
   ThemeData _theme(Brightness brightness) {
-    final dark = brightness == Brightness.dark;
-    final base = ColorScheme.fromSeed(
-      seedColor: KoinlyPixelTokens.pink,
-      brightness: brightness,
-    );
-    final scheme = dark
-        ? base.copyWith(
-            primary: KoinlyPixelTokens.pink,
-            onPrimary: const Color(0xFF3B1425),
-            primaryContainer: const Color(0xFF5A2D42),
-            onPrimaryContainer: const Color(0xFFFFD9E7),
-            secondary: KoinlyPixelTokens.lavender,
-            onSecondary: const Color(0xFF2E184A),
-            secondaryContainer: const Color(0xFF493460),
-            onSecondaryContainer: const Color(0xFFF0DDFF),
-            tertiary: KoinlyPixelTokens.cyan,
-            surface: KoinlyPixelTokens.darkSurface,
-            surfaceContainerLow: const Color(0xFF191116),
-            surfaceContainer: KoinlyPixelTokens.darkSurface,
-            surfaceContainerHigh: KoinlyPixelTokens.darkSurfaceRaised,
-            surfaceContainerHighest: KoinlyPixelTokens.darkSurfaceHighest,
-            background: KoinlyPixelTokens.darkBackground,
-            outline: const Color(0xFF69545F),
-            outlineVariant: const Color(0xFF403039),
+    final isDark = brightness == Brightness.dark;
+    final scheme = isDark
+        ? const ColorScheme.dark(
+            primary: Color(0xFFE6B8F5),
+            onPrimary: Color(0xFF2A1530),
+            primaryContainer: Color(0xFF4A2D4D),
+            onPrimaryContainer: Color(0xFFFFE7FF),
+            secondary: Color(0xFFF1A8C5),
+            onSecondary: Color(0xFF3B1727),
+            secondaryContainer: Color(0xFF4B2635),
+            onSecondaryContainer: Color(0xFFFFD9E8),
+            tertiary: Color(0xFFFFC174),
+            onTertiary: Color(0xFF3D2500),
+            tertiaryContainer: Color(0xFF4F371B),
+            onTertiaryContainer: Color(0xFFFFE1B5),
+            error: Color(0xFFFF8594),
+            onError: Color(0xFF45000D),
+            background: Color(0xFF0C080D),
+            onBackground: Color(0xFFF5EAF1),
+            surface: Color(0xFF171016),
+            onSurface: Color(0xFFF5EAF1),
+            surfaceVariant: Color(0xFF2B1D25),
+            onSurfaceVariant: Color(0xFFCDBDC7),
+            outline: Color(0xFF66535F),
+            outlineVariant: Color(0xFF3B2B34),
+            shadow: Color(0xFF000000),
+            scrim: Color(0xFF000000),
+            inverseSurface: Color(0xFFF2E7EE),
+            onInverseSurface: Color(0xFF2E252B),
+            inversePrimary: Color(0xFF76507E),
+            surfaceTint: Color(0xFFE6B8F5),
+          ).copyWith(
+            surfaceContainerLowest: const Color(0xFF090609),
+            surfaceContainerLow: const Color(0xFF120D12),
+            surfaceContainer: const Color(0xFF1A1218),
+            surfaceContainerHigh: const Color(0xFF241820),
+            surfaceContainerHighest: const Color(0xFF302029),
           )
-        : base.copyWith(
-            primary: const Color(0xFF9D476D),
-            onPrimary: Colors.white,
-            primaryContainer: const Color(0xFFFFD9E7),
-            onPrimaryContainer: const Color(0xFF3D1026),
-            secondary: const Color(0xFF75538E),
-            onSecondary: Colors.white,
-            secondaryContainer: const Color(0xFFF0DDFF),
-            onSecondaryContainer: const Color(0xFF2C1641),
-            tertiary: const Color(0xFF1D7581),
-            surface: KoinlyPixelTokens.lightSurface,
-            surfaceContainerLow: const Color(0xFFFFF4F8),
-            surfaceContainer: KoinlyPixelTokens.lightSurfaceRaised,
-            surfaceContainerHigh: const Color(0xFFF5E4EB),
-            surfaceContainerHighest: KoinlyPixelTokens.lightSurfaceHighest,
-            background: KoinlyPixelTokens.lightBackground,
-            outline: const Color(0xFF8C747F),
-            outlineVariant: const Color(0xFFE1C8D2),
+        : const ColorScheme.light(
+            primary: Color(0xFF83508E),
+            onPrimary: Color(0xFFFFFFFF),
+            primaryContainer: Color(0xFFF6D9FF),
+            onPrimaryContainer: Color(0xFF32133A),
+            secondary: Color(0xFFA75B7B),
+            onSecondary: Color(0xFFFFFFFF),
+            secondaryContainer: Color(0xFFFFD9E8),
+            onSecondaryContainer: Color(0xFF3D1727),
+            tertiary: Color(0xFF8B5E18),
+            onTertiary: Color(0xFFFFFFFF),
+            tertiaryContainer: Color(0xFFFFDDA9),
+            onTertiaryContainer: Color(0xFF2E1B00),
+            error: Color(0xFFBA1A1A),
+            onError: Color(0xFFFFFFFF),
+            background: Color(0xFFFFF8FC),
+            onBackground: Color(0xFF211A1F),
+            surface: Color(0xFFFFF8FC),
+            onSurface: Color(0xFF211A1F),
+            surfaceVariant: Color(0xFFF2E4EC),
+            onSurfaceVariant: Color(0xFF5A4A54),
+            outline: Color(0xFF8C7884),
+            outlineVariant: Color(0xFFDCC9D4),
+            shadow: Color(0xFF000000),
+            scrim: Color(0xFF000000),
+            inverseSurface: Color(0xFF372F34),
+            onInverseSurface: Color(0xFFFCEFF6),
+            inversePrimary: Color(0xFFE6B8F5),
+            surfaceTint: Color(0xFF83508E),
+          ).copyWith(
+            surfaceContainerLowest: const Color(0xFFFFFFFF),
+            surfaceContainerLow: const Color(0xFFFFF2F9),
+            surfaceContainer: const Color(0xFFFBEAF3),
+            surfaceContainerHigh: const Color(0xFFF5E2EC),
+            surfaceContainerHighest: const Color(0xFFEDD7E3),
           );
 
-    final baseText = Typography.material2021(platform: TargetPlatform.android).black.apply(
-          fontFamily: 'Roboto',
-          displayColor: scheme.onSurface,
-          bodyColor: scheme.onSurface,
-        );
-    final textTheme = baseText.copyWith(
-      displaySmall: baseText.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.7, height: .98),
-      headlineLarge: baseText.headlineLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.1, height: 1.0),
-      headlineMedium: baseText.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.85, height: 1.02),
-      headlineSmall: baseText.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.55, height: 1.04),
-      titleLarge: baseText.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.35),
-      titleMedium: baseText.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.15),
-      titleSmall: baseText.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-      bodyLarge: baseText.bodyLarge?.copyWith(height: 1.35),
-      bodyMedium: baseText.bodyMedium?.copyWith(height: 1.34),
-      labelLarge: baseText.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+    final baseTypography = Typography.material2021(platform: TargetPlatform.android);
+    final rawTextTheme = isDark ? baseTypography.white : baseTypography.black;
+    final textTheme = rawTextTheme.apply(
+      fontFamily: 'Roboto',
+      displayColor: scheme.onSurface,
+      bodyColor: scheme.onSurface,
     );
-    const transitions = KoinlyPageTransitionsBuilder();
+    const pageTransitionBuilder = KoinlyPageTransitionsBuilder();
+
+    WidgetStateProperty<T> states<T>({required T normal, T? selected, T? pressed, T? disabled}) {
+      return WidgetStateProperty.resolveWith((state) {
+        if (state.contains(WidgetState.disabled)) return disabled ?? normal;
+        if (state.contains(WidgetState.pressed)) return pressed ?? selected ?? normal;
+        if (state.contains(WidgetState.selected)) return selected ?? normal;
+        return normal;
+      });
+    }
 
     return ThemeData(
       useMaterial3: true,
@@ -3757,138 +3782,201 @@ class KoinlyApp extends StatelessWidget {
       scaffoldBackgroundColor: scheme.background,
       canvasColor: scheme.background,
       visualDensity: VisualDensity.standard,
+      dividerColor: scheme.outlineVariant.withOpacity(.35),
       splashFactory: InkRipple.splashFactory,
-      dividerColor: scheme.outlineVariant.withOpacity(.45),
-      textTheme: textTheme,
+      textTheme: textTheme.copyWith(
+        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.35, height: .98),
+        headlineLarge: textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.0),
+        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.75),
+        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.45),
+        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.25),
+        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.32),
+        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.32),
+        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+      ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: transitions,
-          TargetPlatform.windows: transitions,
-          TargetPlatform.linux: transitions,
-          TargetPlatform.macOS: transitions,
-          TargetPlatform.iOS: transitions,
+          TargetPlatform.android: pageTransitionBuilder,
+          TargetPlatform.windows: pageTransitionBuilder,
+          TargetPlatform.linux: pageTransitionBuilder,
+          TargetPlatform.macOS: pageTransitionBuilder,
+          TargetPlatform.iOS: pageTransitionBuilder,
         },
-      ),
-      appBarTheme: AppBarTheme(
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: false,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: scheme.onSurface,
-        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        margin: EdgeInsets.zero,
         color: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        margin: EdgeInsets.zero,
+        shape: AppShapes.squircle(20),
       ),
       dialogTheme: DialogThemeData(
         elevation: 0,
         backgroundColor: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.dialog),
+        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.36),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         elevation: 0,
         backgroundColor: scheme.surfaceContainer,
-        modalBackgroundColor: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
-        modalBarrierColor: Colors.black.withOpacity(dark ? .66 : .34),
+        modalBackgroundColor: scheme.surfaceContainer,
+        modalBarrierColor: Colors.black.withOpacity(isDark ? .66 : .38),
         showDragHandle: true,
-        dragHandleColor: scheme.outline,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
-        constraints: const BoxConstraints(maxWidth: 760),
+        dragHandleColor: scheme.onSurfaceVariant.withOpacity(.55),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        constraints: const BoxConstraints(maxWidth: 720),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 0,
-        backgroundColor: dark ? const Color(0xFF38252F) : const Color(0xFF4B2838),
+        backgroundColor: isDark ? const Color(0xFF3A2632) : const Color(0xFF32252D),
         contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.medium),
       ),
       listTileTheme: ListTileThemeData(
-        minLeadingWidth: 42,
-        minVerticalPadding: 8,
+        minLeadingWidth: 44,
+        minVerticalPadding: 10,
         contentPadding: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
-        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+        shape: AppShapes.squircle(18),
+        iconColor: scheme.onSurfaceVariant,
+        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+      ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        indicatorColor: scheme.primaryContainer,
+        indicatorShape: AppShapes.squircle(18),
+        selectedIconTheme: IconThemeData(color: isDark ? scheme.primary : scheme.primary, size: 25),
+        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.78), size: 23),
+        selectedLabelTextStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800, fontSize: 12),
+        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.78), fontWeight: FontWeight.w600, fontSize: 11),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: scheme.surfaceContainer,
+        indicatorColor: scheme.primaryContainer,
+        height: 72,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        labelTextStyle: WidgetStateProperty.resolveWith((state) => TextStyle(
+              fontWeight: state.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600,
+              fontSize: 11,
+              color: state.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
+            )),
+        iconTheme: WidgetStateProperty.resolveWith((state) => IconThemeData(
+              color: state.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant.withOpacity(.78),
+              size: state.contains(WidgetState.selected) ? 25 : 23,
+            )),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.76), fontWeight: FontWeight.w600),
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
-        floatingLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: scheme.primary.withOpacity(.72), width: 1.5)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: scheme.error, width: 1.2)),
+        fillColor: scheme.surfaceContainerHigh,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.74), fontWeight: FontWeight.w500),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+        floatingLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        border: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(.58), width: 1)),
+        focusedBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.primary.withOpacity(.86), width: 1.4)),
+        errorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error.withOpacity(.76), width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error, width: 1.4)),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          elevation: 0,
-          backgroundColor: scheme.primaryContainer,
-          foregroundColor: scheme.onPrimaryContainer,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          minimumSize: const Size(48, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          elevation: 0,
-          foregroundColor: scheme.onSurface,
-          side: BorderSide(color: scheme.outlineVariant.withOpacity(.72)),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          minimumSize: const Size(48, 48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        style: ButtonStyle(
+          backgroundColor: states(normal: isDark ? kSleekAccent : scheme.primary, pressed: isDark ? const Color(0xFFD9A7EA) : const Color(0xFF70427A), disabled: scheme.onSurface.withOpacity(.10)),
+          foregroundColor: states(normal: isDark ? const Color(0xFF2A1530) : Colors.white, disabled: scheme.onSurface.withOpacity(.35)),
+          overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.08)),
+          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
+          elevation: const WidgetStatePropertyAll(0),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: scheme.primary,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        style: ButtonStyle(
+          foregroundColor: states(normal: scheme.primary, pressed: scheme.secondary),
+          shape: WidgetStatePropertyAll(AppShapes.squircle(16)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
         ),
       ),
-      iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(
-          backgroundColor: dark ? KoinlyPixelTokens.darkSurface : KoinlyPixelTokens.lightSurfaceRaised,
-          foregroundColor: scheme.onSurface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: states(normal: scheme.onSurface, pressed: scheme.primary, disabled: scheme.onSurface.withOpacity(.35)),
+          side: states(
+            normal: BorderSide(color: scheme.outlineVariant.withOpacity(.78), width: 1.1),
+            pressed: BorderSide(color: scheme.primary.withOpacity(.70), width: 1.2),
+            disabled: BorderSide(color: scheme.onSurface.withOpacity(.10), width: 1),
+          ),
+          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.primaryContainer : scheme.surfaceContainerHigh),
+          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.72), width: 1)),
+          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 13, horizontal: 15)),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: isDark ? kSleekAccent : scheme.primary,
+        foregroundColor: isDark ? const Color(0xFF2A1530) : Colors.white,
         elevation: 0,
         focusElevation: 0,
         hoverElevation: 0,
         highlightElevation: 0,
-        backgroundColor: scheme.primaryContainer,
-        foregroundColor: scheme.onPrimaryContainer,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
+        shape: const CircleBorder(),
       ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? scheme.onPrimary : scheme.onSurfaceVariant),
-        trackColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? scheme.primary : scheme.surfaceContainerHighest),
+      iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.primaryContainer : scheme.surfaceContainerHigh),
+          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.primary : scheme.onSurface),
+          shape: const WidgetStatePropertyAll(CircleBorder()),
+          minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.all(10)),
+        ),
+      ),
+      appBarTheme: AppBarTheme(
+        centerTitle: false,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        iconTheme: IconThemeData(color: scheme.onSurface),
+        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800, letterSpacing: -.55),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: scheme.surfaceContainerHigh,
+        selectedColor: scheme.primaryContainer,
+        disabledColor: scheme.onSurface.withOpacity(.08),
+        side: BorderSide(color: scheme.outlineVariant.withOpacity(.68)),
+        shape: AppShapes.squircle(16),
+        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w700),
+        secondaryLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: scheme.primary,
         linearTrackColor: scheme.surfaceContainerHighest,
+        circularTrackColor: scheme.surfaceContainerHighest,
       ),
-      sliderTheme: SliderThemeData(
-        activeTrackColor: scheme.primary,
-        thumbColor: scheme.primary,
-        inactiveTrackColor: scheme.surfaceContainerHighest,
-        overlayColor: scheme.primary.withOpacity(.12),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onPrimary : scheme.outline),
+        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.primary : scheme.surfaceContainerHighest),
+        trackOutlineColor: WidgetStatePropertyAll(scheme.outlineVariant),
       ),
     );
   }
@@ -4224,7 +4312,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   bool _shouldRetryAutomaticUpdateCheck(UpdateCheckOutcome outcome) {
-    return outcome == UpdateCheckOutcome.networkError || outcome == UpdateCheckOutcome.httpError;
+    return outcome == UpdateCheckOutcome.networkError ||
+        outcome == UpdateCheckOutcome.httpError;
   }
 
   Future<void> _showAutomaticUpdateDialogIfReady(AppController state, GithubRelease release) async {
@@ -4242,12 +4331,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final requestedTabIndex = context.select<AppController, int>((state) => state.tabIndex);
     final state = context.read<AppController>();
-    const pages = <Widget>[
-      HomeDashboardScreen(),
-      AnalysisScreen(),
-      LoansScreen(),
-      TransactionListScreen(),
-      CategoriesScreen(),
+    final pages = <Widget>[
+      const HomeDashboardScreen(),
+      const AnalysisScreen(),
+      const LoansScreen(),
+      const TransactionListScreen(),
+      const CategoriesScreen(),
     ];
     final tabIndex = requestedTabIndex.clamp(0, pages.length - 1).toInt();
     if (requestedTabIndex != tabIndex) {
@@ -4256,21 +4345,32 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       });
     }
 
+    final Widget? actionButton = tabIndex == kTransactionTabIndex
+        ? FloatingActionButton(
+            heroTag: 'transactionAddFab',
+            tooltip: 'Add transaction',
+            onPressed: () => showTransactionEditor(context),
+            child: const Icon(Icons.add_rounded, size: 28),
+          )
+        : null;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final desktop = constraints.maxWidth >= 900;
-        final extended = constraints.maxWidth >= 1180;
-        void selectTab(int index) => state.selectTabIndex(index);
+        final useDesktopNavigation = constraints.maxWidth >= 900;
+        final extendDesktopNavigation = constraints.maxWidth >= 1180;
 
-        final page = KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]);
+        void selectTab(int index) {
+          state.selectTabIndex(index);
+        }
+
         return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.background,
+          extendBody: !useDesktopNavigation,
           body: Row(
             children: [
-              if (desktop)
+              if (useDesktopNavigation)
                 _SideRailNavigation(
                   selectedIndex: tabIndex,
-                  extended: extended,
+                  extended: extendDesktopNavigation,
                   onSelected: selectTab,
                 ),
               Expanded(
@@ -4278,33 +4378,37 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
-                        duration: AppMotion.medium,
+                        duration: AppMotion.fast,
                         switchInCurve: AppMotion.standard,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
                         transitionBuilder: (child, animation) {
-                          final offset = Tween<Offset>(begin: const Offset(.012, 0), end: Offset.zero).animate(animation);
-                          return FadeTransition(opacity: animation, child: SlideTransition(position: offset, child: child));
+                          final curved = CurvedAnimation(parent: animation, curve: AppMotion.standard);
+                          return FadeTransition(
+                            opacity: curved,
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: .992, end: 1).animate(curved),
+                              child: child,
+                            ),
+                          );
                         },
-                        child: page,
+                        child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
-                    if (tabIndex == kTransactionTabIndex)
+                    if (actionButton != null)
                       Positioned(
-                        right: desktop ? 28 : 18,
-                        bottom: MediaQuery.paddingOf(context).bottom + (desktop ? 24 : 92),
-                        child: FloatingActionButton.extended(
-                          heroTag: 'transactionAddFab',
-                          onPressed: () => showTransactionEditor(context),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('New'),
-                        ),
+                        right: useDesktopNavigation ? 34 : 28,
+                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
+                        child: actionButton,
                       ),
-                    if (!desktop)
+                    if (!useDesktopNavigation)
                       Positioned(
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: _FloatingDockNavigation(selectedIndex: tabIndex, onSelected: selectTab),
+                        child: _FloatingDockNavigation(
+                          selectedIndex: tabIndex,
+                          onSelected: selectTab,
+                        ),
                       ),
                   ],
                 ),
@@ -4318,14 +4422,23 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 }
 
 class _DockDestination {
-  const _DockDestination({required this.label, required this.icon, required this.activeIcon});
+  const _DockDestination({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+  });
+
   final String label;
   final IconData icon;
   final IconData activeIcon;
 }
 
 class _SideRailNavigation extends StatelessWidget {
-  const _SideRailNavigation({required this.selectedIndex, required this.extended, required this.onSelected});
+  const _SideRailNavigation({
+    required this.selectedIndex,
+    required this.extended,
+    required this.onSelected,
+  });
 
   final int selectedIndex;
   final bool extended;
@@ -4334,101 +4447,69 @@ class _SideRailNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return ColoredBox(
-      color: dark ? const Color(0xFF171015) : const Color(0xFFFFF4F8),
+    return Material(
+      color: scheme.surfaceContainerLow,
       child: SafeArea(
         right: false,
-        child: SizedBox(
-          width: extended ? 226 : 82,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
-            child: Column(
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: extended ? 6 : 0, vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                    children: [
-                      const KoinlyAppIcon(size: 42, borderRadius: 14),
-                      if (extended) ...[
-                        const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Koinly', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                              Text('Money, made clear', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 26),
-                Expanded(
-                  child: ListView.separated(
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _FloatingDockNavigation.destinations.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 7),
-                    itemBuilder: (context, index) {
-                      final item = _FloatingDockNavigation.destinations[index];
-                      final selected = index == selectedIndex;
-                      return Tooltip(
-                        message: extended ? '' : item.label,
-                        child: Material(
-                          color: selected ? scheme.primaryContainer : Colors.transparent,
-                          borderRadius: BorderRadius.circular(17),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => onSelected(index),
-                            child: SizedBox(
-                              height: 50,
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(horizontal: extended ? 14 : 0),
-                                child: Row(
-                                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                                  children: [
-                                    Icon(selected ? item.activeIcon : item.icon, size: 22, color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
-                                    if (extended) ...[
-                                      const SizedBox(width: 13),
-                                      Expanded(
-                                        child: Text(
-                                          item.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                                color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                                                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (extended)
-                  PixelFinanceSurface(
-                    padding: const EdgeInsets.all(12),
-                    radius: 17,
-                    child: Row(
-                      children: [
-                        Icon(Icons.lock_rounded, size: 18, color: scheme.primary),
-                        const SizedBox(width: 9),
-                        Expanded(child: Text('Local-first data', style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700))),
-                      ],
+        child: Container(
+          width: extended ? 230 : 86,
+          decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: scheme.outlineVariant.withOpacity(.42))),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(extended ? 18 : 13, 16, extended ? 18 : 13, 14),
+                child: Row(
+                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: scheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.account_balance_wallet_rounded, color: scheme.onPrimaryContainer, size: 23),
                     ),
-                  ),
-              ],
-            ),
+                    if (extended) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(appTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge),
+                            const SizedBox(height: 1),
+                            Text('Your money', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Expanded(
+                child: NavigationRail(
+                  selectedIndex: selectedIndex,
+                  extended: extended,
+                  minWidth: 86,
+                  minExtendedWidth: 230,
+                  groupAlignment: -0.82,
+                  backgroundColor: Colors.transparent,
+                  labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+                  onDestinationSelected: onSelected,
+                  destinations: _FloatingDockNavigation.destinations
+                      .map(
+                        (destination) => NavigationRailDestination(
+                          icon: Icon(destination.icon),
+                          selectedIcon: Icon(destination.activeIcon),
+                          label: Text(destination.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -4437,72 +4518,95 @@ class _SideRailNavigation extends StatelessWidget {
 }
 
 class _FloatingDockNavigation extends StatelessWidget {
-  const _FloatingDockNavigation({required this.selectedIndex, required this.onSelected});
+  const _FloatingDockNavigation({
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  static const List<_DockDestination> destinations = [
-    _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
-    _DockDestination(label: 'Analysis', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
-    _DockDestination(label: 'Loans', icon: Icons.swap_horiz_rounded, activeIcon: Icons.currency_exchange_rounded),
-    _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
-    _DockDestination(label: 'Categories', icon: Icons.grid_view_rounded, activeIcon: Icons.dashboard_rounded),
+  static List<_DockDestination> get destinations => [
+    const _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
+    const _DockDestination(label: 'Analysis', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
+    const _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
+    const _DockDestination(label: 'Transaction', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
+    const _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
   ];
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 390;
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Material(
-        color: dark ? const Color(0xFF23171E) : const Color(0xFFFFF1F6),
-        borderRadius: BorderRadius.circular(22),
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: 66,
-          child: Row(
-            children: List.generate(destinations.length, (index) {
-              final item = destinations[index];
-              final selected = selectedIndex == index;
-              return Expanded(
-                child: InkWell(
-                  onTap: () => onSelected(index),
-                  child: Center(
-                    child: AnimatedContainer(
-                      duration: AppMotion.fast,
-                      curve: AppMotion.standard,
-                      padding: EdgeInsets.symmetric(horizontal: selected && !compact ? 11 : 8, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: selected ? scheme.primaryContainer : Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(selected ? item.activeIcon : item.icon, size: 21, color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
-                          if (selected && !compact) ...[
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                item.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.fade,
-                                softWrap: false,
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900),
-                              ),
+      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Material(
+            color: scheme.surfaceContainer,
+            elevation: 0,
+            borderRadius: BorderRadius.circular(25),
+            child: Container(
+              height: 72,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: scheme.outlineVariant.withOpacity(.48)),
+              ),
+              child: Row(
+                children: List.generate(destinations.length, (index) {
+                  final destination = destinations[index];
+                  final selected = selectedIndex == index;
+                  return Expanded(
+                    child: Tooltip(
+                      message: destination.label,
+                      child: Semantics(
+                        selected: selected,
+                        button: true,
+                        label: destination.label,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(19),
+                          onTap: () => onSelected(index),
+                          child: AnimatedContainer(
+                            duration: AppMotion.medium,
+                            curve: AppMotion.standard,
+                            decoration: BoxDecoration(
+                              color: selected ? scheme.primaryContainer : Colors.transparent,
+                              borderRadius: BorderRadius.circular(19),
                             ),
-                          ],
-                        ],
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  selected ? destination.activeIcon : destination.icon,
+                                  color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+                                  size: selected ? 24 : 22,
+                                ),
+                                const SizedBox(height: 3),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    destination.label,
+                                    maxLines: 1,
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+                                          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                                          fontSize: 10.5,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
-            }),
+                  );
+                }),
+              ),
+            ),
           ),
         ),
       ),
@@ -4519,21 +4623,15 @@ class PageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canPop = Navigator.of(context).canPop();
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
-      body: PixelFinanceBackground(
+      backgroundColor: scheme.background,
+      body: KoinlyAtmosphere(
         child: SafeArea(
           bottom: false,
           child: Column(
             children: [
-              PixelFinanceHeader(
-                title: title,
-                subtitle: subtitle,
-                actions: actions,
-                showBack: canPop,
-                onBack: canPop ? () => Navigator.maybePop(context) : null,
-              ),
+              _PixelPageHeader(title: title, subtitle: subtitle, actions: actions),
               Expanded(child: child),
             ],
           ),
@@ -4543,11 +4641,92 @@ class PageScaffold extends StatelessWidget {
   }
 }
 
+class _PixelPageHeader extends StatelessWidget {
+  const _PixelPageHeader({required this.title, required this.subtitle, required this.actions});
+
+  final String title;
+  final String? subtitle;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final small = AppBreakpoints.isSmall(context);
+    final desktop = AppBreakpoints.isExpanded(context);
+    final canPop = Navigator.of(context).canPop();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(desktop ? 28 : small ? 10 : 14, 10, desktop ? 28 : small ? 10 : 14, 8),
+      child: Row(
+        children: [
+          if (canPop) ...[
+            IconButton(
+              tooltip: 'Back',
+              onPressed: () => Navigator.maybePop(context),
+              icon: const Icon(Icons.arrow_back_rounded),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontSize: desktop ? 28 : small ? 23 : 25,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -.65,
+                      ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            ...actions.map((action) => Padding(padding: const EdgeInsets.only(left: 6), child: action)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class KoinlyAtmosphere extends StatelessWidget {
   const KoinlyAtmosphere({super.key, required this.child});
+
   final Widget child;
+
   @override
-  Widget build(BuildContext context) => PixelFinanceBackground(child: child);
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: dark
+              ? const [Color(0xFF0C080D), Color(0xFF100A0F), Color(0xFF0C080D)]
+              : const [Color(0xFFFFF8FC), Color(0xFFFFF4FA), Color(0xFFFFFAFD)],
+        ),
+      ),
+      child: child,
+    );
+  }
 }
 
 class ResponsiveContent extends StatelessWidget {
@@ -4677,11 +4856,12 @@ class ExpressiveCard extends StatelessWidget {
   const ExpressiveCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = const EdgeInsets.all(18),
     this.color,
     this.radius = 20,
     this.surfaceTint = true,
   });
+
   final Widget child;
   final EdgeInsets padding;
   final Color? color;
@@ -4690,11 +4870,32 @@ class ExpressiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PixelFinanceSurface(
-      padding: padding,
-      color: color,
-      radius: radius,
-      child: child,
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = color ?? scheme.surfaceContainer;
+    final topTint = Color.alphaBlend(
+      scheme.primary.withOpacity(dark ? .045 : .035),
+      baseColor,
+    );
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: baseColor,
+          gradient: surfaceTint
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [topTint, baseColor],
+                )
+              : null,
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .35 : .48)),
+        ),
+        child: Padding(padding: padding, child: child),
+      ),
     );
   }
 }
@@ -4703,10 +4904,34 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key, this.trailing});
   final String title;
   final Widget? trailing;
-  @override
-  Widget build(BuildContext context) => PixelSectionLabel(title, trailing: trailing);
-}
 
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(3, 26, 3, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -.35,
+                  ),
+            ),
+          ),
+          if (trailing != null)
+            DefaultTextStyle.merge(
+              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
+              child: trailing!,
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 class SleekPillOption<T> {
   const SleekPillOption({required this.value, required this.label, this.icon});
@@ -4716,50 +4941,44 @@ class SleekPillOption<T> {
 }
 
 class SleekPillSelector<T> extends StatelessWidget {
-  const SleekPillSelector({super.key, required this.options, required this.selected, required this.onChanged});
+  const SleekPillSelector({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+  });
+
   final List<SleekPillOption<T>> options;
   final T selected;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    if (options.length <= 3) {
-      return Row(
-        children: [
-          for (var i = 0; i < options.length; i++) ...[
-            Expanded(
-              child: _SleekPillButton<T>(
-                option: options[i],
-                selected: options[i].value == selected,
-                onTap: () => onChanged(options[i].value),
-              ),
-            ),
-            if (i != options.length - 1) const SizedBox(width: 8),
-          ],
-        ],
-      );
-    }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      physics: const ClampingScrollPhysics(),
-      child: Row(
-        children: [
-          for (var i = 0; i < options.length; i++) ...[
-            _SleekPillButton<T>(
+    return Row(
+      children: [
+        for (var i = 0; i < options.length; i++) ...[
+          Expanded(
+            child: _SleekPillButton<T>(
               option: options[i],
               selected: options[i].value == selected,
               onTap: () => onChanged(options[i].value),
             ),
-            if (i != options.length - 1) const SizedBox(width: 8),
-          ],
+          ),
+          if (i != options.length - 1) const SizedBox(width: 8),
         ],
-      ),
+      ],
     );
   }
 }
 
 class SleekCyclePillSelector<T> extends StatelessWidget {
-  const SleekCyclePillSelector({super.key, required this.options, required this.selected, required this.onChanged});
+  const SleekCyclePillSelector({
+    super.key,
+    required this.options,
+    required this.selected,
+    required this.onChanged,
+  });
+
   final List<SleekPillOption<T>> options;
   final T selected;
   final ValueChanged<T> onChanged;
@@ -4770,55 +4989,131 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
     final currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
     final current = options[currentIndex];
     final next = options[(currentIndex + 1) % options.length];
-    final scheme = Theme.of(context).colorScheme;
-    return PixelFinanceSurface(
-      radius: 18,
+    final selectedColor = kSleekAccent.withOpacity(.32);
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final mutedColor = Theme.of(context).colorScheme.onSurface.withOpacity(.60);
+
+    return MotionPressable(
       onTap: () => onChanged(next.value),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-      child: Row(
-        children: [
-          if (current.icon != null) ...[
-            Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(13)),
-              child: Icon(current.icon, size: 20, color: scheme.onPrimaryContainer),
-            ),
-            const SizedBox(width: 11),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(current.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text('Next: ${next.label}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
+      borderRadius: AppShapes.medium,
+      child: Material(
+        color: selectedColor,
+        borderRadius: AppShapes.medium,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.emphasized,
+          constraints: const BoxConstraints(minHeight: 64),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: AppShapes.medium,
+            border: Border.all(color: kSleekAccent.withOpacity(.42), width: 1.1),
+            boxShadow: [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))],
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.sync_alt_rounded, color: scheme.primary, size: 20),
-        ],
+          child: Row(
+            children: [
+              if (current.icon != null) ...[
+                Icon(current.icon, size: 22, color: kSleekAccent),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      current.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Tap to switch to ${next.label}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            color: mutedColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(Icons.swap_horiz_rounded, color: kSleekAccent, size: 24),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
 class _SleekPillButton<T> extends StatelessWidget {
-  const _SleekPillButton({required this.option, required this.selected, required this.onTap});
+  const _SleekPillButton({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
   final SleekPillOption<T> option;
   final bool selected;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return PixelPill(
-      label: option.label,
-      icon: option.icon,
-      selected: selected,
+    final selectedColor = kSleekAccent.withOpacity(.32);
+    final unselectedColor = Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.48);
+    final borderColor = selected ? kSleekAccent.withOpacity(.42) : Theme.of(context).colorScheme.outline.withOpacity(.24);
+    final textColor = selected ? Colors.white : Theme.of(context).colorScheme.onSurface.withOpacity(.76);
+
+    return MotionPressable(
       onTap: onTap,
-      compact: true,
+      borderRadius: AppShapes.medium,
+      child: Material(
+        color: selected ? selectedColor : unselectedColor,
+        borderRadius: AppShapes.medium,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.emphasized,
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 8 : 12, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: AppShapes.medium,
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: selected
+                ? [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (option.icon != null) ...[
+                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 18 : 20, color: selected ? kSleekAccent : textColor),
+                SizedBox(width: AppBreakpoints.isSmall(context) ? 5 : 8),
+              ],
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    option.label,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: textColor,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4861,7 +5156,14 @@ SelectionOption optionFromCategory(Category category) => SelectionOption(
     );
 
 class AppleSelectionField extends StatelessWidget {
-  const AppleSelectionField({super.key, required this.label, required this.option, required this.onTap, this.emptyText = 'Select'});
+  const AppleSelectionField({
+    super.key,
+    required this.label,
+    required this.option,
+    required this.onTap,
+    this.emptyText = 'Select',
+  });
+
   final String label;
   final SelectionOption? option;
   final VoidCallback onTap;
@@ -4875,43 +5177,70 @@ class AppleSelectionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 7),
-          child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
+          padding: const EdgeInsets.only(left: 4, bottom: 6),
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
         ),
-        PixelFinanceSurface(
-          onTap: onTap,
-          radius: 18,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            children: [
-              if (selected != null) ...[
-                iconBubble(context, selected.iconName, selected.iconColor, size: 42),
-                const SizedBox(width: 12),
-              ] else ...[
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(color: scheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
-                  child: Icon(Icons.add_rounded, color: scheme.onSurfaceVariant),
-                ),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(selected?.title ?? emptyText, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                    if (selected != null) ...[
-                      const SizedBox(height: 2),
-                      Text(selected.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                    ],
-                  ],
-                ),
+        Material(
+          color: scheme.surfaceContainerHighest.withOpacity(.52),
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
               ),
-              const SizedBox(width: 8),
-              Icon(Icons.keyboard_arrow_down_rounded, color: scheme.onSurfaceVariant),
-            ],
+              child: Row(
+                children: [
+                  if (selected != null) ...[
+                    iconBubble(context, selected.iconName, selected.iconColor, size: 42),
+                    const SizedBox(width: 12),
+                  ] else ...[
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: kSleekAccent.withOpacity(.13),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: kSleekAccent.withOpacity(.18)),
+                      ),
+                      child: const Icon(Icons.touch_app_rounded, color: kSleekAccent),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          selected?.title ?? emptyText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          selected?.subtitle ?? 'Tap to choose',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.keyboard_arrow_down_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ),
           ),
         ),
       ],
@@ -4927,87 +5256,98 @@ Future<String?> showAppleWheelSelectionSheet(
 }) async {
   if (options.isEmpty) return null;
   final foundIndex = options.indexWhere((option) => option.id == selectedId);
-  var selectedIndex = foundIndex < 0 ? 0 : foundIndex;
-  final controller = ScrollController();
-  final listHeight = math.min(352.0, math.max(72.0, options.length * 72.0));
+  final initialIndex = foundIndex < 0 ? 0 : foundIndex;
+  var selectedIndex = initialIndex;
+
+  const rowExtent = 72.0;
+  final listHeight = math.min(288.0, math.max(rowExtent, options.length * rowExtent));
+  final maxScrollExtent = math.max(0.0, (options.length * rowExtent) - listHeight);
+  final initialOffset = math.min(
+    maxScrollExtent,
+    math.max(0.0, (initialIndex - 1) * rowExtent),
+  );
+  final listController = ScrollController(initialScrollOffset: initialOffset);
 
   final result = await showKoinlyPopup<String>(
     context,
-    maxWidth: 500,
-    maxHeight: math.min(610.0, listHeight + 176),
+    maxWidth: 520,
+    maxHeight: math.min(600.0, 184.0 + listHeight),
     child: StatefulBuilder(
       builder: (dialogContext, setModalState) {
-        final scheme = Theme.of(dialogContext).colorScheme;
-        final safeIndex = selectedIndex.clamp(0, options.length - 1).toInt();
+        final safeIndex = selectedIndex < 0
+            ? 0
+            : selectedIndex >= options.length
+                ? options.length - 1
+                : selectedIndex;
+        final dark = Theme.of(dialogContext).brightness == Brightness.dark;
+        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
+        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
+        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+
         return Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: Theme.of(dialogContext).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -.55,
-                          ),
-                    ),
-                  ),
-                  PixelRoundAction(
-                    icon: Icons.close_rounded,
-                    tooltip: 'Cancel',
-                    onPressed: () => Navigator.pop(dialogContext),
-                  ),
-                ],
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(999)),
               ),
-              const SizedBox(height: 14),
-              Flexible(
-                child: SizedBox(
-                  height: listHeight,
-                  child: Scrollbar(
-                    controller: controller,
-                    thumbVisibility: kIsDesktopApp && options.length > 5,
-                    child: ListView.separated(
-                      controller: controller,
-                      physics: optimizedScrollPhysics(dialogContext),
-                      padding: EdgeInsets.zero,
-                      itemCount: options.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 7),
-                      itemBuilder: (context, index) {
-                        final option = options[index];
-                        final selected = index == safeIndex;
-                        return _AppleWheelOptionRow(
-                          option: option,
-                          selected: selected,
+              const SizedBox(height: 18),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                height: listHeight,
+                decoration: BoxDecoration(
+                  color: innerColor,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: innerBorderColor),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Scrollbar(
+                  controller: listController,
+                  thumbVisibility: kIsDesktopApp && options.length > 4,
+                  child: ListView.builder(
+                    controller: listController,
+                    itemExtent: rowExtent,
+                    padding: EdgeInsets.zero,
+                    physics: optimizedScrollPhysics(dialogContext),
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options[index];
+                      final isSelected = index == safeIndex;
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
                           onTap: () => setModalState(() => selectedIndex = index),
-                        );
-                      },
-                    ),
+                          child: _AppleWheelOptionRow(option: option, selected: isSelected),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      options[safeIndex].subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
-                    icon: const Icon(Icons.check_rounded, size: 18),
-                    label: const Text('Use this'),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
+                      child: const Text('Done'),
+                    ),
                   ),
                 ],
               ),
@@ -5018,82 +5358,67 @@ Future<String?> showAppleWheelSelectionSheet(
     ),
   );
 
-  controller.dispose();
+  listController.dispose();
   return result;
 }
 
 class _AppleWheelOptionRow extends StatelessWidget {
-  const _AppleWheelOptionRow({required this.option, required this.selected, required this.onTap});
+  const _AppleWheelOptionRow({required this.option, required this.selected});
 
   final SelectionOption option;
   final bool selected;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final background = selected
-        ? scheme.primaryContainer
-        : (dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised);
-    final foreground = selected ? scheme.onPrimaryContainer : scheme.onSurface;
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          height: 64,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w900,
+          color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
+        );
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
+          fontWeight: FontWeight.w700,
+        );
+
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.emphasized,
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: selected ? kSleekAccent.withOpacity(.10) : Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected ? kSleekAccent.withOpacity(.52) : Colors.transparent,
+          width: 1.1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          iconBubble(context, option.iconName, option.iconColor, size: 42),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                iconBubble(context, option.iconName, option.iconColor, size: 40),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: foreground,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      if (option.subtitle.trim().isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          option.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: selected ? scheme.onPrimaryContainer.withOpacity(.74) : scheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Icon(
-                  selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                  size: 21,
-                  color: selected ? scheme.onPrimaryContainer : scheme.outlineVariant,
-                ),
+                Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                const SizedBox(height: 3),
+                Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
               ],
             ),
           ),
-        ),
+          if (selected) ...[
+            const SizedBox(width: 10),
+            const Icon(Icons.check_rounded, color: kSleekAccent, size: 22),
+          ],
+        ],
       ),
     );
   }
 }
+
 
 Future<DateTime?> pickDate(BuildContext context, DateTime initial) => showDatePicker(
       context: context,
@@ -5369,11 +5694,11 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 620),
-      reverseDuration: const Duration(milliseconds: 260),
+      duration: AppMotion.medium,
+      reverseDuration: AppMotion.fast,
     );
     _controller.forward();
-    _hideTimer = Timer(const Duration(milliseconds: 3400), () async {
+    _hideTimer = Timer(const Duration(milliseconds: 3200), () async {
       if (!mounted) return;
       await _controller.reverse();
       if (mounted) widget.onDismissed();
@@ -5391,127 +5716,64 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    final scheme = theme.colorScheme;
     final maxWidth = math.min(kIsDesktopApp ? 520.0 : 560.0, math.max(280.0, media.size.width - 28));
-    final expandedHeight = widget.message.length > 96 ? 108.0 : widget.message.length > 54 ? 86.0 : 64.0;
-    final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 8.0);
+    final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
+    final iconColor = _isProblemMessage ? kSleekWarning : kSleekIncome;
+    final curved = CurvedAnimation(parent: _controller, curve: AppMotion.emphasized, reverseCurve: AppMotion.emphasizedAccelerate);
 
     return IgnorePointer(
       child: Material(
         type: MaterialType.transparency,
-        child: Stack(
-          children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                final raw = _controller.value;
-                final t = AppMotion.emphasized.transform(raw);
-                final contentT = (((t - .34) / .66).clamp(0.0, 1.0)).toDouble();
-                final width = ui.lerpDouble(92, maxWidth, t)!;
-                final height = ui.lerpDouble(38, expandedHeight, t)!;
-                final radius = ui.lerpDouble(999, 28, t)!;
-                final y = ui.lerpDouble(-52, 0, t)!;
-                final compactScale = ui.lerpDouble(.72, 1, t)!;
-                final borderOpacity = ui.lerpDouble(.16, .09, t)!;
-                final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
-                final iconColor = _isProblemMessage ? kSleekWarning : kSleekAccent;
-
-                return Positioned(
-                  top: topInset + y,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Transform.scale(
-                      scale: compactScale,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(radius),
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 80),
-                            curve: Curves.linear,
-                            width: width,
-                            height: height,
-                            decoration: BoxDecoration(
-                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
-                              borderRadius: BorderRadius.circular(radius),
-                              border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(dark ? .42 : .24),
-                                  blurRadius: 34,
-                                  offset: const Offset(0, 16),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(radius),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  Align(
-                                    alignment: Alignment.center,
-                                    child: Container(
-                                      width: ui.lerpDouble(34, 0, contentT)!,
-                                      height: ui.lerpDouble(6, 0, contentT)!,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(ui.lerpDouble(.72, 0, contentT)!),
-                                        borderRadius: AppShapes.full,
-                                      ),
-                                    ),
-                                  ),
-                                  Opacity(
-                                    opacity: contentT,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 38,
-                                            height: 38,
-                                            decoration: BoxDecoration(
-                                              color: iconColor.withOpacity(.18),
-                                              borderRadius: BorderRadius.circular(18),
-                                              border: Border.all(color: iconColor.withOpacity(.22)),
-                                            ),
-                                            child: Icon(icon, color: iconColor, size: 21),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              widget.message,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w900,
-                                                height: 1.14,
-                                                letterSpacing: -.1,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+        child: SafeArea(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: EdgeInsets.only(top: kIsDesktopApp ? 14 : 8),
+              child: FadeTransition(
+                opacity: curved,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, -.35), end: Offset.zero).animate(curved),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxWidth),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: scheme.outlineVariant.withOpacity(.52)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(color: iconColor.withOpacity(.16), shape: BoxShape.circle),
+                            child: Icon(icon, color: iconColor, size: 20),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Text(
+                              widget.message,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.18),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
-
 
 Future<T?> showKoinlyPopup<T>(
   BuildContext context, {
@@ -5555,41 +5817,41 @@ class _KoinlyPopupFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final horizontalInset = media.size.width < 430 ? 10.0 : 22.0;
-    final verticalInset = media.size.height < 700 ? 8.0 : 22.0;
-    final availableWidth = math.max(280.0, media.size.width - horizontalInset * 2);
+    final scheme = Theme.of(context).colorScheme;
+    final horizontalInset = media.size.width < 420 ? 12.0 : 20.0;
+    final verticalInset = media.size.height < 720 ? 10.0 : 20.0;
+    final availableWidth = math.max(280.0, media.size.width - (horizontalInset * 2));
     final availableHeight = math.max(
       300.0,
-      media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom - verticalInset * 2,
+      media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom - (verticalInset * 2),
     );
+    final resolvedWidth = math.min(maxWidth, availableWidth);
+    final resolvedHeight = math.min(maxHeight, availableHeight);
 
     return Material(
       type: MaterialType.transparency,
       child: SafeArea(
         child: AnimatedPadding(
           duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          padding: EdgeInsets.fromLTRB(
-            horizontalInset,
-            verticalInset,
-            horizontalInset,
-            verticalInset + media.viewInsets.bottom,
-          ),
-          child: Center(
+          curve: AppMotion.emphasized,
+          padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
+          child: Align(
+            alignment: Alignment.center,
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: math.min(maxWidth, availableWidth),
-                maxHeight: math.min(maxHeight, availableHeight),
-              ),
+              constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
               child: Material(
-                color: dark ? KoinlyPixelTokens.darkSurface : KoinlyPixelTokens.lightSurface,
+                color: scheme.surfaceContainer,
                 elevation: 0,
+                shadowColor: Colors.transparent,
+                borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 28),
                 clipBehavior: Clip.antiAlias,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(media.size.width < 430 ? 24 : 28),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 28),
+                    border: Border.all(color: scheme.outlineVariant.withOpacity(.52)),
+                  ),
+                  child: child,
                 ),
-                child: child,
               ),
             ),
           ),
@@ -5598,8 +5860,6 @@ class _KoinlyPopupFrame extends StatelessWidget {
     );
   }
 }
-
-
 
 // -----------------------------------------------------------------------------
 // Onboarding
@@ -5629,141 +5889,122 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
     if (!mounted || createdAccount != true) return;
-    await controller.animateToPage(1, duration: AppMotion.medium, curve: AppMotion.standard);
-  }
 
-  Future<void> _go(int page) async {
-    await controller.animateToPage(page, duration: AppMotion.medium, curve: AppMotion.standard);
+    // A newly registered sync account must continue through the local setup
+    // pages. This also covers users who entered through Login and then switched
+    // to "Create account instead" inside the auth screen.
+    await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: PixelFinanceBackground(
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-                child: Row(
-                  children: [
-                    const KoinlyAppIcon(size: 42, borderRadius: 13),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Text(
-                        'Koinly',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.5),
-                      ),
-                    ),
-                    PixelPill(label: '${index + 1} / 4', compact: true),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: PageView(
-                  controller: controller,
-                  physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
-                  onPageChanged: (value) => setState(() => index = value),
-                  children: [
-                    _OnboardingPane(
-                      eyebrow: 'START HERE',
-                      icon: Icons.auto_awesome_rounded,
-                      accent: KoinlyPixelTokens.pink,
-                      title: 'Money tracking that feels lighter.',
-                      body: 'Set up your space once. Koinly keeps accounts, spending, savings, budgets, and insights together without turning the app into a spreadsheet.',
-                      featureLabels: const ['Accounts', 'Savings', 'Budgets', 'Insights'],
-                      actions: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          FilledButton.icon(
-                            onPressed: () => _openAccountSync(createAccount: true),
-                            icon: const Icon(Icons.person_add_alt_rounded),
-                            label: const Text('Create account'),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => _openAccountSync(createAccount: false),
-                            icon: const Icon(Icons.login_rounded),
-                            label: const Text('I already have an account'),
-                          ),
-                          const SizedBox(height: 4),
-                          TextButton(
-                            onPressed: () => _go(1),
-                            child: const Text('Continue offline'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    CurrencySetupPane(state: state),
-                    AccountSetupPane(
-                      state: state,
-                      onSkip: () async {
-                        await state.skipStarterAccounts();
-                        if (mounted) await _go(3);
-                      },
-                    ),
-                    _OnboardingPane(
-                      eyebrow: 'READY',
-                      icon: Icons.lock_rounded,
-                      accent: KoinlyPixelTokens.lavender,
-                      title: 'Your money stays yours.',
-                      body: 'Your main finance database is local. Backups and sync are explicit choices, while day-to-day tracking works without a network connection.',
-                      featureLabels: const ['Local database', 'Offline first', 'Backup ready'],
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 780),
-                  child: Row(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final desktop = constraints.maxWidth >= 900;
+            final horizontalPadding = desktop ? 32.0 : 20.0;
+            return Column(
+              children: [
+                Expanded(
+                  child: PageView(
+                    controller: controller,
+                    physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+                    onPageChanged: (value) => setState(() => index = value),
                     children: [
-                      if (index > 0)
-                        PixelRoundAction(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => _go(index - 1))
-                      else
-                        const SizedBox(width: 44),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(
-                            4,
-                            (i) => AnimatedContainer(
-                              duration: AppMotion.fast,
-                              curve: AppMotion.standard,
-                              width: i == index ? 26 : 8,
-                              height: 8,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(
-                                color: i == index ? scheme.primary : scheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(99),
-                              ),
+                      _OnboardingPane(
+                        icon: Icons.account_balance_wallet_rounded,
+                        title: 'Track money without losing detail',
+                        body: 'Accounts, categories, transactions, budgets, analysis, exports, reminders, and local backup are available from the first setup.',
+                        actions: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            FilledButton.icon(
+                              onPressed: () => _openAccountSync(createAccount: false),
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Login'),
                             ),
-                          ),
+                            OutlinedButton.icon(
+                              onPressed: () => _openAccountSync(createAccount: true),
+                              icon: const Icon(Icons.person_add_alt_rounded),
+                              label: const Text('Create account'),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
+                              icon: const Icon(Icons.wifi_off_rounded),
+                              label: const Text('Use offline'),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      PixelRoundAction(
-                        icon: index < 3 ? Icons.arrow_forward_rounded : Icons.check_rounded,
-                        tooltip: index < 3 ? 'Next' : 'Finish',
-                        selected: true,
-                        onPressed: () async {
-                          if (index < 3) {
-                            await _go(index + 1);
-                          } else {
-                            await state.completeOnboarding();
-                          }
+                      CurrencySetupPane(state: state),
+                      AccountSetupPane(
+                        state: state,
+                        onSkip: () async {
+                          await state.skipStarterAccounts();
+                          if (!mounted) return;
+                          await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
                         },
+                      ),
+                      _OnboardingPane(
+                        icon: Icons.privacy_tip_rounded,
+                        title: 'Private local database',
+                        body: 'Your main finance data is stored locally with SQLite. Backup and restore stay on this device unless you share a backup file yourself.',
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
-          ),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 20),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.94),
+                    border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(.55))),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 780),
+                      child: Row(
+                        children: [
+                          Row(
+                            children: List.generate(4, (i) => AnimatedContainer(
+                                  duration: AppMotion.medium,
+                                  width: i == index ? 24 : 8,
+                                  height: 8,
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: i == index ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant),
+                                )),
+                          ),
+                          const Spacer(),
+                          if (index > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 10),
+                              child: OutlinedButton(
+                                onPressed: () => controller.previousPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
+                                child: const Text('Back'),
+                              ),
+                            ),
+                          FilledButton(
+                            onPressed: () async {
+                              if (index < 3) {
+                                await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
+                              } else {
+                                await state.completeOnboarding();
+                              }
+                            },
+                            child: Text(index < 3 ? 'Next' : 'Start'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -5781,11 +6022,13 @@ class OnboardingPageFrame extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 900;
+        final horizontalPadding = desktop ? 40.0 : 24.0;
+        final verticalPadding = desktop ? 32.0 : 24.0;
         return SingleChildScrollView(
           physics: optimizedScrollPhysics(context),
-          padding: EdgeInsets.fromLTRB(desktop ? 34 : 18, desktop ? 28 : 18, desktop ? 34 : 18, 28),
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: math.max(0, constraints.maxHeight - (desktop ? 56 : 36))),
+            constraints: BoxConstraints(minHeight: math.max(0, constraints.maxHeight - verticalPadding * 2)),
             child: Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
@@ -5800,86 +6043,30 @@ class OnboardingPageFrame extends StatelessWidget {
 }
 
 class _OnboardingPane extends StatelessWidget {
-  const _OnboardingPane({
-    required this.icon,
-    required this.title,
-    required this.body,
-    this.actions,
-    this.eyebrow = 'WELCOME',
-    this.accent = KoinlyPixelTokens.pink,
-    this.featureLabels = const [],
-  });
-
+  const _OnboardingPane({required this.icon, required this.title, required this.body, this.actions});
   final IconData icon;
   final String title;
   final String body;
   final Widget? actions;
-  final String eyebrow;
-  final Color accent;
-  final List<String> featureLabels;
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final scheme = Theme.of(context).colorScheme;
     return OnboardingPageFrame(
-      maxWidth: 820,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 680;
-          final hero = PixelFinanceSurface(
-            radius: 30,
-            color: accent.withOpacity(dark ? .16 : .20),
-            padding: EdgeInsets.all(wide ? 28 : 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: wide ? 68 : 58,
-                  height: wide ? 68 : 58,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(22)),
-                  child: Icon(icon, color: const Color(0xFF20131A), size: wide ? 32 : 28),
-                ),
-                const SizedBox(height: 28),
-                Text(
-                  eyebrow,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent, fontWeight: FontWeight.w900, letterSpacing: 1.2),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  title,
-                  style: (wide ? Theme.of(context).textTheme.displaySmall : Theme.of(context).textTheme.headlineMedium)?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -1.15,
-                        height: 1.02,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  body,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant, height: 1.45, fontWeight: FontWeight.w600),
-                ),
-                if (featureLabels.isNotEmpty) ...[
-                  const SizedBox(height: 22),
-                  Wrap(
-                    spacing: 7,
-                    runSpacing: 7,
-                    children: [for (final label in featureLabels) PixelPill(label: label, compact: true)],
-                  ),
-                ],
-              ],
-            ),
-          );
-          if (actions == null) return hero;
-          if (!wide) {
-            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [hero, const SizedBox(height: 14), actions!]);
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [Expanded(flex: 5, child: hero), const SizedBox(width: 22), Expanded(flex: 3, child: actions!)],
-          );
-        },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const KoinlyAppIcon(size: 112, borderRadius: 36),
+          const SizedBox(height: 28),
+          Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(height: 16),
+          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 16),
+          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+          if (actions != null) ...[
+            const SizedBox(height: 24),
+            actions!,
+          ],
+        ],
       ),
     );
   }
@@ -5892,28 +6079,16 @@ class CurrencySetupPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPageFrame(
-      maxWidth: 780,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const PixelSectionLabel('FORMAT'),
-          Text(
-            'Pick your money language.',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.9),
-          ),
-          const SizedBox(height: 8),
-          Text('This controls how amounts look everywhere in Koinly.', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 18),
-          PixelFinanceSurface(
-            radius: 26,
-            padding: const EdgeInsets.all(18),
-            child: CurrencyForm(
-              initialSymbol: state.currencySymbol,
-              initialCode: state.currencyCode,
-              initialPosition: state.currencyPosition,
-              initialSeparators: state.useSeparators,
-            ),
-          ),
+          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const SizedBox(height: 24),
+          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          const Text('Choose how every amount is formatted across accounts, budgets, analysis, and exports.', textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          CurrencyForm(initialSymbol: state.currencySymbol, initialCode: state.currencyCode, initialPosition: state.currencyPosition, initialSeparators: state.useSeparators),
         ],
       ),
     );
@@ -5928,46 +6103,34 @@ class AccountSetupPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPageFrame(
-      maxWidth: 820,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const PixelSectionLabel('YOUR ACCOUNTS'),
-          Text(
-            'Build the wallet you actually use.',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.9),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Regular, credit, and savings accounts can all be created here. Tap any card to edit or remove it.',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 18),
-          if (state.accounts.isEmpty)
-            PixelEmptyState(
-              icon: Icons.account_balance_wallet_rounded,
-              title: 'No accounts yet',
-              body: 'Add your first account to start tracking balances.',
-              action: () => showAccountEditor(context, allowedTypes: AccountType.values),
-              actionLabel: 'Add account',
-            )
-          else
-            ...state.accounts.map((a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: AccountTile(account: a, onTap: () => showAccountEditor(context, account: a)),
-                )),
-          const SizedBox(height: 8),
-          Row(
+          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const SizedBox(height: 24),
+          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          const Text('Keep the starter accounts, add your own, or remove any account you do not need. Tap an account to edit or delete it.', textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          ...state.accounts.map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AccountTile(account: a, onTap: () => showAccountEditor(context, account: a)),
+              )),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 12,
             children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => showAccountEditor(context, allowedTypes: AccountType.values),
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add account'),
-                ),
+              OutlinedButton.icon(
+                onPressed: () => showAccountEditor(context, allowedTypes: AccountType.values),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add account'),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton(onPressed: onSkip, child: const Text('Skip')),
+              TextButton.icon(
+                onPressed: onSkip,
+                icon: const Icon(Icons.skip_next_rounded),
+                label: const Text('Skip accounts'),
+              ),
             ],
           ),
         ],
@@ -5989,172 +6152,182 @@ class HomeDashboardScreen extends StatelessWidget {
     final range = state.activeRange();
     final txs = state.filteredTransactions();
     final summary = state.summaryFor(txs);
+    final accountBalance = state.totalAccountBalance;
     final categoryTotals = state.categoryTotals(CategoryType.expense, source: txs);
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
 
-    final overview = _PixelBalanceHero(
-      balance: state.format(state.totalAccountBalance),
+    final homeIntro = HomeIntroHeader(
+      rangeLabel: range.label,
+      onAnalysis: () => state.selectTabIndex(kAnalysisTabIndex),
+    );
+
+    final balanceCard = BalanceHeroCard(
+      balance: state.format(accountBalance),
       income: state.format(summary.income),
       expense: state.format(summary.expense),
-      periodBalance: state.format(summary.balance),
-      accountCount: state.accounts.length,
+      subtitle: '${state.accounts.length} accounts total • ${range.label} balance ${state.format(summary.balance)}',
       amountsHidden: state.amountsHidden,
       onToggleAmounts: state.toggleAmountsHidden,
-      onAdd: () => showTransactionEditor(context),
     );
 
-    final accounts = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionHeader(
-          'Accounts',
-          trailing: TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
-            child: const Text('Manage'),
+    final accountsSection = <Widget>[
+      const SectionHeader('Accounts'),
+      HomeNavigationTile(
+        iconName: 'wallet',
+        iconColor: '#78D8E8',
+        title: 'Accounts',
+        subtitle: '${state.operatingAccounts.length} regular accounts',
+        amount: state.format(state.operatingAccountBalance),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
+      ),
+      const SizedBox(height: 10),
+      HomeNavigationTile(
+        iconName: 'savings',
+        iconColor: '#A6E3A1',
+        title: 'Savings Accounts',
+        subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
+        amount: state.format(state.savingAccountBalance),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts'))),
+      ),
+    ];
+
+    final budgetSection = <Widget>[
+      SectionHeader('Budgets', trailing: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())), child: const Text('View all'))),
+      if (state.budgets.isEmpty)
+        EmptyCard(icon: Icons.savings_rounded, title: 'No budget yet', body: 'Create a monthly budget and track spending against limits.', action: () => showBudgetEditor(context), actionLabel: 'Create budget')
+      else
+        ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 10), child: BudgetProgressTile(progress: b))),
+    ];
+
+
+
+    final categorySection = <Widget>[
+      SectionHeader('Category spending'),
+      if (topCategories.isEmpty)
+        const EmptyCard(icon: Icons.pie_chart_rounded, title: 'No spending data', body: 'Add expenses to see where money is going.')
+      else
+        ExpressiveCard(
+          child: Column(
+            children: topCategories.take(4).map((entry) {
+              final category = state.categoryOf(entry.key);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
+                title: Text(category?.name ?? 'Unknown'),
+                subtitle: LinearProgressIndicator(value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal),
+                trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w800)),
+                onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
+              );
+            }).toList(),
           ),
         ),
-        HomeNavigationTile(
-          iconName: 'wallet',
-          iconColor: '#D6B9FF',
-          title: 'Everyday',
-          subtitle: '${state.operatingAccounts.length} regular / credit',
-          amount: state.format(state.operatingAccountBalance),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
-        ),
-        const SizedBox(height: 9),
-        HomeNavigationTile(
-          iconName: 'savings',
-          iconColor: '#83D6A9',
-          title: 'Savings',
-          subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
-          amount: state.format(state.savingAccountBalance),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings'))),
-        ),
-      ],
-    );
+    ];
 
-    final budgets = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionHeader(
-          'Budgets',
-          trailing: TextButton(
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())),
-            child: const Text('See all'),
-          ),
-        ),
-        if (state.budgets.isEmpty)
-          EmptyCard(
-            icon: Icons.savings_rounded,
-            title: 'Build your first budget',
-            body: 'Give a category a monthly limit and Koinly will keep the progress visible here.',
-            action: () => showBudgetEditor(context),
-            actionLabel: 'Create budget',
-          )
-        else
-          ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 9), child: BudgetProgressTile(progress: b))),
-      ],
-    );
-
-    final spending = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SectionHeader('Where it went'),
-        if (topCategories.isEmpty)
-          const EmptyCard(
-            icon: Icons.donut_small_rounded,
-            title: 'Nothing spent in this range',
-            body: 'Expense categories will appear here as soon as you add transactions.',
-          )
-        else
-          PixelFinanceSurface(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              children: topCategories.take(5).map((entry) {
-                final category = state.categoryOf(entry.key);
-                final progress = categoryGrandTotal <= 0 ? 0.0 : (entry.value / categoryGrandTotal).clamp(0.0, 1.0);
-                return InkWell(
-                  onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    child: Row(
+    final startEmptySection = <Widget>[
+      if (state.accounts.isEmpty) ...[
+        const SectionHeader('Start from empty'),
+        ExpressiveCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  iconBubble(context, 'wallet', '#78D8E8', size: 50),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (category != null) iconBubble(context, category.iconName, category.iconColor, size: 42),
-                        if (category != null) const SizedBox(width: 11),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(child: Text(category?.name ?? 'Unknown', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
-                                  const SizedBox(width: 10),
-                                  Text(state.format(entry.value), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
-                                ],
-                              ),
-                              const SizedBox(height: 7),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(99),
-                                child: LinearProgressIndicator(value: progress, minHeight: 5),
-                              ),
-                            ],
-                          ),
-                        ),
+                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    onPressed: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add account'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => runRestoreFlow(context, state),
+                    icon: const Icon(Icons.restore_rounded),
+                    label: const Text('Restore backup'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen(preferCloudDataOnAuth: true))),
+                    icon: const Icon(Icons.cloud_download_rounded),
+                    label: const Text('Sign in & restore cloud'),
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
       ],
-    );
+    ];
 
-    final emptyStart = state.accounts.isEmpty
-        ? Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: EmptyCard(
-              icon: Icons.account_balance_wallet_rounded,
-              title: 'Start with an account',
-              body: 'Add an account, restore a backup, or sign in and restore your cloud data.',
-              action: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit, AccountType.savings]),
-              actionLabel: 'Add account',
-            ),
-          )
-        : const SizedBox.shrink();
 
     return PageScaffold(
-      title: 'Your money',
-      subtitle: range.label,
+      title: appTitle,
+      subtitle: 'Personal finance',
       actions: [
-        PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Date range', onPressed: () => showDateRangeSheet(context)),
-        const SizedBox(width: 6),
-        PixelRoundAction(icon: Icons.settings_rounded, tooltip: 'Settings', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
+        IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_rounded)),
       ],
       child: ResponsiveContent(
-        desktopMaxWidth: 1240,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth < 850) {
+            final useDesktopColumns = constraints.maxWidth >= 860;
+            if (!useDesktopColumns) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [overview, emptyStart, accounts, budgets, spending],
+                children: [
+                  homeIntro,
+                  const SizedBox(height: 18),
+                  balanceCard,
+                  ...startEmptySection,
+                  ...accountsSection,
+                  ...budgetSection,
+                  ...categorySection,
+                ],
               );
             }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                overview,
-                emptyStart,
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: Column(children: [accounts, budgets])),
-                    const SizedBox(width: 18),
-                    Expanded(child: spending),
-                  ],
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      homeIntro,
+                      const SizedBox(height: 18),
+                      balanceCard,
+                      ...startEmptySection,
+                      ...accountsSection,
+                      ...budgetSection,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ...categorySection,
+                        ],
+                  ),
                 ),
               ],
             );
@@ -6165,117 +6338,62 @@ class HomeDashboardScreen extends StatelessWidget {
   }
 }
 
-class _PixelBalanceHero extends StatelessWidget {
-  const _PixelBalanceHero({
-    required this.balance,
-    required this.income,
-    required this.expense,
-    required this.periodBalance,
-    required this.accountCount,
-    required this.amountsHidden,
-    required this.onToggleAmounts,
-    required this.onAdd,
-  });
 
-  final String balance;
-  final String income;
-  final String expense;
-  final String periodBalance;
-  final int accountCount;
-  final bool amountsHidden;
-  final VoidCallback onToggleAmounts;
-  final VoidCallback onAdd;
+class HomeIntroHeader extends StatelessWidget {
+  const HomeIntroHeader({super.key, required this.rangeLabel, required this.onAnalysis});
+
+  final String rangeLabel;
+  final VoidCallback onAnalysis;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 430;
-    return Container(
-      padding: EdgeInsets.all(compact ? 18 : 22),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF4C263A) : const Color(0xFFFFD9E7),
-        borderRadius: BorderRadius.circular(compact ? 26 : 30),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Total balance',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.78), fontWeight: FontWeight.w800),
-                ),
-              ),
-              IconButton(
-                tooltip: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                onPressed: onToggleAmounts,
-                icon: Icon(amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-                style: IconButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: scheme.onPrimaryContainer),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            balance,
-            maxLines: 1,
-            overflow: TextOverflow.fade,
-            softWrap: false,
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900, letterSpacing: -1.8),
-          ),
-          const SizedBox(height: 6),
-          Text('$accountCount accounts • Period net $periodBalance', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.72), fontWeight: FontWeight.w600)),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(child: _PixelHeroMetric(label: 'Income', value: income, icon: Icons.south_west_rounded, color: KoinlyPixelTokens.green)),
-              const SizedBox(width: 9),
-              Expanded(child: _PixelHeroMetric(label: 'Expense', value: expense, icon: Icons.north_east_rounded, color: KoinlyPixelTokens.red)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Add transaction'),
-            style: FilledButton.styleFrom(
-              backgroundColor: dark ? const Color(0xFFF0A6C5) : const Color(0xFF9D476D),
-              foregroundColor: dark ? const Color(0xFF3B1425) : Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PixelHeroMetric extends StatelessWidget {
-  const _PixelHeroMetric({required this.label, required this.value, required this.icon, required this.color});
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-      decoration: BoxDecoration(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? .16 : .04), borderRadius: BorderRadius.circular(17)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Icon(icon, color: color, size: 19),
-          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.72), fontWeight: FontWeight.w700)),
-                const SizedBox(height: 1),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900)),
+                Text(
+                  'Your\nMoney',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontSize: AppBreakpoints.isSmall(context) ? 48 : 58,
+                        height: .84,
+                        letterSpacing: -2.6,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '$rangeLabel overview',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
               ],
+            ),
+          ),
+          MotionPressable(
+            onTap: onAnalysis,
+            borderRadius: AppShapes.full,
+            scale: .96,
+            child: Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: dark ? kSleekAccent.withOpacity(.78) : scheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.insights_rounded,
+                size: 31,
+                color: dark ? const Color(0xFF2A1530) : scheme.onPrimaryContainer,
+              ),
             ),
           ),
         ],
@@ -6284,9 +6402,17 @@ class _PixelHeroMetric extends StatelessWidget {
   }
 }
 
-
 class HomeNavigationTile extends StatelessWidget {
-  const HomeNavigationTile({super.key, required this.iconName, required this.iconColor, required this.title, required this.subtitle, required this.amount, required this.onTap});
+  const HomeNavigationTile({
+    super.key,
+    required this.iconName,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.onTap,
+  });
+
   final String iconName;
   final String iconColor;
   final String title;
@@ -6296,37 +6422,27 @@ class HomeNavigationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return PixelFinanceSurface(
-      onTap: onTap,
-      radius: 19,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      child: Row(
-        children: [
-          iconBubble(context, iconName, iconColor, size: 44),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(amount, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-              const SizedBox(height: 2),
-              Icon(Icons.arrow_forward_rounded, size: 17, color: scheme.onSurfaceVariant),
-            ],
-          ),
-        ],
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: iconBubble(context, iconName, iconColor, size: 50),
+        title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        subtitle: Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(amount, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ],
+        ),
+        onTap: onTap,
       ),
     );
   }
@@ -6411,48 +6527,87 @@ class MiniMetric extends StatelessWidget {
 
   Color _accent() {
     final lower = label.toLowerCase();
-    if (lower.contains('income') || lower.contains('saving') || lower.contains('collect') || lower.contains('paid')) return kSleekIncome;
-    if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue') || lower.contains('pay')) return kSleekExpense;
-    if (lower.contains('interest')) return KoinlyPixelTokens.amber;
-    if (lower.contains('balance') || lower.contains('remaining') || lower.contains('net')) return KoinlyPixelTokens.lavender;
+    if (lower.contains('income') || lower.contains('saving')) return kSleekIncome;
+    if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue')) return kSleekExpense;
+    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent;
+    if (lower.contains('open')) return const Color(0xFF8AB4FF);
+    if (lower.contains('completed')) return const Color(0xFF2BD9A1);
     return kSleekAccent;
   }
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     final accent = _accent();
-    return PixelFinanceSurface(
-      radius: 18,
-      padding: const EdgeInsets.all(13),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: accent, size: 19),
+
+    Widget fitted(String text, TextStyle? style, {Alignment alignment = Alignment.centerLeft, TextAlign textAlign = TextAlign.left}) => FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: alignment,
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            textAlign: textAlign,
+            style: style,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.2)),
-              ],
-            ),
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 230;
+        return Container(
+          constraints: BoxConstraints(minHeight: compact ? 82 : 66),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withOpacity(Theme.of(context).brightness == Brightness.dark ? .42 : .48),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: colorScheme.outline.withOpacity(.24), width: .8),
+            boxShadow: Theme.of(context).brightness == Brightness.dark ? [BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 14, offset: const Offset(0, 8))] : null,
           ),
-        ],
-      ),
+          child: compact
+              ? Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(icon, color: accent, size: 21),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(width: double.infinity, child: fitted(label, textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w800))),
+                          const SizedBox(height: 5),
+                          SizedBox(width: double.infinity, child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: colorScheme.onSurface))),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
+                      child: Icon(icon, color: accent, size: 21),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: fitted(label, textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
+                    const SizedBox(width: 12),
+                    Flexible(child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900), alignment: Alignment.centerRight, textAlign: TextAlign.right)),
+                  ],
+                ),
+        );
+      },
     );
   }
 }
-
-
 
 class BalanceHeroCard extends StatelessWidget {
   const BalanceHeroCard({
@@ -6475,88 +6630,135 @@ class BalanceHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = dark ? const Color(0xFFC8E7EC) : scheme.onSurface.withOpacity(.86);
-    final valueColor = dark ? Colors.white : scheme.onSurface;
-    final subtitleColor = dark ? const Color(0xFF9AB0B8) : scheme.onSurfaceVariant.withOpacity(.78);
+    final cardBase = dark ? const Color(0xFF271923) : const Color(0xFFF6E1ED);
+    final cardTop = dark ? const Color(0xFF32202D) : const Color(0xFFFFEDF6);
+    final onCard = dark ? const Color(0xFFFFEEF7) : const Color(0xFF2D1E27);
+    final muted = dark ? const Color(0xFFCDB9C5) : const Color(0xFF705C68);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: dark
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  const Color(0xFF083E47),
-                  KoinlyPixelTokens.darkSurfaceRaised,
-                  const Color(0xFF07171D),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white,
-                  const Color(0xFFF2FBFC),
-                  scheme.surface,
-                ],
-              ),
-        border: Border.all(color: dark ? kSleekAccent.withOpacity(.28) : scheme.outline.withOpacity(.16), width: 1),
-        boxShadow: kIsDesktopApp
-            ? [
-                BoxShadow(color: Colors.black.withOpacity(dark ? .24 : .055), blurRadius: 28, offset: const Offset(0, 14)),
-                if (dark) BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 36, offset: const Offset(0, 5)),
-              ]
-            : [
-                BoxShadow(color: kSleekAccent.withOpacity(dark ? .13 : .05), blurRadius: 24, offset: const Offset(0, 9)),
-                BoxShadow(color: Colors.black.withOpacity(dark ? .32 : .055), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [cardTop, cardBase],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: scheme.primary.withOpacity(dark ? .16 : .12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('Net Balance', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: titleColor, fontWeight: FontWeight.w800)),
-              const SizedBox(width: 6),
-              Tooltip(
-                message: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                child: InkWell(
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withOpacity(dark ? .12 : .10),
                   borderRadius: BorderRadius.circular(999),
-                  onTap: onToggleAmounts,
-                  child: Padding(
-                    padding: const EdgeInsets.all(3),
-                    child: Icon(
-                      amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                      size: 16,
-                      color: dark ? const Color(0xFF9EDDE7) : kSleekAccent.withOpacity(.82),
-                    ),
+                ),
+                child: Text(
+                  'Net balance',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: onCard,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: amountsHidden ? 'Show amounts' : 'Hide amounts',
+                onPressed: onToggleAmounts,
+                style: ButtonStyle(
+                  backgroundColor: WidgetStatePropertyAll(Colors.white.withOpacity(dark ? .08 : .38)),
+                  foregroundColor: WidgetStatePropertyAll(onCard),
+                  shape: const WidgetStatePropertyAll(CircleBorder()),
+                ),
+                icon: Icon(amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 19),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              balance,
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                    color: onCard,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1.8,
                   ),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 14),
+          const _DecorativeSparkline(),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _BalanceMetricBlock(
+                  label: 'Income',
+                  value: income,
+                  icon: Icons.south_west_rounded,
+                  tint: kSleekIncome,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BalanceMetricBlock(
+                  label: 'Expense',
+                  value: expense,
+                  icon: Icons.north_east_rounded,
+                  tint: kSleekExpense,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(balance, maxLines: 1, softWrap: false, style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2, color: valueColor)),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: subtitleColor, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 16),
-          const _DecorativeSparkline(),
-          const SizedBox(height: 18),
+        ],
+      ),
+    );
+  }
+}
+
+class _BalanceMetricBlock extends StatelessWidget {
+  const _BalanceMetricBlock({required this.label, required this.value, required this.icon, required this.tint});
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = dark ? const Color(0xFFFFEEF7) : Theme.of(context).colorScheme.onSurface;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      decoration: BoxDecoration(
+        color: tint.withOpacity(dark ? .11 : .10),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
-              Expanded(child: MiniMetric('Total income', income, Icons.south_west_rounded)),
-              const SizedBox(width: 10),
-              Expanded(child: MiniMetric('Total expense', expense, Icons.north_east_rounded)),
+              Icon(icon, size: 16, color: tint),
+              const SizedBox(width: 6),
+              Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: onSurface.withOpacity(.72), fontWeight: FontWeight.w600)),
             ],
+          ),
+          const SizedBox(height: 7),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: onSurface, fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -6624,8 +6826,25 @@ class EmptyCard extends StatelessWidget {
   final String body;
   final VoidCallback? action;
   final String? actionLabel;
+
   @override
-  Widget build(BuildContext context) => PixelEmptyState(icon: icon, title: title, body: body, action: action, actionLabel: actionLabel);
+  Widget build(BuildContext context) {
+    return ExpressiveCard(
+      child: Column(
+        children: [
+          Icon(icon, size: 42),
+          const SizedBox(height: 12),
+          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(body, textAlign: TextAlign.center),
+          if (action != null) ...[
+            const SizedBox(height: 12),
+            FilledButton(onPressed: action, child: Text(actionLabel ?? 'Add')),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -6640,37 +6859,33 @@ class AccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final scheme = Theme.of(context).colorScheme;
-    final balanceColor = account.amount < 0 ? kSleekExpense : scheme.onSurface;
-    final subtitle = account.type == AccountType.credit
-        ? 'Credit • ${state.format(account.availableCredit)} available'
-        : account.type == AccountType.savings
-            ? 'Savings'
-            : 'Regular account';
-    return PixelFinanceSurface(
-      onTap: onTap,
-      radius: 19,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          iconBubble(context, account.iconName, account.iconColor, size: 44),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
-                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(color: balanceColor, fontWeight: FontWeight.w900)),
-          const SizedBox(width: 4),
-          Icon(Icons.chevron_right_rounded, size: 19, color: scheme.onSurfaceVariant),
-        ],
+    final balanceColor = account.amount < 0 ? kSleekExpense : Theme.of(context).colorScheme.onSurface;
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      radius: 24,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: iconBubble(context, account.iconName, account.iconColor, size: 46),
+        title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(
+          account.type == AccountType.credit
+              ? 'Credit • Available ${state.format(account.availableCredit)}'
+              : account.type == AccountType.savings
+                  ? 'Savings Account'
+                  : 'Cash Wallet',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: balanceColor)),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ],
+        ),
+        onTap: onTap,
       ),
     );
   }
@@ -7142,17 +7357,22 @@ class _AccountEditorState extends State<AccountEditor> {
   final creditLimit = TextEditingController();
   AccountType type = AccountType.regular;
   String icon = 'wallet';
-  String color = '#D6B9FF';
+  String color = '#78D8E8';
 
   List<AccountType> get allowedTypes => widget.allowedTypes ?? AccountType.values;
 
-  List<SleekPillOption<AccountType>> get _typeOptions => allowedTypes.map((accountType) {
-        return switch (accountType) {
-          AccountType.regular => const SleekPillOption(value: AccountType.regular, label: 'Regular', icon: Icons.account_balance_wallet_rounded),
-          AccountType.credit => const SleekPillOption(value: AccountType.credit, label: 'Credit', icon: Icons.credit_card_rounded),
-          AccountType.savings => const SleekPillOption(value: AccountType.savings, label: 'Savings', icon: Icons.savings_rounded),
-        };
-      }).toList();
+  List<SleekPillOption<AccountType>> get _typeOptions {
+    return allowedTypes.map((accountType) {
+      switch (accountType) {
+        case AccountType.regular:
+          return const SleekPillOption(value: AccountType.regular, label: 'Regular', icon: Icons.account_balance_wallet_rounded);
+        case AccountType.credit:
+          return const SleekPillOption(value: AccountType.credit, label: 'Credit', icon: Icons.credit_card_rounded);
+        case AccountType.savings:
+          return const SleekPillOption(value: AccountType.savings, label: 'Savings', icon: Icons.savings_rounded);
+      }
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -7170,165 +7390,89 @@ class _AccountEditorState extends State<AccountEditor> {
       if (type == AccountType.savings) {
         name.text = 'Savings Account';
         icon = 'savings';
-        color = '#83D6A9';
+        color = '#A6E3A1';
       }
     }
   }
 
   @override
-  void dispose() {
-    name.dispose();
-    amount.dispose();
-    creditLimit.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save(AppController state) async {
-    if (name.text.trim().isEmpty) {
-      showSnack(context, 'Enter an account name');
-      return;
-    }
-    final now = DateTime.now();
-    final account = Account(
-      id: widget.account?.id ?? _uuid.v4(),
-      name: name.text.trim(),
-      type: type,
-      iconName: icon,
-      iconColor: color,
-      amount: double.tryParse(amount.text) ?? 0,
-      creditLimit: type == AccountType.credit ? (double.tryParse(creditLimit.text) ?? 0) : 0,
-      sequence: widget.account?.sequence ?? state.accounts.length,
-      createdOn: widget.account?.createdOn ?? now,
-      updatedOn: now,
-    );
-    await state.saveAccount(account);
-    if (mounted) Navigator.pop(context);
-  }
-
-  @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
-    final typeLabel = switch (type) {
-      AccountType.regular => 'Everyday money',
-      AccountType.credit => 'Credit line',
-      AccountType.savings => 'Savings',
-    };
-    return SingleChildScrollView(
-      physics: optimizedScrollPhysics(context),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.account == null ? 'New account' : 'Account details', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.7)),
-                    const SizedBox(height: 3),
-                    Text(typeLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                  ],
-                ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 18),
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Account name')),
+            const SizedBox(height: 12),
+            SleekPillSelector<AccountType>(
+              options: _typeOptions,
+              selected: type,
+              onChanged: (v) => setState(() {
+                type = v;
+                if (v == AccountType.savings && icon == 'wallet') {
+                  icon = 'savings';
+                  color = '#A6E3A1';
+                }
+              }),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Balance')),
+            if (type == AccountType.savings) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Changing this balance updates total accounts only. It does not create income, expense, or transaction history.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
               ),
-              PixelRoundAction(icon: Icons.close_rounded, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
             ],
-          ),
-          const SizedBox(height: 16),
-          PixelFinanceSurface(
-            radius: 26,
-            color: colorFromHex(color, fallback: Theme.of(context).colorScheme.primary).withOpacity(Theme.of(context).brightness == Brightness.dark ? .16 : .20),
-            padding: const EdgeInsets.all(18),
-            child: Row(
+            if (type == AccountType.credit) ...[
+              const SizedBox(height: 12),
+              TextField(controller: creditLimit, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Credit limit')),
+            ],
+            const SizedBox(height: 12),
+            IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
+            const SizedBox(height: 18),
+            Row(
               children: [
-                iconBubble(context, icon, color, size: 58),
-                const SizedBox(width: 14),
+                if (widget.account != null)
+                  Expanded(child: OutlinedButton(onPressed: () async { await state.deleteAccount(widget.account!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
+                if (widget.account != null) const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name.text.trim().isEmpty ? 'Your account' : name.text.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 3),
-                      Text(typeLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                    ],
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: () async {
+                      if (name.text.trim().isEmpty) return;
+                      final now = DateTime.now();
+                      final a = Account(
+                        id: widget.account?.id ?? _uuid.v4(),
+                        name: name.text.trim(),
+                        type: type,
+                        iconName: icon,
+                        iconColor: color,
+                        amount: double.tryParse(amount.text) ?? 0,
+                        creditLimit: type == AccountType.credit ? (double.tryParse(creditLimit.text) ?? 0) : 0,
+                        sequence: widget.account?.sequence ?? state.accounts.length,
+                        createdOn: widget.account?.createdOn ?? now,
+                        updatedOn: now,
+                      );
+                      await state.saveAccount(a);
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('Save'),
                   ),
                 ),
               ],
-            ),
-          ),
-          const SectionHeader('Type'),
-          SleekPillSelector<AccountType>(
-            options: _typeOptions,
-            selected: type,
-            onChanged: (value) => setState(() {
-              type = value;
-              if (value == AccountType.savings && icon == 'wallet') {
-                icon = 'savings';
-                color = '#83D6A9';
-              }
-            }),
-          ),
-          const SectionHeader('Details'),
-          PixelFinanceSurface(
-            radius: 22,
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              children: [
-                TextField(
-                  controller: name,
-                  onChanged: (_) => setState(() {}),
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Account name', prefixIcon: Icon(Icons.edit_rounded)),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: amount,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: type == AccountType.credit ? 'Current balance' : 'Balance', prefixIcon: const Icon(Icons.payments_rounded)),
-                ),
-                if (type == AccountType.credit) ...[
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: creditLimit,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Credit limit', prefixIcon: Icon(Icons.credit_score_rounded)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (type == AccountType.savings) ...[
-            const SizedBox(height: 8),
-            Text('Changing a savings balance does not create income or expense history.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            )
           ],
-          const SectionHeader('Look'),
-          IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              if (widget.account != null) ...[
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await state.deleteAccount(widget.account!.id);
-                    if (mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Delete'),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(child: FilledButton.icon(onPressed: () => _save(state), icon: const Icon(Icons.check_rounded), label: const Text('Save account'))),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
-
-
 
 
 class IconColorPicker extends StatelessWidget {
@@ -7376,8 +7520,17 @@ class IconColorPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Choose a color and icon.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 9),
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 10),
+          child: Text(
+            'APPEARANCE',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  letterSpacing: 3,
+                  fontWeight: FontWeight.w900,
+                  color: colorScheme.onSurface.withOpacity(.82),
+                ),
+          ),
+        ),
         Row(
           children: [
             Expanded(
@@ -7499,7 +7652,7 @@ class ColorSelectionPage extends StatelessWidget {
   }
 
   Future<String?> _showCustomColorOptions(BuildContext context) async {
-    final initial = _normalizeColor(selectedColor).isEmpty ? '#F0A6C5' : _normalizeColor(selectedColor);
+    final initial = _normalizeColor(selectedColor).isEmpty ? '#78D8E8' : _normalizeColor(selectedColor);
 
     final choice = await showKoinlyPopup<String>(
       context,
@@ -8138,7 +8291,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                       borderRadius: BorderRadius.circular(18),
                       child: Container(
                         height: 300,
-                        color: Theme.of(context).brightness == Brightness.dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -8397,28 +8550,16 @@ class CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return PixelFinanceSurface(
-      onTap: onTap,
-      radius: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      child: Row(
-        children: [
-          iconBubble(context, category.iconName, category.iconColor, size: 42),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(enumName(category.type), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-        ],
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      radius: 24,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: iconBubble(context, category.iconName, category.iconColor),
+        title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(enumName(category.type)),
+        trailing: trailing,
+        onTap: onTap,
       ),
     );
   }
@@ -8520,51 +8661,17 @@ class TransactionListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final txs = state.filteredTransactions();
-    final summary = state.summaryFor(txs);
-    final range = state.activeRange();
     return PageScaffold(
-      title: 'Activity',
-      subtitle: '${txs.length} records • ${range.label}',
+      title: 'Transaction',
+      subtitle: '${txs.length} records • ${state.activeRange().label}',
       actions: [
-        PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Date range', onPressed: () => showDateRangeSheet(context)),
-        const SizedBox(width: 6),
-        PixelRoundAction(icon: Icons.tune_rounded, tooltip: 'Filters', onPressed: () => showFilterSheet(context)),
+        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
+        IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded)),
       ],
       child: ResponsiveListContent(
-        desktopMaxWidth: 980,
-        header: [
-          Row(
-            children: [
-              Expanded(child: PixelMetricBlock(label: 'In', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
-              const SizedBox(width: 8),
-              Expanded(child: PixelMetricBlock(label: 'Out', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          PixelFinanceSurface(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            radius: 18,
-            child: Row(
-              children: [
-                Icon(Icons.balance_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 9),
-                Expanded(child: Text('Net for ${range.label}', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
-                Text(state.format(summary.balance), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          ActiveFilterChips(state: state),
-          if (txs.isNotEmpty) const SectionHeader('Transactions'),
-        ],
+        header: [ActiveFilterChips(state: state)],
         itemCount: txs.length,
-        empty: EmptyCard(
-          icon: Icons.receipt_long_rounded,
-          title: 'No activity yet',
-          body: 'Add a transaction or widen the active filters.',
-          action: () => showTransactionEditor(context),
-          actionLabel: 'Add transaction',
-        ),
+        empty: EmptyCard(icon: Icons.receipt_long_rounded, title: 'No transactions', body: 'Create a transaction or change filters.', action: () => showTransactionEditor(context), actionLabel: 'Add transaction'),
         itemBuilder: (context, index) => TransactionTile(tx: txs[index]),
       ),
     );
@@ -8600,12 +8707,11 @@ class TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     final category = state.categoryOf(tx.categoryId);
     final account = state.accountOf(tx.fromAccountId);
     final toAccount = tx.toAccountId == null ? null : state.accountOf(tx.toAccountId!);
-    final amountPrefix = tx.type == MoneyTransactionType.expense ? '−' : tx.type == MoneyTransactionType.income ? '+' : '';
-    final amountColor = tx.type == MoneyTransactionType.expense ? kSleekExpense : tx.type == MoneyTransactionType.income ? kSleekIncome : scheme.secondary;
+    final amountPrefix = tx.type == MoneyTransactionType.expense ? '-' : tx.type == MoneyTransactionType.income ? '+' : '';
+    final amountColor = tx.type == MoneyTransactionType.expense ? kSleekExpense : tx.type == MoneyTransactionType.income ? kSleekIncome : kSleekAccent;
     final savedTitle = tx.title.trim();
     final title = tx.type == MoneyTransactionType.transfer
         ? '${account?.name ?? ''} → ${toAccount?.name ?? ''}'
@@ -8617,30 +8723,26 @@ class TransactionTile extends StatelessWidget {
       transactionDateTimeLabel(tx),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-    return PixelFinanceSurface(
-      onTap: () => showTransactionEditor(context, transaction: tx),
-      radius: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
-      child: Row(
-        children: [
-          tx.type == MoneyTransactionType.transfer
-              ? iconBubble(context, 'exchange', '#D6B9FF', size: 42)
-              : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#F0A6C5', size: 42),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
-                Text(subtitleParts.join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text('$amountPrefix${state.format(tx.amount)}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor)),
-        ],
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      radius: 24,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: tx.type == MoneyTransactionType.transfer
+            ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
+            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        subtitle: Text(
+          subtitleParts.join(' • '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+        ),
+        trailing: Text(
+          '$amountPrefix${state.format(tx.amount)}',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
+        ),
+        onTap: () => showTransactionEditor(context, transaction: tx),
       ),
     );
   }
@@ -8719,71 +8821,9 @@ class _TransactionEditorState extends State<TransactionEditor> {
     super.dispose();
   }
 
-  Color _accent() => switch (type) {
-        MoneyTransactionType.income => kSleekIncome,
-        MoneyTransactionType.expense => kSleekExpense,
-        MoneyTransactionType.transfer => KoinlyPixelTokens.lavender,
-      };
-
-  void _changeType(MoneyTransactionType value, AppController state) {
-    setState(() {
-      type = value;
-      if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
-        final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
-        final categories = state.categories.where((c) => c.type == targetType).toList();
-        categoryId = type == MoneyTransactionType.income
-            ? state.defaultIncomeCategoryId ?? categories.firstOrNull?.id
-            : state.defaultExpenseCategoryId ?? categories.firstOrNull?.id;
-        final regular = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
-        if (fromAccountId == null || regular.where((a) => a.id == fromAccountId).firstOrNull == null) {
-          fromAccountId = state.defaultAccountId ?? regular.firstOrNull?.id;
-        }
-        toAccountId = null;
-      } else {
-        categoryId = '';
-        fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
-        if (toAccountId == fromAccountId) toAccountId = null;
-      }
-    });
-  }
-
-  Future<void> _save(AppController state) async {
-    final value = double.tryParse(amount.text) ?? 0;
-    if (value <= 0) return showSnack(context, 'Enter a valid amount');
-    final transactionTitle = title.text.trim();
-    if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
-    if (fromAccountId == null) return showSnack(context, 'Select an account');
-    if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
-    if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
-    final tx = MoneyTransaction(
-      id: widget.transaction?.id ?? _uuid.v4(),
-      type: type,
-      amount: value,
-      title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
-      notes: notes.text.trim(),
-      categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
-      fromAccountId: fromAccountId!,
-      toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
-      imagePath: widget.transaction?.imagePath ?? '',
-      excludeFromReports: widget.transaction?.excludeFromReports ?? false,
-      linkedEntityType: widget.transaction?.linkedEntityType,
-      linkedEntityId: widget.transaction?.linkedEntityId,
-      createdOn: selectedDate,
-      endOn: isSameCalendarDay(selectedDate, selectedEndDate) ? null : selectedEndDate,
-      updatedOn: DateTime.now(),
-    );
-    if (widget.transaction == null) {
-      await state.addTransaction(tx);
-    } else {
-      await state.updateTransaction(tx);
-    }
-    if (mounted) Navigator.pop(context);
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     final regularAccountOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
     final transferFromOptions = state.accounts.where((a) => a.id != toAccountId).toList();
     final transferToOptions = state.accounts.where((a) => a.id != fromAccountId).toList();
@@ -8792,189 +8832,204 @@ class _TransactionEditorState extends State<TransactionEditor> {
     final toAccount = state.accounts.where((a) => a.id == toAccountId).firstOrNull;
     final relevantCategories = state.categories.where((c) => c.type == (type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense)).toList();
     if (type == MoneyTransactionType.transfer) categoryId = '';
-    final accent = _accent();
-
-    return SingleChildScrollView(
-      physics: optimizedScrollPhysics(context),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.transaction == null ? 'New activity' : 'Edit activity', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.7)),
-                    const SizedBox(height: 3),
-                    Text(enumName(type), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: accent, fontWeight: FontWeight.w800)),
-                  ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 12),
+            SleekPillSelector<MoneyTransactionType>(
+              options: const [
+                SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
+                SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
+                SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
+              ],
+              selected: type,
+              onChanged: (v) => setState(() {
+                type = v;
+                if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
+                  final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
+                  final newCategories = state.categories.where((c) => c.type == targetType).toList();
+                  categoryId = type == MoneyTransactionType.income
+                      ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
+                      : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
+                  final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
+                  if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
+                    fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
+                  }
+                  toAccountId = null;
+                } else {
+                  categoryId = '';
+                  fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
+                  if (toAccountId == fromAccountId) toAccountId = null;
+                }
+              }),
+            ),
+            const SizedBox(height: 12),
+            if (type != MoneyTransactionType.transfer) ...[
+              TextField(
+                controller: title,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                maxLength: 100,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.title_rounded),
+                  labelText: 'Title',
+                  hintText: 'Example: Lunch, Salary, Groceries',
+                  counterText: '',
                 ),
               ),
-              PixelRoundAction(icon: Icons.close_rounded, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
+              const SizedBox(height: 12),
             ],
-          ),
-          const SizedBox(height: 14),
-          SleekPillSelector<MoneyTransactionType>(
-            options: const [
-              SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
-              SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
-              SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
-            ],
-            selected: type,
-            onChanged: (value) => _changeType(value, state),
-          ),
-          const SizedBox(height: 12),
-          PixelFinanceSurface(
-            radius: 27,
-            color: accent.withOpacity(Theme.of(context).brightness == Brightness.dark ? .13 : .17),
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (type != MoneyTransactionType.transfer) ...[
-                  TextField(
-                    controller: title,
-                    textInputAction: TextInputAction.next,
-                    textCapitalization: TextCapitalization.sentences,
-                    maxLength: 100,
-                    decoration: const InputDecoration(labelText: 'Title', hintText: 'Lunch, salary, groceries…', counterText: ''),
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                TextField(
-                  controller: amount,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  textInputAction: TextInputAction.next,
-                  textAlign: TextAlign.start,
-                  inputFormatters: [
-                    TextInputFormatter.withFunction((oldValue, newValue) {
-                      final text = newValue.text;
-                      if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
-                      return oldValue;
-                    }),
-                  ],
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2),
-                  decoration: InputDecoration(labelText: 'Amount', prefixText: '${state.currencySymbol} '),
-                ),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.end,
+              inputFormatters: [
+                TextInputFormatter.withFunction((oldValue, newValue) {
+                  final text = newValue.text;
+                  if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
+                  return oldValue;
+                }),
               ],
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+              decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
             ),
-          ),
-          const SectionHeader('Where'),
-          if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
+            const SizedBox(height: 12),
+            if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
+              AppleSelectionField(
+                label: 'Category',
+                option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
+                emptyText: 'Choose category',
+                onTap: () async {
+                  final selected = await showAppleWheelSelectionSheet(
+                    context,
+                    title: 'Choose Category',
+                    selectedId: categoryId,
+                    options: relevantCategories.map(optionFromCategory).toList(),
+                  );
+                  if (selected != null) setState(() => categoryId = selected);
+                },
+              ),
+            if (widget.lockedCategory != null)
+              ExpressiveCard(padding: const EdgeInsets.all(12), child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w800)))])),
+            const SizedBox(height: 12),
             AppleSelectionField(
-              label: 'Category',
-              option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
-              emptyText: 'Choose category',
+              label: type == MoneyTransactionType.transfer ? 'From account' : 'Account',
+              option: fromAccount == null ? null : optionFromAccount(fromAccount, state),
+              emptyText: 'Choose account',
               onTap: () async {
-                final selected = await showAppleWheelSelectionSheet(context, title: 'Choose category', selectedId: categoryId, options: relevantCategories.map(optionFromCategory).toList());
-                if (selected != null) setState(() => categoryId = selected);
+                final selected = await showAppleWheelSelectionSheet(
+                  context,
+                  title: type == MoneyTransactionType.transfer ? 'Choose From Account' : 'Choose Account',
+                  selectedId: fromAccountId,
+                  options: (type == MoneyTransactionType.transfer ? transferFromOptions : accountOptions).map((a) => optionFromAccount(a, state)).toList(),
+                );
+                if (selected != null) {
+                  setState(() {
+                    fromAccountId = selected;
+                    if (toAccountId == selected) toAccountId = null;
+                  });
+                }
               },
             ),
-          if (widget.lockedCategory != null)
-            PixelFinanceSurface(
-              padding: const EdgeInsets.all(12),
-              child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w800)))]),
-            ),
-          const SizedBox(height: 9),
-          AppleSelectionField(
-            label: type == MoneyTransactionType.transfer ? 'From account' : 'Account',
-            option: fromAccount == null ? null : optionFromAccount(fromAccount, state),
-            emptyText: 'Choose account',
-            onTap: () async {
-              final selected = await showAppleWheelSelectionSheet(
-                context,
-                title: type == MoneyTransactionType.transfer ? 'From account' : 'Choose account',
-                selectedId: fromAccountId,
-                options: (type == MoneyTransactionType.transfer ? transferFromOptions : accountOptions).map((a) => optionFromAccount(a, state)).toList(),
-              );
-              if (selected != null) setState(() { fromAccountId = selected; if (toAccountId == selected) toAccountId = null; });
-            },
-          ),
-          if (type == MoneyTransactionType.transfer) ...[
-            const SizedBox(height: 9),
-            AppleSelectionField(
-              label: 'To account',
-              option: toAccount == null ? null : optionFromAccount(toAccount, state),
-              emptyText: 'Choose destination',
-              onTap: () async {
-                final selected = await showAppleWheelSelectionSheet(context, title: 'To account', selectedId: toAccountId, options: transferToOptions.map((a) => optionFromAccount(a, state)).toList());
-                if (selected != null) setState(() { toAccountId = selected; if (fromAccountId == selected) fromAccountId = null; });
+            if (type == MoneyTransactionType.transfer) ...[
+              const SizedBox(height: 12),
+              AppleSelectionField(
+                label: 'To account',
+                option: toAccount == null ? null : optionFromAccount(toAccount, state),
+                emptyText: 'Choose destination account',
+                onTap: () async {
+                  final selected = await showAppleWheelSelectionSheet(
+                    context,
+                    title: 'Choose To Account',
+                    selectedId: toAccountId,
+                    options: transferToOptions.map((a) => optionFromAccount(a, state)).toList(),
+                  );
+                  if (selected != null) {
+                    setState(() {
+                      toAccountId = selected;
+                      if (fromAccountId == selected) fromAccountId = null;
+                    });
+                  }
+                },
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final range = await pickDateRange(context, selectedDate, selectedEndDate);
+                if (range == null) return;
+                setState(() {
+                  selectedDate = DateTime(range.start.year, range.start.month, range.start.day, selectedDate.hour, selectedDate.minute);
+                  selectedEndDate = DateTime(range.end.year, range.end.month, range.end.day, selectedDate.hour, selectedDate.minute);
+                });
               },
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text(transactionDateSpanLabel(selectedDate, selectedEndDate)),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final time = await pickTime(context, TimeOfDay.fromDateTime(selectedDate));
+                if (time == null) return;
+                setState(() {
+                  selectedDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, time.hour, time.minute);
+                  selectedEndDate = DateTime(selectedEndDate.year, selectedEndDate.month, selectedEndDate.day, time.hour, time.minute);
+                });
+              },
+              icon: const Icon(Icons.schedule_rounded),
+              label: Text(DateFormat('h:mm a').format(selectedDate)),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
+            const SizedBox(height: 18),
+            Row(children: [
+              if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
+              if (widget.transaction != null) const SizedBox(width: 12),
+              Expanded(flex: 2, child: FilledButton(onPressed: () async {
+                final value = double.tryParse(amount.text) ?? 0;
+                if (value <= 0) return showSnack(context, 'Enter a valid amount');
+                final transactionTitle = title.text.trim();
+                if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
+                if (fromAccountId == null) return showSnack(context, 'Select an account');
+                if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
+                if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
+                final tx = MoneyTransaction(
+                  id: widget.transaction?.id ?? _uuid.v4(),
+                  type: type,
+                  amount: value,
+                  title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
+                  notes: notes.text.trim(),
+                  categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
+                  fromAccountId: fromAccountId!,
+                  toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
+                  imagePath: widget.transaction?.imagePath ?? '',
+                  excludeFromReports: widget.transaction?.excludeFromReports ?? false,
+                  linkedEntityType: widget.transaction?.linkedEntityType,
+                  linkedEntityId: widget.transaction?.linkedEntityId,
+                  createdOn: selectedDate,
+                  endOn: isSameCalendarDay(selectedDate, selectedEndDate) ? null : selectedEndDate,
+                  updatedOn: DateTime.now(),
+                );
+                if (widget.transaction == null) {
+                  await state.addTransaction(tx);
+                } else {
+                  await state.updateTransaction(tx);
+                }
+                if (context.mounted) Navigator.pop(context);
+              }, child: const Text('Save'))),
+            ]),
           ],
-          const SectionHeader('When'),
-          Row(
-            children: [
-              Expanded(
-                child: PixelFinanceSurface(
-                  onTap: () async {
-                    final range = await pickDateRange(context, selectedDate, selectedEndDate);
-                    if (range == null) return;
-                    setState(() {
-                      selectedDate = DateTime(range.start.year, range.start.month, range.start.day, selectedDate.hour, selectedDate.minute);
-                      selectedEndDate = DateTime(range.end.year, range.end.month, range.end.day, selectedDate.hour, selectedDate.minute);
-                    });
-                  },
-                  radius: 18,
-                  padding: const EdgeInsets.all(13),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.calendar_month_rounded, color: scheme.primary, size: 20),
-                    const SizedBox(height: 8),
-                    Text(transactionDateSpanLabel(selectedDate, selectedEndDate), maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
-                  ]),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: PixelFinanceSurface(
-                  onTap: () async {
-                    final time = await pickTime(context, TimeOfDay.fromDateTime(selectedDate));
-                    if (time == null) return;
-                    setState(() {
-                      selectedDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, time.hour, time.minute);
-                      selectedEndDate = DateTime(selectedEndDate.year, selectedEndDate.month, selectedEndDate.day, time.hour, time.minute);
-                    });
-                  },
-                  radius: 18,
-                  padding: const EdgeInsets.all(13),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.schedule_rounded, color: scheme.secondary, size: 20),
-                    const SizedBox(height: 8),
-                    Text(DateFormat('h:mm a').format(selectedDate), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
-                  ]),
-                ),
-              ),
-            ],
-          ),
-          const SectionHeader('Optional'),
-          TextField(controller: notes, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Notes', alignLabelWithHint: true)),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              if (widget.transaction != null) ...[
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await state.deleteTransaction(widget.transaction!.id);
-                    if (mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Delete'),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Expanded(child: FilledButton.icon(onPressed: () => _save(state), icon: const Icon(Icons.check_rounded), label: const Text('Save'))),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
-
-
 
 Future<void> showDateRangeSheet(BuildContext context) async {
   final state = context.read<AppController>();
@@ -9120,6 +9175,7 @@ class _FilterSheetState extends State<FilterSheet> {
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
+
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
 }
@@ -9131,8 +9187,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final range = state.activeRange();
     final txs = state.filteredTransactions();
     final summary = state.summaryFor(txs);
-    final now = DateTime.now();
-    final fallbackDay = DateTime(now.year, now.month, now.day);
+    final fallbackToday = DateTime.now();
+    final fallbackDay = DateTime(fallbackToday.year, fallbackToday.month, fallbackToday.day);
     DateTime chartStart;
     DateTime chartEnd;
     if (range.start != null && range.end != null) {
@@ -9151,7 +9207,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       chartStart = fallbackDay;
       chartEnd = fallbackDay.add(const Duration(days: 1));
     }
-
     final daily = <DateTime, Summary>{};
     for (final tx in txs) {
       if (!tx.countsAsIncome && !tx.countsAsExpense) continue;
@@ -9162,6 +9217,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         expense: old.expense + (tx.countsAsExpense ? tx.amount : 0),
       );
     }
+
     final totalDays = chartEnd.difference(chartStart).inDays;
     List<DateTime> days;
     if (totalDays > 0 && totalDays <= 62) {
@@ -9177,47 +9233,27 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final avgDivisor = math.max(1, days.length);
 
     return PageScaffold(
-      title: 'Insights',
+      title: 'Analysis',
       subtitle: range.label,
-      actions: [
-        PixelRoundAction(icon: Icons.tune_rounded, tooltip: 'Filters', onPressed: () => showFilterSheet(context)),
-      ],
+      actions: [IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded))],
       child: ResponsiveContent(
-        desktopMaxWidth: 1120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 620) {
-                  return Column(
-                    children: [
-                      Row(children: [
-                        Expanded(child: PixelMetricBlock(label: 'Income', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
-                        const SizedBox(width: 8),
-                        Expanded(child: PixelMetricBlock(label: 'Expense', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
-                      ]),
-                      const SizedBox(height: 8),
-                      PixelMetricBlock(label: 'Net', value: state.format(summary.balance), icon: Icons.balance_rounded, accent: Theme.of(context).colorScheme.secondary),
-                    ],
-                  );
-                }
-                return Row(children: [
-                  Expanded(child: PixelMetricBlock(label: 'Income', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
-                  const SizedBox(width: 8),
-                  Expanded(child: PixelMetricBlock(label: 'Expense', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
-                  const SizedBox(width: 8),
-                  Expanded(child: PixelMetricBlock(label: 'Net', value: state.format(summary.balance), icon: Icons.balance_rounded, accent: Theme.of(context).colorScheme.secondary)),
-                ]);
-              },
-            ),
+            Row(children: [
+              Expanded(child: MiniMetric('Income', state.format(summary.income), Icons.south_west_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: MiniMetric('Expense', state.format(summary.expense), Icons.north_east_rounded)),
+            ]),
+            const SizedBox(height: 10),
+            MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
             const SectionHeader('Cash flow'),
             RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
-            const SectionHeader('Daily pace'),
+            const SectionHeader('Averages'),
             Row(children: [
-              Expanded(child: PixelMetricBlock(label: 'Income / day', value: state.format(summary.income / avgDivisor), icon: Icons.trending_up_rounded, accent: kSleekIncome)),
-              const SizedBox(width: 8),
-              Expanded(child: PixelMetricBlock(label: 'Expense / day', value: state.format(summary.expense / avgDivisor), icon: Icons.trending_down_rounded, accent: kSleekExpense)),
+              Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
             ]),
           ],
         ),
@@ -10188,10 +10224,17 @@ class MonthBreakdownTile extends StatelessWidget {
 enum _TrendView { both, income, expense }
 
 class AnalysisTrendChart extends StatefulWidget {
-  const AnalysisTrendChart({super.key, required this.days, required this.daily, required this.rangeLabel});
+  const AnalysisTrendChart({
+    super.key,
+    required this.days,
+    required this.daily,
+    required this.rangeLabel,
+  });
+
   final List<DateTime> days;
   final Map<DateTime, Summary> daily;
   final String rangeLabel;
+
   @override
   State<AnalysisTrendChart> createState() => _AnalysisTrendChartState();
 }
@@ -10201,28 +10244,34 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
 
   List<FlSpot> _spotsFor(bool income) {
     if (widget.days.isEmpty) return const [FlSpot(0, 0), FlSpot(1, 0)];
-    final result = <FlSpot>[];
+    final spots = <FlSpot>[];
     for (var i = 0; i < widget.days.length; i++) {
       final summary = widget.daily[widget.days[i]] ?? const Summary(income: 0, expense: 0);
-      result.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
+      spots.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
     }
-    if (result.length == 1) result.add(FlSpot(1, result.first.y));
-    return result;
+    if (spots.length == 1) spots.add(FlSpot(1, spots.first.y));
+    return spots;
   }
 
   double _niceMaxY(Iterable<double> values) {
     final highest = values.fold<double>(0, (current, value) => math.max(current, value).toDouble());
     if (highest <= 0) return 100;
-    final padded = highest * 1.15;
+    final padded = highest * 1.18;
     final magnitude = math.pow(10, (math.log(padded) / math.ln10).floor()).toDouble();
     final normalized = padded / magnitude;
-    final rounded = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+    final rounded = normalized <= 2
+        ? 2
+        : normalized <= 5
+            ? 5
+            : 10;
     return rounded * magnitude;
   }
 
   String _compactCurrency(AppController state, double value) {
     if (state.amountsHidden) {
-      return state.currencyPosition == CurrencyPosition.prefix ? '${state.currencySymbol}••••' : '••••${state.currencySymbol}';
+      return state.currencyPosition == CurrencyPosition.prefix
+          ? '${state.currencySymbol}••••'
+          : '••••${state.currencySymbol}';
     }
     final absolute = value.abs();
     String number;
@@ -10233,23 +10282,67 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     } else {
       number = absolute.toStringAsFixed(absolute % 1 == 0 ? 0 : 1);
     }
-    final sign = value < 0 ? '−' : '';
-    return state.currencyPosition == CurrencyPosition.prefix ? '$sign${state.currencySymbol}$number' : '$sign$number${state.currencySymbol}';
+    final sign = value < 0 ? '-' : '';
+    return state.currencyPosition == CurrencyPosition.prefix
+        ? '$sign${state.currencySymbol}$number'
+        : '$sign$number${state.currencySymbol}';
   }
 
   Set<int> _bottomLabelIndexes() {
     final count = widget.days.length;
     if (count <= 1) return {0};
     if (count <= 4) return {for (var i = 0; i < count; i++) i};
-    return {0, ((count - 1) / 3).round(), (((count - 1) * 2) / 3).round(), count - 1};
+    return {
+      0,
+      ((count - 1) / 3).round(),
+      (((count - 1) * 2) / 3).round(),
+      count - 1,
+    };
   }
 
   String _dateLabel(DateTime day) {
     if (widget.days.length <= 1) return DateFormat('MMM d').format(day);
-    final span = widget.days.last.difference(widget.days.first).inDays.abs();
+    final first = widget.days.first;
+    final last = widget.days.last;
+    final span = last.difference(first).inDays.abs();
     if (span > 365) return DateFormat('MMM yy').format(day);
     if (span > 62) return DateFormat('MMM').format(day);
     return DateFormat('MMM d').format(day);
+  }
+
+  Widget _leftTitle(BuildContext context, double value, TitleMeta meta, double maxY) {
+    final interval = maxY / 4;
+    if (interval <= 0) return const SizedBox.shrink();
+    final slot = (value / interval).round();
+    if ((value - slot * interval).abs() > .01) return const SizedBox.shrink();
+    final state = context.read<AppController>();
+    return Text(
+      _compactCurrency(state, value),
+      maxLines: 1,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
+            fontWeight: FontWeight.w800,
+          ),
+    );
+  }
+
+  Widget _bottomTitle(BuildContext context, double value, TitleMeta meta) {
+    if (widget.days.isEmpty) return const SizedBox.shrink();
+    final index = value.round();
+    if (index < 0 || index >= widget.days.length || !_bottomLabelIndexes().contains(index)) {
+      return const SizedBox.shrink();
+    }
+    return SideTitleWidget(
+      axisSide: meta.axisSide,
+      space: 10,
+      child: Text(
+        _dateLabel(widget.days[index]),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+    );
   }
 
   @override
@@ -10267,69 +10360,136 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     ];
     final maxY = _niceMaxY(visibleValues);
     final maxX = math.max(1.0, (widget.days.length - 1).toDouble());
-    final totalIncome = widget.days.fold<double>(0, (sum, day) => sum + (widget.daily[day]?.income ?? 0));
-    final totalExpense = widget.days.fold<double>(0, (sum, day) => sum + (widget.daily[day]?.expense ?? 0));
+    final totalIncome = widget.days.fold<double>(
+      0,
+      (sum, day) => sum + (widget.daily[day]?.income ?? 0),
+    );
+    final totalExpense = widget.days.fold<double>(
+      0,
+      (sum, day) => sum + (widget.daily[day]?.expense ?? 0),
+    );
+    final net = totalIncome - totalExpense;
     final hasData = totalIncome != 0 || totalExpense != 0;
+    final gridColor = scheme.outlineVariant.withOpacity(dark ? .16 : .42);
+    final panelColor = dark
+        ? scheme.surfaceContainerHigh.withOpacity(.46)
+        : scheme.surface.withOpacity(.94);
 
     final bars = <LineChartBarData>[
       if (showIncome)
         LineChartBarData(
           spots: incomeSpots,
-          isCurved: widget.days.length > 2 && widget.days.length <= 32,
+          isCurved: widget.days.length > 2,
           preventCurveOverShooting: true,
-          barWidth: 3,
+          barWidth: 3.2,
           isStrokeCapRound: true,
           color: kSleekIncome,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: _view == _TrendView.income, color: kSleekIncome.withOpacity(.08)),
+          dotData: FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.income,
+            color: kSleekIncome.withOpacity(dark ? .10 : .08),
+          ),
         ),
       if (showExpense)
         LineChartBarData(
           spots: expenseSpots,
-          isCurved: widget.days.length > 2 && widget.days.length <= 32,
+          isCurved: widget.days.length > 2,
           preventCurveOverShooting: true,
-          barWidth: 3,
+          barWidth: 3.2,
           isStrokeCapRound: true,
           color: kSleekExpense,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(show: _view == _TrendView.expense, color: kSleekExpense.withOpacity(.08)),
+          dotData: FlDotData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.expense,
+            color: kSleekExpense.withOpacity(dark ? .10 : .08),
+          ),
         ),
     ];
 
-    return PixelFinanceSurface(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(15, 15, 15, 14),
+    return ExpressiveCard(
+      surfaceTint: false,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Flow', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                    Text(
+                      'Cash flow trend',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                    ),
                     const SizedBox(height: 3),
-                    Text(widget.rangeLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                    Text(
+                      widget.rangeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                   ],
                 ),
               ),
-              PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Change range', onPressed: () => showDateRangeSheet(context)),
+              IconButton.filledTonal(
+                onPressed: () => showDateRangeSheet(context),
+                tooltip: 'Change date range',
+                icon: const Icon(Icons.date_range_rounded),
+              ),
             ],
-          ),
-          const SizedBox(height: 13),
-          SleekPillSelector<_TrendView>(
-            options: const [
-              SleekPillOption(value: _TrendView.both, label: 'Both'),
-              SleekPillOption(value: _TrendView.income, label: 'Income'),
-              SleekPillOption(value: _TrendView.expense, label: 'Expense'),
-            ],
-            selected: _view,
-            onChanged: (value) => setState(() => _view = value),
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 250,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _TrendMetricPill(
+                label: 'Income',
+                value: state.format(totalIncome),
+                icon: Icons.south_west_rounded,
+                color: kSleekIncome,
+              ),
+              _TrendMetricPill(
+                label: 'Expense',
+                value: state.format(totalExpense),
+                icon: Icons.north_east_rounded,
+                color: kSleekExpense,
+              ),
+              _TrendMetricPill(
+                label: 'Net',
+                value: state.format(net),
+                icon: net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                color: net >= 0 ? kSleekIncome : kSleekExpense,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SegmentedButton<_TrendView>(
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: _TrendView.both, label: Text('Both')),
+              ButtonSegment(value: _TrendView.income, label: Text('Income')),
+              ButtonSegment(value: _TrendView.expense, label: Text('Expense')),
+            ],
+            selected: {_view},
+            onSelectionChanged: (selection) {
+              if (selection.isNotEmpty) setState(() => _view = selection.first);
+            },
+          ),
+          const SizedBox(height: 14),
+          Container(
+            height: 278,
+            padding: const EdgeInsets.fromLTRB(6, 12, 10, 4),
+            decoration: BoxDecoration(
+              color: panelColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .14 : .48)),
+            ),
             child: hasData
                 ? RepaintBoundary(
                     child: LineChart(
@@ -10344,7 +10504,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           show: true,
                           drawVerticalLine: false,
                           horizontalInterval: maxY / 4,
-                          getDrawingHorizontalLine: (_) => FlLine(color: scheme.outlineVariant.withOpacity(dark ? .18 : .42), strokeWidth: 1),
+                          getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
                         ),
                         titlesData: FlTitlesData(
                           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -10352,69 +10512,71 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 54,
+                              reservedSize: 58,
                               interval: maxY / 4,
-                              getTitlesWidget: (value, meta) => Text(
-                                _compactCurrency(state, value),
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                              ),
+                              getTitlesWidget: (value, meta) => _leftTitle(context, value, meta, maxY),
                             ),
                           ),
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 32,
+                              reservedSize: 36,
                               interval: 1,
-                              getTitlesWidget: (value, meta) {
-                                final index = value.round();
-                                if (index < 0 || index >= widget.days.length || !_bottomLabelIndexes().contains(index)) return const SizedBox.shrink();
-                                return SideTitleWidget(
-                                  axisSide: meta.axisSide,
-                                  space: 8,
-                                  child: Text(_dateLabel(widget.days[index]), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                                );
-                              },
+                              getTitlesWidget: (value, meta) => _bottomTitle(context, value, meta),
                             ),
                           ),
                         ),
                         lineTouchData: LineTouchData(
                           handleBuiltInTouches: true,
                           touchTooltipData: LineTouchTooltipData(
-                            tooltipRoundedRadius: 12,
-                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            getTooltipColor: (_) => dark ? const Color(0xFF4A2A3A) : const Color(0xFF4A2A3A),
+                            tooltipRoundedRadius: 14,
+                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                            tooltipMargin: 12,
+                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
-                              final date = DateFormat('MMM d').format(widget.days[index]);
+                              final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
                               final label = item.barIndex == 0 && showIncome ? 'Income' : 'Expense';
-                              return LineTooltipItem('$date\n$label ${_compactCurrency(state, item.y)}', const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, height: 1.3));
+                              return LineTooltipItem(
+                                '$date\n$label  ${_compactCurrency(state, item.y)}',
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, height: 1.35),
+                              );
                             }).toList(),
                           ),
                         ),
                         lineBarsData: bars,
                       ),
-                      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.medium,
-                      curve: AppMotion.standard,
                     ),
                   )
                 : Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.show_chart_rounded, size: 32, color: scheme.onSurfaceVariant.withOpacity(.55)),
-                        const SizedBox(height: 9),
-                        Text('No flow yet', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 3),
-                        Text('Add income or expenses to draw this chart.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.show_chart_rounded, size: 34, color: scheme.onSurfaceVariant.withOpacity(.65)),
+                          const SizedBox(height: 10),
+                          Text(
+                            'No income or expense data in this range',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Add transactions or choose another date range to see a trend.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Row(
             children: [
               if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
-              if (showIncome && showExpense) const SizedBox(width: 14),
+              if (showIncome && showExpense) const SizedBox(width: 16),
               if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
             ],
           ),
@@ -10502,6 +10664,7 @@ class _TrendLegendDot extends StatelessWidget {
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
+
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
 }
@@ -10511,29 +10674,25 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    final totals = state.categoryTotals(selected);
-    final total = totals.values.fold<double>(0, (sum, value) => sum + value);
     return PageScaffold(
-      title: selected == CategoryType.expense ? 'Spending' : 'Income',
-      subtitle: '${state.activeRange().label} • ${state.format(total)} total',
+      title: 'Categories',
+      subtitle: selected == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown',
       actions: const [ProfileAvatarButton()],
       child: ResponsiveContent(
-        desktopMaxWidth: 1040,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SleekPillSelector<CategoryType>(
+            SleekCyclePillSelector<CategoryType>(
               options: const [
                 SleekPillOption(value: CategoryType.expense, label: 'Expense', icon: Icons.north_east_rounded),
                 SleekPillOption(value: CategoryType.income, label: 'Income', icon: Icons.south_west_rounded),
               ],
               selected: selected,
-              onChanged: (value) => setState(() => selected = value),
+              onChanged: (v) => setState(() => selected = v),
             ),
             const SizedBox(height: 14),
             CategoryBreakdownCard(key: ValueKey(selected), type: selected, interactive: true),
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
             _ManageCategoriesButton(type: selected),
           ],
         ),
@@ -10548,28 +10707,52 @@ class _ManageCategoriesButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return PixelFinanceSurface(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type))),
-      radius: 18,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          Container(width: 42, height: 42, decoration: BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.tune_rounded, color: scheme.onSecondaryContainer, size: 21)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Manage categories', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 2),
-                Text(type == CategoryType.expense ? 'Edit expense groups' : 'Edit income groups', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-              ],
-            ),
+    final label = type == CategoryType.expense ? 'Expense categories' : 'Income categories';
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
           ),
-          Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
-        ],
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: kSleekAccent.withOpacity(.16),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kSleekAccent.withOpacity(.24)),
+                ),
+                child: const Icon(Icons.category_rounded, color: kSleekAccent),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Manage categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -10616,94 +10799,399 @@ class CategoryBreakdownCard extends StatelessWidget {
   final CategoryType type;
   final bool interactive;
 
+  Color _fallbackColor(int index) {
+    const palette = [
+      Color(0xFF18D8CF),
+      Color(0xFFA79BFF),
+      Color(0xFF7EDBD3),
+      Color(0xFF1EC7BD),
+      Color(0xFFB9B1FF),
+      Color(0xFF5BE6DB),
+      Color(0xFFF7C66D),
+      Color(0xFFF49DBE),
+    ];
+    return palette[index % palette.length];
+  }
+
+  List<_BreakdownSlice> _buildSlices(AppController state, List<MapEntry<String, double>> entries) {
+    if (entries.length <= 8) {
+      return entries.asMap().entries.map((indexed) {
+        final index = indexed.key;
+        final entry = indexed.value;
+        final category = state.categoryOf(entry.key);
+        final color = category == null ? _fallbackColor(index) : colorFromHex(category.iconColor, fallback: _fallbackColor(index));
+        return _BreakdownSlice(categoryId: entry.key, category: category, value: entry.value, color: color);
+      }).toList();
+    }
+
+    final visible = <_BreakdownSlice>[];
+    for (var i = 0; i < 7; i++) {
+      final entry = entries[i];
+      final category = state.categoryOf(entry.key);
+      final color = category == null ? _fallbackColor(i) : colorFromHex(category.iconColor, fallback: _fallbackColor(i));
+      visible.add(_BreakdownSlice(categoryId: entry.key, category: category, value: entry.value, color: color));
+    }
+    final otherValue = entries.skip(7).fold<double>(0, (sum, entry) => sum + entry.value);
+    visible.add(
+      _BreakdownSlice(
+        categoryId: '__other__',
+        category: null,
+        value: otherValue,
+        color: _fallbackColor(7),
+        labelOverride: 'Other',
+        iconNameOverride: 'category',
+      ),
+    );
+    return visible;
+  }
+
+  String _badgeTag(_BreakdownSlice slice) {
+    if (slice.label.toLowerCase() == 'other') return 'OTHER';
+    final words = slice.label
+        .split(RegExp(r'\s+'))
+        .where((w) => w.trim().isNotEmpty)
+        .toList();
+    if (words.isEmpty) return 'CAT';
+    if (words.length >= 2) {
+      return words.take(2).map((w) => w.substring(0, 1)).join().toUpperCase();
+    }
+    final word = words.first;
+    if (word.length <= 4) return word.toUpperCase();
+    return word.substring(0, 3).toUpperCase();
+  }
+
+  bool _useTextBadge(_BreakdownSlice slice) => slice.category == null;
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     final totals = state.categoryTotals(type);
     final entries = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final total = entries.fold<double>(0, (sum, entry) => sum + entry.value);
+    final total = entries.fold<double>(0, (sum, e) => sum + e.value);
+
     if (entries.isEmpty) {
-      return EmptyCard(
-        icon: type == CategoryType.expense ? Icons.shopping_bag_outlined : Icons.payments_outlined,
-        title: type == CategoryType.expense ? 'No spending yet' : 'No income yet',
-        body: 'Transactions in this range will be grouped here automatically.',
+      return ExpressiveCard(
+        child: EmptyCard(
+          icon: Icons.pie_chart_rounded,
+          title: 'No ${enumName(type)} data',
+          body: 'Transactions will appear here by category.',
+        ),
       );
     }
 
-    final visible = entries.take(8).toList();
-    return PixelFinanceSurface(
-      radius: 22,
-      padding: const EdgeInsets.fromLTRB(15, 16, 15, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    final slices = _buildSlices(state, entries);
+    final chartTitle = type == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown';
+    final rangeLabel = state.activeRange().label;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chartSurfaceTop = isDark ? scheme.surfaceContainerHighest.withOpacity(.18) : const Color(0xFFF7FCFD);
+    final chartSurfaceBottom = isDark ? scheme.surfaceContainerHigh.withOpacity(.06) : Colors.white;
+    final chartBorderColor = isDark ? Colors.transparent : const Color(0xFFDCEBEE).withOpacity(.95);
+    final donutTrackColor = isDark ? const Color(0xFF26383C).withOpacity(.36) : const Color(0xFFE1ECEF);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ExpressiveCard(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: Text('Top categories', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-              PixelPill(label: state.format(total), selected: true, compact: true),
-            ],
-          ),
-          const SizedBox(height: 12),
-          for (var i = 0; i < visible.length; i++) ...[
-            Builder(
-              builder: (context) {
-                final entry = visible[i];
-                final category = state.categoryOf(entry.key);
-                final color = colorFromHex(category?.iconColor ?? '#F0A6C5', fallback: scheme.primary);
-                final fraction = total <= 0 ? 0.0 : (entry.value / total).clamp(0.0, 1.0);
-                return Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(15),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: interactive && category != null
-                        ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category)))
-                        : null,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
-                      child: Row(
-                        children: [
-                          iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#F0A6C5', size: 40),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(child: Text(category?.name ?? 'Unknown', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
-                                    const SizedBox(width: 8),
-                                    Text(state.format(entry.value), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
-                                  ],
+              Text(
+                chartTitle,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 334,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final canvasWidth = constraints.maxWidth;
+                    const canvasHeight = 334.0;
+                    final chartSize = math.min(math.max(180.0, canvasWidth - 98), math.min(268.0, canvasWidth - 8));
+                    final centerSize = chartSize * .57;
+                    final manyBadges = slices.length > 5;
+                    final badgeWidth = manyBadges ? (canvasWidth < 360 ? 78.0 : 86.0) : (canvasWidth < 360 ? 84.0 : 94.0);
+                    final badgeHeight = manyBadges ? 40.0 : 44.0;
+                    final badgeOrbit = (chartSize / 2) + (manyBadges ? 32.0 : 24.0);
+
+                    double startAngle = -90;
+                    final badgeAngles = <double>[];
+                    for (final slice in slices) {
+                      final sweep = total == 0 ? 0 : (slice.value / total) * 360;
+                      badgeAngles.add(startAngle + (sweep / 2));
+                      startAngle += sweep;
+                    }
+
+                    final badgeNudges = List<double>.filled(slices.length, 0);
+                    void spreadDenseSide(bool leftSide) {
+                      final indexes = <int>[];
+                      for (var i = 0; i < badgeAngles.length; i++) {
+                        final radians = badgeAngles[i] * (math.pi / 180);
+                        final isLeft = math.cos(radians) < -0.18;
+                        if (isLeft == leftSide) indexes.add(i);
+                      }
+                      if (indexes.length <= 1) return;
+                      indexes.sort((a, b) {
+                        final ay = math.sin(badgeAngles[a] * (math.pi / 180));
+                        final by = math.sin(badgeAngles[b] * (math.pi / 180));
+                        return ay.compareTo(by);
+                      });
+                      final spacing = manyBadges ? 11.0 : 8.0;
+                      for (var rank = 0; rank < indexes.length; rank++) {
+                        badgeNudges[indexes[rank]] = (rank - ((indexes.length - 1) / 2)) * spacing;
+                      }
+                    }
+
+                    spreadDenseSide(true);
+                    spreadDenseSide(false);
+
+                    int? selectedBadgeIndex;
+
+                    return StatefulBuilder(
+                      builder: (context, setBadgeState) {
+                        return TweenAnimationBuilder<double>(
+                      key: ValueKey('${type.name}-${slices.length}-${total.toStringAsFixed(2)}'),
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 680),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, progress, _) {
+                        final badgeProgress = ((progress - .35) / .65).clamp(0.0, 1.0).toDouble();
+                        final centerProgress = ((progress - .18) / .82).clamp(0.0, 1.0).toDouble();
+                        final badgeOrder = List<int>.generate(slices.length, (index) => index);
+                        if (selectedBadgeIndex != null && selectedBadgeIndex! >= 0 && selectedBadgeIndex! < slices.length) {
+                          badgeOrder
+                            ..remove(selectedBadgeIndex)
+                            ..add(selectedBadgeIndex!);
+                        }
+
+                        return Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.hardEdge,
+                          children: [
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(34),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      chartSurfaceTop,
+                                      chartSurfaceBottom,
+                                    ],
+                                  ),
+                                  border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
+                                  boxShadow: isDark
+                                      ? null
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(.035),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ],
                                 ),
-                                const SizedBox(height: 7),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(99),
-                                        child: LinearProgressIndicator(value: fraction, minHeight: 6, color: color, backgroundColor: color.withOpacity(.10)),
+                              ),
+                            ),
+                            Center(
+                              child: SizedBox(
+                                width: chartSize,
+                                height: chartSize,
+                                child: RepaintBoundary(
+                                  child: CustomPaint(
+                                    isComplex: true,
+                                    willChange: progress < 1,
+                                    painter: _ExpressiveDonutPainter(slices: slices, total: total, progress: progress, trackColor: donutTrackColor),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            for (final i in badgeOrder)
+                              _DonutBadgePositioned(
+                                angleDegrees: badgeAngles[i],
+                                orbit: badgeOrbit,
+                                canvasWidth: canvasWidth,
+                                canvasHeight: canvasHeight,
+                                badgeWidth: selectedBadgeIndex == i ? badgeWidth + 12 : badgeWidth,
+                                badgeHeight: selectedBadgeIndex == i ? badgeHeight + 4 : badgeHeight,
+                                verticalNudge: badgeNudges[i],
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    setBadgeState(() {
+                                      selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
+                                    });
+                                  },
+                                  child: Opacity(
+                                    opacity: badgeProgress,
+                                    child: Transform.scale(
+                                      scale: (.86 + (.14 * badgeProgress)) * (selectedBadgeIndex == i ? 1.08 : 1.0),
+                                      child: _DonutPercentBadge(
+                                        color: slices[i].color,
+                                        iconName: slices[i].iconName,
+                                        label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
+                                        leadingText: _badgeTag(slices[i]),
+                                        useTextBadge: _useTextBadge(slices[i]),
+                                        selected: selectedBadgeIndex == i,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
-                                    SizedBox(width: 38, child: Text('${(fraction * 100).toStringAsFixed(0)}%', textAlign: TextAlign.end, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
-                                  ],
+                                  ),
                                 ),
-                              ],
+                              ),
+                            Center(
+                              child: Opacity(
+                                opacity: centerProgress,
+                                child: Transform.scale(
+                                  scale: .92 + (.08 * centerProgress),
+                                  child: Container(
+                                    width: centerSize,
+                                    height: centerSize,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF111417).withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(isDark ? .22 : .08),
+                                          blurRadius: isDark ? 22.0 : 18.0,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ],
+                                      border: Border.all(
+                                        color: isDark ? scheme.outline.withOpacity(.10) : const Color(0xFFD7E6E9),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Flexible(
+                                          flex: 3,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              state.format(total),
+                                              maxLines: 1,
+                                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: -.8,
+                                                    color: isDark ? Colors.white : scheme.onSurface,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Flexible(
+                                          flex: 2,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              type == CategoryType.expense ? 'Total expense' : 'Total income',
+                                              maxLines: 1,
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                    color: const Color(0xFF10CADA),
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Flexible(
+                                          flex: 2,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              rangeLabel,
+                                              maxLines: 1,
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                    color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant.withOpacity(.88),
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                          ],
+                        );
+                      },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...slices.asMap().entries.map((indexed) {
+          final slice = indexed.value;
+          final color = slice.color;
+          final percentage = total <= 0 ? 0.0 : (slice.value / total) * 100;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: ExpressiveCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: interactive && slice.category != null
+                      ? () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: slice.category!)),
+                          )
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Row(
+                      children: [
+                        iconBubble(context, slice.iconName, colorToHex(color), size: 50),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                slice.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${percentage.toStringAsFixed(1)}%',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
+                              ),
+                            ],
                           ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          state.format(slice.value),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        if (interactive && slice.category != null) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                );
-              },
+                ),
+              ),
             ),
-            if (i != visible.length - 1) Divider(height: 1, indent: 52, color: scheme.outlineVariant.withOpacity(.34)),
-          ],
-        ],
-      ),
+          );
+        }),
+      ],
     );
   }
 }
@@ -10988,29 +11476,27 @@ class BudgetProgressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     final ratio = progress.ratio;
-    final color = ratio >= 1 ? kSleekExpense : ratio >= .8 ? kSleekWarning : ratio >= .5 ? scheme.secondary : kSleekIncome;
-    return PixelFinanceSurface(
-      onTap: onTap,
-      radius: 18,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(.15), borderRadius: BorderRadius.circular(13)), child: Icon(Icons.savings_rounded, color: color, size: 21)),
-              const SizedBox(width: 11),
-              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
-              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w900)),
-            ],
-          ),
-          const SizedBox(height: 13),
-          ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 7, color: color, backgroundColor: color.withOpacity(.12))),
-          const SizedBox(height: 8),
-          Text('${state.format(progress.spent)} of ${state.format(progress.budget.amount)} spent', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-        ],
+    final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
+    return ExpressiveCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              iconBubble(context, 'wallet', colorToHex(color)),
+              const SizedBox(width: 12),
+              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: const TextStyle(fontWeight: FontWeight.w900))),
+              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w900)),
+            ]),
+            const SizedBox(height: 12),
+            ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 12, color: color)),
+            const SizedBox(height: 8),
+            Text('${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}'),
+          ],
+        ),
       ),
     );
   }
@@ -11127,50 +11613,20 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
     return PageScaffold(
       title: 'Settings',
-      subtitle: 'Make Koinly yours',
       child: ResponsiveContent(
-        mobileMaxWidth: 760,
-        desktopMaxWidth: 900,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            PixelFinanceSurface(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
-              radius: 22,
-              padding: const EdgeInsets.all(15),
-              child: Row(
-                children: [
-                  const ProfileAvatarButton(),
-                  const SizedBox(width: 13),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(state.profileDisplayLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 3),
-                        Text('Profile & savings preferences', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
-                ],
-              ),
-            ),
-            const SectionHeader('Personalize'),
-            SettingsTile(icon: Icons.palette_rounded, title: 'Appearance', subtitle: _themeLabel(state.themePreference), color: '#F0A6C5', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#D6B9FF', onTap: () => showCurrencySheet(context)),
-            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#F2C879', onTap: () => showReminderSheet(context)),
-            const SectionHeader('Data & devices'),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#7EDBE7', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#83D6A9', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
-            SettingsTile(icon: Icons.date_range_rounded, title: 'Default date range', subtitle: _dateRangeLabel(state.dateRangeType), color: '#D6B9FF', onTap: () => showDateRangeSheet(context)),
-            const SectionHeader('More'),
-            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced', subtitle: 'Defaults, backup, and data health', color: '#A8B9FF', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
-            SettingsTile(icon: Icons.info_rounded, title: 'About Koinly', subtitle: 'Version, licenses, and links', color: '#F0A6C5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
+            SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
+            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
+            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
+            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
+            SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
           ],
         ),
       ),
@@ -11189,34 +11645,46 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
+    final c = colorFromHex(color);
     final scheme = Theme.of(context).colorScheme;
+    final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: PixelFinanceSurface(
-        onTap: onTap,
-        radius: 18,
-        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-        child: Row(
-          children: [
-            Container(width: 42, height: 42, decoration: BoxDecoration(color: c.withOpacity(.15), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: c, size: 21)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                  ],
-                ],
-              ),
+      child: ExpressiveCard(
+        padding: EdgeInsets.symmetric(horizontal: 14, vertical: hasSubtitle ? 9 : 11),
+        radius: 19,
+        surfaceTint: false,
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          minVerticalPadding: 3,
+          leading: Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: c.withOpacity(Theme.of(context).brightness == Brightness.dark ? .28 : .17),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 8),
-            Icon(Icons.chevron_right_rounded, size: 19, color: scheme.onSurfaceVariant),
-          ],
+            child: Icon(icon, color: c, size: 23),
+          ),
+          title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          subtitle: hasSubtitle
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                  ),
+                )
+              : null,
+          trailing: Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: scheme.surfaceContainerHigh, shape: BoxShape.circle),
+            child: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant, size: 20),
+          ),
+          onTap: onTap,
         ),
       ),
     );
@@ -13597,8 +14065,8 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised;
-        final innerBorderColor = dark ? KoinlyPixelTokens.darkSurfaceHighest : const Color(0xFFDCE8EB);
+        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
+        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
         final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
 
         return SingleChildScrollView(
