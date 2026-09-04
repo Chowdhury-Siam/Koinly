@@ -146,24 +146,22 @@ Widget iconGlyph(
 }
 
 Widget iconBubble(BuildContext context, String icon, String color, {double size = 44}) {
-  final scheme = Theme.of(context).colorScheme;
-  final c = colorFromHex(color, fallback: scheme.primary);
+  final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
   final dark = Theme.of(context).brightness == Brightness.dark;
   return Container(
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: Color.alphaBlend(c.withOpacity(dark ? .18 : .11), scheme.surfaceContainerHigh),
-      borderRadius: BorderRadius.circular(size * .28),
-      border: Border.all(color: c.withOpacity(dark ? .30 : .22), width: 1),
+      color: c.withOpacity(dark ? .17 : .12),
+      borderRadius: BorderRadius.circular(size * .30),
     ),
     child: Center(
       child: iconGlyph(
         context,
         icon,
         color: c,
-        size: size * .52,
-        imageBackground: scheme.surface,
+        size: size * .54,
+        imageBackground: Colors.white.withOpacity(.88),
       ),
     ),
   );

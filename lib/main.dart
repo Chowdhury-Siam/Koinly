@@ -41,6 +41,7 @@ import 'reminder_service.dart';
 import 'sync_models.dart';
 import 'sync_services.dart';
 import 'ui_foundation.dart';
+import 'ui/pixel_finance_ui.dart';
 import 'update_service.dart';
 
 part 'loans/loan_controller_part.dart';
@@ -3670,11 +3671,14 @@ class KoinlyApp extends StatelessWidget {
       builder: (context, child) {
         final media = MediaQuery.of(context);
         final width = media.size.width;
-        final maxScale = width < 360 ? 1.04 : width < 600 ? 1.14 : width < 900 ? 1.22 : 1.30;
+        final maxScale = width < 360 ? 1.04 : width < 600 ? 1.14 : width < 900 ? 1.20 : 1.28;
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
-            disableAnimations: kLowEndFriendlyUi || media.disableAnimations,
+            // Low-end mode no longer disables motion globally. Instead, the new
+            // UI uses short transform/color animations and avoids blur-heavy or
+            // continuously-running effects.
+            disableAnimations: media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
         );
@@ -3683,303 +3687,208 @@ class KoinlyApp extends StatelessWidget {
   }
 
   ThemeData _theme(Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
-    final baseScheme = ColorScheme.fromSeed(
-      seedColor: kSleekAccent,
+    final dark = brightness == Brightness.dark;
+    final base = ColorScheme.fromSeed(
+      seedColor: KoinlyPixelTokens.pink,
       brightness: brightness,
     );
-
-    // These tokens mirror the reference app's default Material 3 palette.
-    // Koinly keeps its own finance semantics (income/expense/warning) while
-    // the application chrome uses the reference's warm mauve surfaces.
-    final scheme = isDark
-        ? baseScheme.copyWith(
-            primary: const Color(0xFFE8B5EF),
-            onPrimary: const Color(0xFF472150),
-            primaryContainer: const Color(0xFF5F3768),
-            onPrimaryContainer: const Color(0xFFFCD6FF),
-            secondary: const Color(0xFFD6C0D6),
-            onSecondary: const Color(0xFF3A2B3C),
-            secondaryContainer: const Color(0xFF524153),
-            onSecondaryContainer: const Color(0xFFF3DBF2),
-            tertiary: const Color(0xFFF5B7B0),
-            onTertiary: const Color(0xFF4C2521),
-            tertiaryContainer: const Color(0xFF673B36),
-            onTertiaryContainer: const Color(0xFFFFDAD6),
-            error: const Color(0xFFFFB4AB),
-            onError: const Color(0xFF690005),
-            errorContainer: const Color(0xFF93000A),
-            onErrorContainer: const Color(0xFFFFDAD6),
-            background: const Color(0xFF161217),
-            onBackground: const Color(0xFFEAE0E7),
-            surface: const Color(0xFF161217),
-            onSurface: const Color(0xFFEAE0E7),
-            surfaceVariant: const Color(0xFF4C444C),
-            onSurfaceVariant: const Color(0xFFCFC3CD),
-            outline: const Color(0xFF988E97),
-            outlineVariant: const Color(0xFF4C444C),
-            inverseSurface: const Color(0xFFEAE0E7),
-            onInverseSurface: const Color(0xFF342F34),
-            inversePrimary: const Color(0xFF794F81),
-            surfaceDim: const Color(0xFF161217),
-            surfaceBright: const Color(0xFF3D373D),
-            surfaceContainerLowest: const Color(0xFF110D11),
-            surfaceContainerLow: const Color(0xFF1F1A1F),
-            surfaceContainer: const Color(0xFF231E23),
-            surfaceContainerHigh: const Color(0xFF2E282E),
-            surfaceContainerHighest: const Color(0xFF393338),
+    final scheme = dark
+        ? base.copyWith(
+            primary: KoinlyPixelTokens.pink,
+            onPrimary: const Color(0xFF3B1425),
+            primaryContainer: const Color(0xFF5A2D42),
+            onPrimaryContainer: const Color(0xFFFFD9E7),
+            secondary: KoinlyPixelTokens.lavender,
+            onSecondary: const Color(0xFF2E184A),
+            secondaryContainer: const Color(0xFF493460),
+            onSecondaryContainer: const Color(0xFFF0DDFF),
+            tertiary: KoinlyPixelTokens.cyan,
+            surface: KoinlyPixelTokens.darkSurface,
+            surfaceContainerLow: const Color(0xFF191116),
+            surfaceContainer: KoinlyPixelTokens.darkSurface,
+            surfaceContainerHigh: KoinlyPixelTokens.darkSurfaceRaised,
+            surfaceContainerHighest: KoinlyPixelTokens.darkSurfaceHighest,
+            background: KoinlyPixelTokens.darkBackground,
+            outline: const Color(0xFF69545F),
+            outlineVariant: const Color(0xFF403039),
           )
-        : baseScheme.copyWith(
-            primary: const Color(0xFF794F81),
+        : base.copyWith(
+            primary: const Color(0xFF9D476D),
             onPrimary: Colors.white,
-            primaryContainer: const Color(0xFFFCD6FF),
-            onPrimaryContainer: const Color(0xFF5F3768),
-            secondary: const Color(0xFF6A596C),
+            primaryContainer: const Color(0xFFFFD9E7),
+            onPrimaryContainer: const Color(0xFF3D1026),
+            secondary: const Color(0xFF75538E),
             onSecondary: Colors.white,
-            secondaryContainer: const Color(0xFFF3DBF2),
-            onSecondaryContainer: const Color(0xFF524153),
-            tertiary: const Color(0xFF82524D),
-            onTertiary: Colors.white,
-            tertiaryContainer: const Color(0xFFFFDAD6),
-            onTertiaryContainer: const Color(0xFF673B36),
-            error: const Color(0xFFBA1A1A),
-            onError: Colors.white,
-            errorContainer: const Color(0xFFFFDAD6),
-            onErrorContainer: const Color(0xFF93000A),
-            background: const Color(0xFFFFF7FB),
-            onBackground: const Color(0xFF1F1A1F),
-            surface: const Color(0xFFFFF7FB),
-            onSurface: const Color(0xFF1F1A1F),
-            surfaceVariant: const Color(0xFFECDFE9),
-            onSurfaceVariant: const Color(0xFF4C444C),
-            outline: const Color(0xFF7E747D),
-            outlineVariant: const Color(0xFFCFC3CD),
-            inverseSurface: const Color(0xFF342F34),
-            onInverseSurface: const Color(0xFFF9EEF5),
-            inversePrimary: const Color(0xFFE8B5EF),
-            surfaceDim: const Color(0xFFE1D7DE),
-            surfaceBright: const Color(0xFFFFF7FB),
-            surfaceContainerLowest: Colors.white,
-            surfaceContainerLow: const Color(0xFFFBF1F8),
-            surfaceContainer: const Color(0xFFF6EBF2),
-            surfaceContainerHigh: const Color(0xFFF0E5EC),
-            surfaceContainerHighest: const Color(0xFFEAE0E7),
+            secondaryContainer: const Color(0xFFF0DDFF),
+            onSecondaryContainer: const Color(0xFF2C1641),
+            tertiary: const Color(0xFF1D7581),
+            surface: KoinlyPixelTokens.lightSurface,
+            surfaceContainerLow: const Color(0xFFFFF4F8),
+            surfaceContainer: KoinlyPixelTokens.lightSurfaceRaised,
+            surfaceContainerHigh: const Color(0xFFF5E4EB),
+            surfaceContainerHighest: KoinlyPixelTokens.lightSurfaceHighest,
+            background: KoinlyPixelTokens.lightBackground,
+            outline: const Color(0xFF8C747F),
+            outlineVariant: const Color(0xFFE1C8D2),
           );
 
-    final rawTextTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
+    final baseText = Typography.material2021(platform: TargetPlatform.android).black.apply(
+          fontFamily: 'Roboto',
           displayColor: scheme.onSurface,
           bodyColor: scheme.onSurface,
         );
-    final textTheme = rawTextTheme.copyWith(
-      displaySmall: rawTextTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.6),
-      headlineLarge: rawTextTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.5),
-      headlineMedium: rawTextTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.35),
-      headlineSmall: rawTextTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
-      titleLarge: rawTextTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.1),
-      titleMedium: rawTextTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-      titleSmall: rawTextTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-      bodyLarge: rawTextTheme.bodyLarge?.copyWith(height: 1.28),
-      bodyMedium: rawTextTheme.bodyMedium?.copyWith(height: 1.28),
-      labelLarge: rawTextTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+    final textTheme = baseText.copyWith(
+      displaySmall: baseText.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.7, height: .98),
+      headlineLarge: baseText.headlineLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.1, height: 1.0),
+      headlineMedium: baseText.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.85, height: 1.02),
+      headlineSmall: baseText.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.55, height: 1.04),
+      titleLarge: baseText.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.35),
+      titleMedium: baseText.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.15),
+      titleSmall: baseText.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+      bodyLarge: baseText.bodyLarge?.copyWith(height: 1.35),
+      bodyMedium: baseText.bodyMedium?.copyWith(height: 1.34),
+      labelLarge: baseText.labelLarge?.copyWith(fontWeight: FontWeight.w800),
     );
-
-    final pageTransitionBuilder = const KoinlyPageTransitionsBuilder();
-
-    WidgetStateProperty<T> states<T>({required T normal, T? selected, T? pressed, T? disabled}) {
-      return WidgetStateProperty.resolveWith((state) {
-        if (state.contains(WidgetState.disabled)) return disabled ?? normal;
-        if (state.contains(WidgetState.pressed)) return pressed ?? selected ?? normal;
-        if (state.contains(WidgetState.selected)) return selected ?? normal;
-        return normal;
-      });
-    }
+    const transitions = KoinlyPageTransitionsBuilder();
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.background,
       canvasColor: scheme.background,
-      visualDensity: kIsDesktopApp ? const VisualDensity(horizontal: -1, vertical: -1) : VisualDensity.standard,
-      dividerColor: scheme.outlineVariant.withOpacity(.34),
+      visualDensity: VisualDensity.standard,
       splashFactory: InkRipple.splashFactory,
+      dividerColor: scheme.outlineVariant.withOpacity(.45),
       textTheme: textTheme,
-      pageTransitionsTheme: PageTransitionsTheme(
+      pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: pageTransitionBuilder,
-          TargetPlatform.windows: pageTransitionBuilder,
-          TargetPlatform.linux: pageTransitionBuilder,
-          TargetPlatform.macOS: pageTransitionBuilder,
-          TargetPlatform.iOS: pageTransitionBuilder,
+          TargetPlatform.android: transitions,
+          TargetPlatform.windows: transitions,
+          TargetPlatform.linux: transitions,
+          TargetPlatform.macOS: transitions,
+          TargetPlatform.iOS: transitions,
         },
+      ),
+      appBarTheme: AppBarTheme(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: scheme.onSurface,
+        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: scheme.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
-        shape: AppShapes.squircle(18),
+        color: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: scheme.surfaceContainerHigh,
-        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: AppShapes.dialog),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.32),
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: scheme.surface,
+        elevation: 0,
+        backgroundColor: scheme.surfaceContainer,
+        modalBackgroundColor: scheme.surfaceContainer,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: scheme.surface,
-        modalBarrierColor: Colors.black.withOpacity(isDark ? .60 : .34),
+        modalBarrierColor: Colors.black.withOpacity(dark ? .66 : .34),
         showDragHandle: true,
-        dragHandleColor: scheme.outlineVariant,
-        dragHandleSize: const Size(34, 4),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-        constraints: const BoxConstraints(maxWidth: 640),
+        dragHandleColor: scheme.outline,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+        constraints: const BoxConstraints(maxWidth: 760),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        elevation: 2,
-        backgroundColor: isDark ? scheme.inverseSurface : const Color(0xFF342F34),
-        contentTextStyle: TextStyle(color: isDark ? scheme.onInverseSurface : Colors.white, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        elevation: 0,
+        backgroundColor: dark ? const Color(0xFF38252F) : const Color(0xFF4B2838),
+        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       listTileTheme: ListTileThemeData(
-        minLeadingWidth: 38,
-        minTileHeight: 58,
-        horizontalTitleGap: 12,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        shape: AppShapes.squircle(16),
-        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w600),
-        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-      ),
-      navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        indicatorColor: scheme.secondaryContainer,
-        indicatorShape: AppShapes.squircle(16),
-        selectedIconTheme: IconThemeData(color: scheme.onSecondaryContainer, size: 23),
-        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.82), size: 22),
-        selectedLabelTextStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700, fontSize: 11),
-        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.82), fontWeight: FontWeight.w500, fontSize: 10.5),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surfaceContainerLow.withOpacity(.98),
-        indicatorColor: scheme.secondaryContainer,
-        height: 66,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        labelTextStyle: WidgetStateProperty.resolveWith((state) => TextStyle(
-              fontWeight: state.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 10.5,
-              color: state.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
-            )),
-        iconTheme: WidgetStateProperty.resolveWith((state) => IconThemeData(
-              color: state.contains(WidgetState.selected) ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
-              size: 22,
-            )),
+        minLeadingWidth: 42,
+        minVerticalPadding: 8,
+        contentPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: scheme.surfaceContainerHigh,
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.72), fontWeight: FontWeight.w400),
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-        floatingLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        border: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(.36), width: 1)),
-        focusedBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.primary.withOpacity(.78), width: 1.2)),
-        errorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error.withOpacity(.72), width: 1)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error, width: 1.2)),
+        fillColor: dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.76), fontWeight: FontWeight.w600),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+        floatingLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: scheme.primary.withOpacity(.72), width: 1.5)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: scheme.error, width: 1.2)),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: states(normal: scheme.primary, pressed: scheme.primary.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
-          foregroundColor: states(normal: scheme.onPrimary, disabled: scheme.onSurface.withOpacity(.38)),
-          overlayColor: WidgetStatePropertyAll(scheme.onPrimary.withOpacity(.08)),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(16)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18, vertical: 12)),
-          minimumSize: const WidgetStatePropertyAll(Size(44, 46)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
-          elevation: const WidgetStatePropertyAll(0),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: ButtonStyle(
-          foregroundColor: states(normal: scheme.primary, pressed: scheme.primary.withOpacity(.72)),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(14)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12, vertical: 10)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
+        style: FilledButton.styleFrom(
+          elevation: 0,
+          backgroundColor: scheme.primaryContainer,
+          foregroundColor: scheme.onPrimaryContainer,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: ButtonStyle(
-          foregroundColor: states(normal: scheme.onSurface, pressed: scheme.primary, disabled: scheme.onSurface.withOpacity(.38)),
-          side: states(
-            normal: BorderSide(color: scheme.outlineVariant.withOpacity(.72), width: 1),
-            pressed: BorderSide(color: scheme.primary.withOpacity(.72), width: 1),
-            disabled: BorderSide(color: scheme.onSurface.withOpacity(.12), width: 1),
-          ),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(16)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-          minimumSize: const WidgetStatePropertyAll(Size(44, 46)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          elevation: 0,
+          foregroundColor: scheme.onSurface,
+          side: BorderSide(color: scheme.outlineVariant.withOpacity(.72)),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          minimumSize: const Size(48, 48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.secondaryContainer : scheme.surfaceContainerHigh),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onSecondaryContainer : scheme.onSurfaceVariant),
-          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.52), width: 1)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 10, horizontal: 12)),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: scheme.primary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          backgroundColor: dark ? KoinlyPixelTokens.darkSurface : KoinlyPixelTokens.lightSurfaceRaised,
+          foregroundColor: scheme.onSurface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
         backgroundColor: scheme.primaryContainer,
         foregroundColor: scheme.onPrimaryContainer,
-        elevation: 3,
-        highlightElevation: 1,
-        shape: AppShapes.squircle(18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(19)),
       ),
-      iconButtonTheme: IconButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.secondaryContainer : scheme.surfaceContainerHigh),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.onSecondaryContainer : scheme.onSurface),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(14)),
-          minimumSize: const WidgetStatePropertyAll(Size(42, 42)),
-        ),
-      ),
-      appBarTheme: AppBarTheme(
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: scheme.background,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: scheme.onSurface, size: 22),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: scheme.surfaceContainerHigh,
-        selectedColor: scheme.secondaryContainer,
-        disabledColor: scheme.onSurface.withOpacity(.08),
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(.52)),
-        shape: AppShapes.squircle(14),
-        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w500),
-        secondaryLabelStyle: TextStyle(color: scheme.onSecondaryContainer, fontWeight: FontWeight.w600),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? scheme.onPrimary : scheme.onSurfaceVariant),
+        trackColor: WidgetStateProperty.resolveWith((states) => states.contains(WidgetState.selected) ? scheme.primary : scheme.surfaceContainerHighest),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: scheme.primary,
         linearTrackColor: scheme.surfaceContainerHighest,
       ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onPrimary : scheme.outline),
-        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.primary : scheme.surfaceContainerHighest),
-        trackOutlineColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.transparent : scheme.outlineVariant),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: scheme.primary,
+        thumbColor: scheme.primary,
+        inactiveTrackColor: scheme.surfaceContainerHighest,
+        overlayColor: scheme.primary.withOpacity(.12),
       ),
     );
   }
@@ -4152,7 +4061,7 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                       Text(prompt.subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                     ],
                   ),
@@ -4221,7 +4130,7 @@ class SplashScreen extends StatelessWidget {
           children: [
             const KoinlyAppIcon(size: 92, borderRadius: 30),
             const SizedBox(height: 24),
-            Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
             const CircularProgressIndicator(),
           ],
@@ -4315,8 +4224,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   bool _shouldRetryAutomaticUpdateCheck(UpdateCheckOutcome outcome) {
-    return outcome == UpdateCheckOutcome.networkError ||
-        outcome == UpdateCheckOutcome.httpError;
+    return outcome == UpdateCheckOutcome.networkError || outcome == UpdateCheckOutcome.httpError;
   }
 
   Future<void> _showAutomaticUpdateDialogIfReady(AppController state, GithubRelease release) async {
@@ -4334,12 +4242,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final requestedTabIndex = context.select<AppController, int>((state) => state.tabIndex);
     final state = context.read<AppController>();
-    final pages = <Widget>[
-      const HomeDashboardScreen(),
-      const AnalysisScreen(),
-      const LoansScreen(),
-      const TransactionListScreen(),
-      const CategoriesScreen(),
+    const pages = <Widget>[
+      HomeDashboardScreen(),
+      AnalysisScreen(),
+      LoansScreen(),
+      TransactionListScreen(),
+      CategoriesScreen(),
     ];
     final tabIndex = requestedTabIndex.clamp(0, pages.length - 1).toInt();
     if (requestedTabIndex != tabIndex) {
@@ -4348,31 +4256,21 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       });
     }
 
-    final Widget? actionButton = tabIndex == kTransactionTabIndex
-        ? FloatingActionButton(
-            heroTag: 'transactionAddFab',
-            onPressed: () => showTransactionEditor(context),
-            child: const Icon(Icons.add_rounded),
-          )
-        : null;
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final useDesktopNavigation = constraints.maxWidth >= 900;
-        final extendDesktopNavigation = constraints.maxWidth >= 1180;
+        final desktop = constraints.maxWidth >= 900;
+        final extended = constraints.maxWidth >= 1180;
+        void selectTab(int index) => state.selectTabIndex(index);
 
-        void selectTab(int index) {
-          state.selectTabIndex(index);
-        }
-
+        final page = KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]);
         return Scaffold(
-          extendBody: !useDesktopNavigation,
+          backgroundColor: Theme.of(context).colorScheme.background,
           body: Row(
             children: [
-              if (useDesktopNavigation)
+              if (desktop)
                 _SideRailNavigation(
                   selectedIndex: tabIndex,
-                  extended: extendDesktopNavigation,
+                  extended: extended,
                   onSelected: selectTab,
                 ),
               Expanded(
@@ -4380,28 +4278,33 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
-                        duration: AppMotion.fast,
+                        duration: AppMotion.medium,
                         switchInCurve: AppMotion.standard,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
-                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
-                        child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
+                        transitionBuilder: (child, animation) {
+                          final offset = Tween<Offset>(begin: const Offset(.012, 0), end: Offset.zero).animate(animation);
+                          return FadeTransition(opacity: animation, child: SlideTransition(position: offset, child: child));
+                        },
+                        child: page,
                       ),
                     ),
-                    if (actionButton != null)
+                    if (tabIndex == kTransactionTabIndex)
                       Positioned(
-                        right: useDesktopNavigation ? 34 : 28,
-                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 26 : 86),
-                        child: actionButton,
+                        right: desktop ? 28 : 18,
+                        bottom: MediaQuery.paddingOf(context).bottom + (desktop ? 24 : 92),
+                        child: FloatingActionButton.extended(
+                          heroTag: 'transactionAddFab',
+                          onPressed: () => showTransactionEditor(context),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('New'),
+                        ),
                       ),
-                    if (!useDesktopNavigation)
+                    if (!desktop)
                       Positioned(
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        child: _FloatingDockNavigation(
-                          selectedIndex: tabIndex,
-                          onSelected: selectTab,
-                        ),
+                        child: _FloatingDockNavigation(selectedIndex: tabIndex, onSelected: selectTab),
                       ),
                   ],
                 ),
@@ -4415,23 +4318,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 }
 
 class _DockDestination {
-  const _DockDestination({
-    required this.label,
-    required this.icon,
-    required this.activeIcon,
-  });
-
+  const _DockDestination({required this.label, required this.icon, required this.activeIcon});
   final String label;
   final IconData icon;
   final IconData activeIcon;
 }
 
 class _SideRailNavigation extends StatelessWidget {
-  const _SideRailNavigation({
-    required this.selectedIndex,
-    required this.extended,
-    required this.onSelected,
-  });
+  const _SideRailNavigation({required this.selectedIndex, required this.extended, required this.onSelected});
 
   final int selectedIndex;
   final bool extended;
@@ -4440,76 +4334,101 @@ class _SideRailNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final railColor = scheme.surfaceContainerLowest;
-
-    return Material(
-      color: railColor,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return ColoredBox(
+      color: dark ? const Color(0xFF171015) : const Color(0xFFFFF4F8),
       child: SafeArea(
         right: false,
-        child: Container(
-          width: extended ? 220 : 74,
-          decoration: BoxDecoration(
-            border: Border(right: BorderSide(color: scheme.outlineVariant.withOpacity(.34))),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(extended ? 16 : 11, 16, extended ? 16 : 11, 8),
-                child: Row(
-                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(Icons.account_balance_wallet_rounded, color: scheme.onPrimaryContainer, size: 22),
-                    ),
-                    if (extended) ...[
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(appTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                            Text('Desktop', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
-                          ],
+        child: SizedBox(
+          width: extended ? 226 : 82,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+            child: Column(
+              children: [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: extended ? 6 : 0, vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+                    children: [
+                      const KoinlyAppIcon(size: 42, borderRadius: 14),
+                      if (extended) ...[
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Koinly', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                              Text('Money, made clear', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              Expanded(
-                child: NavigationRail(
-                  selectedIndex: selectedIndex,
-                  extended: extended,
-                  minWidth: 74,
-                  minExtendedWidth: 220,
-                  groupAlignment: -0.88,
-                  backgroundColor: Colors.transparent,
-                  indicatorColor: scheme.secondaryContainer,
-                  indicatorShape: AppShapes.squircle(16),
-                  labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-                  selectedIconTheme: IconThemeData(color: scheme.onSecondaryContainer, size: 23),
-                  unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.82), size: 22),
-                  selectedLabelTextStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700, fontSize: 10.5),
-                  unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.80), fontWeight: FontWeight.w500, fontSize: 10),
-                  onDestinationSelected: onSelected,
-                  destinations: _FloatingDockNavigation.destinations
-                      .map(
-                        (destination) => NavigationRailDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.activeIcon),
-                          label: Text(destination.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 26),
+                Expanded(
+                  child: ListView.separated(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _FloatingDockNavigation.destinations.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 7),
+                    itemBuilder: (context, index) {
+                      final item = _FloatingDockNavigation.destinations[index];
+                      final selected = index == selectedIndex;
+                      return Tooltip(
+                        message: extended ? '' : item.label,
+                        child: Material(
+                          color: selected ? scheme.primaryContainer : Colors.transparent,
+                          borderRadius: BorderRadius.circular(17),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            onTap: () => onSelected(index),
+                            child: SizedBox(
+                              height: 50,
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(horizontal: extended ? 14 : 0),
+                                child: Row(
+                                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+                                  children: [
+                                    Icon(selected ? item.activeIcon : item.icon, size: 22, color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+                                    if (extended) ...[
+                                      const SizedBox(width: 13),
+                                      Expanded(
+                                        child: Text(
+                                          item.label,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                                color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
+                                                fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      )
-                      .toList(),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+                if (extended)
+                  PixelFinanceSurface(
+                    padding: const EdgeInsets.all(12),
+                    radius: 17,
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_rounded, size: 18, color: scheme.primary),
+                        const SizedBox(width: 9),
+                        Expanded(child: Text('Local-first data', style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700))),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -4518,106 +4437,78 @@ class _SideRailNavigation extends StatelessWidget {
 }
 
 class _FloatingDockNavigation extends StatelessWidget {
-  const _FloatingDockNavigation({
-    required this.selectedIndex,
-    required this.onSelected,
-  });
+  const _FloatingDockNavigation({required this.selectedIndex, required this.onSelected});
 
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
-  static List<_DockDestination> get destinations => [
-    const _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
-    const _DockDestination(label: 'Analysis', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
-    const _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
-    const _DockDestination(label: 'Transaction', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
-    const _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
+  static const List<_DockDestination> destinations = [
+    _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
+    _DockDestination(label: 'Analysis', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
+    _DockDestination(label: 'Loans', icon: Icons.swap_horiz_rounded, activeIcon: Icons.currency_exchange_rounded),
+    _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
+    _DockDestination(label: 'Categories', icon: Icons.grid_view_rounded, activeIcon: Icons.dashboard_rounded),
   ];
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 390;
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Container(
-            height: 66,
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHigh.withOpacity(.98),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: scheme.outlineVariant.withOpacity(.38)),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? .24 : .08), blurRadius: 18, offset: const Offset(0, 8)),
-              ],
-            ),
-            child: Row(
-              children: List.generate(destinations.length, (index) {
-                final destination = destinations[index];
-                final selected = selectedIndex == index;
-                return Expanded(
-                  child: Tooltip(
-                    message: destination.label,
-                    child: Semantics(
-                      selected: selected,
-                      button: true,
-                      label: destination.label,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(18),
-                        onTap: () => onSelected(index),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedContainer(
-                                duration: AppMotion.fast,
-                                curve: AppMotion.standard,
-                                width: 38,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: selected ? scheme.secondaryContainer : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Icon(
-                                  selected ? destination.activeIcon : destination.icon,
-                                  color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
-                                  size: 21,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                destination.label,
+      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Material(
+        color: dark ? const Color(0xFF23171E) : const Color(0xFFFFF1F6),
+        borderRadius: BorderRadius.circular(22),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: 66,
+          child: Row(
+            children: List.generate(destinations.length, (index) {
+              final item = destinations[index];
+              final selected = selectedIndex == index;
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onSelected(index),
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: AppMotion.fast,
+                      curve: AppMotion.standard,
+                      padding: EdgeInsets.symmetric(horizontal: selected && !compact ? 11 : 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? scheme.primaryContainer : Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(selected ? item.activeIcon : item.icon, size: 21, color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
+                          if (selected && !compact) ...[
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                item.label,
                                 maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      fontSize: 9.5,
-                                      height: 1,
-                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                      color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                                    ),
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900),
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
-                );
-              }),
-            ),
+                ),
+              );
+            }),
           ),
         ),
       ),
     );
   }
 }
-
 
 class PageScaffold extends StatelessWidget {
   const PageScaffold({super.key, required this.title, this.actions = const [], required this.child, this.subtitle});
@@ -4628,60 +4519,35 @@ class PageScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final small = AppBreakpoints.isSmall(context);
-    final desktop = AppBreakpoints.isExpanded(context);
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: scheme.background,
-      appBar: AppBar(
-        toolbarHeight: desktop ? 68 : small ? 60 : 64,
-        titleSpacing: small ? 12 : 16,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 23 : small ? 20 : 22),
-            ),
-            if (subtitle != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 1),
-                child: Text(
-                  subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500, fontSize: 11.5),
-                ),
+      backgroundColor: Theme.of(context).colorScheme.background,
+      body: PixelFinanceBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              PixelFinanceHeader(
+                title: title,
+                subtitle: subtitle,
+                actions: actions,
+                showBack: canPop,
+                onBack: canPop ? () => Navigator.maybePop(context) : null,
               ),
-          ],
+              Expanded(child: child),
+            ],
+          ),
         ),
-        actions: actions
-            .map((action) => Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: action,
-                ))
-            .toList(),
       ),
-      body: KoinlyAtmosphere(child: SafeArea(top: false, child: child)),
     );
   }
 }
 
 class KoinlyAtmosphere extends StatelessWidget {
   const KoinlyAtmosphere({super.key, required this.child});
-
   final Widget child;
-
   @override
-  Widget build(BuildContext context) {
-    // The reference app uses flat, softly tinted Material surfaces rather than
-    // decorative background gradients. Keeping the page background flat also
-    // reduces GPU work on low-end Android devices and Windows.
-    return ColoredBox(color: Theme.of(context).colorScheme.background, child: child);
-  }
+  Widget build(BuildContext context) => PixelFinanceBackground(child: child);
 }
 
 class ResponsiveContent extends StatelessWidget {
@@ -4711,10 +4577,10 @@ class ResponsiveContent extends StatelessWidget {
         final double width = math.min(constraints.maxWidth, maxContentWidth).toDouble();
         final resolvedPadding = padding ??
             EdgeInsets.fromLTRB(
-              desktop ? 24 : small ? 10 : 14,
-              desktop ? 14 : small ? 4 : 7,
-              desktop ? 24 : small ? 10 : 14,
-              desktop ? 30 : small ? 84 : 92,
+              desktop ? 32 : small ? 12 : 16,
+              desktop ? 22 : small ? 6 : 8,
+              desktop ? 32 : small ? 12 : 16,
+              desktop ? 42 : small ? 96 : 110,
             );
 
         return Align(
@@ -4725,7 +4591,7 @@ class ResponsiveContent extends StatelessWidget {
               padding: resolvedPadding,
               physics: optimizedScrollPhysics(context),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              cacheExtent: kIsDesktopApp ? 760 : 300,
+              cacheExtent: kIsDesktopApp ? 900 : 320,
               children: [RepaintBoundary(child: child)],
             ),
           ),
@@ -4746,7 +4612,7 @@ class ResponsiveListContent extends StatelessWidget {
     this.padding,
     this.mobileMaxWidth = 720,
     this.desktopMaxWidth = 1180,
-    this.itemSpacing = 8,
+    this.itemSpacing = 10,
   });
 
   final int itemCount;
@@ -4771,10 +4637,10 @@ class ResponsiveListContent extends StatelessWidget {
         final double width = math.min(constraints.maxWidth, maxContentWidth).toDouble();
         final resolvedPadding = padding ??
             EdgeInsets.fromLTRB(
-              desktop ? 24 : small ? 10 : 14,
-              desktop ? 14 : small ? 4 : 7,
-              desktop ? 24 : small ? 10 : 14,
-              desktop ? 30 : small ? 84 : 92,
+              desktop ? 32 : small ? 12 : 16,
+              desktop ? 22 : small ? 6 : 8,
+              desktop ? 32 : small ? 12 : 16,
+              desktop ? 42 : small ? 96 : 110,
             );
         final bodyCount = itemCount == 0 && empty != null ? 1 : itemCount;
 
@@ -4786,7 +4652,7 @@ class ResponsiveListContent extends StatelessWidget {
               padding: resolvedPadding,
               physics: optimizedScrollPhysics(context),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              cacheExtent: kIsDesktopApp ? 620 : 380,
+              cacheExtent: kIsDesktopApp ? 620 : 420,
               addAutomaticKeepAlives: false,
               addSemanticIndexes: false,
               itemCount: header.length + bodyCount,
@@ -4811,12 +4677,11 @@ class ExpressiveCard extends StatelessWidget {
   const ExpressiveCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.all(16),
     this.color,
-    this.radius = 18,
+    this.radius = 20,
     this.surfaceTint = true,
   });
-
   final Widget child;
   final EdgeInsets padding;
   final Color? color;
@@ -4825,21 +4690,11 @@ class ExpressiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = color ?? scheme.surfaceContainerLow;
-    final decoration = BoxDecoration(
-      color: baseColor,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(
-        color: scheme.outlineVariant.withOpacity(dark ? .34 : .44),
-        width: 1,
-      ),
-    );
-    return Container(
-      decoration: decoration,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(padding: padding, child: child),
+    return PixelFinanceSurface(
+      padding: padding,
+      color: color,
+      radius: radius,
+      child: child,
     );
   }
 }
@@ -4848,20 +4703,8 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key, this.trailing});
   final String title;
   final Widget? trailing;
-
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 18, 2, 8),
-      child: Row(
-        children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-          if (trailing != null) DefaultTextStyle.merge(style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600), child: trailing!),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => PixelSectionLabel(title, trailing: trailing);
 }
 
 
@@ -4873,173 +4716,109 @@ class SleekPillOption<T> {
 }
 
 class SleekPillSelector<T> extends StatelessWidget {
-  const SleekPillSelector({
-    super.key,
-    required this.options,
-    required this.selected,
-    required this.onChanged,
-  });
-
+  const SleekPillSelector({super.key, required this.options, required this.selected, required this.onChanged});
   final List<SleekPillOption<T>> options;
   final T selected;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < options.length; i++) ...[
-          Expanded(
-            child: _SleekPillButton<T>(
+    if (options.length <= 3) {
+      return Row(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            Expanded(
+              child: _SleekPillButton<T>(
+                option: options[i],
+                selected: options[i].value == selected,
+                onTap: () => onChanged(options[i].value),
+              ),
+            ),
+            if (i != options.length - 1) const SizedBox(width: 8),
+          ],
+        ],
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const ClampingScrollPhysics(),
+      child: Row(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            _SleekPillButton<T>(
               option: options[i],
               selected: options[i].value == selected,
               onTap: () => onChanged(options[i].value),
             ),
-          ),
-          if (i != options.length - 1) const SizedBox(width: 8),
+            if (i != options.length - 1) const SizedBox(width: 8),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
 class SleekCyclePillSelector<T> extends StatelessWidget {
-  const SleekCyclePillSelector({
-    super.key,
-    required this.options,
-    required this.selected,
-    required this.onChanged,
-  });
-
+  const SleekCyclePillSelector({super.key, required this.options, required this.selected, required this.onChanged});
   final List<SleekPillOption<T>> options;
   final T selected;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final selectedIndex = options.indexWhere((option) => option.value == selected);
     final currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
     final current = options[currentIndex];
     final next = options[(currentIndex + 1) % options.length];
-
-    return MotionPressable(
+    final scheme = Theme.of(context).colorScheme;
+    return PixelFinanceSurface(
+      radius: 18,
       onTap: () => onChanged(next.value),
-      borderRadius: AppShapes.medium,
-      child: Material(
-        color: scheme.secondaryContainer,
-        borderRadius: AppShapes.medium,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: AppShapes.medium,
-            border: Border.all(color: scheme.outlineVariant.withOpacity(.36)),
-          ),
-          child: Row(
-            children: [
-              if (current.icon != null) ...[
-                Icon(current.icon, size: 20, color: scheme.onSecondaryContainer),
-                const SizedBox(width: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+      child: Row(
+        children: [
+          if (current.icon != null) ...[
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(13)),
+              child: Icon(current.icon, size: 20, color: scheme.onPrimaryContainer),
+            ),
+            const SizedBox(width: 11),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(current.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text('Next: ${next.label}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
               ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      current.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: scheme.onSecondaryContainer,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      'Tap to switch to ${next.label}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: scheme.onSecondaryContainer.withOpacity(.72),
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Icon(Icons.swap_horiz_rounded, color: scheme.onSecondaryContainer, size: 21),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Icon(Icons.sync_alt_rounded, color: scheme.primary, size: 20),
+        ],
       ),
     );
   }
 }
 
 class _SleekPillButton<T> extends StatelessWidget {
-  const _SleekPillButton({
-    required this.option,
-    required this.selected,
-    required this.onTap,
-  });
-
+  const _SleekPillButton({required this.option, required this.selected, required this.onTap});
   final SleekPillOption<T> option;
   final bool selected;
   final VoidCallback onTap;
-
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final background = selected ? scheme.secondaryContainer : scheme.surfaceContainerHigh;
-    final foreground = selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
-
-    return MotionPressable(
+    return PixelPill(
+      label: option.label,
+      icon: option.icon,
+      selected: selected,
       onTap: onTap,
-      borderRadius: AppShapes.medium,
-      child: Material(
-        color: background,
-        borderRadius: AppShapes.medium,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          constraints: const BoxConstraints(minHeight: 48),
-          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 8 : 11, vertical: 9),
-          decoration: BoxDecoration(
-            borderRadius: AppShapes.medium,
-            border: Border.all(
-              color: selected ? scheme.primary.withOpacity(.28) : scheme.outlineVariant.withOpacity(.34),
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (option.icon != null) ...[
-                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 17 : 19, color: foreground),
-                SizedBox(width: AppBreakpoints.isSmall(context) ? 5 : 7),
-              ],
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Text(
-                    option.label,
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: foreground,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      compact: true,
     );
   }
 }
@@ -5082,14 +4861,7 @@ SelectionOption optionFromCategory(Category category) => SelectionOption(
     );
 
 class AppleSelectionField extends StatelessWidget {
-  const AppleSelectionField({
-    super.key,
-    required this.label,
-    required this.option,
-    required this.onTap,
-    this.emptyText = 'Select',
-  });
-
+  const AppleSelectionField({super.key, required this.label, required this.option, required this.onTap, this.emptyText = 'Select'});
   final String label;
   final SelectionOption? option;
   final VoidCallback onTap;
@@ -5103,70 +4875,43 @@ class AppleSelectionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
+          padding: const EdgeInsets.only(left: 2, bottom: 7),
+          child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
         ),
-        Material(
-          color: scheme.surfaceContainerHighest.withOpacity(.52),
-          borderRadius: BorderRadius.circular(18),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
-              ),
-              child: Row(
-                children: [
-                  if (selected != null) ...[
-                    iconBubble(context, selected.iconName, selected.iconColor, size: 42),
-                    const SizedBox(width: 12),
-                  ] else ...[
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: kSleekAccent.withOpacity(.13),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: kSleekAccent.withOpacity(.18)),
-                      ),
-                      child: const Icon(Icons.touch_app_rounded, color: kSleekAccent),
-                    ),
-                    const SizedBox(width: 12),
+        PixelFinanceSurface(
+          onTap: onTap,
+          radius: 18,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              if (selected != null) ...[
+                iconBubble(context, selected.iconName, selected.iconColor, size: 42),
+                const SizedBox(width: 12),
+              ] else ...[
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(color: scheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+                  child: Icon(Icons.add_rounded, color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(selected?.title ?? emptyText, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                    if (selected != null) ...[
+                      const SizedBox(height: 2),
+                      Text(selected.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                    ],
                   ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          selected?.title ?? emptyText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          selected?.subtitle ?? 'Tap to choose',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.keyboard_arrow_down_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Icon(Icons.keyboard_arrow_down_rounded, color: scheme.onSurfaceVariant),
+            ],
           ),
         ),
       ],
@@ -5182,98 +4927,87 @@ Future<String?> showAppleWheelSelectionSheet(
 }) async {
   if (options.isEmpty) return null;
   final foundIndex = options.indexWhere((option) => option.id == selectedId);
-  final initialIndex = foundIndex < 0 ? 0 : foundIndex;
-  var selectedIndex = initialIndex;
-
-  const rowExtent = 72.0;
-  final listHeight = math.min(288.0, math.max(rowExtent, options.length * rowExtent));
-  final maxScrollExtent = math.max(0.0, (options.length * rowExtent) - listHeight);
-  final initialOffset = math.min(
-    maxScrollExtent,
-    math.max(0.0, (initialIndex - 1) * rowExtent),
-  );
-  final listController = ScrollController(initialScrollOffset: initialOffset);
+  var selectedIndex = foundIndex < 0 ? 0 : foundIndex;
+  final controller = ScrollController();
+  final listHeight = math.min(352.0, math.max(72.0, options.length * 72.0));
 
   final result = await showKoinlyPopup<String>(
     context,
-    maxWidth: 520,
-    maxHeight: math.min(600.0, 184.0 + listHeight),
+    maxWidth: 500,
+    maxHeight: math.min(610.0, listHeight + 176),
     child: StatefulBuilder(
       builder: (dialogContext, setModalState) {
-        final safeIndex = selectedIndex < 0
-            ? 0
-            : selectedIndex >= options.length
-                ? options.length - 1
-                : selectedIndex;
-        final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF1F1A1F) : const Color(0xFFFBF1F8);
-        final innerBorderColor = dark ? const Color(0xFF4C444C) : const Color(0xFFCFC3CD);
-        final handleColor = dark ? const Color(0xFF4C444C) : const Color(0xFFCFC3CD);
-
+        final scheme = Theme.of(dialogContext).colorScheme;
+        final safeIndex = selectedIndex.clamp(0, options.length - 1).toInt();
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(999)),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                height: listHeight,
-                decoration: BoxDecoration(
-                  color: innerColor,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: innerBorderColor),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Scrollbar(
-                  controller: listController,
-                  thumbVisibility: kIsDesktopApp && options.length > 4,
-                  child: ListView.builder(
-                    controller: listController,
-                    itemExtent: rowExtent,
-                    padding: EdgeInsets.zero,
-                    physics: optimizedScrollPhysics(dialogContext),
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options[index];
-                      final isSelected = index == safeIndex;
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => setModalState(() => selectedIndex = index),
-                          child: _AppleWheelOptionRow(option: option, selected: isSelected),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Cancel'),
+                    child: Text(
+                      title,
+                      style: Theme.of(dialogContext).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.55,
+                          ),
+                    ),
+                  ),
+                  PixelRoundAction(
+                    icon: Icons.close_rounded,
+                    tooltip: 'Cancel',
+                    onPressed: () => Navigator.pop(dialogContext),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Flexible(
+                child: SizedBox(
+                  height: listHeight,
+                  child: Scrollbar(
+                    controller: controller,
+                    thumbVisibility: kIsDesktopApp && options.length > 5,
+                    child: ListView.separated(
+                      controller: controller,
+                      physics: optimizedScrollPhysics(dialogContext),
+                      padding: EdgeInsets.zero,
+                      itemCount: options.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 7),
+                      itemBuilder: (context, index) {
+                        final option = options[index];
+                        final selected = index == safeIndex;
+                        return _AppleWheelOptionRow(
+                          option: option,
+                          selected: selected,
+                          onTap: () => setModalState(() => selectedIndex = index),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      options[safeIndex].subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
-                      child: const Text('Done'),
-                    ),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
+                    icon: const Icon(Icons.check_rounded, size: 18),
+                    label: const Text('Use this'),
                   ),
                 ],
               ),
@@ -5284,67 +5018,82 @@ Future<String?> showAppleWheelSelectionSheet(
     ),
   );
 
-  listController.dispose();
+  controller.dispose();
   return result;
 }
 
 class _AppleWheelOptionRow extends StatelessWidget {
-  const _AppleWheelOptionRow({required this.option, required this.selected});
+  const _AppleWheelOptionRow({required this.option, required this.selected, required this.onTap});
 
   final SelectionOption option;
   final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
-        );
-    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
-          fontWeight: FontWeight.w700,
-        );
-
-    return AnimatedContainer(
-      duration: AppMotion.fast,
-      curve: AppMotion.emphasized,
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: selected ? kSleekAccent.withOpacity(.10) : Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: selected ? kSleekAccent.withOpacity(.52) : Colors.transparent,
-          width: 1.1,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          iconBubble(context, option.iconName, option.iconColor, size: 42),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final background = selected
+        ? scheme.primaryContainer
+        : (dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised);
+    final foreground = selected ? scheme.onPrimaryContainer : scheme.onSurface;
+    return Material(
+      color: background,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
               children: [
-                Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
-                const SizedBox(height: 3),
-                Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                iconBubble(context, option.iconName, option.iconColor, size: 40),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                      if (option.subtitle.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          option.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: selected ? scheme.onPrimaryContainer.withOpacity(.74) : scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                  size: 21,
+                  color: selected ? scheme.onPrimaryContainer : scheme.outlineVariant,
+                ),
               ],
             ),
           ),
-          if (selected) ...[
-            const SizedBox(width: 10),
-            const Icon(Icons.check_rounded, color: kSleekAccent, size: 22),
-          ],
-        ],
+        ),
       ),
     );
   }
 }
-
 
 Future<DateTime?> pickDate(BuildContext context, DateTime initial) => showDatePicker(
       context: context,
@@ -5438,7 +5187,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
                 child: Text(
                   'Select transaction date range',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               IconButton(
@@ -5452,7 +5201,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
           Text(
             '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 16),
           Row(
@@ -5547,9 +5296,9 @@ class _DateRangeEndpointButton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w900)),
               const SizedBox(height: 2),
-              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w800)),
             ],
           ),
         ),
@@ -5684,9 +5433,9 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                             width: width,
                             height: height,
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest.withOpacity(.98),
+                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
                               borderRadius: BorderRadius.circular(radius),
-                              border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(.45 + borderOpacity)),
+                              border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(dark ? .42 : .24),
@@ -5735,7 +5484,7 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                                               overflow: TextOverflow.ellipsis,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 color: Colors.white,
-                                                fontWeight: FontWeight.w700,
+                                                fontWeight: FontWeight.w900,
                                                 height: 1.14,
                                                 letterSpacing: -.1,
                                               ),
@@ -5775,7 +5524,7 @@ Future<T?> showKoinlyPopup<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withOpacity(.58),
+    barrierColor: Colors.black.withOpacity(.62),
     transitionDuration: AppMotion.medium,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return _KoinlyPopupFrame(maxWidth: maxWidth, maxHeight: maxHeight, child: child);
@@ -5785,9 +5534,9 @@ Future<T?> showKoinlyPopup<T>(
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          scale: Tween<double>(begin: .97, end: 1).animate(curved),
+          scale: Tween<double>(begin: .94, end: 1).animate(curved),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, .02), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(curved),
             child: child,
           ),
         ),
@@ -5806,45 +5555,41 @@ class _KoinlyPopupFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final horizontalInset = media.size.width < 420 ? 12.0 : 20.0;
-    final verticalInset = media.size.height < 720 ? 10.0 : 20.0;
-    final availableWidth = math.max(280.0, media.size.width - (horizontalInset * 2));
+    final horizontalInset = media.size.width < 430 ? 10.0 : 22.0;
+    final verticalInset = media.size.height < 700 ? 8.0 : 22.0;
+    final availableWidth = math.max(280.0, media.size.width - horizontalInset * 2);
     final availableHeight = math.max(
       300.0,
-      media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom - (verticalInset * 2),
+      media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom - verticalInset * 2,
     );
-    final resolvedWidth = math.min(maxWidth, availableWidth);
-    final resolvedHeight = math.min(maxHeight, availableHeight);
 
     return Material(
       type: MaterialType.transparency,
       child: SafeArea(
         child: AnimatedPadding(
           duration: AppMotion.fast,
-          curve: AppMotion.emphasized,
-          padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
-          child: Align(
-            alignment: Alignment.center,
+          curve: AppMotion.standard,
+          padding: EdgeInsets.fromLTRB(
+            horizontalInset,
+            verticalInset,
+            horizontalInset,
+            verticalInset + media.viewInsets.bottom,
+          ),
+          child: Center(
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
+              constraints: BoxConstraints(
+                maxWidth: math.min(maxWidth, availableWidth),
+                maxHeight: math.min(maxHeight, availableHeight),
+              ),
               child: Material(
-                color: scheme.surfaceContainerHigh,
+                color: dark ? KoinlyPixelTokens.darkSurface : KoinlyPixelTokens.lightSurface,
                 elevation: 0,
-                shadowColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(media.size.width < 420 ? 24 : 28),
                 clipBehavior: Clip.antiAlias,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 24 : 28),
-                    border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .44 : .54)),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(dark ? .26 : .10), blurRadius: 24, offset: const Offset(0, 10)),
-                    ],
-                  ),
-                  child: child,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(media.size.width < 430 ? 24 : 28),
                 ),
+                child: child,
               ),
             ),
           ),
@@ -5853,6 +5598,8 @@ class _KoinlyPopupFrame extends StatelessWidget {
     );
   }
 }
+
+
 
 // -----------------------------------------------------------------------------
 // Onboarding
@@ -5882,122 +5629,141 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ),
     );
     if (!mounted || createdAccount != true) return;
+    await controller.animateToPage(1, duration: AppMotion.medium, curve: AppMotion.standard);
+  }
 
-    // A newly registered sync account must continue through the local setup
-    // pages. This also covers users who entered through Login and then switched
-    // to "Create account instead" inside the auth screen.
-    await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
+  Future<void> _go(int page) async {
+    await controller.animateToPage(page, duration: AppMotion.medium, curve: AppMotion.standard);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 900;
-            final horizontalPadding = desktop ? 32.0 : 20.0;
-            return Column(
-              children: [
-                Expanded(
-                  child: PageView(
-                    controller: controller,
-                    physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
-                    onPageChanged: (value) => setState(() => index = value),
-                    children: [
-                      _OnboardingPane(
-                        icon: Icons.account_balance_wallet_rounded,
-                        title: 'Track money without losing detail',
-                        body: 'Accounts, categories, transactions, budgets, analysis, exports, reminders, and local backup are available from the first setup.',
-                        actions: Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: () => _openAccountSync(createAccount: false),
-                              icon: const Icon(Icons.login_rounded),
-                              label: const Text('Login'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => _openAccountSync(createAccount: true),
-                              icon: const Icon(Icons.person_add_alt_rounded),
-                              label: const Text('Create account'),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
-                              icon: const Icon(Icons.wifi_off_rounded),
-                              label: const Text('Use offline'),
-                            ),
-                          ],
-                        ),
+      body: PixelFinanceBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+                child: Row(
+                  children: [
+                    const KoinlyAppIcon(size: 42, borderRadius: 13),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Text(
+                        'Koinly',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.5),
                       ),
-                      CurrencySetupPane(state: state),
-                      AccountSetupPane(
-                        state: state,
-                        onSkip: () async {
-                          await state.skipStarterAccounts();
-                          if (!mounted) return;
-                          await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
-                        },
-                      ),
-                      _OnboardingPane(
-                        icon: Icons.privacy_tip_rounded,
-                        title: 'Private local database',
-                        body: 'Your main finance data is stored locally with SQLite. Backup and restore stay on this device unless you share a backup file yourself.',
-                      ),
-                    ],
-                  ),
+                    ),
+                    PixelPill(label: '${index + 1} / 4', compact: true),
+                  ],
                 ),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.94),
-                    border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(.55))),
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 780),
-                      child: Row(
+              ),
+              Expanded(
+                child: PageView(
+                  controller: controller,
+                  physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+                  onPageChanged: (value) => setState(() => index = value),
+                  children: [
+                    _OnboardingPane(
+                      eyebrow: 'START HERE',
+                      icon: Icons.auto_awesome_rounded,
+                      accent: KoinlyPixelTokens.pink,
+                      title: 'Money tracking that feels lighter.',
+                      body: 'Set up your space once. Koinly keeps accounts, spending, savings, budgets, and insights together without turning the app into a spreadsheet.',
+                      featureLabels: const ['Accounts', 'Savings', 'Budgets', 'Insights'],
+                      actions: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(
-                            children: List.generate(4, (i) => AnimatedContainer(
-                                  duration: AppMotion.medium,
-                                  width: i == index ? 24 : 8,
-                                  height: 8,
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: i == index ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant),
-                                )),
+                          FilledButton.icon(
+                            onPressed: () => _openAccountSync(createAccount: true),
+                            icon: const Icon(Icons.person_add_alt_rounded),
+                            label: const Text('Create account'),
                           ),
-                          const Spacer(),
-                          if (index > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: OutlinedButton(
-                                onPressed: () => controller.previousPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
-                                child: const Text('Back'),
-                              ),
-                            ),
-                          FilledButton(
-                            onPressed: () async {
-                              if (index < 3) {
-                                await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
-                              } else {
-                                await state.completeOnboarding();
-                              }
-                            },
-                            child: Text(index < 3 ? 'Next' : 'Start'),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _openAccountSync(createAccount: false),
+                            icon: const Icon(Icons.login_rounded),
+                            label: const Text('I already have an account'),
+                          ),
+                          const SizedBox(height: 4),
+                          TextButton(
+                            onPressed: () => _go(1),
+                            child: const Text('Continue offline'),
                           ),
                         ],
                       ),
                     ),
+                    CurrencySetupPane(state: state),
+                    AccountSetupPane(
+                      state: state,
+                      onSkip: () async {
+                        await state.skipStarterAccounts();
+                        if (mounted) await _go(3);
+                      },
+                    ),
+                    _OnboardingPane(
+                      eyebrow: 'READY',
+                      icon: Icons.lock_rounded,
+                      accent: KoinlyPixelTokens.lavender,
+                      title: 'Your money stays yours.',
+                      body: 'Your main finance database is local. Backups and sync are explicit choices, while day-to-day tracking works without a network connection.',
+                      featureLabels: const ['Local database', 'Offline first', 'Backup ready'],
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 16),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 780),
+                  child: Row(
+                    children: [
+                      if (index > 0)
+                        PixelRoundAction(icon: Icons.arrow_back_rounded, tooltip: 'Back', onPressed: () => _go(index - 1))
+                      else
+                        const SizedBox(width: 44),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            4,
+                            (i) => AnimatedContainer(
+                              duration: AppMotion.fast,
+                              curve: AppMotion.standard,
+                              width: i == index ? 26 : 8,
+                              height: 8,
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color: i == index ? scheme.primary : scheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      PixelRoundAction(
+                        icon: index < 3 ? Icons.arrow_forward_rounded : Icons.check_rounded,
+                        tooltip: index < 3 ? 'Next' : 'Finish',
+                        selected: true,
+                        onPressed: () async {
+                          if (index < 3) {
+                            await _go(index + 1);
+                          } else {
+                            await state.completeOnboarding();
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            );
-          },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -6015,13 +5781,11 @@ class OnboardingPageFrame extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final desktop = constraints.maxWidth >= 900;
-        final horizontalPadding = desktop ? 40.0 : 24.0;
-        final verticalPadding = desktop ? 32.0 : 24.0;
         return SingleChildScrollView(
           physics: optimizedScrollPhysics(context),
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: verticalPadding),
+          padding: EdgeInsets.fromLTRB(desktop ? 34 : 18, desktop ? 28 : 18, desktop ? 34 : 18, 28),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: math.max(0, constraints.maxHeight - verticalPadding * 2)),
+            constraints: BoxConstraints(minHeight: math.max(0, constraints.maxHeight - (desktop ? 56 : 36))),
             child: Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
@@ -6036,30 +5800,86 @@ class OnboardingPageFrame extends StatelessWidget {
 }
 
 class _OnboardingPane extends StatelessWidget {
-  const _OnboardingPane({required this.icon, required this.title, required this.body, this.actions});
+  const _OnboardingPane({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.actions,
+    this.eyebrow = 'WELCOME',
+    this.accent = KoinlyPixelTokens.pink,
+    this.featureLabels = const [],
+  });
+
   final IconData icon;
   final String title;
   final String body;
   final Widget? actions;
+  final String eyebrow;
+  final Color accent;
+  final List<String> featureLabels;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
     return OnboardingPageFrame(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const KoinlyAppIcon(size: 112, borderRadius: 36),
-          const SizedBox(height: 28),
-          Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 16),
-          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
-          if (actions != null) ...[
-            const SizedBox(height: 24),
-            actions!,
-          ],
-        ],
+      maxWidth: 820,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 680;
+          final hero = PixelFinanceSurface(
+            radius: 30,
+            color: accent.withOpacity(dark ? .16 : .20),
+            padding: EdgeInsets.all(wide ? 28 : 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: wide ? 68 : 58,
+                  height: wide ? 68 : 58,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(22)),
+                  child: Icon(icon, color: const Color(0xFF20131A), size: wide ? 32 : 28),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  eyebrow,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: accent, fontWeight: FontWeight.w900, letterSpacing: 1.2),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: (wide ? Theme.of(context).textTheme.displaySmall : Theme.of(context).textTheme.headlineMedium)?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1.15,
+                        height: 1.02,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  body,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: scheme.onSurfaceVariant, height: 1.45, fontWeight: FontWeight.w600),
+                ),
+                if (featureLabels.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: [for (final label in featureLabels) PixelPill(label: label, compact: true)],
+                  ),
+                ],
+              ],
+            ),
+          );
+          if (actions == null) return hero;
+          if (!wide) {
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [hero, const SizedBox(height: 14), actions!]);
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [Expanded(flex: 5, child: hero), const SizedBox(width: 22), Expanded(flex: 3, child: actions!)],
+          );
+        },
       ),
     );
   }
@@ -6072,16 +5892,28 @@ class CurrencySetupPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPageFrame(
+      maxWidth: 780,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const KoinlyAppIcon(size: 72, borderRadius: 22),
+          const PixelSectionLabel('FORMAT'),
+          Text(
+            'Pick your money language.',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.9),
+          ),
+          const SizedBox(height: 8),
+          Text('This controls how amounts look everywhere in Koinly.', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 18),
-          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          const Text('Choose how every amount is formatted across accounts, budgets, analysis, and exports.', textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          CurrencyForm(initialSymbol: state.currencySymbol, initialCode: state.currencyCode, initialPosition: state.currencyPosition, initialSeparators: state.useSeparators),
+          PixelFinanceSurface(
+            radius: 26,
+            padding: const EdgeInsets.all(18),
+            child: CurrencyForm(
+              initialSymbol: state.currencySymbol,
+              initialCode: state.currencyCode,
+              initialPosition: state.currencyPosition,
+              initialSeparators: state.useSeparators,
+            ),
+          ),
         ],
       ),
     );
@@ -6096,34 +5928,46 @@ class AccountSetupPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OnboardingPageFrame(
+      maxWidth: 820,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const KoinlyAppIcon(size: 72, borderRadius: 22),
+          const PixelSectionLabel('YOUR ACCOUNTS'),
+          Text(
+            'Build the wallet you actually use.',
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.9),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Regular, credit, and savings accounts can all be created here. Tap any card to edit or remove it.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 18),
-          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          const Text('Keep the starter accounts, add your own, or remove any account you do not need. Tap an account to edit or delete it.', textAlign: TextAlign.center),
-          const SizedBox(height: 24),
-          ...state.accounts.map((a) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: AccountTile(account: a, onTap: () => showAccountEditor(context, account: a)),
-              )),
-          Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 12,
-            runSpacing: 12,
+          if (state.accounts.isEmpty)
+            PixelEmptyState(
+              icon: Icons.account_balance_wallet_rounded,
+              title: 'No accounts yet',
+              body: 'Add your first account to start tracking balances.',
+              action: () => showAccountEditor(context, allowedTypes: AccountType.values),
+              actionLabel: 'Add account',
+            )
+          else
+            ...state.accounts.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: AccountTile(account: a, onTap: () => showAccountEditor(context, account: a)),
+                )),
+          const SizedBox(height: 8),
+          Row(
             children: [
-              OutlinedButton.icon(
-                onPressed: () => showAccountEditor(context, allowedTypes: AccountType.values),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add account'),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => showAccountEditor(context, allowedTypes: AccountType.values),
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add account'),
+                ),
               ),
-              TextButton.icon(
-                onPressed: onSkip,
-                icon: const Icon(Icons.skip_next_rounded),
-                label: const Text('Skip accounts'),
-              ),
+              const SizedBox(width: 8),
+              OutlinedButton(onPressed: onSkip, child: const Text('Skip')),
             ],
           ),
         ],
@@ -6145,173 +5989,172 @@ class HomeDashboardScreen extends StatelessWidget {
     final range = state.activeRange();
     final txs = state.filteredTransactions();
     final summary = state.summaryFor(txs);
-    final accountBalance = state.totalAccountBalance;
     final categoryTotals = state.categoryTotals(CategoryType.expense, source: txs);
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
 
-    final balanceCard = BalanceHeroCard(
-      balance: state.format(accountBalance),
+    final overview = _PixelBalanceHero(
+      balance: state.format(state.totalAccountBalance),
       income: state.format(summary.income),
       expense: state.format(summary.expense),
-      subtitle: '${state.accounts.length} accounts total • ${range.label} balance ${state.format(summary.balance)}',
+      periodBalance: state.format(summary.balance),
+      accountCount: state.accounts.length,
       amountsHidden: state.amountsHidden,
       onToggleAmounts: state.toggleAmountsHidden,
+      onAdd: () => showTransactionEditor(context),
     );
 
-    final accountsSection = <Widget>[
-      const SectionHeader('Accounts'),
-      HomeNavigationTile(
-        iconName: 'wallet',
-        iconColor: '#78D8E8',
-        title: 'Accounts',
-        subtitle: '${state.operatingAccounts.length} regular accounts',
-        amount: state.format(state.operatingAccountBalance),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
-      ),
-      const SizedBox(height: 10),
-      HomeNavigationTile(
-        iconName: 'savings',
-        iconColor: '#A6E3A1',
-        title: 'Savings Accounts',
-        subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
-        amount: state.format(state.savingAccountBalance),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts'))),
-      ),
-    ];
-
-    final budgetSection = <Widget>[
-      SectionHeader('Budgets', trailing: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())), child: const Text('View all'))),
-      if (state.budgets.isEmpty)
-        EmptyCard(icon: Icons.savings_rounded, title: 'No budget yet', body: 'Create a monthly budget and track spending against limits.', action: () => showBudgetEditor(context), actionLabel: 'Create budget')
-      else
-        ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 10), child: BudgetProgressTile(progress: b))),
-    ];
-
-
-
-    final categorySection = <Widget>[
-      SectionHeader('Category spending'),
-      if (topCategories.isEmpty)
-        const EmptyCard(icon: Icons.pie_chart_rounded, title: 'No spending data', body: 'Add expenses to see where money is going.')
-      else
-        ExpressiveCard(
-          child: Column(
-            children: topCategories.take(4).map((entry) {
-              final category = state.categoryOf(entry.key);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
-                title: Text(category?.name ?? 'Unknown'),
-                subtitle: LinearProgressIndicator(value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal),
-                trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600)),
-                onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
-              );
-            }).toList(),
+    final accounts = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          'Accounts',
+          trailing: TextButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
+            child: const Text('Manage'),
           ),
         ),
-    ];
+        HomeNavigationTile(
+          iconName: 'wallet',
+          iconColor: '#D6B9FF',
+          title: 'Everyday',
+          subtitle: '${state.operatingAccounts.length} regular / credit',
+          amount: state.format(state.operatingAccountBalance),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
+        ),
+        const SizedBox(height: 9),
+        HomeNavigationTile(
+          iconName: 'savings',
+          iconColor: '#83D6A9',
+          title: 'Savings',
+          subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
+          amount: state.format(state.savingAccountBalance),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings'))),
+        ),
+      ],
+    );
 
-    final startEmptySection = <Widget>[
-      if (state.accounts.isEmpty) ...[
-        const SectionHeader('Start from empty'),
-        ExpressiveCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  iconBubble(context, 'wallet', '#78D8E8', size: 50),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    final budgets = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(
+          'Budgets',
+          trailing: TextButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())),
+            child: const Text('See all'),
+          ),
+        ),
+        if (state.budgets.isEmpty)
+          EmptyCard(
+            icon: Icons.savings_rounded,
+            title: 'Build your first budget',
+            body: 'Give a category a monthly limit and Koinly will keep the progress visible here.',
+            action: () => showBudgetEditor(context),
+            actionLabel: 'Create budget',
+          )
+        else
+          ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 9), child: BudgetProgressTile(progress: b))),
+      ],
+    );
+
+    final spending = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionHeader('Where it went'),
+        if (topCategories.isEmpty)
+          const EmptyCard(
+            icon: Icons.donut_small_rounded,
+            title: 'Nothing spent in this range',
+            body: 'Expense categories will appear here as soon as you add transactions.',
+          )
+        else
+          PixelFinanceSurface(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              children: topCategories.take(5).map((entry) {
+                final category = state.categoryOf(entry.key);
+                final progress = categoryGrandTotal <= 0 ? 0.0 : (entry.value / categoryGrandTotal).clamp(0.0, 1.0);
+                return InkWell(
+                  onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Row(
                       children: [
-                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 4),
-                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        if (category != null) iconBubble(context, category.iconName, category.iconColor, size: 42),
+                        if (category != null) const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: Text(category?.name ?? 'Unknown', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
+                                  const SizedBox(width: 10),
+                                  Text(state.format(entry.value), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                                ],
+                              ),
+                              const SizedBox(height: 7),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(99),
+                                child: LinearProgressIndicator(value: progress, minHeight: 5),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Add account'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => runRestoreFlow(context, state),
-                    icon: const Icon(Icons.restore_rounded),
-                    label: const Text('Restore backup'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen(preferCloudDataOnAuth: true))),
-                    icon: const Icon(Icons.cloud_download_rounded),
-                    label: const Text('Sign in & restore cloud'),
-                  ),
-                ],
-              ),
-            ],
+                );
+              }).toList(),
+            ),
           ),
-        ),
       ],
-    ];
+    );
 
+    final emptyStart = state.accounts.isEmpty
+        ? Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: EmptyCard(
+              icon: Icons.account_balance_wallet_rounded,
+              title: 'Start with an account',
+              body: 'Add an account, restore a backup, or sign in and restore your cloud data.',
+              action: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit, AccountType.savings]),
+              actionLabel: 'Add account',
+            ),
+          )
+        : const SizedBox.shrink();
 
     return PageScaffold(
-      title: 'Home',
+      title: 'Your money',
       subtitle: range.label,
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
-        IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_rounded)),
+        PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Date range', onPressed: () => showDateRangeSheet(context)),
+        const SizedBox(width: 6),
+        PixelRoundAction(icon: Icons.settings_rounded, tooltip: 'Settings', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
       ],
       child: ResponsiveContent(
+        desktopMaxWidth: 1240,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final useDesktopColumns = constraints.maxWidth >= 860;
-            if (!useDesktopColumns) {
+            if (constraints.maxWidth < 850) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  balanceCard,
-                  ...startEmptySection,
-                  ...accountsSection,
-                  ...budgetSection,
-                  ...categorySection,
-                ],
+                children: [overview, emptyStart, accounts, budgets, spending],
               );
             }
-
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      balanceCard,
-                      ...startEmptySection,
-                      ...accountsSection,
-                      ...budgetSection,
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ...categorySection,
-                        ],
-                  ),
+                overview,
+                emptyStart,
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: Column(children: [accounts, budgets])),
+                    const SizedBox(width: 18),
+                    Expanded(child: spending),
+                  ],
                 ),
               ],
             );
@@ -6322,18 +6165,128 @@ class HomeDashboardScreen extends StatelessWidget {
   }
 }
 
-
-class HomeNavigationTile extends StatelessWidget {
-  const HomeNavigationTile({
-    super.key,
-    required this.iconName,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    required this.onTap,
+class _PixelBalanceHero extends StatelessWidget {
+  const _PixelBalanceHero({
+    required this.balance,
+    required this.income,
+    required this.expense,
+    required this.periodBalance,
+    required this.accountCount,
+    required this.amountsHidden,
+    required this.onToggleAmounts,
+    required this.onAdd,
   });
 
+  final String balance;
+  final String income;
+  final String expense;
+  final String periodBalance;
+  final int accountCount;
+  final bool amountsHidden;
+  final VoidCallback onToggleAmounts;
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 430;
+    return Container(
+      padding: EdgeInsets.all(compact ? 18 : 22),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF4C263A) : const Color(0xFFFFD9E7),
+        borderRadius: BorderRadius.circular(compact ? 26 : 30),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Total balance',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.78), fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: amountsHidden ? 'Show amounts' : 'Hide amounts',
+                onPressed: onToggleAmounts,
+                icon: Icon(amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                style: IconButton.styleFrom(backgroundColor: Colors.transparent, foregroundColor: scheme.onPrimaryContainer),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            balance,
+            maxLines: 1,
+            overflow: TextOverflow.fade,
+            softWrap: false,
+            style: Theme.of(context).textTheme.displaySmall?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900, letterSpacing: -1.8),
+          ),
+          const SizedBox(height: 6),
+          Text('$accountCount accounts • Period net $periodBalance', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.72), fontWeight: FontWeight.w600)),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(child: _PixelHeroMetric(label: 'Income', value: income, icon: Icons.south_west_rounded, color: KoinlyPixelTokens.green)),
+              const SizedBox(width: 9),
+              Expanded(child: _PixelHeroMetric(label: 'Expense', value: expense, icon: Icons.north_east_rounded, color: KoinlyPixelTokens.red)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add transaction'),
+            style: FilledButton.styleFrom(
+              backgroundColor: dark ? const Color(0xFFF0A6C5) : const Color(0xFF9D476D),
+              foregroundColor: dark ? const Color(0xFF3B1425) : Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PixelHeroMetric extends StatelessWidget {
+  const _PixelHeroMetric({required this.label, required this.value, required this.icon, required this.color});
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? .16 : .04), borderRadius: BorderRadius.circular(17)),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 19),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onPrimaryContainer.withOpacity(.72), fontWeight: FontWeight.w700)),
+                const SizedBox(height: 1),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+class HomeNavigationTile extends StatelessWidget {
+  const HomeNavigationTile({super.key, required this.iconName, required this.iconColor, required this.title, required this.subtitle, required this.amount, required this.onTap});
   final String iconName;
   final String iconColor;
   final String title;
@@ -6343,27 +6296,37 @@ class HomeNavigationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, iconName, iconColor, size: 44),
-        title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(amount, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ],
-        ),
-        onTap: onTap,
+    final scheme = Theme.of(context).colorScheme;
+    return PixelFinanceSurface(
+      onTap: onTap,
+      radius: 19,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      child: Row(
+        children: [
+          iconBubble(context, iconName, iconColor, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(amount, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 2),
+              Icon(Icons.arrow_forward_rounded, size: 17, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -6386,38 +6349,53 @@ class QuickActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = colorFromHex(iconColor, fallback: kSleekAccent);
     return Semantics(
       button: true,
       label: label.replaceAll('\n', ' '),
-      child: Material(
-        color: scheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: scheme.outlineVariant.withOpacity(.34)),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                iconBubble(context, iconName, iconColor, size: 38),
-                const SizedBox(height: 7),
-                Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                        height: 1.05,
-                      ),
-                ),
-              ],
-            ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.spring,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          decoration: BoxDecoration(
+            color: dark ? const Color(0xFF0B1B21).withOpacity(.78) : Colors.white.withOpacity(.94),
+            gradient: dark
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.alphaBlend(accent.withOpacity(.09), const Color(0xFF0B1B21)),
+                      const Color(0xFF09151A),
+                    ],
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: dark ? Colors.white.withOpacity(.07) : scheme.outlineVariant.withOpacity(.72)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(dark ? .20 : .06), blurRadius: 16, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              iconBubble(context, iconName, iconColor, size: 42),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: dark ? const Color(0xFFDDE9EC) : scheme.onSurface,
+                      fontWeight: FontWeight.w900,
+                      height: 1.05,
+                    ),
+              ),
+            ],
           ),
         ),
       ),
@@ -6433,86 +6411,48 @@ class MiniMetric extends StatelessWidget {
 
   Color _accent() {
     final lower = label.toLowerCase();
-    if (lower.contains('income') || lower.contains('saving')) return kSleekIncome;
-    if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue')) return kSleekExpense;
-    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent;
-    if (lower.contains('open')) return const Color(0xFF8AB4FF);
-    if (lower.contains('completed')) return const Color(0xFF2BD9A1);
+    if (lower.contains('income') || lower.contains('saving') || lower.contains('collect') || lower.contains('paid')) return kSleekIncome;
+    if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue') || lower.contains('pay')) return kSleekExpense;
+    if (lower.contains('interest')) return KoinlyPixelTokens.amber;
+    if (lower.contains('balance') || lower.contains('remaining') || lower.contains('net')) return KoinlyPixelTokens.lavender;
     return kSleekAccent;
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     final accent = _accent();
-
-    Widget fitted(String text, TextStyle? style, {Alignment alignment = Alignment.centerLeft, TextAlign textAlign = TextAlign.left}) => FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: alignment,
-          child: Text(
-            text,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            textAlign: textAlign,
-            style: style,
+    return PixelFinanceSurface(
+      radius: 18,
+      padding: const EdgeInsets.all(13),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: accent, size: 19),
           ),
-        );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 230;
-        return Container(
-          constraints: BoxConstraints(minHeight: compact ? 74 : 60),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.outlineVariant.withOpacity(.34), width: 1),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.2)),
+              ],
+            ),
           ),
-          child: compact
-              ? Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, color: accent, size: 21),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(width: double.infinity, child: fitted(label, textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600))),
-                          const SizedBox(height: 5),
-                          SizedBox(width: double.infinity, child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: colorScheme.onSurface))),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, color: accent, size: 21),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: fitted(label, textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
-                    const SizedBox(width: 12),
-                    Flexible(child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700), alignment: Alignment.centerRight, textAlign: TextAlign.right)),
-                  ],
-                ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
+
+
 
 class BalanceHeroCard extends StatelessWidget {
   const BalanceHeroCard({
@@ -6534,20 +6474,51 @@ class BalanceHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = dark ? const Color(0xFFC8E7EC) : scheme.onSurface.withOpacity(.86);
+    final valueColor = dark ? Colors.white : scheme.onSurface;
+    final subtitleColor = dark ? const Color(0xFF9AB0B8) : scheme.onSurfaceVariant.withOpacity(.78);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(.38)),
+        borderRadius: BorderRadius.circular(28),
+        gradient: dark
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF083E47),
+                  KoinlyPixelTokens.darkSurfaceRaised,
+                  const Color(0xFF07171D),
+                ],
+              )
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white,
+                  const Color(0xFFF2FBFC),
+                  scheme.surface,
+                ],
+              ),
+        border: Border.all(color: dark ? kSleekAccent.withOpacity(.28) : scheme.outline.withOpacity(.16), width: 1),
+        boxShadow: kIsDesktopApp
+            ? [
+                BoxShadow(color: Colors.black.withOpacity(dark ? .24 : .055), blurRadius: 28, offset: const Offset(0, 14)),
+                if (dark) BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 36, offset: const Offset(0, 5)),
+              ]
+            : [
+                BoxShadow(color: kSleekAccent.withOpacity(dark ? .13 : .05), blurRadius: 24, offset: const Offset(0, 9)),
+                BoxShadow(color: Colors.black.withOpacity(dark ? .32 : .055), blurRadius: 20, offset: const Offset(0, 10)),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text('Net Balance', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              Text('Net Balance', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: titleColor, fontWeight: FontWeight.w800)),
               const SizedBox(width: 6),
               Tooltip(
                 message: amountsHidden ? 'Show amounts' : 'Hide amounts',
@@ -6559,31 +6530,31 @@ class BalanceHeroCard extends StatelessWidget {
                     child: Icon(
                       amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
                       size: 16,
-                      color: scheme.primary,
+                      color: dark ? const Color(0xFF9EDDE7) : kSleekAccent.withOpacity(.82),
                     ),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(balance, maxLines: 1, softWrap: false, style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.6, color: scheme.onSurface)),
+              child: Text(balance, maxLines: 1, softWrap: false, style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2, color: valueColor)),
             ),
           ),
-          const SizedBox(height: 6),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: subtitleColor, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
           const _DecorativeSparkline(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           Row(
             children: [
               Expanded(child: MiniMetric('Total income', income, Icons.south_west_rounded)),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(child: MiniMetric('Total expense', expense, Icons.north_east_rounded)),
             ],
           ),
@@ -6653,25 +6624,8 @@ class EmptyCard extends StatelessWidget {
   final String body;
   final VoidCallback? action;
   final String? actionLabel;
-
   @override
-  Widget build(BuildContext context) {
-    return ExpressiveCard(
-      child: Column(
-        children: [
-          Icon(icon, size: 42),
-          const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          Text(body, textAlign: TextAlign.center),
-          if (action != null) ...[
-            const SizedBox(height: 12),
-            FilledButton(onPressed: action, child: Text(actionLabel ?? 'Add')),
-          ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => PixelEmptyState(icon: icon, title: title, body: body, action: action, actionLabel: actionLabel);
 }
 
 // -----------------------------------------------------------------------------
@@ -6686,33 +6640,37 @@ class AccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final balanceColor = account.amount < 0 ? kSleekExpense : Theme.of(context).colorScheme.onSurface;
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      radius: 18,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, account.iconName, account.iconColor, size: 42),
-        title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          account.type == AccountType.credit
-              ? 'Credit • Available ${state.format(account.availableCredit)}'
-              : account.type == AccountType.savings
-                  ? 'Savings Account'
-                  : 'Cash Wallet',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: balanceColor)),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ],
-        ),
-        onTap: onTap,
+    final scheme = Theme.of(context).colorScheme;
+    final balanceColor = account.amount < 0 ? kSleekExpense : scheme.onSurface;
+    final subtitle = account.type == AccountType.credit
+        ? 'Credit • ${state.format(account.availableCredit)} available'
+        : account.type == AccountType.savings
+            ? 'Savings'
+            : 'Regular account';
+    return PixelFinanceSurface(
+      onTap: onTap,
+      radius: 19,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          iconBubble(context, account.iconName, account.iconColor, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(color: balanceColor, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right_rounded, size: 19, color: scheme.onSurfaceVariant),
+        ],
       ),
     );
   }
@@ -6986,7 +6944,7 @@ class _SavingsSuggestionBubble extends StatelessWidget {
           width: 74,
           height: 74,
           decoration: BoxDecoration(
-            color: selected ? color.withOpacity(.24) : scheme.surfaceContainerHigh,
+            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE10191D) : Colors.white.withOpacity(.96)),
             shape: BoxShape.circle,
             border: Border.all(color: selected ? color.withOpacity(.78) : color.withOpacity(.36), width: selected ? 2 : 1.2),
             boxShadow: [
@@ -7010,7 +6968,7 @@ class _SavingsSuggestionBubble extends StatelessWidget {
                 '?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       color: color,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w900,
                       height: 1,
                     ),
               ),
@@ -7039,7 +6997,7 @@ class SavingsSuggestionDetailDialog extends StatelessWidget {
           children: [
             iconBubble(context, suggestion.iconName, suggestion.color, size: 58),
             const SizedBox(height: 14),
-            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 12),
             _SuggestionDetailRow(icon: Icons.price_change_rounded, title: 'Estimated cost', body: suggestion.costRange, color: color),
             _SuggestionDetailRow(icon: Icons.psychology_rounded, title: 'Why this fits', body: suggestion.reason, color: color),
@@ -7086,7 +7044,7 @@ class _SuggestionDetailRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
                   Text(body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
                 ],
@@ -7184,22 +7142,17 @@ class _AccountEditorState extends State<AccountEditor> {
   final creditLimit = TextEditingController();
   AccountType type = AccountType.regular;
   String icon = 'wallet';
-  String color = '#78D8E8';
+  String color = '#D6B9FF';
 
   List<AccountType> get allowedTypes => widget.allowedTypes ?? AccountType.values;
 
-  List<SleekPillOption<AccountType>> get _typeOptions {
-    return allowedTypes.map((accountType) {
-      switch (accountType) {
-        case AccountType.regular:
-          return const SleekPillOption(value: AccountType.regular, label: 'Regular', icon: Icons.account_balance_wallet_rounded);
-        case AccountType.credit:
-          return const SleekPillOption(value: AccountType.credit, label: 'Credit', icon: Icons.credit_card_rounded);
-        case AccountType.savings:
-          return const SleekPillOption(value: AccountType.savings, label: 'Savings', icon: Icons.savings_rounded);
-      }
-    }).toList();
-  }
+  List<SleekPillOption<AccountType>> get _typeOptions => allowedTypes.map((accountType) {
+        return switch (accountType) {
+          AccountType.regular => const SleekPillOption(value: AccountType.regular, label: 'Regular', icon: Icons.account_balance_wallet_rounded),
+          AccountType.credit => const SleekPillOption(value: AccountType.credit, label: 'Credit', icon: Icons.credit_card_rounded),
+          AccountType.savings => const SleekPillOption(value: AccountType.savings, label: 'Savings', icon: Icons.savings_rounded),
+        };
+      }).toList();
 
   @override
   void initState() {
@@ -7217,89 +7170,165 @@ class _AccountEditorState extends State<AccountEditor> {
       if (type == AccountType.savings) {
         name.text = 'Savings Account';
         icon = 'savings';
-        color = '#A6E3A1';
+        color = '#83D6A9';
       }
     }
   }
 
   @override
+  void dispose() {
+    name.dispose();
+    amount.dispose();
+    creditLimit.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(AppController state) async {
+    if (name.text.trim().isEmpty) {
+      showSnack(context, 'Enter an account name');
+      return;
+    }
+    final now = DateTime.now();
+    final account = Account(
+      id: widget.account?.id ?? _uuid.v4(),
+      name: name.text.trim(),
+      type: type,
+      iconName: icon,
+      iconColor: color,
+      amount: double.tryParse(amount.text) ?? 0,
+      creditLimit: type == AccountType.credit ? (double.tryParse(creditLimit.text) ?? 0) : 0,
+      sequence: widget.account?.sequence ?? state.accounts.length,
+      createdOn: widget.account?.createdOn ?? now,
+      updatedOn: now,
+    );
+    await state.saveAccount(account);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 18),
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Account name')),
-            const SizedBox(height: 12),
-            SleekPillSelector<AccountType>(
-              options: _typeOptions,
-              selected: type,
-              onChanged: (v) => setState(() {
-                type = v;
-                if (v == AccountType.savings && icon == 'wallet') {
-                  icon = 'savings';
-                  color = '#A6E3A1';
-                }
-              }),
-            ),
-            const SizedBox(height: 12),
-            TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Balance')),
-            if (type == AccountType.savings) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Changing this balance updates total accounts only. It does not create income, expense, or transaction history.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+    final scheme = Theme.of(context).colorScheme;
+    final typeLabel = switch (type) {
+      AccountType.regular => 'Everyday money',
+      AccountType.credit => 'Credit line',
+      AccountType.savings => 'Savings',
+    };
+    return SingleChildScrollView(
+      physics: optimizedScrollPhysics(context),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.account == null ? 'New account' : 'Account details', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.7)),
+                    const SizedBox(height: 3),
+                    Text(typeLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
+              PixelRoundAction(icon: Icons.close_rounded, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
             ],
-            if (type == AccountType.credit) ...[
-              const SizedBox(height: 12),
-              TextField(controller: creditLimit, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Credit limit')),
-            ],
-            const SizedBox(height: 12),
-            IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
-            const SizedBox(height: 18),
-            Row(
+          ),
+          const SizedBox(height: 16),
+          PixelFinanceSurface(
+            radius: 26,
+            color: colorFromHex(color, fallback: Theme.of(context).colorScheme.primary).withOpacity(Theme.of(context).brightness == Brightness.dark ? .16 : .20),
+            padding: const EdgeInsets.all(18),
+            child: Row(
               children: [
-                if (widget.account != null)
-                  Expanded(child: OutlinedButton(onPressed: () async { await state.deleteAccount(widget.account!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
-                if (widget.account != null) const SizedBox(width: 12),
+                iconBubble(context, icon, color, size: 58),
+                const SizedBox(width: 14),
                 Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: () async {
-                      if (name.text.trim().isEmpty) return;
-                      final now = DateTime.now();
-                      final a = Account(
-                        id: widget.account?.id ?? _uuid.v4(),
-                        name: name.text.trim(),
-                        type: type,
-                        iconName: icon,
-                        iconColor: color,
-                        amount: double.tryParse(amount.text) ?? 0,
-                        creditLimit: type == AccountType.credit ? (double.tryParse(creditLimit.text) ?? 0) : 0,
-                        sequence: widget.account?.sequence ?? state.accounts.length,
-                        createdOn: widget.account?.createdOn ?? now,
-                        updatedOn: now,
-                      );
-                      await state.saveAccount(a);
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: const Text('Save'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name.text.trim().isEmpty ? 'Your account' : name.text.trim(), maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 3),
+                      Text(typeLabel, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                    ],
                   ),
                 ),
               ],
-            )
+            ),
+          ),
+          const SectionHeader('Type'),
+          SleekPillSelector<AccountType>(
+            options: _typeOptions,
+            selected: type,
+            onChanged: (value) => setState(() {
+              type = value;
+              if (value == AccountType.savings && icon == 'wallet') {
+                icon = 'savings';
+                color = '#83D6A9';
+              }
+            }),
+          ),
+          const SectionHeader('Details'),
+          PixelFinanceSurface(
+            radius: 22,
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                TextField(
+                  controller: name,
+                  onChanged: (_) => setState(() {}),
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(labelText: 'Account name', prefixIcon: Icon(Icons.edit_rounded)),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: amount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(labelText: type == AccountType.credit ? 'Current balance' : 'Balance', prefixIcon: const Icon(Icons.payments_rounded)),
+                ),
+                if (type == AccountType.credit) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: creditLimit,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Credit limit', prefixIcon: Icon(Icons.credit_score_rounded)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (type == AccountType.savings) ...[
+            const SizedBox(height: 8),
+            Text('Changing a savings balance does not create income or expense history.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
           ],
-        ),
+          const SectionHeader('Look'),
+          IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              if (widget.account != null) ...[
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await state.deleteAccount(widget.account!.id);
+                    if (mounted) Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Delete'),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: FilledButton.icon(onPressed: () => _save(state), icon: const Icon(Icons.check_rounded), label: const Text('Save account'))),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
+
+
 
 
 class IconColorPicker extends StatelessWidget {
@@ -7347,17 +7376,8 @@ class IconColorPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 10),
-          child: Text(
-            'APPEARANCE',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  letterSpacing: 3,
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurface.withOpacity(.82),
-                ),
-          ),
-        ),
+        Text('Choose a color and icon.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 9),
         Row(
           children: [
             Expanded(
@@ -7416,7 +7436,7 @@ class _AppearanceButton extends StatelessWidget {
                   child: Text(
                     label,
                     maxLines: 1,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                   ),
                 ),
               ),
@@ -7479,7 +7499,7 @@ class ColorSelectionPage extends StatelessWidget {
   }
 
   Future<String?> _showCustomColorOptions(BuildContext context) async {
-    final initial = _normalizeColor(selectedColor).isEmpty ? '#78D8E8' : _normalizeColor(selectedColor);
+    final initial = _normalizeColor(selectedColor).isEmpty ? '#F0A6C5' : _normalizeColor(selectedColor);
 
     final choice = await showKoinlyPopup<String>(
       context,
@@ -7488,7 +7508,7 @@ class ColorSelectionPage extends StatelessWidget {
       child: Builder(
         builder: (dialogContext) {
           final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-          final handleColor = dark ? const Color(0xFF4C444C) : const Color(0xFFCFC3CD);
+          final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
@@ -7502,7 +7522,7 @@ class ColorSelectionPage extends StatelessWidget {
                 const SizedBox(height: 18),
                 Text(
                   'Custom color',
-                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -7617,7 +7637,7 @@ class ColorSelectionPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 2),
                             Text(
                               customSelected ? selectedNormalized : 'Color picker or pick from photo',
@@ -7645,7 +7665,7 @@ class ColorSelectionPage extends StatelessWidget {
                   customCard,
                 SizedBox(height: desktop ? 24 : 18),
                 if (desktop) ...[
-                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 4),
                   Text(
                     'Choose a ready-made accent color.',
@@ -7726,7 +7746,7 @@ class _CustomColorOptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
@@ -8090,7 +8110,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 3),
                         Text('Selected custom color', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
@@ -8118,7 +8138,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                       borderRadius: BorderRadius.circular(18),
                       child: Container(
                         height: 300,
-                        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+                        color: Theme.of(context).brightness == Brightness.dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -8254,7 +8274,7 @@ class _ValueSlider extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Brightness', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600, color: kSleekMuted)),
+        Text('Brightness', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, color: kSleekMuted)),
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
@@ -8377,16 +8397,28 @@ class CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    final scheme = Theme.of(context).colorScheme;
+    return PixelFinanceSurface(
+      onTap: onTap,
       radius: 18,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, category.iconName, category.iconColor),
-        title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(enumName(category.type)),
-        trailing: trailing,
-        onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      child: Row(
+        children: [
+          iconBubble(context, category.iconName, category.iconColor, size: 42),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(enumName(category.type), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ],
       ),
     );
   }
@@ -8440,7 +8472,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
@@ -8488,17 +8520,51 @@ class TransactionListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final txs = state.filteredTransactions();
+    final summary = state.summaryFor(txs);
+    final range = state.activeRange();
     return PageScaffold(
-      title: 'Transaction',
-      subtitle: '${txs.length} records • ${state.activeRange().label}',
+      title: 'Activity',
+      subtitle: '${txs.length} records • ${range.label}',
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
-        IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded)),
+        PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Date range', onPressed: () => showDateRangeSheet(context)),
+        const SizedBox(width: 6),
+        PixelRoundAction(icon: Icons.tune_rounded, tooltip: 'Filters', onPressed: () => showFilterSheet(context)),
       ],
       child: ResponsiveListContent(
-        header: [ActiveFilterChips(state: state)],
+        desktopMaxWidth: 980,
+        header: [
+          Row(
+            children: [
+              Expanded(child: PixelMetricBlock(label: 'In', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
+              const SizedBox(width: 8),
+              Expanded(child: PixelMetricBlock(label: 'Out', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          PixelFinanceSurface(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            radius: 18,
+            child: Row(
+              children: [
+                Icon(Icons.balance_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 9),
+                Expanded(child: Text('Net for ${range.label}', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
+                Text(state.format(summary.balance), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          ActiveFilterChips(state: state),
+          if (txs.isNotEmpty) const SectionHeader('Transactions'),
+        ],
         itemCount: txs.length,
-        empty: EmptyCard(icon: Icons.receipt_long_rounded, title: 'No transactions', body: 'Create a transaction or change filters.', action: () => showTransactionEditor(context), actionLabel: 'Add transaction'),
+        empty: EmptyCard(
+          icon: Icons.receipt_long_rounded,
+          title: 'No activity yet',
+          body: 'Add a transaction or widen the active filters.',
+          action: () => showTransactionEditor(context),
+          actionLabel: 'Add transaction',
+        ),
         itemBuilder: (context, index) => TransactionTile(tx: txs[index]),
       ),
     );
@@ -8534,11 +8600,12 @@ class TransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     final category = state.categoryOf(tx.categoryId);
     final account = state.accountOf(tx.fromAccountId);
     final toAccount = tx.toAccountId == null ? null : state.accountOf(tx.toAccountId!);
-    final amountPrefix = tx.type == MoneyTransactionType.expense ? '-' : tx.type == MoneyTransactionType.income ? '+' : '';
-    final amountColor = tx.type == MoneyTransactionType.expense ? kSleekExpense : tx.type == MoneyTransactionType.income ? kSleekIncome : kSleekAccent;
+    final amountPrefix = tx.type == MoneyTransactionType.expense ? '−' : tx.type == MoneyTransactionType.income ? '+' : '';
+    final amountColor = tx.type == MoneyTransactionType.expense ? kSleekExpense : tx.type == MoneyTransactionType.income ? kSleekIncome : scheme.secondary;
     final savedTitle = tx.title.trim();
     final title = tx.type == MoneyTransactionType.transfer
         ? '${account?.name ?? ''} → ${toAccount?.name ?? ''}'
@@ -8550,26 +8617,30 @@ class TransactionTile extends StatelessWidget {
       transactionDateTimeLabel(tx),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+    return PixelFinanceSurface(
+      onTap: () => showTransactionEditor(context, transaction: tx),
       radius: 18,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: tx.type == MoneyTransactionType.transfer
-            ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          subtitleParts.join(' • '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
-        ),
-        trailing: Text(
-          '$amountPrefix${state.format(tx.amount)}',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: amountColor),
-        ),
-        onTap: () => showTransactionEditor(context, transaction: tx),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      child: Row(
+        children: [
+          tx.type == MoneyTransactionType.transfer
+              ? iconBubble(context, 'exchange', '#D6B9FF', size: 42)
+              : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#F0A6C5', size: 42),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(subtitleParts.join(' • '), maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text('$amountPrefix${state.format(tx.amount)}', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor)),
+        ],
       ),
     );
   }
@@ -8648,9 +8719,71 @@ class _TransactionEditorState extends State<TransactionEditor> {
     super.dispose();
   }
 
+  Color _accent() => switch (type) {
+        MoneyTransactionType.income => kSleekIncome,
+        MoneyTransactionType.expense => kSleekExpense,
+        MoneyTransactionType.transfer => KoinlyPixelTokens.lavender,
+      };
+
+  void _changeType(MoneyTransactionType value, AppController state) {
+    setState(() {
+      type = value;
+      if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
+        final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
+        final categories = state.categories.where((c) => c.type == targetType).toList();
+        categoryId = type == MoneyTransactionType.income
+            ? state.defaultIncomeCategoryId ?? categories.firstOrNull?.id
+            : state.defaultExpenseCategoryId ?? categories.firstOrNull?.id;
+        final regular = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
+        if (fromAccountId == null || regular.where((a) => a.id == fromAccountId).firstOrNull == null) {
+          fromAccountId = state.defaultAccountId ?? regular.firstOrNull?.id;
+        }
+        toAccountId = null;
+      } else {
+        categoryId = '';
+        fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
+        if (toAccountId == fromAccountId) toAccountId = null;
+      }
+    });
+  }
+
+  Future<void> _save(AppController state) async {
+    final value = double.tryParse(amount.text) ?? 0;
+    if (value <= 0) return showSnack(context, 'Enter a valid amount');
+    final transactionTitle = title.text.trim();
+    if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
+    if (fromAccountId == null) return showSnack(context, 'Select an account');
+    if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
+    if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
+    final tx = MoneyTransaction(
+      id: widget.transaction?.id ?? _uuid.v4(),
+      type: type,
+      amount: value,
+      title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
+      notes: notes.text.trim(),
+      categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
+      fromAccountId: fromAccountId!,
+      toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
+      imagePath: widget.transaction?.imagePath ?? '',
+      excludeFromReports: widget.transaction?.excludeFromReports ?? false,
+      linkedEntityType: widget.transaction?.linkedEntityType,
+      linkedEntityId: widget.transaction?.linkedEntityId,
+      createdOn: selectedDate,
+      endOn: isSameCalendarDay(selectedDate, selectedEndDate) ? null : selectedEndDate,
+      updatedOn: DateTime.now(),
+    );
+    if (widget.transaction == null) {
+      await state.addTransaction(tx);
+    } else {
+      await state.updateTransaction(tx);
+    }
+    if (mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     final regularAccountOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
     final transferFromOptions = state.accounts.where((a) => a.id != toAccountId).toList();
     final transferToOptions = state.accounts.where((a) => a.id != fromAccountId).toList();
@@ -8659,204 +8792,189 @@ class _TransactionEditorState extends State<TransactionEditor> {
     final toAccount = state.accounts.where((a) => a.id == toAccountId).firstOrNull;
     final relevantCategories = state.categories.where((c) => c.type == (type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense)).toList();
     if (type == MoneyTransactionType.transfer) categoryId = '';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-            SleekPillSelector<MoneyTransactionType>(
-              options: const [
-                SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
-                SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
-                SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
-              ],
-              selected: type,
-              onChanged: (v) => setState(() {
-                type = v;
-                if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
-                  final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
-                  final newCategories = state.categories.where((c) => c.type == targetType).toList();
-                  categoryId = type == MoneyTransactionType.income
-                      ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
-                      : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
-                  final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
-                  if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
-                    fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
-                  }
-                  toAccountId = null;
-                } else {
-                  categoryId = '';
-                  fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
-                  if (toAccountId == fromAccountId) toAccountId = null;
-                }
-              }),
-            ),
-            const SizedBox(height: 12),
-            if (type != MoneyTransactionType.transfer) ...[
-              TextField(
-                controller: title,
-                textInputAction: TextInputAction.next,
-                textCapitalization: TextCapitalization.sentences,
-                maxLength: 100,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.title_rounded),
-                  labelText: 'Title',
-                  hintText: 'Example: Lunch, Salary, Groceries',
-                  counterText: '',
+    final accent = _accent();
+
+    return SingleChildScrollView(
+      physics: optimizedScrollPhysics(context),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(widget.transaction == null ? 'New activity' : 'Edit activity', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.7)),
+                    const SizedBox(height: 3),
+                    Text(enumName(type), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: accent, fontWeight: FontWeight.w800)),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
+              PixelRoundAction(icon: Icons.close_rounded, tooltip: 'Close', onPressed: () => Navigator.pop(context)),
             ],
-            TextField(
-              controller: amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              textInputAction: TextInputAction.next,
-              textAlign: TextAlign.end,
-              inputFormatters: [
-                TextInputFormatter.withFunction((oldValue, newValue) {
-                  final text = newValue.text;
-                  if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
-                  return oldValue;
-                }),
+          ),
+          const SizedBox(height: 14),
+          SleekPillSelector<MoneyTransactionType>(
+            options: const [
+              SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
+              SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
+              SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
+            ],
+            selected: type,
+            onChanged: (value) => _changeType(value, state),
+          ),
+          const SizedBox(height: 12),
+          PixelFinanceSurface(
+            radius: 27,
+            color: accent.withOpacity(Theme.of(context).brightness == Brightness.dark ? .13 : .17),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (type != MoneyTransactionType.transfer) ...[
+                  TextField(
+                    controller: title,
+                    textInputAction: TextInputAction.next,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLength: 100,
+                    decoration: const InputDecoration(labelText: 'Title', hintText: 'Lunch, salary, groceries…', counterText: ''),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                TextField(
+                  controller: amount,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.next,
+                  textAlign: TextAlign.start,
+                  inputFormatters: [
+                    TextInputFormatter.withFunction((oldValue, newValue) {
+                      final text = newValue.text;
+                      if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
+                      return oldValue;
+                    }),
+                  ],
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2),
+                  decoration: InputDecoration(labelText: 'Amount', prefixText: '${state.currencySymbol} '),
+                ),
               ],
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
             ),
-            const SizedBox(height: 12),
-            if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
-              AppleSelectionField(
-                label: 'Category',
-                option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
-                emptyText: 'Choose category',
-                onTap: () async {
-                  final selected = await showAppleWheelSelectionSheet(
-                    context,
-                    title: 'Choose Category',
-                    selectedId: categoryId,
-                    options: relevantCategories.map(optionFromCategory).toList(),
-                  );
-                  if (selected != null) setState(() => categoryId = selected);
-                },
-              ),
-            if (widget.lockedCategory != null)
-              ExpressiveCard(padding: const EdgeInsets.all(12), child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w600)))])),
-            const SizedBox(height: 12),
+          ),
+          const SectionHeader('Where'),
+          if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
             AppleSelectionField(
-              label: type == MoneyTransactionType.transfer ? 'From account' : 'Account',
-              option: fromAccount == null ? null : optionFromAccount(fromAccount, state),
-              emptyText: 'Choose account',
+              label: 'Category',
+              option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
+              emptyText: 'Choose category',
               onTap: () async {
-                final selected = await showAppleWheelSelectionSheet(
-                  context,
-                  title: type == MoneyTransactionType.transfer ? 'Choose From Account' : 'Choose Account',
-                  selectedId: fromAccountId,
-                  options: (type == MoneyTransactionType.transfer ? transferFromOptions : accountOptions).map((a) => optionFromAccount(a, state)).toList(),
-                );
-                if (selected != null) {
-                  setState(() {
-                    fromAccountId = selected;
-                    if (toAccountId == selected) toAccountId = null;
-                  });
-                }
+                final selected = await showAppleWheelSelectionSheet(context, title: 'Choose category', selectedId: categoryId, options: relevantCategories.map(optionFromCategory).toList());
+                if (selected != null) setState(() => categoryId = selected);
               },
             ),
-            if (type == MoneyTransactionType.transfer) ...[
-              const SizedBox(height: 12),
-              AppleSelectionField(
-                label: 'To account',
-                option: toAccount == null ? null : optionFromAccount(toAccount, state),
-                emptyText: 'Choose destination account',
-                onTap: () async {
-                  final selected = await showAppleWheelSelectionSheet(
-                    context,
-                    title: 'Choose To Account',
-                    selectedId: toAccountId,
-                    options: transferToOptions.map((a) => optionFromAccount(a, state)).toList(),
-                  );
-                  if (selected != null) {
+          if (widget.lockedCategory != null)
+            PixelFinanceSurface(
+              padding: const EdgeInsets.all(12),
+              child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w800)))]),
+            ),
+          const SizedBox(height: 9),
+          AppleSelectionField(
+            label: type == MoneyTransactionType.transfer ? 'From account' : 'Account',
+            option: fromAccount == null ? null : optionFromAccount(fromAccount, state),
+            emptyText: 'Choose account',
+            onTap: () async {
+              final selected = await showAppleWheelSelectionSheet(
+                context,
+                title: type == MoneyTransactionType.transfer ? 'From account' : 'Choose account',
+                selectedId: fromAccountId,
+                options: (type == MoneyTransactionType.transfer ? transferFromOptions : accountOptions).map((a) => optionFromAccount(a, state)).toList(),
+              );
+              if (selected != null) setState(() { fromAccountId = selected; if (toAccountId == selected) toAccountId = null; });
+            },
+          ),
+          if (type == MoneyTransactionType.transfer) ...[
+            const SizedBox(height: 9),
+            AppleSelectionField(
+              label: 'To account',
+              option: toAccount == null ? null : optionFromAccount(toAccount, state),
+              emptyText: 'Choose destination',
+              onTap: () async {
+                final selected = await showAppleWheelSelectionSheet(context, title: 'To account', selectedId: toAccountId, options: transferToOptions.map((a) => optionFromAccount(a, state)).toList());
+                if (selected != null) setState(() { toAccountId = selected; if (fromAccountId == selected) fromAccountId = null; });
+              },
+            ),
+          ],
+          const SectionHeader('When'),
+          Row(
+            children: [
+              Expanded(
+                child: PixelFinanceSurface(
+                  onTap: () async {
+                    final range = await pickDateRange(context, selectedDate, selectedEndDate);
+                    if (range == null) return;
                     setState(() {
-                      toAccountId = selected;
-                      if (fromAccountId == selected) fromAccountId = null;
+                      selectedDate = DateTime(range.start.year, range.start.month, range.start.day, selectedDate.hour, selectedDate.minute);
+                      selectedEndDate = DateTime(range.end.year, range.end.month, range.end.day, selectedDate.hour, selectedDate.minute);
                     });
-                  }
-                },
+                  },
+                  radius: 18,
+                  padding: const EdgeInsets.all(13),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.calendar_month_rounded, color: scheme.primary, size: 20),
+                    const SizedBox(height: 8),
+                    Text(transactionDateSpanLabel(selectedDate, selectedEndDate), maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  ]),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: PixelFinanceSurface(
+                  onTap: () async {
+                    final time = await pickTime(context, TimeOfDay.fromDateTime(selectedDate));
+                    if (time == null) return;
+                    setState(() {
+                      selectedDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, time.hour, time.minute);
+                      selectedEndDate = DateTime(selectedEndDate.year, selectedEndDate.month, selectedEndDate.day, time.hour, time.minute);
+                    });
+                  },
+                  radius: 18,
+                  padding: const EdgeInsets.all(13),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.schedule_rounded, color: scheme.secondary, size: 20),
+                    const SizedBox(height: 8),
+                    Text(DateFormat('h:mm a').format(selectedDate), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  ]),
+                ),
               ),
             ],
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final range = await pickDateRange(context, selectedDate, selectedEndDate);
-                if (range == null) return;
-                setState(() {
-                  selectedDate = DateTime(range.start.year, range.start.month, range.start.day, selectedDate.hour, selectedDate.minute);
-                  selectedEndDate = DateTime(range.end.year, range.end.month, range.end.day, selectedDate.hour, selectedDate.minute);
-                });
-              },
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(transactionDateSpanLabel(selectedDate, selectedEndDate)),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final time = await pickTime(context, TimeOfDay.fromDateTime(selectedDate));
-                if (time == null) return;
-                setState(() {
-                  selectedDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, time.hour, time.minute);
-                  selectedEndDate = DateTime(selectedEndDate.year, selectedEndDate.month, selectedEndDate.day, time.hour, time.minute);
-                });
-              },
-              icon: const Icon(Icons.schedule_rounded),
-              label: Text(DateFormat('h:mm a').format(selectedDate)),
-            ),
-            const SizedBox(height: 12),
-            TextField(controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
-            const SizedBox(height: 18),
-            Row(children: [
-              if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
-              if (widget.transaction != null) const SizedBox(width: 12),
-              Expanded(flex: 2, child: FilledButton(onPressed: () async {
-                final value = double.tryParse(amount.text) ?? 0;
-                if (value <= 0) return showSnack(context, 'Enter a valid amount');
-                final transactionTitle = title.text.trim();
-                if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
-                if (fromAccountId == null) return showSnack(context, 'Select an account');
-                if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
-                if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
-                final tx = MoneyTransaction(
-                  id: widget.transaction?.id ?? _uuid.v4(),
-                  type: type,
-                  amount: value,
-                  title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
-                  notes: notes.text.trim(),
-                  categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
-                  fromAccountId: fromAccountId!,
-                  toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
-                  imagePath: widget.transaction?.imagePath ?? '',
-                  excludeFromReports: widget.transaction?.excludeFromReports ?? false,
-                  linkedEntityType: widget.transaction?.linkedEntityType,
-                  linkedEntityId: widget.transaction?.linkedEntityId,
-                  createdOn: selectedDate,
-                  endOn: isSameCalendarDay(selectedDate, selectedEndDate) ? null : selectedEndDate,
-                  updatedOn: DateTime.now(),
-                );
-                if (widget.transaction == null) {
-                  await state.addTransaction(tx);
-                } else {
-                  await state.updateTransaction(tx);
-                }
-                if (context.mounted) Navigator.pop(context);
-              }, child: const Text('Save'))),
-            ]),
-          ],
-        ),
+          ),
+          const SectionHeader('Optional'),
+          TextField(controller: notes, minLines: 2, maxLines: 4, decoration: const InputDecoration(labelText: 'Notes', alignLabelWithHint: true)),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              if (widget.transaction != null) ...[
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await state.deleteTransaction(widget.transaction!.id);
+                    if (mounted) Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.delete_outline_rounded),
+                  label: const Text('Delete'),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(child: FilledButton.icon(onPressed: () => _save(state), icon: const Icon(Icons.check_rounded), label: const Text('Save'))),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
+
+
 
 Future<void> showDateRangeSheet(BuildContext context) async {
   final state = context.read<AppController>();
@@ -8976,7 +9094,7 @@ class _FilterSheetState extends State<FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SectionHeader('Accounts'),
             Wrap(spacing: 8, runSpacing: 8, children: state.accounts.map((a) => FilterChip(label: Text(a.name), selected: accounts.contains(a.id), onSelected: (v) => setState(() => v ? accounts.add(a.id) : accounts.remove(a.id)))).toList()),
             const SectionHeader('Categories'),
@@ -9002,7 +9120,6 @@ class _FilterSheetState extends State<FilterSheet> {
 
 class AnalysisScreen extends StatefulWidget {
   const AnalysisScreen({super.key});
-
   @override
   State<AnalysisScreen> createState() => _AnalysisScreenState();
 }
@@ -9014,8 +9131,8 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final range = state.activeRange();
     final txs = state.filteredTransactions();
     final summary = state.summaryFor(txs);
-    final fallbackToday = DateTime.now();
-    final fallbackDay = DateTime(fallbackToday.year, fallbackToday.month, fallbackToday.day);
+    final now = DateTime.now();
+    final fallbackDay = DateTime(now.year, now.month, now.day);
     DateTime chartStart;
     DateTime chartEnd;
     if (range.start != null && range.end != null) {
@@ -9034,6 +9151,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       chartStart = fallbackDay;
       chartEnd = fallbackDay.add(const Duration(days: 1));
     }
+
     final daily = <DateTime, Summary>{};
     for (final tx in txs) {
       if (!tx.countsAsIncome && !tx.countsAsExpense) continue;
@@ -9044,7 +9162,6 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         expense: old.expense + (tx.countsAsExpense ? tx.amount : 0),
       );
     }
-
     final totalDays = chartEnd.difference(chartStart).inDays;
     List<DateTime> days;
     if (totalDays > 0 && totalDays <= 62) {
@@ -9060,27 +9177,47 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final avgDivisor = math.max(1, days.length);
 
     return PageScaffold(
-      title: 'Analysis',
+      title: 'Insights',
       subtitle: range.label,
-      actions: [IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded))],
+      actions: [
+        PixelRoundAction(icon: Icons.tune_rounded, tooltip: 'Filters', onPressed: () => showFilterSheet(context)),
+      ],
       child: ResponsiveContent(
+        desktopMaxWidth: 1120,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(children: [
-              Expanded(child: MiniMetric('Income', state.format(summary.income), Icons.south_west_rounded)),
-              const SizedBox(width: 10),
-              Expanded(child: MiniMetric('Expense', state.format(summary.expense), Icons.north_east_rounded)),
-            ]),
-            const SizedBox(height: 10),
-            MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 620) {
+                  return Column(
+                    children: [
+                      Row(children: [
+                        Expanded(child: PixelMetricBlock(label: 'Income', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
+                        const SizedBox(width: 8),
+                        Expanded(child: PixelMetricBlock(label: 'Expense', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
+                      ]),
+                      const SizedBox(height: 8),
+                      PixelMetricBlock(label: 'Net', value: state.format(summary.balance), icon: Icons.balance_rounded, accent: Theme.of(context).colorScheme.secondary),
+                    ],
+                  );
+                }
+                return Row(children: [
+                  Expanded(child: PixelMetricBlock(label: 'Income', value: state.format(summary.income), icon: Icons.south_west_rounded, accent: kSleekIncome)),
+                  const SizedBox(width: 8),
+                  Expanded(child: PixelMetricBlock(label: 'Expense', value: state.format(summary.expense), icon: Icons.north_east_rounded, accent: kSleekExpense)),
+                  const SizedBox(width: 8),
+                  Expanded(child: PixelMetricBlock(label: 'Net', value: state.format(summary.balance), icon: Icons.balance_rounded, accent: Theme.of(context).colorScheme.secondary)),
+                ]);
+              },
+            ),
             const SectionHeader('Cash flow'),
             RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
-            const SectionHeader('Averages'),
+            const SectionHeader('Daily pace'),
             Row(children: [
-              Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
-              const SizedBox(width: 10),
-              Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
+              Expanded(child: PixelMetricBlock(label: 'Income / day', value: state.format(summary.income / avgDivisor), icon: Icons.trending_up_rounded, accent: kSleekIncome)),
+              const SizedBox(width: 8),
+              Expanded(child: PixelMetricBlock(label: 'Expense / day', value: state.format(summary.expense / avgDivisor), icon: Icons.trending_down_rounded, accent: kSleekExpense)),
             ]),
           ],
         ),
@@ -9503,7 +9640,7 @@ class FinancialHealthPeriodCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                           Text(period == FinancialHealthPeriod.monthly ? 'Tap to choose another month' : 'Tap to choose another year', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                         ],
                       ),
@@ -9601,7 +9738,7 @@ class FinancialHealthStatusCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                     HealthStatusPill(label: summary.periodLabel, color: color),
                     const HealthStatusPill(label: 'Savings transfers are internal', color: kSleekAccent),
                   ],
@@ -9628,7 +9765,7 @@ class HealthStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: color.withOpacity(.12), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(.24))),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700)),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w900)),
     );
   }
 }
@@ -9757,7 +9894,7 @@ class HealthBarChartCard extends StatelessWidget {
             children: [
               Icon(icon, color: kSleekAccent),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
             ],
           ),
           const SizedBox(height: 14),
@@ -9785,9 +9922,9 @@ class HealthBarRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text(data.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600))),
+            Expanded(child: Text(data.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
             const SizedBox(width: 8),
-            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
           ],
         ),
         const SizedBox(height: 6),
@@ -9822,7 +9959,7 @@ class BudgetHealthCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -9859,7 +9996,7 @@ class BillStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -9890,7 +10027,7 @@ class OverspendingCategoriesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           ...summary.overspentItems.map((item) => Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -9906,8 +10043,8 @@ class OverspendingCategoriesCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
-                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w700)),
+                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
+                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w900)),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -9952,7 +10089,7 @@ class YearlyComparisonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -9986,7 +10123,7 @@ class YearlyBreakdownCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           ...summary.monthlyBreakdowns.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -10020,9 +10157,9 @@ class MonthBreakdownTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700))),
+              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
               Expanded(child: Text('Income ${state.format(item.income)} • Expense ${state.format(item.expense)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700))),
-              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w700)),
+              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w900)),
             ],
           ),
           const SizedBox(height: 8),
@@ -10051,17 +10188,10 @@ class MonthBreakdownTile extends StatelessWidget {
 enum _TrendView { both, income, expense }
 
 class AnalysisTrendChart extends StatefulWidget {
-  const AnalysisTrendChart({
-    super.key,
-    required this.days,
-    required this.daily,
-    required this.rangeLabel,
-  });
-
+  const AnalysisTrendChart({super.key, required this.days, required this.daily, required this.rangeLabel});
   final List<DateTime> days;
   final Map<DateTime, Summary> daily;
   final String rangeLabel;
-
   @override
   State<AnalysisTrendChart> createState() => _AnalysisTrendChartState();
 }
@@ -10071,34 +10201,28 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
 
   List<FlSpot> _spotsFor(bool income) {
     if (widget.days.isEmpty) return const [FlSpot(0, 0), FlSpot(1, 0)];
-    final spots = <FlSpot>[];
+    final result = <FlSpot>[];
     for (var i = 0; i < widget.days.length; i++) {
       final summary = widget.daily[widget.days[i]] ?? const Summary(income: 0, expense: 0);
-      spots.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
+      result.add(FlSpot(i.toDouble(), income ? summary.income : summary.expense));
     }
-    if (spots.length == 1) spots.add(FlSpot(1, spots.first.y));
-    return spots;
+    if (result.length == 1) result.add(FlSpot(1, result.first.y));
+    return result;
   }
 
   double _niceMaxY(Iterable<double> values) {
     final highest = values.fold<double>(0, (current, value) => math.max(current, value).toDouble());
     if (highest <= 0) return 100;
-    final padded = highest * 1.18;
+    final padded = highest * 1.15;
     final magnitude = math.pow(10, (math.log(padded) / math.ln10).floor()).toDouble();
     final normalized = padded / magnitude;
-    final rounded = normalized <= 2
-        ? 2
-        : normalized <= 5
-            ? 5
-            : 10;
+    final rounded = normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
     return rounded * magnitude;
   }
 
   String _compactCurrency(AppController state, double value) {
     if (state.amountsHidden) {
-      return state.currencyPosition == CurrencyPosition.prefix
-          ? '${state.currencySymbol}••••'
-          : '••••${state.currencySymbol}';
+      return state.currencyPosition == CurrencyPosition.prefix ? '${state.currencySymbol}••••' : '••••${state.currencySymbol}';
     }
     final absolute = value.abs();
     String number;
@@ -10109,67 +10233,23 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     } else {
       number = absolute.toStringAsFixed(absolute % 1 == 0 ? 0 : 1);
     }
-    final sign = value < 0 ? '-' : '';
-    return state.currencyPosition == CurrencyPosition.prefix
-        ? '$sign${state.currencySymbol}$number'
-        : '$sign$number${state.currencySymbol}';
+    final sign = value < 0 ? '−' : '';
+    return state.currencyPosition == CurrencyPosition.prefix ? '$sign${state.currencySymbol}$number' : '$sign$number${state.currencySymbol}';
   }
 
   Set<int> _bottomLabelIndexes() {
     final count = widget.days.length;
     if (count <= 1) return {0};
     if (count <= 4) return {for (var i = 0; i < count; i++) i};
-    return {
-      0,
-      ((count - 1) / 3).round(),
-      (((count - 1) * 2) / 3).round(),
-      count - 1,
-    };
+    return {0, ((count - 1) / 3).round(), (((count - 1) * 2) / 3).round(), count - 1};
   }
 
   String _dateLabel(DateTime day) {
     if (widget.days.length <= 1) return DateFormat('MMM d').format(day);
-    final first = widget.days.first;
-    final last = widget.days.last;
-    final span = last.difference(first).inDays.abs();
+    final span = widget.days.last.difference(widget.days.first).inDays.abs();
     if (span > 365) return DateFormat('MMM yy').format(day);
     if (span > 62) return DateFormat('MMM').format(day);
     return DateFormat('MMM d').format(day);
-  }
-
-  Widget _leftTitle(BuildContext context, double value, TitleMeta meta, double maxY) {
-    final interval = maxY / 4;
-    if (interval <= 0) return const SizedBox.shrink();
-    final slot = (value / interval).round();
-    if ((value - slot * interval).abs() > .01) return const SizedBox.shrink();
-    final state = context.read<AppController>();
-    return Text(
-      _compactCurrency(state, value),
-      maxLines: 1,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
-            fontWeight: FontWeight.w600,
-          ),
-    );
-  }
-
-  Widget _bottomTitle(BuildContext context, double value, TitleMeta meta) {
-    if (widget.days.isEmpty) return const SizedBox.shrink();
-    final index = value.round();
-    if (index < 0 || index >= widget.days.length || !_bottomLabelIndexes().contains(index)) {
-      return const SizedBox.shrink();
-    }
-    return SideTitleWidget(
-      axisSide: meta.axisSide,
-      space: 10,
-      child: Text(
-        _dateLabel(widget.days[index]),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
-              fontWeight: FontWeight.w600,
-            ),
-      ),
-    );
   }
 
   @override
@@ -10187,136 +10267,69 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     ];
     final maxY = _niceMaxY(visibleValues);
     final maxX = math.max(1.0, (widget.days.length - 1).toDouble());
-    final totalIncome = widget.days.fold<double>(
-      0,
-      (sum, day) => sum + (widget.daily[day]?.income ?? 0),
-    );
-    final totalExpense = widget.days.fold<double>(
-      0,
-      (sum, day) => sum + (widget.daily[day]?.expense ?? 0),
-    );
-    final net = totalIncome - totalExpense;
+    final totalIncome = widget.days.fold<double>(0, (sum, day) => sum + (widget.daily[day]?.income ?? 0));
+    final totalExpense = widget.days.fold<double>(0, (sum, day) => sum + (widget.daily[day]?.expense ?? 0));
     final hasData = totalIncome != 0 || totalExpense != 0;
-    final gridColor = scheme.outlineVariant.withOpacity(dark ? .16 : .42);
-    final panelColor = dark
-        ? scheme.surfaceContainerHigh.withOpacity(.46)
-        : scheme.surface.withOpacity(.94);
 
     final bars = <LineChartBarData>[
       if (showIncome)
         LineChartBarData(
           spots: incomeSpots,
-          isCurved: widget.days.length > 2,
+          isCurved: widget.days.length > 2 && widget.days.length <= 32,
           preventCurveOverShooting: true,
-          barWidth: 3.2,
+          barWidth: 3,
           isStrokeCapRound: true,
           color: kSleekIncome,
-          dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: _view == _TrendView.income,
-            color: kSleekIncome.withOpacity(dark ? .10 : .08),
-          ),
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(show: _view == _TrendView.income, color: kSleekIncome.withOpacity(.08)),
         ),
       if (showExpense)
         LineChartBarData(
           spots: expenseSpots,
-          isCurved: widget.days.length > 2,
+          isCurved: widget.days.length > 2 && widget.days.length <= 32,
           preventCurveOverShooting: true,
-          barWidth: 3.2,
+          barWidth: 3,
           isStrokeCapRound: true,
           color: kSleekExpense,
-          dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: _view == _TrendView.expense,
-            color: kSleekExpense.withOpacity(dark ? .10 : .08),
-          ),
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(show: _view == _TrendView.expense, color: kSleekExpense.withOpacity(.08)),
         ),
     ];
 
-    return ExpressiveCard(
-      surfaceTint: false,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+    return PixelFinanceSurface(
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(15, 15, 15, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Cash flow trend',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                    ),
+                    Text('Flow', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
-                    Text(
-                      widget.rangeLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
+                    Text(widget.rangeLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
-              IconButton.filledTonal(
-                onPressed: () => showDateRangeSheet(context),
-                tooltip: 'Change date range',
-                icon: const Icon(Icons.date_range_rounded),
-              ),
+              PixelRoundAction(icon: Icons.calendar_month_rounded, tooltip: 'Change range', onPressed: () => showDateRangeSheet(context)),
             ],
           ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _TrendMetricPill(
-                label: 'Income',
-                value: state.format(totalIncome),
-                icon: Icons.south_west_rounded,
-                color: kSleekIncome,
-              ),
-              _TrendMetricPill(
-                label: 'Expense',
-                value: state.format(totalExpense),
-                icon: Icons.north_east_rounded,
-                color: kSleekExpense,
-              ),
-              _TrendMetricPill(
-                label: 'Net',
-                value: state.format(net),
-                icon: net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                color: net >= 0 ? kSleekIncome : kSleekExpense,
-              ),
+          const SizedBox(height: 13),
+          SleekPillSelector<_TrendView>(
+            options: const [
+              SleekPillOption(value: _TrendView.both, label: 'Both'),
+              SleekPillOption(value: _TrendView.income, label: 'Income'),
+              SleekPillOption(value: _TrendView.expense, label: 'Expense'),
             ],
+            selected: _view,
+            onChanged: (value) => setState(() => _view = value),
           ),
           const SizedBox(height: 14),
-          SegmentedButton<_TrendView>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: _TrendView.both, label: Text('Both')),
-              ButtonSegment(value: _TrendView.income, label: Text('Income')),
-              ButtonSegment(value: _TrendView.expense, label: Text('Expense')),
-            ],
-            selected: {_view},
-            onSelectionChanged: (selection) {
-              if (selection.isNotEmpty) setState(() => _view = selection.first);
-            },
-          ),
-          const SizedBox(height: 14),
-          Container(
-            height: 278,
-            padding: const EdgeInsets.fromLTRB(6, 12, 10, 4),
-            decoration: BoxDecoration(
-              color: panelColor,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .14 : .48)),
-            ),
+          SizedBox(
+            height: 250,
             child: hasData
                 ? RepaintBoundary(
                     child: LineChart(
@@ -10331,7 +10344,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           show: true,
                           drawVerticalLine: false,
                           horizontalInterval: maxY / 4,
-                          getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
+                          getDrawingHorizontalLine: (_) => FlLine(color: scheme.outlineVariant.withOpacity(dark ? .18 : .42), strokeWidth: 1),
                         ),
                         titlesData: FlTitlesData(
                           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -10339,71 +10352,69 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 58,
+                              reservedSize: 54,
                               interval: maxY / 4,
-                              getTitlesWidget: (value, meta) => _leftTitle(context, value, meta, maxY),
+                              getTitlesWidget: (value, meta) => Text(
+                                _compactCurrency(state, value),
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
-                              reservedSize: 36,
+                              reservedSize: 32,
                               interval: 1,
-                              getTitlesWidget: (value, meta) => _bottomTitle(context, value, meta),
+                              getTitlesWidget: (value, meta) {
+                                final index = value.round();
+                                if (index < 0 || index >= widget.days.length || !_bottomLabelIndexes().contains(index)) return const SizedBox.shrink();
+                                return SideTitleWidget(
+                                  axisSide: meta.axisSide,
+                                  space: 8,
+                                  child: Text(_dateLabel(widget.days[index]), style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                                );
+                              },
                             ),
                           ),
                         ),
                         lineTouchData: LineTouchData(
                           handleBuiltInTouches: true,
                           touchTooltipData: LineTouchTooltipData(
-                            tooltipRoundedRadius: 14,
-                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            tooltipMargin: 12,
-                            getTooltipColor: (_) => Theme.of(context).colorScheme.surfaceContainerHighest,
+                            tooltipRoundedRadius: 12,
+                            tooltipPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            getTooltipColor: (_) => dark ? const Color(0xFF4A2A3A) : const Color(0xFF4A2A3A),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
-                              final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
+                              final date = DateFormat('MMM d').format(widget.days[index]);
                               final label = item.barIndex == 0 && showIncome ? 'Income' : 'Expense';
-                              return LineTooltipItem(
-                                '$date\n$label  ${_compactCurrency(state, item.y)}',
-                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.35),
-                              );
+                              return LineTooltipItem('$date\n$label ${_compactCurrency(state, item.y)}', const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, height: 1.3));
                             }).toList(),
                           ),
                         ),
                         lineBarsData: bars,
                       ),
+                      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.medium,
+                      curve: AppMotion.standard,
                     ),
                   )
                 : Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.show_chart_rounded, size: 34, color: scheme.onSurfaceVariant.withOpacity(.65)),
-                          const SizedBox(height: 10),
-                          Text(
-                            'No income or expense data in this range',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Add transactions or choose another date range to see a trend.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.show_chart_rounded, size: 32, color: scheme.onSurfaceVariant.withOpacity(.55)),
+                        const SizedBox(height: 9),
+                        Text('No flow yet', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text('Add income or expenses to draw this chart.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant)),
+                      ],
                     ),
                   ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Row(
             children: [
               if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
-              if (showIncome && showExpense) const SizedBox(width: 16),
+              if (showIncome && showExpense) const SizedBox(width: 14),
               if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
             ],
           ),
@@ -10449,14 +10460,14 @@ class _TrendMetricPill extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w800,
                     ),
               ),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
             ],
           ),
@@ -10483,7 +10494,7 @@ class _TrendLegendDot extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 7),
-        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
+        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800)),
       ],
     );
   }
@@ -10491,7 +10502,6 @@ class _TrendLegendDot extends StatelessWidget {
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
-
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
 }
@@ -10501,25 +10511,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final totals = state.categoryTotals(selected);
+    final total = totals.values.fold<double>(0, (sum, value) => sum + value);
     return PageScaffold(
-      title: 'Categories',
-      subtitle: selected == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown',
+      title: selected == CategoryType.expense ? 'Spending' : 'Income',
+      subtitle: '${state.activeRange().label} • ${state.format(total)} total',
       actions: const [ProfileAvatarButton()],
       child: ResponsiveContent(
+        desktopMaxWidth: 1040,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SleekCyclePillSelector<CategoryType>(
+            SleekPillSelector<CategoryType>(
               options: const [
                 SleekPillOption(value: CategoryType.expense, label: 'Expense', icon: Icons.north_east_rounded),
                 SleekPillOption(value: CategoryType.income, label: 'Income', icon: Icons.south_west_rounded),
               ],
               selected: selected,
-              onChanged: (v) => setState(() => selected = v),
+              onChanged: (value) => setState(() => selected = value),
             ),
             const SizedBox(height: 14),
             CategoryBreakdownCard(key: ValueKey(selected), type: selected, interactive: true),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _ManageCategoriesButton(type: selected),
           ],
         ),
@@ -10534,52 +10548,28 @@ class _ManageCategoriesButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = type == CategoryType.expense ? 'Expense categories' : 'Income categories';
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
+    final scheme = Theme.of(context).colorScheme;
+    return PixelFinanceSurface(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type))),
+      radius: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(width: 42, height: 42, decoration: BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(14)), child: Icon(Icons.tune_rounded, color: scheme.onSecondaryContainer, size: 21)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Manage categories', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 2),
+                Text(type == CategoryType.expense ? 'Edit expense groups' : 'Edit income groups', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+              ],
+            ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: kSleekAccent.withOpacity(.16),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: kSleekAccent.withOpacity(.24)),
-                ),
-                child: const Icon(Icons.category_rounded, color: kSleekAccent),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Manage categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
-        ),
+          Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+        ],
       ),
     );
   }
@@ -10626,399 +10616,94 @@ class CategoryBreakdownCard extends StatelessWidget {
   final CategoryType type;
   final bool interactive;
 
-  Color _fallbackColor(int index) {
-    const palette = [
-      Color(0xFF18D8CF),
-      Color(0xFFA79BFF),
-      Color(0xFF7EDBD3),
-      Color(0xFF1EC7BD),
-      Color(0xFFB9B1FF),
-      Color(0xFF5BE6DB),
-      Color(0xFFF7C66D),
-      Color(0xFFF49DBE),
-    ];
-    return palette[index % palette.length];
-  }
-
-  List<_BreakdownSlice> _buildSlices(AppController state, List<MapEntry<String, double>> entries) {
-    if (entries.length <= 8) {
-      return entries.asMap().entries.map((indexed) {
-        final index = indexed.key;
-        final entry = indexed.value;
-        final category = state.categoryOf(entry.key);
-        final color = category == null ? _fallbackColor(index) : colorFromHex(category.iconColor, fallback: _fallbackColor(index));
-        return _BreakdownSlice(categoryId: entry.key, category: category, value: entry.value, color: color);
-      }).toList();
-    }
-
-    final visible = <_BreakdownSlice>[];
-    for (var i = 0; i < 7; i++) {
-      final entry = entries[i];
-      final category = state.categoryOf(entry.key);
-      final color = category == null ? _fallbackColor(i) : colorFromHex(category.iconColor, fallback: _fallbackColor(i));
-      visible.add(_BreakdownSlice(categoryId: entry.key, category: category, value: entry.value, color: color));
-    }
-    final otherValue = entries.skip(7).fold<double>(0, (sum, entry) => sum + entry.value);
-    visible.add(
-      _BreakdownSlice(
-        categoryId: '__other__',
-        category: null,
-        value: otherValue,
-        color: _fallbackColor(7),
-        labelOverride: 'Other',
-        iconNameOverride: 'category',
-      ),
-    );
-    return visible;
-  }
-
-  String _badgeTag(_BreakdownSlice slice) {
-    if (slice.label.toLowerCase() == 'other') return 'OTHER';
-    final words = slice.label
-        .split(RegExp(r'\s+'))
-        .where((w) => w.trim().isNotEmpty)
-        .toList();
-    if (words.isEmpty) return 'CAT';
-    if (words.length >= 2) {
-      return words.take(2).map((w) => w.substring(0, 1)).join().toUpperCase();
-    }
-    final word = words.first;
-    if (word.length <= 4) return word.toUpperCase();
-    return word.substring(0, 3).toUpperCase();
-  }
-
-  bool _useTextBadge(_BreakdownSlice slice) => slice.category == null;
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     final totals = state.categoryTotals(type);
     final entries = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    final total = entries.fold<double>(0, (sum, e) => sum + e.value);
-
+    final total = entries.fold<double>(0, (sum, entry) => sum + entry.value);
     if (entries.isEmpty) {
-      return ExpressiveCard(
-        child: EmptyCard(
-          icon: Icons.pie_chart_rounded,
-          title: 'No ${enumName(type)} data',
-          body: 'Transactions will appear here by category.',
-        ),
+      return EmptyCard(
+        icon: type == CategoryType.expense ? Icons.shopping_bag_outlined : Icons.payments_outlined,
+        title: type == CategoryType.expense ? 'No spending yet' : 'No income yet',
+        body: 'Transactions in this range will be grouped here automatically.',
       );
     }
 
-    final slices = _buildSlices(state, entries);
-    final chartTitle = type == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown';
-    final rangeLabel = state.activeRange().label;
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chartSurfaceTop = scheme.surfaceContainerHigh;
-    final chartSurfaceBottom = scheme.surfaceContainerLow;
-    final chartBorderColor = scheme.outlineVariant.withOpacity(.28);
-    final donutTrackColor = scheme.outlineVariant.withOpacity(.28);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ExpressiveCard(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final visible = entries.take(8).toList();
+    return PixelFinanceSurface(
+      radius: 22,
+      padding: const EdgeInsets.fromLTRB(15, 16, 15, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Text(
-                chartTitle,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 334,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final canvasWidth = constraints.maxWidth;
-                    const canvasHeight = 334.0;
-                    final chartSize = math.min(math.max(180.0, canvasWidth - 98), math.min(268.0, canvasWidth - 8));
-                    final centerSize = chartSize * .57;
-                    final manyBadges = slices.length > 5;
-                    final badgeWidth = manyBadges ? (canvasWidth < 360 ? 78.0 : 86.0) : (canvasWidth < 360 ? 84.0 : 94.0);
-                    final badgeHeight = manyBadges ? 40.0 : 44.0;
-                    final badgeOrbit = (chartSize / 2) + (manyBadges ? 32.0 : 24.0);
-
-                    double startAngle = -90;
-                    final badgeAngles = <double>[];
-                    for (final slice in slices) {
-                      final sweep = total == 0 ? 0 : (slice.value / total) * 360;
-                      badgeAngles.add(startAngle + (sweep / 2));
-                      startAngle += sweep;
-                    }
-
-                    final badgeNudges = List<double>.filled(slices.length, 0);
-                    void spreadDenseSide(bool leftSide) {
-                      final indexes = <int>[];
-                      for (var i = 0; i < badgeAngles.length; i++) {
-                        final radians = badgeAngles[i] * (math.pi / 180);
-                        final isLeft = math.cos(radians) < -0.18;
-                        if (isLeft == leftSide) indexes.add(i);
-                      }
-                      if (indexes.length <= 1) return;
-                      indexes.sort((a, b) {
-                        final ay = math.sin(badgeAngles[a] * (math.pi / 180));
-                        final by = math.sin(badgeAngles[b] * (math.pi / 180));
-                        return ay.compareTo(by);
-                      });
-                      final spacing = manyBadges ? 11.0 : 8.0;
-                      for (var rank = 0; rank < indexes.length; rank++) {
-                        badgeNudges[indexes[rank]] = (rank - ((indexes.length - 1) / 2)) * spacing;
-                      }
-                    }
-
-                    spreadDenseSide(true);
-                    spreadDenseSide(false);
-
-                    int? selectedBadgeIndex;
-
-                    return StatefulBuilder(
-                      builder: (context, setBadgeState) {
-                        return TweenAnimationBuilder<double>(
-                      key: ValueKey('${type.name}-${slices.length}-${total.toStringAsFixed(2)}'),
-                      tween: Tween<double>(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 680),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, progress, _) {
-                        final badgeProgress = ((progress - .35) / .65).clamp(0.0, 1.0).toDouble();
-                        final centerProgress = ((progress - .18) / .82).clamp(0.0, 1.0).toDouble();
-                        final badgeOrder = List<int>.generate(slices.length, (index) => index);
-                        if (selectedBadgeIndex != null && selectedBadgeIndex! >= 0 && selectedBadgeIndex! < slices.length) {
-                          badgeOrder
-                            ..remove(selectedBadgeIndex)
-                            ..add(selectedBadgeIndex!);
-                        }
-
-                        return Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.hardEdge,
-                          children: [
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(34),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      chartSurfaceTop,
-                                      chartSurfaceBottom,
-                                    ],
-                                  ),
-                                  border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
-                                  boxShadow: isDark
-                                      ? null
-                                      : [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(.035),
-                                            blurRadius: 18,
-                                            offset: const Offset(0, 8),
-                                          ),
-                                        ],
-                                ),
-                              ),
-                            ),
-                            Center(
-                              child: SizedBox(
-                                width: chartSize,
-                                height: chartSize,
-                                child: RepaintBoundary(
-                                  child: CustomPaint(
-                                    isComplex: true,
-                                    willChange: progress < 1,
-                                    painter: _ExpressiveDonutPainter(slices: slices, total: total, progress: progress, trackColor: donutTrackColor),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            for (final i in badgeOrder)
-                              _DonutBadgePositioned(
-                                angleDegrees: badgeAngles[i],
-                                orbit: badgeOrbit,
-                                canvasWidth: canvasWidth,
-                                canvasHeight: canvasHeight,
-                                badgeWidth: selectedBadgeIndex == i ? badgeWidth + 12 : badgeWidth,
-                                badgeHeight: selectedBadgeIndex == i ? badgeHeight + 4 : badgeHeight,
-                                verticalNudge: badgeNudges[i],
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () {
-                                    setBadgeState(() {
-                                      selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
-                                    });
-                                  },
-                                  child: Opacity(
-                                    opacity: badgeProgress,
-                                    child: Transform.scale(
-                                      scale: (.86 + (.14 * badgeProgress)) * (selectedBadgeIndex == i ? 1.08 : 1.0),
-                                      child: _DonutPercentBadge(
-                                        color: slices[i].color,
-                                        iconName: slices[i].iconName,
-                                        label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
-                                        leadingText: _badgeTag(slices[i]),
-                                        useTextBadge: _useTextBadge(slices[i]),
-                                        selected: selectedBadgeIndex == i,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            Center(
-                              child: Opacity(
-                                opacity: centerProgress,
-                                child: Transform.scale(
-                                  scale: .92 + (.08 * centerProgress),
-                                  child: Container(
-                                    width: centerSize,
-                                    height: centerSize,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: scheme.surfaceContainerHigh.withOpacity(.98),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(isDark ? .22 : .08),
-                                          blurRadius: isDark ? 22.0 : 18.0,
-                                          offset: const Offset(0, 10),
-                                        ),
-                                      ],
-                                      border: Border.all(
-                                        color: isDark ? scheme.outline.withOpacity(.10) : const Color(0xFFD7E6E9),
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Flexible(
-                                          flex: 3,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              state.format(total),
-                                              maxLines: 1,
-                                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: -.8,
-                                                    color: isDark ? Colors.white : scheme.onSurface,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Flexible(
-                                          flex: 2,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              type == CategoryType.expense ? 'Total expense' : 'Total income',
-                                              maxLines: 1,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: scheme.primary,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Flexible(
-                                          flex: 2,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              rangeLabel,
-                                              maxLines: 1,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                    color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant.withOpacity(.88),
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: Text('Top categories', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+              PixelPill(label: state.format(total), selected: true, compact: true),
             ],
           ),
-        ),
-        const SizedBox(height: 12),
-        ...slices.asMap().entries.map((indexed) {
-          final slice = indexed.value;
-          final color = slice.color;
-          final percentage = total <= 0 ? 0.0 : (slice.value / total) * 100;
-
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: ExpressiveCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: interactive && slice.category != null
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: slice.category!)),
-                          )
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                    child: Row(
-                      children: [
-                        iconBubble(context, slice.iconName, colorToHex(color), size: 50),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                slice.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${percentage.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600),
-                              ),
-                            ],
+          const SizedBox(height: 12),
+          for (var i = 0; i < visible.length; i++) ...[
+            Builder(
+              builder: (context) {
+                final entry = visible[i];
+                final category = state.categoryOf(entry.key);
+                final color = colorFromHex(category?.iconColor ?? '#F0A6C5', fallback: scheme.primary);
+                final fraction = total <= 0 ? 0.0 : (entry.value / total).clamp(0.0, 1.0);
+                return Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(15),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: interactive && category != null
+                        ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category)))
+                        : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 2),
+                      child: Row(
+                        children: [
+                          iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#F0A6C5', size: 40),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(child: Text(category?.name ?? 'Unknown', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
+                                    const SizedBox(width: 8),
+                                    Text(state.format(entry.value), style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                                  ],
+                                ),
+                                const SizedBox(height: 7),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(99),
+                                        child: LinearProgressIndicator(value: fraction, minHeight: 6, color: color, backgroundColor: color.withOpacity(.10)),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    SizedBox(width: 38, child: Text('${(fraction * 100).toStringAsFixed(0)}%', textAlign: TextAlign.end, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          state.format(slice.value),
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        if (interactive && slice.category != null) ...[
-                          const SizedBox(width: 8),
-                          Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          );
-        }),
-      ],
+            if (i != visible.length - 1) Divider(height: 1, indent: 52, color: scheme.outlineVariant.withOpacity(.34)),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -11156,7 +10841,7 @@ class _DonutPercentBadge extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final badgeBackground = selected
         ? (isDark ? color.withOpacity(.28) : color.withOpacity(.20))
-        : scheme.surfaceContainerHigh.withOpacity(.96);
+        : (isDark ? const Color(0xFF181B1F).withOpacity(.96) : Colors.white.withOpacity(.96));
     final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : const Color(0xFFD8E6EA));
     final textColor = isDark ? Colors.white.withOpacity(.96) : scheme.onSurface;
     final iconBackground = useTextBadge
@@ -11203,7 +10888,7 @@ class _DonutPercentBadge extends StatelessWidget {
                           maxLines: 1,
                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: textColor,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w900,
                                 letterSpacing: .4,
                               ),
                         ),
@@ -11221,7 +10906,7 @@ class _DonutPercentBadge extends StatelessWidget {
                 label,
                 maxLines: 1,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w900,
                       letterSpacing: -.2,
                       color: textColor,
                     ),
@@ -11303,27 +10988,29 @@ class BudgetProgressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     final ratio = progress.ratio;
-    final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
-    return ExpressiveCard(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              iconBubble(context, 'wallet', colorToHex(color)),
-              const SizedBox(width: 12),
-              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: const TextStyle(fontWeight: FontWeight.w700))),
-              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w700)),
-            ]),
-            const SizedBox(height: 12),
-            ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 12, color: color)),
-            const SizedBox(height: 8),
-            Text('${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}'),
-          ],
-        ),
+    final color = ratio >= 1 ? kSleekExpense : ratio >= .8 ? kSleekWarning : ratio >= .5 ? scheme.secondary : kSleekIncome;
+    return PixelFinanceSurface(
+      onTap: onTap,
+      radius: 18,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 40, height: 40, decoration: BoxDecoration(color: color.withOpacity(.15), borderRadius: BorderRadius.circular(13)), child: Icon(Icons.savings_rounded, color: color, size: 21)),
+              const SizedBox(width: 11),
+              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
+              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w900)),
+            ],
+          ),
+          const SizedBox(height: 13),
+          ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 7, color: color, backgroundColor: color.withOpacity(.12))),
+          const SizedBox(height: 8),
+          Text('${state.format(progress.spent)} of ${state.format(progress.budget.amount)} spent', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }
@@ -11401,7 +11088,7 @@ class _BudgetEditorState extends State<BudgetEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
             TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
             const SizedBox(height: 12),
@@ -11440,20 +11127,50 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     return PageScaffold(
       title: 'Settings',
+      subtitle: 'Make Koinly yours',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        mobileMaxWidth: 760,
+        desktopMaxWidth: 900,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
-            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#B76AC2', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
-            SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
-            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
-            SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
+            PixelFinanceSurface(
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              radius: 22,
+              padding: const EdgeInsets.all(15),
+              child: Row(
+                children: [
+                  const ProfileAvatarButton(),
+                  const SizedBox(width: 13),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(state.profileDisplayLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 3),
+                        Text('Profile & savings preferences', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
+                ],
+              ),
+            ),
+            const SectionHeader('Personalize'),
+            SettingsTile(icon: Icons.palette_rounded, title: 'Appearance', subtitle: _themeLabel(state.themePreference), color: '#F0A6C5', onTap: () => showThemeDialog(context)),
+            SettingsTile(icon: Icons.payments_rounded, title: 'Currency', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#D6B9FF', onTap: () => showCurrencySheet(context)),
+            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#F2C879', onTap: () => showReminderSheet(context)),
+            const SectionHeader('Data & devices'),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#7EDBE7', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#83D6A9', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.date_range_rounded, title: 'Default date range', subtitle: _dateRangeLabel(state.dateRangeType), color: '#D6B9FF', onTap: () => showDateRangeSheet(context)),
+            const SectionHeader('More'),
+            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced', subtitle: 'Defaults, backup, and data health', color: '#A8B9FF', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
+            SettingsTile(icon: Icons.info_rounded, title: 'About Koinly', subtitle: 'Version, licenses, and links', color: '#F0A6C5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
           ],
         ),
       ),
@@ -11472,40 +11189,34 @@ class SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
     final scheme = Theme.of(context).colorScheme;
-    final c = colorFromHex(color, fallback: scheme.primary);
-    final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: Material(
-        color: scheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: scheme.outlineVariant.withOpacity(.34)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          leading: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Color.alphaBlend(c.withOpacity(.14), scheme.surfaceContainerHigh),
-              borderRadius: BorderRadius.circular(13),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: PixelFinanceSurface(
+        onTap: onTap,
+        radius: 18,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+        child: Row(
+          children: [
+            Container(width: 42, height: 42, decoration: BoxDecoration(color: c.withOpacity(.15), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: c, size: 21)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
+                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                  ],
+                ],
+              ),
             ),
-            child: Icon(icon, color: c, size: 21),
-          ),
-          title: Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          subtitle: hasSubtitle
-              ? Text(
-                  subtitle!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w400),
-                )
-              : null,
-          trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant, size: 20),
-          onTap: onTap,
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right_rounded, size: 19, color: scheme.onSurfaceVariant),
+          ],
         ),
       ),
     );
@@ -11524,7 +11235,7 @@ class UpdatesScreen extends StatelessWidget {
       title: 'Updates',
       subtitle: updateRepositorySlug,
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -11534,13 +11245,13 @@ class UpdatesScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#B76AC2', size: 54),
+                      iconBubble(context, 'download', '#00D7E8', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
                             Text(state.updateStatusMessage, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                           ],
@@ -11620,15 +11331,15 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#B76AC2', size: 54),
+                      iconBubble(context, 'download', '#00D7E8', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 3),
-                            Text(releaseDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600)),
+                            Text(releaseDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
                           ],
                         ),
                       ),
@@ -11639,7 +11350,7 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 10),
                         ReleaseChangelogView(markdown: release.body),
                       ],
@@ -11671,7 +11382,7 @@ class UpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text('Open the GitHub release page for this platform.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -11714,7 +11425,7 @@ class _AndroidUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -11769,7 +11480,7 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             Text(
               'This release does not include a Windows installer asset.',
@@ -11797,7 +11508,7 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           Text(
             '${asset.name}${asset.sizeBytes > 0 ? ' • ${formatBytes(asset.sizeBytes)}' : ''}',
@@ -11838,8 +11549,8 @@ class DownloadProgressCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: kSleekAccent)),
+              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: kSleekAccent)),
             ],
           ),
           const SizedBox(height: 12),
@@ -11847,12 +11558,12 @@ class DownloadProgressCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: Text('${progress.downloadedText} / ${progress.totalText}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600))),
-              Text(progress.speedText, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600)),
+              Expanded(child: Text('${progress.downloadedText} / ${progress.totalText}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800))),
+              Text(progress.speedText, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 6),
-          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w700)),
+          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w900)),
           const SizedBox(height: 10),
           OutlinedButton.icon(onPressed: onCancel, icon: const Icon(Icons.close_rounded), label: const Text('Cancel download')),
         ],
@@ -12030,7 +11741,7 @@ class _ChangelogBlockView extends StatelessWidget {
       case ChangelogBlockType.heading:
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 6),
-          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
         );
       case ChangelogBlockType.bullet:
         return _ChangelogLine(prefix: '•', block: block);
@@ -12058,7 +11769,7 @@ class _ChangelogLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w700, color: kSleekAccent))),
+          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w900, color: kSleekAccent))),
           Expanded(child: _LinkedSegmentsText(segments: block.segments)),
         ],
       ),
@@ -12079,7 +11790,7 @@ class _LinkedSegmentsText extends StatelessWidget {
         if (segment.url == null) return Text(segment.text, style: style);
         return InkWell(
           onTap: () => launchUrl(Uri.parse(segment.url!), mode: LaunchMode.externalApplication),
-          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w700)),
+          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
         );
       }).toList(),
     );
@@ -12265,7 +11976,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       title: 'Account & sync',
       subtitle: signedIn ? state.syncAccountEmail : 'Multi-device online sync',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -12273,7 +11984,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 10),
                   SegmentedButton<bool>(
                     segments: const [
@@ -12344,7 +12055,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
                             Text(
                               state.cloudSyncLastAt == null ? 'Not synced yet' : 'Last synced ${DateFormat('MMM d, yyyy HH:mm').format(state.cloudSyncLastAt!.toLocal())}',
@@ -12357,7 +12068,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   ),
                   if (state.cloudSyncError != null && state.cloudSyncError!.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Text(state.cloudSyncError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w600)),
+                    Text(state.cloudSyncError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
                   ],
                 ],
               ),
@@ -12404,13 +12115,13 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             if (!signedIn) ...[
               Text(
                 _registerMode ? 'Create your Koinly sync account' : 'Login to your Koinly sync account',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
               if (!_registerMode) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Login downloads your cloud copy and completely replaces local finance data on this device.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
                 ),
               ],
               const SizedBox(height: 10),
@@ -12605,7 +12316,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
         ),
       ],
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -12634,7 +12345,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
             ),
             if (state.cloudSyncError != null && state.cloudSyncError!.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(state.cloudSyncError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
+              Text(state.cloudSyncError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w800)),
             ],
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -12670,7 +12381,7 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
     return PageScaffold(
       title: 'Hidden Settings',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -12697,7 +12408,7 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Select database method',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                       ),
                     ),
                     Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -12721,7 +12432,7 @@ class SyncDatabaseMethodListScreen extends StatelessWidget {
     return PageScaffold(
       title: 'Select database method',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -12910,7 +12621,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
       title: providerLabel,
       subtitle: 'Sync method setup',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -12932,7 +12643,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 4),
                         Text(syncDatabaseProviderSubtitle(_provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
@@ -12945,7 +12656,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
             _providerFields(),
             if (_status != null && _status!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(_status!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w600)),
+              Text(_status!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800)),
             ],
             const SizedBox(height: 18),
             Row(
@@ -13098,7 +12809,7 @@ class _ProviderSyncActions extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   ],
                 ),
               ),
@@ -13224,7 +12935,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
                   child: const Icon(Icons.tune_rounded, color: kSleekAccent),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700))),
+                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
                 IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
               ],
             ),
@@ -13248,7 +12959,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
             ),
             if (_status != null && _status!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(_status!, style: theme.textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w600)),
+              Text(_status!, style: theme.textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800)),
             ],
             const SizedBox(height: 18),
             Row(
@@ -13387,7 +13098,7 @@ class _ProviderChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
                     Text(syncDatabaseProviderSubtitle(provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                   ],
@@ -13726,7 +13437,7 @@ class _CurrencyFormState extends State<CurrencyForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.closeAfterSave) ...[
-          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 14),
         ],
         CurrencyCustomizationButton(
@@ -13813,7 +13524,7 @@ class CurrencyCustomizationButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 3),
                     Text(
                       '$country • $symbol • $code',
@@ -13886,9 +13597,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF1F1A1F) : const Color(0xFFFBF1F8);
-        final innerBorderColor = dark ? const Color(0xFF4C444C) : const Color(0xFFCFC3CD);
-        final handleColor = dark ? const Color(0xFF4C444C) : const Color(0xFFCFC3CD);
+        final innerColor = dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised;
+        final innerBorderColor = dark ? KoinlyPixelTokens.darkSurfaceHighest : const Color(0xFFDCE8EB);
+        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -13904,7 +13615,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               Text(
                 'Choose currency',
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -14031,7 +13742,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w900,
                         color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
                       ),
                 ),
@@ -14082,7 +13793,7 @@ class _CurrencySymbolBubble extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: kSleekAccent,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w900,
             ),
       ),
     );
@@ -14119,7 +13830,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 24),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         SwitchListTile(value: enabled, onChanged: (v) => setState(() => enabled = v), title: const Text('Enable reminder'), subtitle: const Text('Notification text: “Don’t forget to record your expenses”')),
         OutlinedButton.icon(onPressed: () async { final t = await pickTime(context, time); if (t != null) setState(() => time = t); }, icon: const Icon(Icons.schedule_rounded), label: Text(time.format(context))),
         const SizedBox(height: 12),
@@ -14138,7 +13849,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
     return PageScaffold(
       title: 'Advanced settings',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(children: [
           SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#78D8E8', onTap: () => showDefaultSelection(context, 'account')),
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
@@ -14150,7 +13861,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
             icon: Icons.fact_check_rounded,
             title: 'Data health',
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
-            color: '#B76AC2',
+            color: '#00D7E8',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
           ),
           SettingsTile(
@@ -14198,7 +13909,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
       title: 'Data health',
       subtitle: 'Safety checks for local data and sync',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -14214,7 +13925,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
                             Text(
                               report == null ? 'Run a quick scan before blaming ghosts in the machine.' : report.statusBody,
@@ -14365,12 +14076,12 @@ class DataHealthFindingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
                 Text(item.body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                 if (item.actionLabel != null) ...[
                   const SizedBox(height: 8),
-                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w700)),
+                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w900)),
                 ],
               ],
             ),
@@ -14443,7 +14154,7 @@ class AboutScreen extends StatelessWidget {
     return PageScaffold(
       title: 'About Us',
       child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 28),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -14451,7 +14162,7 @@ class AboutScreen extends StatelessWidget {
               child: Column(children: [
                 const Icon(Icons.account_balance_wallet_rounded, size: 64),
                 const SizedBox(height: 12),
-                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900), textAlign: TextAlign.center),
                 const SizedBox(height: 8),
                 Text('Version: $appVersion', textAlign: TextAlign.center),
                 const SizedBox(height: 16),
@@ -14515,7 +14226,7 @@ class _AboutLinkButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w800,
                     ),
               ),
             ],
@@ -14626,9 +14337,9 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                                   child: const Icon(Icons.account_balance_wallet_rounded, color: kSleekAccent, size: 38),
                                 ),
                                 const SizedBox(height: 14),
-                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700), textAlign: TextAlign.center),
+                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900), textAlign: TextAlign.center),
                                 const SizedBox(height: 4),
-                                Text('Version $appVersion', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                                Text('Version $appVersion', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
                                 const SizedBox(height: 12),
                                 Text(
                                   'Powered by Flutter • ${licenses.length} packages with license notices',
@@ -14663,7 +14374,7 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                               item.name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              style: const TextStyle(fontWeight: FontWeight.w900),
                             ),
                             subtitle: Text(countLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                             trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
@@ -14756,7 +14467,7 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
                                   const SizedBox(height: 8),
                                   Text(
                                     widget.licenseCount == 1 ? '1 license notice' : '${widget.licenseCount} license notices',
@@ -14784,7 +14495,7 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
                                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                               color: scheme.onSurfaceVariant,
                                               height: 1.42,
-                                              fontWeight: paragraph.indent == LicenseParagraph.centeredIndent ? FontWeight.w600 : FontWeight.w500,
+                                              fontWeight: paragraph.indent == LicenseParagraph.centeredIndent ? FontWeight.w800 : FontWeight.w500,
                                             ),
                                         textAlign: paragraph.indent == LicenseParagraph.centeredIndent ? TextAlign.center : TextAlign.start,
                                       ),

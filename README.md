@@ -82,7 +82,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 
 ### App experience
 
-- Adaptive Material 3 interface
+- PixelPlayer-inspired Koinly interface rebuilt from scratch with flat rounded surfaces, bold hierarchy, and compact navigation
 - Light, dark, and system themes
 - Responsive Android and Windows layouts
 - Customizable profiles with photo, animated GIF, or short-video media previews
@@ -92,7 +92,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - GitHub Releases-based update checks
 - Public release manifest checks that avoid GitHub API rate limits
 - Architecture-specific Android downloads and Windows installer updates
-- Low-end-friendly rendering defaults with reduced heavy motion and effects
+- Low-end-friendly motion: short fade/translate/color transitions, native scrolling, no blur-heavy decorative effects, and isolated download animation
 
 ### Synchronization
 

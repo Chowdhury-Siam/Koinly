@@ -155,24 +155,20 @@ class ProfileAvatarButton extends StatelessWidget {
         label: 'Open profile',
         child: MotionPressable(
           borderRadius: AppShapes.full,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-          ),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())),
           child: Container(
-            width: 48,
-            height: 48,
+            width: 46,
+            height: 46,
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: kSleekAccent.withOpacity(.14),
-              border: Border.all(color: kSleekAccent.withOpacity(.70), width: 1.4),
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(17),
             ),
             child: ProfileMediaView(
               path: state.hasProfileMedia ? state.profileMediaPath : '',
               kind: state.hasProfileMedia ? state.profileMediaKind : null,
               displayName: state.profileDisplayLabel,
-              borderRadius: 999,
+              borderRadius: 15,
             ),
           ),
         ),
@@ -180,6 +176,8 @@ class ProfileAvatarButton extends StatelessWidget {
     );
   }
 }
+
+
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -331,7 +329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -339,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Profile media preview', style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      child: Text('Profile media preview', style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
                     ),
                     IconButton(onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close_rounded)),
                   ],
@@ -366,13 +364,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     return PageScaffold(
-      title: 'Profile',
-      subtitle: 'Personal details, media, and savings preferences',
+      title: 'You',
+      subtitle: state.profileDisplayLabel,
       child: ResponsiveContent(
         mobileMaxWidth: 760,
-        desktopMaxWidth: 1080,
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 32),
+        desktopMaxWidth: 1180,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final mediaCard = _ProfileMediaCard(
@@ -401,26 +399,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onReset: _resetSavings,
             );
 
-            if (constraints.maxWidth >= 820) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            final intro = PixelFinanceSurface(
+              radius: 28,
+              color: scheme.secondaryContainer,
+              padding: const EdgeInsets.all(20),
+              child: Row(
                 children: [
-                  Expanded(
-                    child: Column(children: [mediaCard, const SizedBox(height: 14), informationCard]),
+                  SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: ProfileMediaView(
+                      path: state.hasProfileMedia ? state.profileMediaPath : '',
+                      kind: state.hasProfileMedia ? state.profileMediaKind : null,
+                      displayName: state.profileDisplayLabel,
+                      borderRadius: 23,
+                    ),
                   ),
                   const SizedBox(width: 16),
-                  Expanded(child: savingsCard),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(state.profileDisplayLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.65)),
+                        const SizedBox(height: 4),
+                        Text(
+                          state.profileBio.trim().isEmpty ? 'Shape Koinly around the way you save and spend.' : state.profileBio,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSecondaryContainer.withOpacity(.78), fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            if (constraints.maxWidth >= 860) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  intro,
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: Column(children: [mediaCard, const SizedBox(height: 12), informationCard])),
+                      const SizedBox(width: 14),
+                      Expanded(child: savingsCard),
+                    ],
+                  ),
                 ],
               );
             }
             return Column(
-              children: [
-                mediaCard,
-                const SizedBox(height: 14),
-                informationCard,
-                const SizedBox(height: 14),
-                savingsCard,
-              ],
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [intro, const SizedBox(height: 12), mediaCard, const SizedBox(height: 12), informationCard, const SizedBox(height: 12), savingsCard],
             );
           },
         ),
@@ -447,84 +481,61 @@ class _ProfileMediaCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasMedia = state.hasProfileMedia;
-    final mediaKind = state.profileMediaKind;
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(14),
+    final scheme = Theme.of(context).colorScheme;
+    return PixelFinanceSurface(
+      radius: 24,
+      padding: const EdgeInsets.all(17),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(Icons.perm_media_rounded, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 10),
-              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.35))),
+              Icon(Icons.perm_media_rounded, color: scheme.primary),
             ],
           ),
-          const SizedBox(height: 16),
-          Center(
-            child: Container(
-              width: 132,
-              height: 132,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(.52), width: 1.2),
-              ),
-              child: ProfileMediaView(
-                path: hasMedia ? state.profileMediaPath : '',
-                kind: hasMedia ? mediaKind : null,
-                displayName: state.profileDisplayLabel,
-                borderRadius: 999,
+          const SizedBox(height: 14),
+          AspectRatio(
+            aspectRatio: 16 / 10,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: ColoredBox(
+                color: Theme.of(context).brightness == Brightness.dark ? KoinlyPixelTokens.darkSurfaceRaised : KoinlyPixelTokens.lightSurfaceRaised,
+                child: ProfileMediaView(
+                  path: hasMedia ? state.profileMediaPath : '',
+                  kind: hasMedia ? state.profileMediaKind : null,
+                  displayName: state.profileDisplayLabel,
+                  fit: hasMedia ? BoxFit.cover : BoxFit.contain,
+                  borderRadius: 22,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          if (!hasMedia)
-            Text(
-              'Add a photo, animated GIF, or short video.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
-            ),
-          SizedBox(height: hasMedia ? 10 : 16),
+          if (!hasMedia) ...[
+            const SizedBox(height: 10),
+            Text('JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+          ],
+          const SizedBox(height: 12),
           Wrap(
-            alignment: WrapAlignment.center,
             spacing: 8,
             runSpacing: 8,
             children: [
               FilledButton.icon(
                 onPressed: busy ? null : onPick,
-                icon: busy
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
+                icon: busy ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
                 label: Text(hasMedia ? 'Replace' : 'Add media'),
               ),
-              if (hasMedia)
-                OutlinedButton.icon(
-                  onPressed: busy ? null : onPreview,
-                  icon: const Icon(Icons.visibility_rounded),
-                  label: const Text('Preview'),
-                ),
-              if (hasMedia)
-                TextButton.icon(
-                  onPressed: busy ? null : onRemove,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  label: const Text('Remove'),
-                ),
+              if (hasMedia) OutlinedButton.icon(onPressed: busy ? null : onPreview, icon: const Icon(Icons.visibility_rounded), label: const Text('Preview')),
+              if (hasMedia) TextButton.icon(onPressed: busy ? null : onRemove, icon: const Icon(Icons.delete_outline_rounded), label: const Text('Remove')),
             ],
           ),
-          if (!hasMedia) ...[
-            const SizedBox(height: 12),
-            Text(
-              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
-            ),
-          ],
         ],
       ),
     );
   }
 }
+
+
 
 class _ProfileInformationCard extends StatelessWidget {
   const _ProfileInformationCard({
@@ -544,15 +555,15 @@ class _ProfileInformationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ExpressiveCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Icon(Icons.badge_rounded, color: Theme.of(context).colorScheme.primary),
+              const Icon(Icons.badge_rounded, color: kSleekAccent),
               const SizedBox(width: 10),
-              Expanded(child: Text('Profile information', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Profile information', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
             ],
           ),
           const SizedBox(height: 16),
@@ -618,7 +629,7 @@ class _SavingsSuggestionProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ExpressiveCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -626,13 +637,13 @@ class _SavingsSuggestionProfileCard extends StatelessWidget {
             children: [
               const Icon(Icons.lightbulb_rounded, color: Color(0xFFFFB5D0)),
               const SizedBox(width: 10),
-              Expanded(child: Text('Savings Suggestion', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Savings Suggestion', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             'Personalize optional purchase ideas. Savings transfers remain internal and do not count as income or expense.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
           TextField(controller: hobby, decoration: const InputDecoration(labelText: 'Hobby', hintText: 'Gaming, anime, reading, travel...')),
@@ -704,7 +715,7 @@ class ProfileMediaView extends StatelessWidget {
       child: Center(
         child: initials.isEmpty
             ? const Icon(Icons.person_rounded, color: kSleekAccent, size: 30)
-            : Text(initials, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700)),
+            : Text(initials, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w900)),
       ),
     );
   }
