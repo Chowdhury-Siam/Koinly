@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1059] - 2026-09-04
+
+### Fixed
+- Download progress wave now continuously animates while an update is downloading instead of becoming static when reduced-motion settings are enabled.
+- Choose Color no longer uses a nested non-scrollable grid that could swallow desktop mouse-wheel input; preset colors now use a wrap layout so the page scrolls normally.
+- Transaction date-range selection now opens in Koinly's centered popup instead of taking over the entire screen.
+
+### Changed
+- Transaction Title now appears above Amount for Expense and Income entry.
+- Removed the “Tap or drag for exact values” helper text from Cash flow trend.
+
 ## [1.0.1058] - 2026-09-04
 
 ### Fixed

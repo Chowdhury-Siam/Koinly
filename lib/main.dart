@@ -5199,14 +5199,205 @@ Future<DateTimeRange?> pickDateRange(BuildContext context, DateTime start, DateT
   final startDate = DateTime(start.year, start.month, start.day);
   final requestedEnd = DateTime(end.year, end.month, end.day);
   final endDate = requestedEnd.isBefore(startDate) ? startDate : requestedEnd;
-  return showDateRangePicker(
-    context: context,
-    firstDate: DateTime(2000),
-    lastDate: DateTime(2100),
-    initialDateRange: DateTimeRange(start: startDate, end: endDate),
-    helpText: 'Select transaction date range',
-    saveText: 'Use range',
+  return showKoinlyPopup<DateTimeRange>(
+    context,
+    maxWidth: 470,
+    maxHeight: 640,
+    child: _CenteredDateRangePicker(
+      initialRange: DateTimeRange(start: startDate, end: endDate),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    ),
   );
+}
+
+enum _DateRangeEndpoint { start, end }
+
+class _CenteredDateRangePicker extends StatefulWidget {
+  const _CenteredDateRangePicker({
+    required this.initialRange,
+    required this.firstDate,
+    required this.lastDate,
+  });
+
+  final DateTimeRange initialRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+
+  @override
+  State<_CenteredDateRangePicker> createState() => _CenteredDateRangePickerState();
+}
+
+class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
+  late DateTime _start;
+  late DateTime _end;
+  _DateRangeEndpoint _activeEndpoint = _DateRangeEndpoint.start;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.initialRange.start;
+    _end = widget.initialRange.end;
+  }
+
+  DateTime get _activeDate => _activeEndpoint == _DateRangeEndpoint.start ? _start : _end;
+
+  void _selectEndpoint(_DateRangeEndpoint endpoint) {
+    if (_activeEndpoint == endpoint) return;
+    setState(() => _activeEndpoint = endpoint);
+  }
+
+  void _onDateChanged(DateTime value) {
+    final date = DateTime(value.year, value.month, value.day);
+    setState(() {
+      if (_activeEndpoint == _DateRangeEndpoint.start) {
+        _start = date;
+        if (_end.isBefore(_start)) _end = _start;
+        _activeEndpoint = _DateRangeEndpoint.end;
+      } else {
+        _end = date;
+        if (_end.isBefore(_start)) _start = _end;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final formatter = DateFormat('MMM d, yyyy');
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const SizedBox(width: 44),
+              Expanded(
+                child: Text(
+                  'Select transaction date range',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _DateRangeEndpointButton(
+                  label: 'Start',
+                  value: formatter.format(_start),
+                  selected: _activeEndpoint == _DateRangeEndpoint.start,
+                  onTap: () => _selectEndpoint(_DateRangeEndpoint.start),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DateRangeEndpointButton(
+                  label: 'End',
+                  value: formatter.format(_end),
+                  selected: _activeEndpoint == _DateRangeEndpoint.end,
+                  onTap: () => _selectEndpoint(_DateRangeEndpoint.end),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withOpacity(.34),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outline.withOpacity(.18)),
+            ),
+            child: CalendarDatePicker(
+              key: ValueKey('${_activeEndpoint.name}-${_activeDate.millisecondsSinceEpoch}'),
+              initialDate: _activeDate,
+              firstDate: widget.firstDate,
+              lastDate: widget.lastDate,
+              currentDate: DateTime.now(),
+              onDateChanged: _onDateChanged,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context, DateTimeRange(start: _start, end: _end)),
+                  child: const Text('Use range'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateRangeEndpointButton extends StatelessWidget {
+  const _DateRangeEndpointButton({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? kSleekAccent.withOpacity(.18) : scheme.surfaceContainerHighest.withOpacity(.45),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: selected ? kSleekAccent.withOpacity(.72) : scheme.outline.withOpacity(.18)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 2),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w800)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<TimeOfDay?> pickTime(BuildContext context, TimeOfDay initial) => showTimePicker(context: context, initialTime: initial);
@@ -7348,26 +7539,27 @@ class ColorSelectionPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                 ],
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: presetColors.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    mainAxisSpacing: spacing,
-                    crossAxisSpacing: spacing,
-                    childAspectRatio: desktop ? 1.22 : 1,
-                  ),
-                  itemBuilder: (context, index) {
-                    final color = presetColors[index];
-                    final selected = selectedNormalized.toLowerCase() == color.toLowerCase();
-                    return Center(
-                      child: _ColorChoiceDot(
-                        color: color,
-                        selected: selected,
-                        size: itemSize,
-                        onTap: () => Navigator.pop(context, color),
-                      ),
+                Builder(
+                  builder: (context) {
+                    final cellWidth = ((width - (spacing * (columns - 1))) / columns).clamp(itemSize, width).toDouble();
+                    return Wrap(
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        for (final color in presetColors)
+                          SizedBox(
+                            width: cellWidth,
+                            height: itemSize,
+                            child: Center(
+                              child: _ColorChoiceDot(
+                                color: color,
+                                selected: selectedNormalized.toLowerCase() == color.toLowerCase(),
+                                size: itemSize,
+                                onTap: () => Navigator.pop(context, color),
+                              ),
+                            ),
+                          ),
+                      ],
                     );
                   },
                 ),
@@ -8390,6 +8582,21 @@ class _TransactionEditorState extends State<TransactionEditor> {
               }),
             ),
             const SizedBox(height: 12),
+            if (type != MoneyTransactionType.transfer) ...[
+              TextField(
+                controller: title,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                maxLength: 100,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.title_rounded),
+                  labelText: 'Title',
+                  hintText: 'Example: Lunch, Salary, Groceries',
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -8406,21 +8613,6 @@ class _TransactionEditorState extends State<TransactionEditor> {
               decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
             ),
             const SizedBox(height: 12),
-            if (type != MoneyTransactionType.transfer) ...[
-              TextField(
-                controller: title,
-                textInputAction: TextInputAction.next,
-                textCapitalization: TextCapitalization.sentences,
-                maxLength: 100,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.title_rounded),
-                  labelText: 'Title',
-                  hintText: 'Example: Lunch, Salary, Groceries',
-                  counterText: '',
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
             if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
               AppleSelectionField(
                 label: 'Category',
@@ -10099,20 +10291,6 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
               if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
               if (showIncome && showExpense) const SizedBox(width: 16),
               if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
-              const Spacer(),
-              if (hasData)
-                Flexible(
-                  child: Text(
-                    'Tap or drag for exact values',
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
             ],
           ),
         ],
@@ -11533,13 +11711,10 @@ class _WaveProgressIndicatorState extends State<WaveProgressIndicator> with Sing
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
-    if (widget.progress < 1) _controller.repeat();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1050),
+    );
     _syncControllerState();
   }
 
@@ -11550,12 +11725,11 @@ class _WaveProgressIndicatorState extends State<WaveProgressIndicator> with Sing
   }
 
   void _syncControllerState() {
-    final reducedMotion = MediaQuery.of(context).disableAnimations;
-    if ((widget.progress >= 1 || reducedMotion) && _controller.isAnimating) {
-      _controller.stop();
-    } else if (widget.progress < 1 && !reducedMotion && !_controller.isAnimating) {
-      _controller.repeat();
+    if (widget.progress >= 1) {
+      if (_controller.isAnimating) _controller.stop();
+      return;
     }
+    if (!_controller.isAnimating) _controller.repeat();
   }
 
   @override
@@ -11566,21 +11740,21 @@ class _WaveProgressIndicatorState extends State<WaveProgressIndicator> with Sing
 
   @override
   Widget build(BuildContext context) {
-    final reducedMotion = MediaQuery.of(context).disableAnimations;
     return SizedBox(
       height: 92,
-      child: reducedMotion
-          ? CustomPaint(
-              painter: _WaveProgressPainter(progress: widget.progress, phase: 0, color: kSleekAccent),
-              child: const SizedBox.expand(),
-            )
-          : AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) => CustomPaint(
-                painter: _WaveProgressPainter(progress: widget.progress, phase: _controller.value, color: kSleekAccent),
-                child: const SizedBox.expand(),
-              ),
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => CustomPaint(
+            painter: _WaveProgressPainter(
+              progress: widget.progress,
+              phase: _controller.value,
+              color: kSleekAccent,
             ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -11592,41 +11766,73 @@ class _WaveProgressPainter extends CustomPainter {
   final double phase;
   final Color color;
 
+  Path _wavePath(Size size, double fillTop, double phaseOffset, double amplitude) {
+    final path = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(0, fillTop);
+    for (double x = 0; x <= size.width + 4; x += 4) {
+      final normalizedX = x / math.max(1, size.width);
+      final angle = (normalizedX * math.pi * 2) + ((phase + phaseOffset) * math.pi * 2);
+      path.lineTo(x, fillTop + math.sin(angle) * amplitude);
+    }
+    return path
+      ..lineTo(size.width, size.height)
+      ..close();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final radius = BorderRadius.circular(24);
     final rect = Offset.zero & size;
     final rrect = radius.toRRect(rect);
-    final bgPaint = Paint()..color = kSleekSurfaceHigher.withValues(alpha: .72);
-    canvas.drawRRect(rrect, bgPaint);
+    final clampedProgress = progress.clamp(0.0, 1.0).toDouble();
+
+    canvas.drawRRect(rrect, Paint()..color = kSleekSurfaceHigher.withValues(alpha: .72));
     canvas.save();
     canvas.clipRRect(rrect);
-    final fillTop = size.height * (1 - progress.clamp(0, 1));
-    final path = Path()..moveTo(0, size.height);
-    path.lineTo(0, fillTop);
-    for (double x = 0; x <= size.width; x += 4) {
-      final y = fillTop + math.sin((x / size.width * math.pi * 2) + phase * math.pi * 2) * 7;
-      path.lineTo(x, y);
-    }
-    path.lineTo(size.width, size.height);
-    path.close();
-    final fillPaint = Paint()
+
+    final fillTop = size.height * (1 - clampedProgress);
+    final backWave = _wavePath(size, fillTop + 3, .42, 5.5);
+    final frontWave = _wavePath(size, fillTop, 0, 7.5);
+
+    final backPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [color.withValues(alpha: .95), color.withValues(alpha: .45)],
+        colors: [color.withValues(alpha: .38), color.withValues(alpha: .18)],
       ).createShader(rect);
-    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(backWave, backPaint);
+
+    final frontPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [color.withValues(alpha: .96), color.withValues(alpha: .48)],
+      ).createShader(rect);
+    canvas.drawPath(frontWave, frontPaint);
+
+    final highlightY = (fillTop + math.sin(phase * math.pi * 2) * 2.5).clamp(0.0, size.height).toDouble();
+    canvas.drawLine(
+      Offset(0, highlightY),
+      Offset(size.width, highlightY),
+      Paint()
+        ..color = Colors.white.withValues(alpha: .16)
+        ..strokeWidth = 1,
+    );
+
     canvas.restore();
-    final borderPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..color = color.withValues(alpha: .34);
-    canvas.drawRRect(rrect, borderPaint);
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = color.withValues(alpha: .34),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _WaveProgressPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.phase != phase || oldDelegate.color != color;
+  bool shouldRepaint(covariant _WaveProgressPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.phase != phase || oldDelegate.color != color;
 }
 
 class ReleaseChangelogView extends StatelessWidget {
