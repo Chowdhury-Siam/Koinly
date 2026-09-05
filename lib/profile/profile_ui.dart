@@ -143,9 +143,7 @@ Future<void> pickAndSaveProfileMedia(BuildContext context, AppController state) 
 }
 
 class ProfileAvatarButton extends StatelessWidget {
-  const ProfileAvatarButton({super.key, this.size = 48});
-
-  final double size;
+  const ProfileAvatarButton({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -162,13 +160,13 @@ class ProfileAvatarButton extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const ProfileScreen()),
           ),
           child: Container(
-            width: size,
-            height: size,
+            width: 40,
+            height: 40,
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: kSleekAccent.withOpacity(.12),
-              border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.3),
+              color: kSleekIncome.withOpacity(.14),
+              border: Border.all(color: kSleekIncome.withOpacity(.35), width: 1.4),
             ),
             child: ProfileMediaView(
               path: state.hasProfileMedia ? state.profileMediaPath : '',
@@ -341,7 +339,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text('Profile media preview', style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      child: Text('Profile media preview', style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                     ),
                     IconButton(onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close_rounded)),
                   ],
@@ -459,7 +457,7 @@ class _ProfileMediaCard extends StatelessWidget {
             children: [
               const Icon(Icons.perm_media_rounded, color: kSleekAccent),
               const SizedBox(width: 10),
-              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Profile media', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))),
             ],
           ),
           const SizedBox(height: 16),
@@ -486,10 +484,7 @@ class _ProfileMediaCard extends StatelessWidget {
             Text(
               'Add a photo, animated GIF, or short video.',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightSecondaryText,
-                fontWeight: FontWeight.w500,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
             ),
           SizedBox(height: hasMedia ? 10 : 16),
           Wrap(
@@ -521,12 +516,9 @@ class _ProfileMediaCard extends StatelessWidget {
           if (!hasMedia) ...[
             const SizedBox(height: 12),
             Text(
-              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM · maximum 1000 KB',
+              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightMutedText,
-                fontWeight: FontWeight.w500,
-              ),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
             ),
           ],
         ],
@@ -561,7 +553,7 @@ class _ProfileInformationCard extends StatelessWidget {
             children: [
               const Icon(Icons.badge_rounded, color: kSleekAccent),
               const SizedBox(width: 10),
-              Expanded(child: Text('Profile information', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Profile information', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))),
             ],
           ),
           const SizedBox(height: 16),
@@ -635,13 +627,13 @@ class _SavingsSuggestionProfileCard extends StatelessWidget {
             children: [
               const Icon(Icons.lightbulb_rounded, color: Color(0xFFFFB5D0)),
               const SizedBox(width: 10),
-              Expanded(child: Text('Savings Suggestion', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+              Expanded(child: Text('Savings Suggestion', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600))),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             'Personalize optional purchase ideas. Savings transfers remain internal and do not count as income or expense.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 16),
           TextField(controller: hobby, decoration: const InputDecoration(labelText: 'Hobby', hintText: 'Gaming, anime, reading, travel...')),
@@ -713,7 +705,7 @@ class ProfileMediaView extends StatelessWidget {
       child: Center(
         child: initials.isEmpty
             ? const Icon(Icons.person_rounded, color: kSleekAccent, size: 30)
-            : Text(initials, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w700)),
+            : Text(initials, style: Theme.of(context).textTheme.titleLarge?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w600)),
       ),
     );
   }

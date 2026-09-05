@@ -28,6 +28,7 @@ import 'package:video_player/video_player.dart';
 
 import 'app_config.dart';
 import 'branding_widgets.dart';
+import 'design_system.dart';
 import 'category_deduplication.dart';
 import 'collection_utils.dart';
 import 'icon_helpers.dart';
@@ -47,6 +48,7 @@ part 'loans/loan_controller_part.dart';
 part 'loans/loan_screens.dart';
 part 'loans/loan_sheets.dart';
 part 'profile/profile_ui.dart';
+part 'redesigned_shell.dart';
 
 const _uuid = Uuid();
 
@@ -3405,13 +3407,6 @@ class AppController extends ChangeNotifier {
     await queuePreferenceSync();
   }
 
-  /// Quick light/dark flip used by the header toggle; keeps the existing
-  /// theme preference pipeline intact.
-  Future<void> cycleThemePreference() async {
-    final dark = themeMode == ThemeMode.dark;
-    await saveTheme(dark ? ThemePreference.light : ThemePreference.dark);
-  }
-
   Future<void> saveCurrency({required String symbol, required String code, required CurrencyPosition position, required bool separators}) async {
     currencySymbol = symbol;
     currencyCode = code;
@@ -3681,7 +3676,7 @@ class KoinlyApp extends StatelessWidget {
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
-            disableAnimations: kLowEndFriendlyUi || media.disableAnimations,
+            disableAnimations: media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
         );
@@ -3689,304 +3684,9 @@ class KoinlyApp extends StatelessWidget {
     );
   }
 
-  ThemeData _theme(Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
-    final scheme = isDark
-        ? ColorScheme(
-            brightness: brightness,
-            primary: kSleekAccent,
-            onPrimary: kSleekOnAccent,
-            primaryContainer: const Color(0xFF0E3D2E),
-            onPrimaryContainer: const Color(0xFFA7F3D0),
-            secondary: const Color(0xFF34D399),
-            onSecondary: const Color(0xFF022C22),
-            secondaryContainer: const Color(0xFF124A38),
-            onSecondaryContainer: const Color(0xFFBBF7D0),
-            tertiary: const Color(0xFFF59E0B),
-            onTertiary: const Color(0xFF451A03),
-            error: kSleekExpense,
-            onError: Colors.white,
-            surface: kSleekSurface,
-            onSurface: const Color(0xFFF4F7F5),
-            onSurfaceVariant: const Color(0xFF9CA3AF),
-            surfaceContainerLowest: const Color(0xFF0D1210),
-            surfaceContainerLow: const Color(0xFF111714),
-            surfaceContainer: kSleekSurface,
-            surfaceContainerHigh: kSleekSurfaceHigh,
-            surfaceContainerHighest: kSleekSurfaceHigher,
-            onInverseSurface: const Color(0xFF111714),
-            inverseSurface: const Color(0xFFEDF2EF),
-            inversePrimary: const Color(0xFF047857),
-            outline: const Color(0xFF26302C),
-            outlineVariant: const Color(0xFF1E2724),
-            shadow: Colors.black,
-            scrim: Colors.black,
-          )
-        : ColorScheme(
-            brightness: brightness,
-            primary: const Color(0xFF059669),
-            onPrimary: Colors.white,
-            primaryContainer: const Color(0xFFD1FAE5),
-            onPrimaryContainer: const Color(0xFF064E3B),
-            secondary: const Color(0xFF059669),
-            onSecondary: Colors.white,
-            secondaryContainer: const Color(0xFFD1FAE5),
-            onSecondaryContainer: const Color(0xFF065F46),
-            tertiary: const Color(0xFFD97706),
-            onTertiary: Colors.white,
-            error: kSleekLightExpense,
-            onError: Colors.white,
-            surface: kSleekLightCard,
-            onSurface: kSleekLightText,
-            onSurfaceVariant: kSleekLightSecondaryText,
-            surfaceContainerLowest: Colors.white,
-            surfaceContainerLow: const Color(0xFFFCFDFC),
-            surfaceContainer: const Color(0xFFF8FAF8),
-            surfaceContainerHigh: kSleekLightCardHigh,
-            surfaceContainerHighest: const Color(0xFFECEEE9),
-            onInverseSurface: const Color(0xFFF1F5F2),
-            inverseSurface: const Color(0xFF1F2926),
-            inversePrimary: kSleekAccent,
-            outline: kSleekLightBorder,
-            outlineVariant: const Color(0xFFEDEFEA),
-            shadow: const Color(0x1A111111),
-            scrim: Colors.black,
-          );
-
-    final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
-          fontFamily: 'Roboto',
-          displayColor: scheme.onSurface,
-          bodyColor: scheme.onSurface,
-        );
-
-    final pageTransitionBuilder = const KoinlyPageTransitionsBuilder();
-
-    WidgetStateProperty<T> states<T>({required T normal, T? selected, T? pressed, T? disabled}) {
-      return WidgetStateProperty.resolveWith((state) {
-        if (state.contains(WidgetState.disabled)) return disabled ?? normal;
-        if (state.contains(WidgetState.pressed)) return pressed ?? selected ?? normal;
-        if (state.contains(WidgetState.selected)) return selected ?? normal;
-        return normal;
-      });
-    }
-
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: scheme,
-      scaffoldBackgroundColor: isDark ? kSleekBackground : kSleekLightBackground,
-      canvasColor: isDark ? kSleekBackground : kSleekLightBackground,
-      visualDensity: VisualDensity.standard,
-      dividerColor: Colors.transparent,
-      splashFactory: InkSparkle.splashFactory,
-      textTheme: textTheme.copyWith(
-        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.6),
-        displayLarge: textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -2.0),
-        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.9),
-        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.5),
-        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.3),
-        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
-        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
-        labelMedium: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: .1),
-        labelSmall: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: .2),
-        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.4),
-        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.4),
-      ),
-      pageTransitionsTheme: PageTransitionsTheme(
-        builders: {
-          TargetPlatform.android: pageTransitionBuilder,
-          TargetPlatform.windows: pageTransitionBuilder,
-          TargetPlatform.linux: pageTransitionBuilder,
-          TargetPlatform.macOS: pageTransitionBuilder,
-          TargetPlatform.iOS: pageTransitionBuilder,
-        },
-      ),
-      cardTheme: CardThemeData(
-        elevation: 0,
-        color: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-        margin: EdgeInsets.zero,
-        shape: AppShapes.squircle(20),
-      ),
-      dialogTheme: DialogThemeData(
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: AppShapes.dialog),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
-      ),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: scheme.surface,
-        surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: scheme.surface,
-        modalBarrierColor: Colors.black.withOpacity(isDark ? .60 : .32),
-        showDragHandle: true,
-        dragHandleColor: scheme.outlineVariant,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(kIsDesktopApp ? 28 : 24))),
-        constraints: const BoxConstraints(maxWidth: 720),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        elevation: 0,
-        backgroundColor: isDark ? kSleekSurfaceHigher : const Color(0xFF111714),
-        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        shape: RoundedRectangleBorder(borderRadius: AppShapes.full),
-      ),
-      listTileTheme: ListTileThemeData(
-        minLeadingWidth: 46,
-        contentPadding: EdgeInsets.zero,
-        shape: AppShapes.squircle(18),
-        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
-        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-      ),
-      navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        indicatorColor: kSleekAccent.withOpacity(isDark ? .22 : .14),
-        indicatorShape: AppShapes.squircle(16),
-        selectedIconTheme: const IconThemeData(color: kSleekAccent, size: 24),
-        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant, size: 22),
-        selectedLabelTextStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700, fontSize: 12),
-        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500, fontSize: 12),
-      ),
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? kSleekSurface : Colors.white,
-        indicatorColor: kSleekAccent.withOpacity(isDark ? .20 : .12),
-        height: 74,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        labelTextStyle: WidgetStateProperty.resolveWith((state) => TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: state.contains(WidgetState.selected) ? 12 : 11,
-              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant,
-            )),
-        iconTheme: WidgetStateProperty.resolveWith((state) => IconThemeData(
-              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant,
-              size: state.contains(WidgetState.selected) ? 26 : 24,
-            )),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: isDark ? kSleekSurfaceHigh : Colors.white,
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-        floatingLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: kSleekAccent.withOpacity(.85), width: 1.4)),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.error.withOpacity(.72), width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.error, width: 1.4)),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: states(
-            normal: isDark ? kSleekPrimaryButton : scheme.primary,
-            pressed: isDark ? const Color(0xFF059669) : const Color(0xFF047857),
-            disabled: scheme.onSurface.withOpacity(.10),
-          ),
-          foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
-          overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.10)),
-          shape: const WidgetStatePropertyAll(StadiumBorder()),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700, letterSpacing: -.1)),
-          elevation: const WidgetStatePropertyAll(0.0),
-        ),
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: ButtonStyle(
-          foregroundColor: states(normal: isDark ? kSleekAccent : scheme.primary, pressed: kSleekAccent.withOpacity(.75)),
-          shape: const WidgetStatePropertyAll(StadiumBorder()),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: states(
-            normal: isDark ? kSleekSurfaceHigh : Colors.white,
-            pressed: isDark ? kSleekSurfaceHigher : kSleekLightCardHigh,
-          ),
-          foregroundColor: states(normal: scheme.onSurface, pressed: kSleekAccent, disabled: scheme.onSurface.withOpacity(.38)),
-          side: states(
-            normal: BorderSide(color: isDark ? const Color(0xFF2A3531) : kSleekLightBorder, width: 1),
-            pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.2),
-            disabled: BorderSide(color: scheme.onSurface.withOpacity(.10), width: 1),
-          ),
-          shape: const WidgetStatePropertyAll(StadiumBorder()),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
-          elevation: const WidgetStatePropertyAll(0.0),
-        ),
-      ),
-      segmentedButtonTheme: SegmentedButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected)
-              ? kSleekAccent.withOpacity(isDark ? .26 : .16)
-              : scheme.surfaceContainerHigh),
-          foregroundColor: WidgetStateProperty.resolveWith((state) =>
-              state.contains(WidgetState.selected) ? (isDark ? kSleekAccent : const Color(0xFF047857)) : scheme.onSurfaceVariant),
-          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant, width: 1)),
-          shape: const WidgetStatePropertyAll(StadiumBorder()),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 16)),
-        ),
-      ),
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: kSleekAccent,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        highlightElevation: 2,
-        shape: const CircleBorder(),
-      ),
-      iconButtonTheme: IconButtonThemeData(
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? kSleekAccent.withOpacity(.14)
-                : (isDark ? kSleekSurfaceHigh : kSleekLightCardHigh),
-          ),
-          foregroundColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface,
-          ),
-          shape: const WidgetStatePropertyAll(CircleBorder()),
-          minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
-        ),
-      ),
-      appBarTheme: AppBarTheme(
-        centerTitle: false,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(color: scheme.onSurface),
-        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700, letterSpacing: -.5),
-      ),
-      chipTheme: ChipThemeData(
-        backgroundColor: isDark ? kSleekSurfaceHigh : kSleekLightCardHigh,
-        selectedColor: kSleekAccent.withOpacity(isDark ? .26 : .16),
-        disabledColor: scheme.onSurface.withOpacity(.08),
-        side: BorderSide(color: scheme.outlineVariant),
-        shape: const StadiumBorder(),
-        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
-        secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: kSleekAccent,
-        linearTrackColor: isDark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
-      ),
-      switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.white : scheme.outline),
-        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent : scheme.surfaceContainerHighest),
-        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
-      ),
-    );
-  }
+  ThemeData _theme(Brightness brightness) => KoinlyDesign.theme(brightness);
 }
+
 
 class StartupGate extends StatelessWidget {
   const StartupGate({super.key});
@@ -4132,7 +3832,7 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
       _busy = false;
       _index += 1;
     });
-    await _pageController.animateToPage(_index, duration: AppMotion.medium, curve: AppMotion.emphasized);
+    await _pageController.animateToPage(_index, duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: AppMotion.emphasized);
   }
 
   @override
@@ -4155,8 +3855,8 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                      Text(prompt.subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(prompt.subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -4217,37 +3917,16 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: dark ? kSleekBackground : kSleekLightBackground,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const _KoinlyBrandMark(size: 84),
-            const SizedBox(height: 22),
-            Text(
-              appTitle,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.0),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'PRIVATE FINANCE',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: dark ? kSleekMuted : kSleekLightSecondaryText,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2.2,
-                  ),
-            ),
-            const SizedBox(height: 26),
-            SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.6,
-                color: dark ? kSleekAccent : const Color(0xFF059669),
-              ),
-            ),
+            const KoinlyAppIcon(size: 92, borderRadius: 30),
+            const SizedBox(height: 24),
+            Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 16),
+            const CircularProgressIndicator(),
           ],
         ),
       ),
@@ -4396,28 +4075,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
-                        duration: AppMotion.medium,
+                        duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.slow,
                         switchInCurve: AppMotion.standard,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: CurvedAnimation(parent: animation, curve: AppMotion.standard),
-                          child: SlideTransition(
-                            position: Tween<Offset>(begin: const Offset(0, .015), end: Offset.zero).animate(animation),
-                            child: child,
-                          ),
-                        ),
+                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
                         child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
-                    if (!useDesktopNavigation) ...[
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: MediaQuery.of(context).padding.bottom + 96,
-                        child: Center(
-                          child: _KoinlyAddFab(onPressed: () => showTransactionEditor(context)),
-                        ),
-                      ),
+                    if (!useDesktopNavigation)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -4427,7 +4092,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           onSelected: selectTab,
                         ),
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -4435,66 +4099,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
         );
       },
-    );
-  }
-}
-
-class _KoinlyAddFab extends StatefulWidget {
-  const _KoinlyAddFab({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  State<_KoinlyAddFab> createState() => _KoinlyAddFabState();
-}
-
-class _KoinlyAddFabState extends State<_KoinlyAddFab> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed == value || !mounted) return;
-    setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final reducedMotion = MediaQuery.of(context).disableAnimations;
-    return Semantics(
-      button: true,
-      label: 'Add transaction',
-      child: Tooltip(
-        message: 'Add transaction',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (_) => _setPressed(true),
-          onTapCancel: () => _setPressed(false),
-          onTapUp: (_) => _setPressed(false),
-          onTap: widget.onPressed,
-          child: AnimatedScale(
-            duration: AppMotion.fast,
-            curve: _pressed ? Curves.easeOutCubic : AppMotion.spring,
-            scale: _pressed ? .92 : 1,
-            child: AnimatedContainer(
-              duration: AppMotion.fast,
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF34D399), Color(0xFF10B981), Color(0xFF059669)],
-                ),
-                boxShadow: [
-                  BoxShadow(color: const Color(0xFF10B981).withOpacity(reducedMotion ? 0 : .38), blurRadius: 22, offset: const Offset(0, 10)),
-                  BoxShadow(color: Colors.black.withOpacity(.30), blurRadius: 14, offset: const Offset(0, 6)),
-                ],
-              ),
-              child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -4511,497 +4115,12 @@ class _DockDestination {
   final IconData activeIcon;
 }
 
-/// Reference-style sidebar: brand block on top, pill-highlighted destinations
-/// in the middle, and a sync/local-mode status card pinned to the bottom.
-class _SideRailNavigation extends StatelessWidget {
-  const _SideRailNavigation({
-    required this.selectedIndex,
-    required this.extended,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final bool extended;
-  final ValueChanged<int> onSelected;
-
-  static const List<_DockDestination> _destinations = [
-    _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
-    _DockDestination(label: 'Insights', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
-    _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
-    _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
-    _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final railColor = dark ? kSleekBackground : kSleekLightSidebar;
-    final dividerColor = dark ? Colors.white.withOpacity(.05) : kSleekLightBorder;
-
-    return Material(
-      color: railColor,
-      child: SafeArea(
-        right: false,
-        child: Container(
-          width: extended ? kSidebarExtendedWidth : kSidebarCompactWidth,
-          decoration: BoxDecoration(
-            border: Border(right: BorderSide(color: dividerColor, width: 1)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Brand block: emerald "K" + Koinly + PRIVATE FINANCE.
-              Padding(
-                padding: EdgeInsets.fromLTRB(extended ? 18 : 16, 22, extended ? 18 : 16, 18),
-                child: extended
-                    ? Row(
-                        children: [
-                          const _KoinlyBrandMark(size: 42),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(appTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2)),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'PRIVATE FINANCE',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: scheme.onSurfaceVariant,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1.4,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      )
-                    : Center(child: const _KoinlyBrandMark(size: 44)),
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: optimizedScrollPhysics(context),
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < _destinations.length; i++)
-                        _SidebarDestination(
-                          destination: _destinations[i],
-                          extended: extended,
-                          selected: selectedIndex == i,
-                          onTap: () => onSelected(i),
-                        ),
-                      _SidebarDestination(
-                        destination: const _DockDestination(label: 'Settings', icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded),
-                        extended: extended,
-                        selected: false,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              _SidebarSyncCard(extended: extended),
-              const SizedBox(height: 14),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KoinlyBrandMark extends StatelessWidget {
-  const _KoinlyBrandMark({this.size = 40});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF34D399), Color(0xFF10B981), Color(0xFF059669)],
-        ),
-        boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(.32), blurRadius: size * .5, offset: Offset(0, size * .18))],
-      ),
-      child: Center(
-        child: Text(
-          'K',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: size * .48,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -.5,
-            height: 1,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SidebarDestination extends StatelessWidget {
-  const _SidebarDestination({
-    required this.destination,
-    required this.extended,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _DockDestination destination;
-  final bool extended;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = dark ? kSleekAccent : const Color(0xFF047857);
-    final activeBackground = dark ? const Color(0xFF11281F) : const Color(0xFFDCEEE6);
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: extended ? 12 : 12),
-      child: MotionPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        scale: .97,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.spring,
-          height: 52,
-          decoration: BoxDecoration(
-            color: selected ? activeBackground : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.symmetric(horizontal: extended ? 14 : 0),
-          child: extended
-              ? Row(
-                  children: [
-                    Icon(
-                      selected ? destination.activeIcon : destination.icon,
-                      color: selected ? activeColor : scheme.onSurfaceVariant,
-                      size: 23,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        destination.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: selected ? (dark ? Colors.white : kSleekLightText) : scheme.onSurfaceVariant,
-                              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                            ),
-                      ),
-                    ),
-                  ],
-                )
-              : Center(
-                  child: Tooltip(
-                    message: destination.label,
-                    child: Icon(
-                      selected ? destination.activeIcon : destination.icon,
-                      color: selected ? activeColor : scheme.onSurfaceVariant,
-                      size: 24,
-                    ),
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Sidebar footer: local-only / sync status with a link into device sync.
-class _SidebarSyncCard extends StatelessWidget {
-  const _SidebarSyncCard({required this.extended});
-
-  final bool extended;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final online = state.cloudSyncEnabled;
-    final cardColor = dark ? kSleekSurface : Colors.white;
-    final statusColor = online ? kSleekAccent : kSleekMuted;
-
-    if (!extended) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Tooltip(
-          message: online ? 'Cloud sync on' : 'Local-only mode',
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-            child: Icon(
-              online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
-              color: statusColor,
-              size: 20,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: dark ? Colors.white.withOpacity(.05) : kSleekLightBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor, boxShadow: [BoxShadow(color: statusColor.withOpacity(.55), blurRadius: 6)]),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    online ? 'CLOUD SYNC ON' : 'LOCAL-ONLY MODE',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: online ? kSleekAccent : scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              online ? state.syncAccountEmail : 'Data stays on this device.',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 38,
-              width: double.infinity,
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen())),
-                child: const Text('Device sync'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FloatingDockNavigation extends StatelessWidget {
-  const _FloatingDockNavigation({
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  static List<_DockDestination> get destinations => [
-    const _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
-    const _DockDestination(label: 'Insights', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
-    const _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
-    const _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
-    const _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final active = dark ? kSleekAccent : const Color(0xFF047857);
-    final inactive = scheme.onSurfaceVariant;
-    final dockColor = dark ? const Color(0xF2141A17) : Colors.white.withOpacity(.97);
-    final selectedColor = dark ? const Color(0xFF2A3B33) : const Color(0xFFE2F2EA);
-
-    return SafeArea(
-      top: false,
-      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 430),
-          child: Container(
-            height: 68,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              color: dockColor,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: dark ? Colors.white.withOpacity(.07) : kSleekLightBorder, width: 1),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(dark ? .40 : .10), blurRadius: 26, offset: const Offset(0, 12)),
-              ],
-            ),
-            child: Row(
-              children: List.generate(destinations.length, (index) {
-                final destination = destinations[index];
-                final selected = selectedIndex == index;
-                return Expanded(
-                  child: Tooltip(
-                    message: destination.label,
-                    child: Semantics(
-                      selected: selected,
-                      button: true,
-                      label: destination.label,
-                      child: MotionPressable(
-                        onTap: () => onSelected(index),
-                        borderRadius: BorderRadius.circular(18),
-                        scale: .94,
-                        child: AnimatedContainer(
-                          duration: AppMotion.medium,
-                          curve: AppMotion.spring,
-                          height: double.infinity,
-                          decoration: BoxDecoration(
-                            color: selected ? selectedColor : Colors.transparent,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              AnimatedScale(
-                                duration: AppMotion.medium,
-                                curve: AppMotion.spring,
-                                scale: selected ? 1.08 : 1,
-                                child: Icon(
-                                  selected ? destination.activeIcon : destination.icon,
-                                  color: selected ? active : inactive,
-                                  size: 23,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              AnimatedDefaultTextStyle(
-                                duration: AppMotion.fast,
-                                style: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
-                                      color: selected ? active : inactive,
-                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                                      fontSize: 10.5,
-                                    ),
-                                child: Text(
-                                  destination.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-class PageScaffold extends StatelessWidget {
-  const PageScaffold({super.key, required this.title, this.actions = const [], required this.child, this.subtitle});
-  final String title;
-  final String? subtitle;
-  final List<Widget> actions;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final small = AppBreakpoints.isSmall(context);
-    final desktop = AppBreakpoints.isExpanded(context);
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        toolbarHeight: desktop ? 78 : small ? 66 : 74,
-        titleSpacing: small ? 14 : 20,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 24 : small ? 21 : 23)),
-            if (subtitle != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
-              ),
-          ],
-        ),
-        actions: actions
-            .map((action) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: action,
-                ))
-            .toList(),
-      ),
-      body: KoinlyAtmosphere(child: SafeArea(top: false, child: child)),
-    );
-  }
-}
-
 class KoinlyAtmosphere extends StatelessWidget {
   const KoinlyAtmosphere({super.key, required this.child});
-
   final Widget child;
-
   @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    if (!dark) {
-      return DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF7F8F5), Color(0xFFF3F5F0), Color(0xFFF7F8F5)],
-          ),
-        ),
-        child: child,
-      );
-    }
-
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: kSleekBackground,
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0C110F), Color(0xFF0B0F0E), Color(0xFF090D0C)],
-        ),
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => ColoredBox(
+    color: Theme.of(context).scaffoldBackgroundColor, child: child);
 }
 
 class ResponsiveContent extends StatelessWidget {
@@ -5034,7 +4153,7 @@ class ResponsiveContent extends StatelessWidget {
               desktop ? 32 : small ? 12 : 16,
               desktop ? 22 : small ? 6 : 8,
               desktop ? 32 : small ? 12 : 16,
-              desktop ? 42 : small ? 170 : 180,
+              desktop ? 42 : small ? 96 : 110,
             );
 
         return Align(
@@ -5094,7 +4213,7 @@ class ResponsiveListContent extends StatelessWidget {
               desktop ? 32 : small ? 12 : 16,
               desktop ? 22 : small ? 6 : 8,
               desktop ? 32 : small ? 12 : 16,
-              desktop ? 42 : small ? 170 : 180,
+              desktop ? 42 : small ? 96 : 110,
             );
         final bodyCount = itemCount == 0 && empty != null ? 1 : itemCount;
 
@@ -5128,46 +4247,23 @@ class ResponsiveListContent extends StatelessWidget {
 }
 
 class ExpressiveCard extends StatelessWidget {
-  const ExpressiveCard({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(18),
-    this.color,
-    this.radius = 20,
-    this.surfaceTint = true,
-  });
-
+  const ExpressiveCard({super.key, required this.child,
+    this.padding = const EdgeInsets.all(20), this.color,
+    this.radius = 16, this.surfaceTint = true});
   final Widget child;
   final EdgeInsets padding;
   final Color? color;
   final double radius;
   final bool surfaceTint;
-
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = color ?? (dark ? kSleekSurface : Colors.white);
-    final borderColor = dark ? Colors.white.withOpacity(.055) : kSleekLightBorder;
-    final decoration = BoxDecoration(
-      color: baseColor,
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: borderColor, width: 1),
-      boxShadow: [
-        if (dark)
-          BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 14, offset: const Offset(0, 8))
-        else
-          BoxShadow(color: const Color(0x14118C78), blurRadius: 16, offset: const Offset(0, 8)),
-      ],
-    );
-    final cardChild = ClipRRect(
-      borderRadius: BorderRadius.circular(radius),
-      child: Padding(padding: padding, child: child),
-    );
-    return AnimatedContainer(
-      duration: AppMotion.medium,
-      curve: AppMotion.emphasized,
-      decoration: decoration,
-      child: cardChild,
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(color: color ?? scheme.surface,
+        borderRadius: BorderRadius.circular(radius),
+        border: Border.all(color: scheme.outlineVariant)),
+      child: ClipRRect(borderRadius: BorderRadius.circular(radius),
+        child: Padding(padding: padding, child: child)),
     );
   }
 }
@@ -5179,30 +4275,13 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final small = AppBreakpoints.isSmall(context);
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 24, 4, 12),
+      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: dark ? Colors.white.withOpacity(.92) : kSleekLightText,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: small ? .8 : 1.2,
-                    fontSize: 13,
-                  ),
-            ),
-          ),
-          if (trailing != null)
-            DefaultTextStyle.merge(
-              style: TextStyle(color: dark ? kSleekAccent : const Color(0xFF047857), fontWeight: FontWeight.w700, fontSize: 13),
-              child: trailing!,
-            ),
+          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -.2))),
+          if (trailing != null) DefaultTextStyle.merge(style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600), child: trailing!),
         ],
       ),
     );
@@ -5262,43 +4341,34 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final selectedIndex = options.indexWhere((option) => option.value == selected);
     final currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
     final current = options[currentIndex];
     final next = options[(currentIndex + 1) % options.length];
-    final accent = dark ? kSleekAccent : const Color(0xFF047857);
-    final mutedColor = dark ? kSleekMuted : kSleekLightSecondaryText;
+    final selectedColor = Theme.of(context).colorScheme.primaryContainer;
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final mutedColor = Theme.of(context).colorScheme.onSurface.withOpacity(.60);
 
     return MotionPressable(
       onTap: () => onChanged(next.value),
       borderRadius: AppShapes.medium,
       child: Material(
-        color: dark ? kSleekSurface : Colors.white,
+        color: selectedColor,
         borderRadius: AppShapes.medium,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
           curve: AppMotion.emphasized,
           constraints: const BoxConstraints(minHeight: 64),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: AppShapes.medium,
-            color: dark ? kSleekSurface : Colors.white,
-            border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder, width: 1),
-            boxShadow: [
-              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 16, offset: const Offset(0, 8)),
-            ],
+            border: Border.all(color: kSleekAccent.withOpacity(.42), width: 1.1),
+            boxShadow: [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))],
           ),
           child: Row(
             children: [
               if (current.icon != null) ...[
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(color: accent.withOpacity(.12), shape: BoxShape.circle),
-                  child: Icon(current.icon, size: 19, color: accent),
-                ),
+                Icon(current.icon, size: 22, color: kSleekAccent),
                 const SizedBox(width: 12),
               ],
               Expanded(
@@ -5311,9 +4381,8 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: scheme.onSurface,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -.2,
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
                           ),
                     ),
                     const SizedBox(height: 2),
@@ -5323,14 +4392,14 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: mutedColor,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Icon(Icons.swap_horiz_rounded, color: accent, size: 22),
+              Icon(Icons.swap_horiz_rounded, color: kSleekAccent, size: 24),
             ],
           ),
         ),
@@ -5352,39 +4421,35 @@ class _SleekPillButton<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent = dark ? kSleekAccent : const Color(0xFF047857);
-    final selectedColor = dark ? const Color(0xFF12291F) : const Color(0xFFDDEEE5);
-    final unselectedColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
-    final textColor = selected ? (dark ? Colors.white : kSleekLightText) : scheme.onSurfaceVariant;
+    final selectedColor = Theme.of(context).colorScheme.primaryContainer;
+    final unselectedColor = Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.48);
+    final borderColor = selected ? kSleekAccent.withOpacity(.42) : Theme.of(context).colorScheme.outline.withOpacity(.24);
+    final textColor = Theme.of(context).colorScheme.onSurface;
 
     return MotionPressable(
       onTap: onTap,
-      borderRadius: AppShapes.full,
-      scale: .97,
+      borderRadius: AppShapes.medium,
       child: Material(
         color: selected ? selectedColor : unselectedColor,
-        borderRadius: AppShapes.full,
+        borderRadius: AppShapes.medium,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
           curve: AppMotion.emphasized,
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 10 : 14, vertical: 12),
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 8 : 12, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: AppShapes.full,
-            color: selected ? selectedColor : unselectedColor,
-            border: Border.all(
-              color: selected ? accent.withOpacity(.45) : Colors.transparent,
-              width: 1,
-            ),
+            borderRadius: AppShapes.medium,
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: selected
+                ? [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))]
+                : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (option.icon != null) ...[
-                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 17 : 19, color: selected ? accent : textColor),
-                SizedBox(width: AppBreakpoints.isSmall(context) ? 6 : 8),
+                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 18 : 20, color: selected ? kSleekAccent : textColor),
+                SizedBox(width: AppBreakpoints.isSmall(context) ? 5 : 8),
               ],
               Flexible(
                 child: FittedBox(
@@ -5396,8 +4461,7 @@ class _SleekPillButton<T> extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: textColor,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                          letterSpacing: -.1,
+                          fontWeight: FontWeight.w600,
                         ),
                   ),
                 ),
@@ -5474,7 +4538,7 @@ class AppleSelectionField extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
                   color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                 ),
           ),
         ),
@@ -5516,14 +4580,14 @@ class AppleSelectionField extends StatelessWidget {
                           selected?.title ?? emptyText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           selected?.subtitle ?? 'Tap to choose',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -5572,9 +4636,9 @@ Future<String?> showAppleWheelSelectionSheet(
                 ? options.length - 1
                 : selectedIndex;
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
-        final innerBorderColor = dark ? const Color(0xFF26302C) : kSleekLightBorder;
-        final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
+        final innerColor = dark ? const Color(0xFF171317) : const Color(0xFFFCFAFA);
+        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
+        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -5590,7 +4654,7 @@ Future<String?> showAppleWheelSelectionSheet(
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               Container(
@@ -5664,16 +4728,16 @@ class _AppleWheelOptionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
           color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
           color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w500,
         );
 
     return AnimatedContainer(
-      duration: AppMotion.fast,
+      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
       curve: AppMotion.emphasized,
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -5804,7 +4868,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
                 child: Text(
                   'Select transaction date range',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
               IconButton(
@@ -5818,7 +4882,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
           Text(
             '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           Row(
@@ -5913,9 +4977,9 @@ class _DateRangeEndpointButton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
+              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
-              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w800)),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -6050,7 +5114,7 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                             width: width,
                             height: height,
                             decoration: BoxDecoration(
-                              color: dark ? const Color(0xF2141A17) : const Color(0xF2141A17),
+                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
                               borderRadius: BorderRadius.circular(radius),
                               border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
                               boxShadow: [
@@ -6101,7 +5165,7 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                                               overflow: TextOverflow.ellipsis,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 color: Colors.white,
-                                                fontWeight: FontWeight.w800,
+                                                fontWeight: FontWeight.w600,
                                                 height: 1.14,
                                                 letterSpacing: -.1,
                                               ),
@@ -6142,7 +5206,7 @@ Future<T?> showKoinlyPopup<T>(
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black.withOpacity(.62),
-    transitionDuration: AppMotion.medium,
+    transitionDuration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.medium,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return _KoinlyPopupFrame(maxWidth: maxWidth, maxHeight: maxHeight, child: child);
     },
@@ -6188,7 +5252,7 @@ class _KoinlyPopupFrame extends StatelessWidget {
       type: MaterialType.transparency,
       child: SafeArea(
         child: AnimatedPadding(
-          duration: AppMotion.fast,
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
           curve: AppMotion.emphasized,
           padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
           child: Align(
@@ -6199,12 +5263,12 @@ class _KoinlyPopupFrame extends StatelessWidget {
                 color: dark ? kSleekSurface : scheme.surface,
                 elevation: 18,
                 shadowColor: Colors.black.withOpacity(.45),
-                borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 30),
+                borderRadius: BorderRadius.circular(22),
                 clipBehavior: Clip.antiAlias,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 30),
-                    border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: dark ? Colors.white.withOpacity(.08) : scheme.outline.withOpacity(.16)),
                   ),
                   child: child,
                 ),
@@ -6249,7 +5313,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     // A newly registered sync account must continue through the local setup
     // pages. This also covers users who entered through Login and then switched
     // to "Create account instead" inside the auth screen.
-    await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
+    await controller.animateToPage(1, duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: Curves.easeOutCubic);
   }
 
   @override
@@ -6289,7 +5353,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               label: const Text('Create account'),
                             ),
                             TextButton.icon(
-                              onPressed: () => controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
+                              onPressed: () => controller.nextPage(duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: Curves.easeOutCubic),
                               icon: const Icon(Icons.wifi_off_rounded),
                               label: const Text('Use offline'),
                             ),
@@ -6302,7 +5366,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         onSkip: () async {
                           await state.skipStarterAccounts();
                           if (!mounted) return;
-                          await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
+                          await controller.nextPage(duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: Curves.easeOutCubic);
                         },
                       ),
                       _OnboardingPane(
@@ -6327,7 +5391,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         children: [
                           Row(
                             children: List.generate(4, (i) => AnimatedContainer(
-                                  duration: AppMotion.medium,
+                                  duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.medium,
                                   width: i == index ? 24 : 8,
                                   height: 8,
                                   margin: const EdgeInsets.only(right: 6),
@@ -6339,14 +5403,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             Padding(
                               padding: const EdgeInsets.only(right: 10),
                               child: OutlinedButton(
-                                onPressed: () => controller.previousPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
+                                onPressed: () => controller.previousPage(duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: Curves.easeOutCubic),
                                 child: const Text('Back'),
                               ),
                             ),
                           FilledButton(
                             onPressed: () async {
                               if (index < 3) {
-                                await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
+                                await controller.nextPage(duration: MediaQuery.of(context).disableAnimations ? const Duration(milliseconds: 1) : AppMotion.medium, curve: Curves.easeOutCubic);
                               } else {
                                 await state.completeOnboarding();
                               }
@@ -6411,23 +5475,15 @@ class _OnboardingPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _KoinlyBrandMark(size: 88),
+          const KoinlyAppIcon(size: 112, borderRadius: 36),
           const SizedBox(height: 28),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
-          ),
-          const SizedBox(height: 18),
-          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
+          Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
           const SizedBox(height: 16),
-          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.5)),
+          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 16),
+          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
           if (actions != null) ...[
-            const SizedBox(height: 26),
+            const SizedBox(height: 24),
             actions!,
           ],
         ],
@@ -6446,9 +5502,9 @@ class CurrencySetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _KoinlyBrandMark(size: 64),
+          const KoinlyAppIcon(size: 82, borderRadius: 26),
           const SizedBox(height: 24),
-          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
+          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           const Text('Choose how every amount is formatted across accounts, budgets, analysis, and exports.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
@@ -6470,9 +5526,9 @@ class AccountSetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const _KoinlyBrandMark(size: 64),
+          const KoinlyAppIcon(size: 82, borderRadius: 26),
           const SizedBox(height: 24),
-          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
+          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           const Text('Keep the starter accounts, add your own, or remove any account you do not need. Tap an account to edit or delete it.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
@@ -6509,131 +5565,21 @@ class AccountSetupPane extends StatelessWidget {
 
 class HomeDashboardScreen extends StatelessWidget {
   const HomeDashboardScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final range = state.activeRange();
     final txs = state.filteredTransactions();
     final summary = state.summaryFor(txs);
-    final accountBalance = state.totalAccountBalance;
     final categoryTotals = state.categoryTotals(CategoryType.expense, source: txs);
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
-
-    // Top budget summary rendered inside the hero (reference layout).
-    final budgetProgresses = state.budgetProgress();
-    final topBudget = budgetProgresses.isEmpty ? null : budgetProgresses.first;
-    final budgetLimit = topBudget?.budget.amount ?? 0;
-    final budgetSpent = topBudget?.spent ?? 0;
-    final budgetRatioValue = topBudget?.ratio ?? 0;
-
     final balanceCard = BalanceHeroCard(
-      balance: state.format(accountBalance),
-      income: state.format(summary.income),
+      balance: state.format(state.totalAccountBalance), income: state.format(summary.income),
       expense: state.format(summary.expense),
       subtitle: '${state.accounts.length} accounts total • ${range.label} balance ${state.format(summary.balance)}',
-      amountsHidden: state.amountsHidden,
-      onToggleAmounts: state.toggleAmountsHidden,
-      budgetLabel: topBudget == null ? null : 'Monthly budget · ${DateFormat('MMMM yyyy').format(topBudget.budget.selectedMonth)}',
-      budgetValue: topBudget == null ? null : '${state.format(budgetSpent)} / ${state.format(budgetLimit)}',
-      budgetRatio: topBudget == null ? null : budgetRatioValue,
-      budgetCaption: topBudget == null
-          ? null
-          : '${(budgetRatioValue * 100).clamp(0, 999).round()}% used · ${state.format(math.max(0, budgetLimit - budgetSpent))} left to spend',
-      onBudgetTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetDetailScreen(progress: topBudget!))),
+      amountsHidden: state.amountsHidden, onToggleAmounts: state.toggleAmountsHidden,
     );
-
-    final recentTxs = txs.take(5).toList();
-
-    // Account cards laid out like the reference "Your accounts" grid:
-    // each card is a live account; tapping opens the account editor,
-    // exactly like tapping a row in the accounts list.
-    final accountsSection = <Widget>[
-      SectionHeader(
-        'Your accounts',
-        trailing: TextButton(
-          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          onPressed: () => state.selectTabIndex(kTransactionTabIndex),
-          child: const Text('View activity'),
-        ),
-      ),
-      if (state.accounts.isEmpty)
-        EmptyCard(
-          icon: Icons.account_balance_wallet_rounded,
-          title: 'No accounts yet',
-          body: 'Add an account, restore a backup, or sign in to replace this device with your cloud data.',
-          action: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
-          actionLabel: 'Add account',
-        )
-      else
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final cardWidth = (constraints.maxWidth - 10) / 2;
-            final useTwoColumns = constraints.maxWidth >= 520;
-            return Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: state.accounts.take(useTwoColumns ? 6 : 4).map((account) {
-                return SizedBox(
-                  width: useTwoColumns ? cardWidth : constraints.maxWidth,
-                  child: _AccountCardTile(
-                    account: account,
-                    onTap: () => showAccountEditor(context, account: account, allowedTypes: account.type == AccountType.savings ? const [AccountType.savings] : const [AccountType.regular, AccountType.credit]),
-                  ),
-                );
-              }).toList(),
-            );
-          },
-        ),
-      if (state.accounts.isNotEmpty) ...[
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            HomeNavigationTile(
-              iconName: 'wallet',
-              iconColor: '#78D8E8',
-              title: 'All accounts',
-              subtitle: '${state.operatingAccounts.length} regular accounts',
-              amount: state.format(state.operatingAccountBalance),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
-            ),
-            HomeNavigationTile(
-              iconName: 'savings',
-              iconColor: '#A6E3A1',
-              title: 'Savings Accounts',
-              subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
-              amount: state.format(state.savingAccountBalance),
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts'))),
-            ),
-          ],
-        ),
-      ],
-    ];
-
-    // "Recent activity" mirrors the reference dashboard list; "See all"
-    // jumps to the existing activity tab.
-    final recentActivitySection = <Widget>[
-      if (recentTxs.isNotEmpty) ...[
-        SectionHeader(
-          'Recent activity',
-          trailing: TextButton(
-            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-            onPressed: () => state.selectTabIndex(kTransactionTabIndex),
-            child: const Text('See all'),
-          ),
-        ),
-        ExpressiveCard(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
-          child: Column(
-            children: recentTxs.map((tx) => TransactionTile(tx: tx, flat: true)).toList(),
-          ),
-        ),
-      ],
-    ];
-
     final budgetSection = <Widget>[
       SectionHeader('Budgets', trailing: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())), child: const Text('View all'))),
       if (state.budgets.isEmpty)
@@ -6641,6 +5587,8 @@ class HomeDashboardScreen extends StatelessWidget {
       else
         ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 10), child: BudgetProgressTile(progress: b))),
     ];
+
+
 
     final categorySection = <Widget>[
       SectionHeader('Category spending'),
@@ -6651,22 +5599,17 @@ class HomeDashboardScreen extends StatelessWidget {
           child: Column(
             children: topCategories.take(4).map((entry) {
               final category = state.categoryOf(entry.key);
-              return _CategorySpendRow(
-                bubble: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
-                name: category?.name ?? 'Unknown',
-                value: state.format(entry.value),
-                progress: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
+                title: Text(category?.name ?? 'Unknown'),
+                subtitle: LinearProgressIndicator(value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal),
+                trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600)),
                 onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
               );
             }).toList(),
           ),
         ),
-    ];
-
-    // "Savings suggestion" card presents today's unseen purchase suggestion,
-    // opening the existing suggestion dialog on tap (same data as the bubbles).
-    final savingsSuggestionSection = <Widget>[
-      if (recentTxs.isNotEmpty) ..._buildSavingsSuggestionSection(context, state),
     ];
 
     final startEmptySection = <Widget>[
@@ -6684,9 +5627,9 @@ class HomeDashboardScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 4),
-                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500)),
+                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -6721,446 +5664,93 @@ class HomeDashboardScreen extends StatelessWidget {
     ];
 
 
-    return PageScaffold(
-      title: 'Home',
-      subtitle: 'Welcome back, ${state.profileDisplayLabel}',
-      actions: [
-        if (AppBreakpoints.isExpanded(context))
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                minimumSize: const Size(0, 44),
-              ),
-              onPressed: () => showTransactionEditor(context),
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('Add'),
-            ),
-          ),
-        IconButton(onPressed: () => showDateRangeSheet(context), tooltip: 'Date range', icon: const Icon(Icons.date_range_outlined)),
-        IconButton(onPressed: () => state.cycleThemePreference(), tooltip: 'Toggle theme', icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined)),
-        const ProfileAvatarButton(size: 40),
-      ],
-      child: ResponsiveContent(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final useDesktopColumns = constraints.maxWidth >= 860;
-            if (!useDesktopColumns) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  balanceCard,
-                  ...startEmptySection,
-                  ...accountsSection,
-                  ...recentActivitySection,
-                  ...budgetSection,
-                  ...categorySection,
-                  ...savingsSuggestionSection,
-                ],
-              );
-            }
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      balanceCard,
-                      ...startEmptySection,
-                      ...accountsSection,
-                      ...recentActivitySection,
-                      ...budgetSection,
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  flex: 4,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ...categorySection,
-                      ...savingsSuggestionSection,
-                        ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+    final recent = ExpressiveCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [Expanded(child: Text('Recent activity', style: Theme.of(context).textTheme.titleMedium)),
+        TextButton(onPressed: () => state.selectTabIndex(kTransactionTabIndex), child: const Text('See all →'))]),
+      const SizedBox(height: 8),
+      if (txs.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 32), child: Column(children: [
+        Icon(Icons.receipt_long_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 28),
+        const SizedBox(height: 12), const Text('No activity in this period'),
+        TextButton(onPressed: () => showTransactionEditor(context), child: const Text('Add transaction')),
+      ])) else for (final tx in txs.take(5)) TransactionTile(tx: tx, framed: false),
+    ]));
+    return PageScaffold(
+      title: state.profileDisplayName.trim().isEmpty ? 'Welcome back' : 'Welcome back, ${state.profileDisplayName.trim()}',
+      subtitle: range.label,
+      actions: [
+        IconButton(tooltip: 'Date range', onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_outlined)),
+        IconButton(tooltip: 'Settings', onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_outlined)),
+      ],
+      child: ResponsiveContent(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        balanceCard,
+        ...startEmptySection,
+        SectionHeader('Your accounts', trailing: TextButton(
+          onPressed: () => state.selectTabIndex(kTransactionTabIndex), child: const Text('View activity →'))),
+        if (state.accounts.isNotEmpty) LayoutBuilder(builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 920 ? 4 : constraints.maxWidth >= 620 ? 3 : constraints.maxWidth < 300 ? 1 : 2;
+          final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+          return Wrap(spacing: 12, runSpacing: 12, children: [
+            for (final account in state.accounts) SizedBox(width: width, child: _DashboardAccountCard(account: account)),
+          ]);
+        }),
+        const SizedBox(height: 12),
+        Wrap(spacing: 12, runSpacing: 4, children: [
+          TextButton.icon(icon: const Icon(Icons.account_balance_wallet_outlined, size: 17),
+            label: Text('Accounts · ${state.format(state.operatingAccountBalance)}'),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen()))),
+          TextButton.icon(icon: const Icon(Icons.savings_outlined, size: 17),
+            label: Text('Savings Accounts · ${state.format(state.savingAccountBalance)}'),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts')))),
+        ]),
+        const SizedBox(height: 20),
+        LayoutBuilder(builder: (context, constraints) {
+          final supporting = Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [...budgetSection, ...categorySection]);
+          if (constraints.maxWidth < 820) return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [recent, supporting]);
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(flex: 3, child: recent), const SizedBox(width: 20), Expanded(flex: 2, child: supporting),
+          ]);
+        }),
+      ])),
     );
   }
 }
 
-List<Widget> _buildSavingsSuggestionSection(BuildContext context, AppController state) {
-  final suggestions = state.unseenSavingsPurchaseSuggestionsForToday();
-  if (suggestions.isEmpty) return const [];
-  final suggestion = suggestions.first;
-  final color = colorFromHex(suggestion.color, fallback: kSleekAccent);
-  final dark = Theme.of(context).brightness == Brightness.dark;
-
-  return [
-    const SectionHeader('Savings suggestion'),
-    ExpressiveCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(color: color.withOpacity(.14), shape: BoxShape.circle),
-                child: iconGlyph(context, suggestion.iconName, color: color, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  suggestion.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            suggestion.reason,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500, height: 1.45),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Estimated cost',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: dark ? Colors.white.withOpacity(.55) : kSleekLightSecondaryText,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: .8,
-                      ),
-                ),
-              ),
-              Text(
-                suggestion.costRange,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: dark ? kSleekIncome : kSleekLightIncome, letterSpacing: -.3),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => showKoinlyPopup<void>(
-                context,
-                maxWidth: 520,
-                maxHeight: 620,
-                child: SavingsSuggestionDetailDialog(suggestion: suggestion),
-              ),
-              icon: Icon(Icons.savings_outlined, size: 18, color: color),
-              label: const Text('View suggestion'),
-            ),
-          ),
-        ],
-      ),
-    ),
-  ];
-}
-
-/// Compact reference-style account card: circular icon, type tag, balance.
-class _AccountCardTile extends StatelessWidget {
-  const _AccountCardTile({required this.account, required this.onTap});
-
+class _DashboardAccountCard extends StatelessWidget {
+  const _DashboardAccountCard({required this.account});
   final Account account;
-  final VoidCallback onTap;
-
-  String get _tag {
-    switch (account.type) {
-      case AccountType.savings:
-        return 'SAVINGS';
-      case AccountType.credit:
-        return 'CREDIT';
-      default:
-        return 'REGULAR';
-    }
-  }
-
-  Color get _tagColor {
-    switch (account.type) {
-      case AccountType.savings:
-        return kSleekWarning;
-      case AccountType.credit:
-        return kSleekExpense;
-      default:
-        return kSleekIncome;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    // Reference uses the regular text color for negative balances; the
-    // credit utilization bar carries the warning color instead.
-    final balanceColor = dark ? Colors.white : kSleekLightText;
-
-    return MotionPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      scale: .97,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                iconBubble(context, account.iconName, account.iconColor, size: 42),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _tagColor.withOpacity(.12),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    _tag,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: _tagColor, fontWeight: FontWeight.w700, letterSpacing: .8, fontSize: 9.5),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              account.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 5),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                state.format(account.amount),
-                maxLines: 1,
-                softWrap: false,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8, color: balanceColor),
-              ),
-            ),
-            if (account.type == AccountType.credit) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  value: account.creditLimit <= 0 ? 0 : (-account.amount / account.creditLimit).clamp(0.0, 1.0).toDouble(),
-                  minHeight: 5,
-                  color: kSleekExpense,
-                  backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${state.format(account.availableCredit)} available',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CategorySpendRow extends StatelessWidget {
-  const _CategorySpendRow({
-    required this.bubble,
-    required this.name,
-    required this.value,
-    required this.progress,
-    this.onTap,
-  });
-
-  final Widget? bubble;
-  final String name;
-  final String value;
-  final double progress;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return MotionPressable(
-      onTap: onTap,
+    final theme = Theme.of(context);
+    final credit = account.type == AccountType.credit;
+    return Material(color: Colors.transparent, child: InkWell(
       borderRadius: BorderRadius.circular(16),
-      scale: .98,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        child: Row(
-          children: [
-            if (bubble != null) ...[
-              bubble!,
-              const SizedBox(width: 12),
-            ],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: progress.clamp(0.0, 1.0).toDouble(),
-                      minHeight: 6,
-                      backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(value, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2)),
+      onTap: () => showAccountEditor(context, account: account,
+        allowedTypes: account.type == AccountType.savings ? const [AccountType.savings] : const [AccountType.regular, AccountType.credit]),
+      child: ExpressiveCard(padding: const EdgeInsets.all(16), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [iconBubble(context, account.iconName, account.iconColor, size: 36),
+            const Spacer(), Flexible(child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHigh, borderRadius: BorderRadius.circular(20)),
+              child: Text(enumName(account.type).toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.labelSmall)))]),
+          const SizedBox(height: 16),
+          Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodySmall),
+          const SizedBox(height: 5),
+          SizedBox(width: double.infinity, child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+            child: Text(state.format(account.amount), style: theme.textTheme.titleLarge))),
+          if (credit) ...[
+            const SizedBox(height: 12),
+            ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(
+              value: account.creditLimit <= 0 ? 0 : (-account.amount / account.creditLimit).clamp(0.0, 1.0).toDouble(),
+              color: kSleekAccent, minHeight: 4)),
+            const SizedBox(height: 5),
+            Text('${state.format(account.availableCredit)} available', maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.labelSmall),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-
-class HomeNavigationTile extends StatelessWidget {
-  const HomeNavigationTile({
-    super.key,
-    required this.iconName,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    required this.onTap,
-  });
-
-  final String iconName;
-  final String iconColor;
-  final String title;
-  final String subtitle;
-  final String amount;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return MotionPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      scale: .97,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            iconBubble(context, iconName, iconColor, size: 44),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightMutedText,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Text(amount, softWrap: false, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3)),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class QuickActionTile extends StatelessWidget {
-  const QuickActionTile({
-    super.key,
-    required this.iconName,
-    required this.iconColor,
-    required this.label,
-    required this.onTap,
-  });
-
-  final String iconName;
-  final String iconColor;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Semantics(
-      button: true,
-      label: label.replaceAll('\n', ' '),
-      child: MotionPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        scale: .96,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.spring,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          decoration: BoxDecoration(
-            color: dark ? kSleekSurface : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: dark ? Colors.white.withOpacity(.055) : kSleekLightBorder),
-            boxShadow: [
-              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 14, offset: const Offset(0, 8)),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              iconBubble(context, iconName, iconColor, size: 42),
-              const SizedBox(height: 9),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: scheme.onSurface,
-                      fontWeight: FontWeight.w600,
-                      height: 1.05,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+        ])),
+    ));
   }
 }
 
@@ -7169,425 +5759,81 @@ class MiniMetric extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-
-  Color _accent() {
-    final lower = label.toLowerCase();
-    if (lower.contains('income') || lower.contains('saving')) return kSleekIncome;
-    if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue')) return kSleekExpense;
-    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent;
-    if (lower.contains('open')) return const Color(0xFF8AB4FF);
-    if (lower.contains('completed')) return const Color(0xFF2BD9A1);
-    return kSleekAccent;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent = _accent();
-
-    Widget fitted(String text, TextStyle? style, {Alignment alignment = Alignment.centerLeft, TextAlign textAlign = TextAlign.left}) => FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: alignment,
-          child: Text(
-            text,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            textAlign: textAlign,
-            style: style,
-          ),
-        );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 230;
-        return Container(
-          constraints: BoxConstraints(minHeight: compact ? 82 : 66),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: dark ? kSleekSurface : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: dark ? Colors.white.withOpacity(.055) : kSleekLightBorder, width: 1),
-            boxShadow: [
-              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 14, offset: const Offset(0, 8)),
-            ],
-          ),
-          child: compact
-              ? Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(color: accent.withOpacity(.13), shape: BoxShape.circle),
-                      child: Icon(icon, color: accent, size: 19),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(width: double.infinity, child: fitted(label, textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
-                          const SizedBox(height: 5),
-                          SizedBox(width: double.infinity, child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.onSurface, letterSpacing: -.4))),
-                        ],
-                      ),
-                    ),
-                  ],
-                )
-              : Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(color: accent.withOpacity(.13), shape: BoxShape.circle),
-                      child: Icon(icon, color: accent, size: 19),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(child: fitted(label, textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500))),
-                    const SizedBox(width: 12),
-                    Flexible(child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3), alignment: Alignment.centerRight, textAlign: TextAlign.right)),
-                  ],
-                ),
-        );
-      },
+    final theme = Theme.of(context);
+    final lower = label.toLowerCase();
+    final accent = lower.contains('income') || lower.contains('collect')
+        ? theme.colorScheme.secondary
+        : lower.contains('expense') || lower.contains('pay') ? kSleekWarning : kSleekAccent;
+    return ExpressiveCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(icon, size: 15, color: accent), const SizedBox(width: 6),
+          Expanded(child: Text(label.toUpperCase(), maxLines: 2,
+            style: theme.textTheme.labelSmall))]),
+        const SizedBox(height: 10),
+        SizedBox(width: double.infinity, child: FittedBox(fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(value, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)))),
+      ]),
     );
   }
 }
 
 class BalanceHeroCard extends StatelessWidget {
-  const BalanceHeroCard({
-    super.key,
-    required this.balance,
-    required this.income,
-    required this.expense,
-    required this.subtitle,
-    required this.amountsHidden,
-    required this.onToggleAmounts,
-    this.budgetLabel,
-    this.budgetValue,
-    this.budgetRatio,
-    this.budgetCaption,
-    this.onBudgetTap,
-  });
+  const BalanceHeroCard({super.key, required this.balance, required this.income,
+    required this.expense, required this.subtitle, required this.amountsHidden,
+    required this.onToggleAmounts});
   final String balance;
   final String income;
   final String expense;
   final String subtitle;
   final bool amountsHidden;
   final VoidCallback onToggleAmounts;
-  final String? budgetLabel;
-  final String? budgetValue;
-  final double? budgetRatio;
-  final String? budgetCaption;
-  final VoidCallback? onBudgetTap;
-
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final small = AppBreakpoints.isSmall(context);
-    final cardColor = dark ? kSleekSurface : Colors.white;
-    final labelColor = dark ? Colors.white.withOpacity(.62) : kSleekLightSecondaryText;
-    final valueColor = dark ? Colors.white : kSleekLightText;
-
-    return AnimatedContainer(
-      duration: AppMotion.medium,
-      curve: AppMotion.emphasized,
-      padding: EdgeInsets.all(small ? 20 : 24),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(dark ? .22 : .05), blurRadius: 26, offset: const Offset(0, 14)),
-          if (dark) BoxShadow(color: kSleekAccent.withOpacity(.05), blurRadius: 34, offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // "TOTAL BALANCE" label + currency + eye toggle.
-          Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded, size: 15, color: dark ? kSleekAccent : const Color(0xFF059669)),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  'TOTAL BALANCE',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: labelColor,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.4,
-                      ),
-                ),
-              ),
-              Tooltip(
-                message: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: onToggleAmounts,
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: Icon(
-                      amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                      size: 16,
-                      color: dark ? kSleekAccent.withOpacity(.85) : const Color(0xFF059669).withOpacity(.85),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Hero number + currency code.
-          SizedBox(
-            width: double.infinity,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    balance,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -2.0,
-                          color: valueColor,
-                          height: 1.05,
-                        ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    context.select<AppController, String>((state) => state.currencyCode),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: labelColor,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: .8,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          // Income / expense stat badges.
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _HeroStatBadge(
-                icon: Icons.south_west_rounded,
-                label: '+$income',
-                emphasized: true,
-              ),
-              _HeroStatBadge(
-                icon: Icons.north_east_rounded,
-                label: '-$expense',
-                emphasized: false,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500)),
-          // Monthly budget summary, reference style: label + spent/limit,
-          // green→amber gradient fill, usage caption.
-          if (budgetLabel != null && budgetValue != null && budgetRatio != null) ...[
-            const SizedBox(height: 18),
-            MotionPressable(
-              onTap: onBudgetTap,
-              borderRadius: BorderRadius.circular(16),
-              scale: .985,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          budgetLabel!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: labelColor, fontWeight: FontWeight.w700, letterSpacing: .6),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            budgetValue!,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: TweenAnimationBuilder<double>(
-                      tween: Tween<double>(begin: 0, end: budgetRatio!.clamp(0.0, 1.0).toDouble()),
-                      duration: AppMotion.slow,
-                      curve: AppMotion.emphasized,
-                      builder: (context, value, _) => LinearProgressIndicator(
-                        value: value,
-                        minHeight: 10,
-                        color: kSleekIncome,
-                        backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
-                      ),
-                    ),
-                  ),
-                  if (budgetCaption != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      budgetCaption!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          // Stat boxes row.
-          Row(
-            children: [
-              Expanded(
-                child: _HeroStatBox(
-                  label: 'THIS MONTH IN',
-                  value: income,
-                  icon: Icons.trending_up_rounded,
-                  positive: true,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _HeroStatBox(
-                  label: 'THIS MONTH OUT',
-                  value: expense,
-                  icon: Icons.trending_down_rounded,
-                  positive: false,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStatBadge extends StatelessWidget {
-  const _HeroStatBadge({required this.icon, required this.label, required this.emphasized});
-
-  final IconData icon;
-  final String label;
-  final bool emphasized;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final positive = emphasized;
-    final color = positive
-        ? (dark ? kSleekIncome : kSleekLightIncome)
-        : (dark ? const Color(0xFF8B9493) : kSleekLightSecondaryText);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: EdgeInsets.all(AppBreakpoints.isExpanded(context) ? 28 : 24),
       decoration: BoxDecoration(
-        color: positive
-            ? (dark ? kSleekIncome.withOpacity(.14) : kSleekLightIncome.withOpacity(.10))
-            : (dark ? Colors.white.withOpacity(.06) : const Color(0xFFF3F4F1)),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                label,
-                maxLines: 1,
-                softWrap: false,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroStatBox extends StatelessWidget {
-  const _HeroStatBox({required this.label, required this.value, required this.icon, required this.positive});
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final bool positive;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final scheme = Theme.of(context).colorScheme;
-    final color = positive ? (dark ? kSleekIncome : kSleekLightIncome) : (dark ? kSleekWarning : const Color(0xFFD97706));
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      decoration: BoxDecoration(
-        color: dark ? kSleekSurfaceHigh : kSleekLightCardHigh,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(color: color.withOpacity(.14), shape: BoxShape.circle),
-            child: Icon(icon, size: 17, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700, letterSpacing: .9),
-                ),
-                const SizedBox(height: 3),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.4),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+        gradient: LinearGradient(begin: Alignment.bottomLeft, end: Alignment.topRight,
+          colors: [Color.alphaBlend(kSleekWarning.withOpacity(dark ? .035 : .025), scheme.surface),
+            scheme.surface, Color.alphaBlend(kSleekAccent.withOpacity(dark ? .08 : .055), scheme.surface)])),
+      child: LayoutBuilder(builder: (context, constraints) {
+        final metrics = Row(children: [
+          Expanded(child: MiniMetric('Total income', income, Icons.trending_up_rounded)),
+          const SizedBox(width: 12),
+          Expanded(child: MiniMetric('Total expense', expense, Icons.trending_down_rounded)),
+        ]);
+        final total = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.auto_awesome_outlined, color: kSleekWarning, size: 16),
+            const SizedBox(width: 8),
+            Text('TOTAL BALANCE', style: theme.textTheme.labelMedium?.copyWith(letterSpacing: 2)),
+            const SizedBox(width: 6),
+            IconButton(tooltip: amountsHidden ? 'Show amounts' : 'Hide amounts',
+              onPressed: onToggleAmounts, iconSize: 17,
+              icon: Icon(amountsHidden ? Icons.visibility_off_outlined : Icons.visibility_outlined)),
+          ]),
+          const SizedBox(height: 4),
+          SizedBox(width: double.infinity, child: FittedBox(fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(balance, style: theme.textTheme.displaySmall?.copyWith(fontSize: constraints.maxWidth > 680 ? 56 : 42)))),
+          const SizedBox(height: 12),
+          Text(subtitle, style: theme.textTheme.bodySmall),
+        ]);
+        if (constraints.maxWidth > 740) {
+          return Row(children: [Expanded(flex: 6, child: total), const SizedBox(width: 28),
+            Expanded(flex: 4, child: metrics)]);
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [total, const SizedBox(height: 24), metrics]);
+      }),
     );
   }
 }
@@ -7602,32 +5848,16 @@ class EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
       child: Column(
         children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: (dark ? kSleekAccent : const Color(0xFF059669)).withOpacity(.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 28, color: dark ? kSleekAccent : const Color(0xFF059669)),
-          ),
-          const SizedBox(height: 14),
-          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+          Icon(icon, size: 42),
+          const SizedBox(height: 12),
+          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500, height: 1.45),
-          ),
+          Text(body, textAlign: TextAlign.center),
           if (action != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             FilledButton(onPressed: action, child: Text(actionLabel ?? 'Add')),
           ],
         ],
@@ -7648,52 +5878,33 @@ class AccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final balanceColor = dark ? Colors.white : kSleekLightText;
-    return MotionPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      scale: .98,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        radius: 20,
-        child: Row(
+    final balanceColor = account.amount < 0 ? kSleekExpense : Theme.of(context).colorScheme.onSurface;
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      radius: 16,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: iconBubble(context, account.iconName, account.iconColor, size: 46),
+        title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          account.type == AccountType.credit
+              ? 'Credit • Available ${state.format(account.availableCredit)}'
+              : account.type == AccountType.savings
+                  ? 'Savings Account'
+                  : 'Cash Wallet',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            iconBubble(context, account.iconName, account.iconColor, size: 46),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                  const SizedBox(height: 3),
-                  Text(
-                    account.type == AccountType.credit
-                        ? 'Credit · Available ${state.format(account.availableCredit)}'
-                        : account.type == AccountType.savings
-                            ? 'Savings account'
-                            : 'Regular account',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
-              child: Text(
-                state.format(account.amount),
-                softWrap: false,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: balanceColor),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: balanceColor)),
+            const SizedBox(width: 6),
+            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ],
         ),
+        onTap: onTap,
       ),
     );
   }
@@ -7920,11 +6131,11 @@ class _SavingsSuggestionPanelState extends State<SavingsSuggestionPanel> with Si
                   ignoring: !_bubbleVisible,
                   child: AnimatedOpacity(
                     opacity: _bubbleVisible ? 1 : 0,
-                    duration: AppMotion.fast,
+                    duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
                     curve: AppMotion.emphasized,
                     child: AnimatedScale(
                       scale: _bubbleVisible ? 1 : .78,
-                      duration: AppMotion.fast,
+                      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
                       curve: AppMotion.emphasized,
                       child: _SavingsSuggestionBubble(
                         suggestion: visibleSuggestion,
@@ -7958,16 +6169,16 @@ class _SavingsSuggestionBubble extends StatelessWidget {
 
     return AnimatedScale(
       scale: selected ? .82 : 1,
-      duration: AppMotion.fast,
+      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
       curve: AppMotion.emphasized,
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
           width: 74,
           height: 74,
           decoration: BoxDecoration(
-            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE141A17) : Colors.white.withOpacity(.96)),
+            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE10191D) : Colors.white.withOpacity(.96)),
             shape: BoxShape.circle,
             border: Border.all(color: selected ? color.withOpacity(.78) : color.withOpacity(.36), width: selected ? 2 : 1.2),
             boxShadow: [
@@ -7991,7 +6202,7 @@ class _SavingsSuggestionBubble extends StatelessWidget {
                 '?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       color: color,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       height: 1,
                     ),
               ),
@@ -8020,13 +6231,13 @@ class SavingsSuggestionDetailDialog extends StatelessWidget {
           children: [
             iconBubble(context, suggestion.iconName, suggestion.color, size: 58),
             const SizedBox(height: 14),
-            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             _SuggestionDetailRow(icon: Icons.price_change_rounded, title: 'Estimated cost', body: suggestion.costRange, color: color),
             _SuggestionDetailRow(icon: Icons.psychology_rounded, title: 'Why this fits', body: suggestion.reason, color: color),
             _SuggestionDetailRow(icon: Icons.savings_rounded, title: 'Savings fit', body: suggestion.savingsFit, color: color),
             const SizedBox(height: 8),
-            Text('This is an optional spending idea, not financial advice. Only buy if it fits your actual needs and savings goal.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+            Text('This is an optional spending idea, not financial advice. Only buy if it fits your actual needs and savings goal.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
             const SizedBox(height: 18),
             FilledButton(
               onPressed: () => Navigator.pop(context),
@@ -8067,9 +6278,9 @@ class _SuggestionDetailRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 3),
-                  Text(body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                  Text(body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
@@ -8213,7 +6424,7 @@ class _AccountEditorState extends State<AccountEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Account name')),
             const SizedBox(height: 12),
@@ -8234,7 +6445,7 @@ class _AccountEditorState extends State<AccountEditor> {
               const SizedBox(height: 8),
               Text(
                 'Changing this balance updates total accounts only. It does not create income, expense, or transaction history.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
               ),
             ],
             if (type == AccountType.credit) ...[
@@ -8334,7 +6545,7 @@ class IconColorPicker extends StatelessWidget {
             'APPEARANCE',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   letterSpacing: 3,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w600,
                   color: colorScheme.onSurface.withOpacity(.82),
                 ),
           ),
@@ -8397,7 +6608,7 @@ class _AppearanceButton extends StatelessWidget {
                   child: Text(
                     label,
                     maxLines: 1,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -8469,7 +6680,7 @@ class ColorSelectionPage extends StatelessWidget {
       child: Builder(
         builder: (dialogContext) {
           final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-          final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
+          final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
@@ -8483,13 +6694,13 @@ class ColorSelectionPage extends StatelessWidget {
                 const SizedBox(height: 18),
                 Text(
                   'Custom color',
-                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Choose how you want to create a custom color.',
                   textAlign: TextAlign.center,
-                  style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                  style: Theme.of(dialogContext).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 16),
                 _CustomColorOptionCard(
@@ -8598,11 +6809,11 @@ class ColorSelectionPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 2),
                             Text(
                               customSelected ? selectedNormalized : 'Color picker or pick from photo',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -8626,11 +6837,11 @@ class ColorSelectionPage extends StatelessWidget {
                   customCard,
                 SizedBox(height: desktop ? 24 : 18),
                 if (desktop) ...[
-                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   Text(
                     'Choose a ready-made accent color.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 14),
                 ],
@@ -8707,13 +6918,13 @@ class _CustomColorOptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -8932,7 +7143,7 @@ class _ColorWheelPickerPageState extends State<ColorWheelPickerPage> {
                         ),
                         child: Text(
                           'Drag on the wheel to choose hue and saturation, then fine-tune brightness.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.4),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500, height: 1.4),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -9071,9 +7282,9 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 3),
-                        Text('Selected custom color', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        Text('Selected custom color', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -9099,7 +7310,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                       borderRadius: BorderRadius.circular(18),
                       child: Container(
                         height: 300,
-                        color: Theme.of(context).brightness == Brightness.dark ? kSleekSurfaceHigh : kSleekLightCardHigh,
+                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF171317) : const Color(0xFFFCFAFA),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -9235,7 +7446,7 @@ class _ValueSlider extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Brightness', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, color: kSleekMuted)),
+        Text('Brightness', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 8),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
@@ -9358,37 +7569,16 @@ class CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return MotionPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      scale: .98,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        radius: 20,
-        child: Row(
-          children: [
-            iconBubble(context, category.iconName, category.iconColor, size: 44),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                  const SizedBox(height: 3),
-                  Text(
-                    enumName(category.type),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              trailing!,
-            ],
-          ],
-        ),
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      radius: 16,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: iconBubble(context, category.iconName, category.iconColor),
+        title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(enumName(category.type)),
+        trailing: trailing,
+        onTap: onTap,
       ),
     );
   }
@@ -9442,7 +7632,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
@@ -9492,10 +7682,10 @@ class TransactionListScreen extends StatelessWidget {
     final txs = state.filteredTransactions();
     return PageScaffold(
       title: 'Activity',
-      subtitle: '${txs.length} records · ${state.activeRange().label}',
+      subtitle: '${txs.length} records • ${state.activeRange().label}',
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), tooltip: 'Date range', icon: const Icon(Icons.date_range_outlined)),
-        IconButton(onPressed: () => showFilterSheet(context), tooltip: 'Filters', icon: const Icon(Icons.filter_alt_outlined)),
+        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
+        IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded)),
       ],
       child: ResponsiveListContent(
         header: [ActiveFilterChips(state: state)],
@@ -9530,9 +7720,9 @@ class ActiveFilterChips extends StatelessWidget {
 }
 
 class TransactionTile extends StatelessWidget {
-  const TransactionTile({super.key, required this.tx, this.flat = false});
+  const TransactionTile({super.key, required this.tx, this.framed = true});
+  final bool framed;
   final MoneyTransaction tx;
-  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -9541,11 +7731,7 @@ class TransactionTile extends StatelessWidget {
     final account = state.accountOf(tx.fromAccountId);
     final toAccount = tx.toAccountId == null ? null : state.accountOf(tx.toAccountId!);
     final amountPrefix = tx.type == MoneyTransactionType.expense ? '-' : tx.type == MoneyTransactionType.income ? '+' : '';
-    final amountColor = tx.type == MoneyTransactionType.expense
-        ? kSleekExpense
-        : tx.type == MoneyTransactionType.income
-            ? kSleekIncome
-            : (Theme.of(context).brightness == Brightness.dark ? kSleekAccent : const Color(0xFF047857));
+    final amountColor = tx.type == MoneyTransactionType.income ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.onSurface;
     final savedTitle = tx.title.trim();
     final title = tx.type == MoneyTransactionType.transfer
         ? '${account?.name ?? ''} → ${toAccount?.name ?? ''}'
@@ -9554,60 +7740,29 @@ class TransactionTile extends StatelessWidget {
             : category?.name ?? 'Unknown';
     final subtitleParts = <String>[
       if (tx.type != MoneyTransactionType.transfer && savedTitle.isNotEmpty && category != null) category.name,
-      transactionDateSpanLabel(tx.createdOn, tx.effectiveEndOn),
+      transactionDateTimeLabel(tx),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      child: Row(
-        children: [
-          tx.type == MoneyTransactionType.transfer
-              ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-              : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                const SizedBox(height: 3),
-                Text(
-                  subtitleParts.join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightMutedText,
-                        fontWeight: FontWeight.w500,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$amountPrefix${state.format(tx.amount)}',
-            maxLines: 1,
-            softWrap: false,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: amountColor),
-          ),
-        ],
-      ),
+    final row = ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: tx.type == MoneyTransactionType.transfer
+            ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
+            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(
+          subtitleParts.join(' • '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+        ),
+        trailing: Text(
+          '$amountPrefix${state.format(tx.amount)}',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600, color: amountColor),
+        ),
+        onTap: () => showTransactionEditor(context, transaction: tx),
     );
-
-    final tile = MotionPressable(
-      onTap: () => showTransactionEditor(context, transaction: tx),
-      borderRadius: BorderRadius.circular(16),
-      scale: .985,
-      child: row,
-    );
-
-    if (flat) return tile;
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      radius: 20,
-      child: tile,
-    );
+    if (!framed) return Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: row);
+    return ExpressiveCard(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), child: row);
   }
 }
 
@@ -9696,13 +7851,13 @@ class _TransactionEditorState extends State<TransactionEditor> {
     final relevantCategories = state.categories.where((c) => c.type == (type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense)).toList();
     if (type == MoneyTransactionType.transfer) categoryId = '';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             SleekPillSelector<MoneyTransactionType>(
               options: const [
@@ -9732,6 +7887,22 @@ class _TransactionEditorState extends State<TransactionEditor> {
               }),
             ),
             const SizedBox(height: 12),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.next,
+              textAlign: TextAlign.center,
+              inputFormatters: [
+                TextInputFormatter.withFunction((oldValue, newValue) {
+                  final text = newValue.text;
+                  if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
+                  return oldValue;
+                }),
+              ],
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600),
+              decoration: const InputDecoration(labelText: 'Amount', hintText: '0.00', contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 28)),
+            ),
+            const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer) ...[
               TextField(
                 controller: title,
@@ -9747,22 +7918,6 @@ class _TransactionEditorState extends State<TransactionEditor> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
-              controller: amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              textInputAction: TextInputAction.next,
-              textAlign: TextAlign.end,
-              inputFormatters: [
-                TextInputFormatter.withFunction((oldValue, newValue) {
-                  final text = newValue.text;
-                  if (text.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(text)) return newValue;
-                  return oldValue;
-                }),
-              ],
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
-            ),
-            const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
               AppleSelectionField(
                 label: 'Category',
@@ -9779,7 +7934,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 },
               ),
             if (widget.lockedCategory != null)
-              ExpressiveCard(padding: const EdgeInsets.all(12), child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w800)))])),
+              ExpressiveCard(padding: const EdgeInsets.all(12), child: Row(children: [iconBubble(context, widget.lockedCategory!.iconName, widget.lockedCategory!.iconColor), const SizedBox(width: 12), Expanded(child: Text(widget.lockedCategory!.name, style: const TextStyle(fontWeight: FontWeight.w600)))])),
             const SizedBox(height: 12),
             AppleSelectionField(
               label: type == MoneyTransactionType.transfer ? 'From account' : 'Account',
@@ -9854,7 +8009,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
             Row(children: [
               if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
               if (widget.transaction != null) const SizedBox(width: 12),
-              Expanded(flex: 2, child: FilledButton(onPressed: () async {
+              Expanded(flex: 2, child: KoinlyPrimaryAction(onPressed: () async {
                 final value = double.tryParse(amount.text) ?? 0;
                 if (value <= 0) return showSnack(context, 'Enter a valid amount');
                 final transactionTitle = title.text.trim();
@@ -9885,7 +8040,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                   await state.updateTransaction(tx);
                 }
                 if (context.mounted) Navigator.pop(context);
-              }, child: const Text('Save'))),
+              }, label: 'Save', icon: Icons.check_rounded)),
             ]),
           ],
         ),
@@ -10012,7 +8167,7 @@ class _FilterSheetState extends State<FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
             const SectionHeader('Accounts'),
             Wrap(spacing: 8, runSpacing: 8, children: state.accounts.map((a) => FilterChip(label: Text(a.name), selected: accounts.contains(a.id), onSelected: (v) => setState(() => v ? accounts.add(a.id) : accounts.remove(a.id)))).toList()),
             const SectionHeader('Categories'),
@@ -10097,52 +8252,35 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
     return PageScaffold(
       title: 'Insights',
-      subtitle: 'Where your money is going',
-      actions: [IconButton(onPressed: () => showFilterSheet(context), tooltip: 'Filters', icon: const Icon(Icons.filter_alt_outlined))],
+      subtitle: range.label,
+      actions: [IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded))],
       child: ResponsiveContent(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final fourAcross = constraints.maxWidth >= 760;
-            final kpis = <Widget>[
-              MiniMetric('Income', state.format(summary.income), Icons.south_west_rounded),
-              MiniMetric('Expense', state.format(summary.expense), Icons.north_east_rounded),
-              MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
-              MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.local_fire_department_outlined),
-            ];
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (fourAcross)
-                  Row(children: [
-                    for (var i = 0; i < kpis.length; i++) ...[
-                      Expanded(child: kpis[i]),
-                      if (i != kpis.length - 1) const SizedBox(width: 10),
-                    ],
-                  ])
-                else ...[
-                  Row(children: [
-                    Expanded(child: kpis[0]),
-                    const SizedBox(width: 10),
-                    Expanded(child: kpis[1]),
-                  ]),
-                  const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(child: kpis[2]),
-                    const SizedBox(width: 10),
-                    Expanded(child: kpis[3]),
-                  ]),
-                ],
-                const SectionHeader('Cash flow'),
-                RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
-                const SectionHeader('Averages'),
-                Row(children: [
-                  Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
-                  const SizedBox(width: 10),
-                  Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
-                ]),
-              ],
-            );
-          },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LayoutBuilder(builder: (context, constraints) {
+              final cards = [
+                MiniMetric('Income', state.format(summary.income), Icons.trending_up_rounded),
+                MiniMetric('Expense', state.format(summary.expense), Icons.trending_down_rounded),
+                MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_outlined),
+              ];
+              if (constraints.maxWidth < 600) return Column(children: [
+                Row(children: [Expanded(child: cards[0]), const SizedBox(width: 12), Expanded(child: cards[1])]),
+                const SizedBox(height: 12), SizedBox(width: double.infinity, child: cards[2]),
+              ]);
+              return Row(children: [for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 12), Expanded(child: cards[i]),
+              ]]);
+            }),
+            const SectionHeader('Cash flow'),
+            RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
+            const SectionHeader('Averages'),
+            Row(children: [
+              Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
+              const SizedBox(width: 10),
+              Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
+            ]),
+          ],
         ),
       ),
     );
@@ -10563,8 +8701,8 @@ class FinancialHealthPeriodCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                          Text(period == FinancialHealthPeriod.monthly ? 'Tap to choose another month' : 'Tap to choose another year', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                          Text(period == FinancialHealthPeriod.monthly ? 'Tap to choose another month' : 'Tap to choose another year', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ),
@@ -10661,13 +8799,13 @@ class FinancialHealthStatusCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                     HealthStatusPill(label: summary.periodLabel, color: color),
                     const HealthStatusPill(label: 'Savings transfers are internal', color: kSleekAccent),
                   ],
                 ),
                 const SizedBox(height: 6),
-                Text(summary.statusBody, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                Text(summary.statusBody, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -10688,7 +8826,7 @@ class HealthStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: color.withOpacity(.12), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(.24))),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w800)),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -10817,7 +8955,7 @@ class HealthBarChartCard extends StatelessWidget {
             children: [
               Icon(icon, color: kSleekAccent),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
             ],
           ),
           const SizedBox(height: 14),
@@ -10845,9 +8983,9 @@ class HealthBarRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text(data.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
+            Expanded(child: Text(data.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600))),
             const SizedBox(width: 8),
-            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
+            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600)),
           ],
         ),
         const SizedBox(height: 6),
@@ -10882,7 +9020,7 @@ class BudgetHealthCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -10919,7 +9057,7 @@ class BillStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -10950,7 +9088,7 @@ class OverspendingCategoriesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           ...summary.overspentItems.map((item) => Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -10966,12 +9104,12 @@ class OverspendingCategoriesCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
-                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
+                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w600)),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      Text('Spent ${state.format(item.spent)} • Limit ${state.format(item.limit)} • Overspent ${state.format(item.overspent)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                      Text('Spent ${state.format(item.spent)} • Limit ${state.format(item.limit)} • Overspent ${state.format(item.overspent)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
@@ -11012,7 +9150,7 @@ class YearlyComparisonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -11046,7 +9184,7 @@ class YearlyBreakdownCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           ...summary.monthlyBreakdowns.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -11080,9 +9218,9 @@ class MonthBreakdownTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
-              Expanded(child: Text('Income ${state.format(item.income)} • Expense ${state.format(item.expense)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700))),
-              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w800)),
+              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+              Expanded(child: Text('Income ${state.format(item.income)} • Expense ${state.format(item.expense)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500))),
+              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 8),
@@ -11100,7 +9238,7 @@ class MonthBreakdownTile extends StatelessWidget {
             'Savings ${state.format(item.savingsNet)} • Bills ${item.billPaymentCount} • Budget used ${state.format(item.budgetSpent)}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -11208,7 +9346,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
       maxLines: 1,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w600,
           ),
     );
   }
@@ -11226,7 +9364,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
         _dateLabel(widget.days[index]),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
       ),
     );
@@ -11274,11 +9412,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           dotData: FlDotData(show: false),
           belowBarData: BarAreaData(
             show: _view == _TrendView.income,
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [kSleekIncome.withOpacity(dark ? .22 : .16), kSleekIncome.withOpacity(0)],
-            ),
+            color: kSleekIncome.withOpacity(dark ? .10 : .08),
           ),
         ),
       if (showExpense)
@@ -11288,15 +9422,11 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           preventCurveOverShooting: true,
           barWidth: 3.2,
           isStrokeCapRound: true,
-          color: kSleekWarning,
+          color: kSleekExpense,
           dotData: FlDotData(show: false),
           belowBarData: BarAreaData(
             show: _view == _TrendView.expense,
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [kSleekWarning.withOpacity(dark ? .22 : .16), kSleekWarning.withOpacity(0)],
-            ),
+            color: kSleekExpense.withOpacity(dark ? .10 : .08),
           ),
         ),
     ];
@@ -11316,7 +9446,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                   children: [
                     Text(
                       'Cash flow trend',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -11353,7 +9483,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                 label: 'Expense',
                 value: state.format(totalExpense),
                 icon: Icons.north_east_rounded,
-                color: kSleekWarning,
+                color: kSleekExpense,
               ),
               _TrendMetricPill(
                 label: 'Net',
@@ -11427,14 +9557,14 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                             tooltipRoundedRadius: 14,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
+                            getTooltipColor: (_) => dark ? const Color(0xFF252027) : const Color(0xFF252027),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
                               final label = item.barIndex == 0 && showIncome ? 'Income' : 'Expense';
                               return LineTooltipItem(
                                 '$date\n$label  ${_compactCurrency(state, item.y)}',
-                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, height: 1.35),
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, height: 1.35),
                               );
                             }).toList(),
                           ),
@@ -11454,7 +9584,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           Text(
                             'No income or expense data in this range',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -11472,7 +9602,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
             children: [
               if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
               if (showIncome && showExpense) const SizedBox(width: 16),
-              if (showExpense) const _TrendLegendDot(color: kSleekWarning, label: 'Expense'),
+              if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
             ],
           ),
         ],
@@ -11517,14 +9647,14 @@ class _TrendMetricPill extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
               ),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
             ],
           ),
@@ -11571,7 +9701,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget build(BuildContext context) {
     return PageScaffold(
       title: 'Categories',
-      subtitle: 'Group, budget & analyze',
+      subtitle: selected == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown',
       actions: const [ProfileAvatarButton()],
       child: ResponsiveContent(
         child: Column(
@@ -11602,43 +9732,51 @@ class _ManageCategoriesButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent = dark ? kSleekAccent : const Color(0xFF059669);
     final label = type == CategoryType.expense ? 'Expense categories' : 'Income categories';
-    return MotionPressable(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
-      ),
-      borderRadius: BorderRadius.circular(20),
-      scale: .98,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        radius: 20,
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(color: accent.withOpacity(.12), shape: BoxShape.circle),
-              child: Icon(Icons.category_rounded, color: accent, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Manage categories', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
-                  ),
-                ],
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: kSleekAccent.withOpacity(.16),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kSleekAccent.withOpacity(.24)),
+                ),
+                child: const Icon(Icons.category_rounded, color: kSleekAccent),
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, size: 20),
-          ],
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Manage categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
         ),
       ),
     );
@@ -11660,26 +9798,28 @@ class ManageCategoriesScreen extends StatelessWidget {
       title: 'Manage categories',
       subtitle: title,
       actions: [IconButton(onPressed: () => showCategoryEditor(context, initialType: type), icon: const Icon(Icons.add_rounded))],
-      child: ResponsiveListContent(
-        itemCount: cats.length,
-        empty: EmptyCard(
-          icon: Icons.category_rounded,
-          title: 'No ${enumName(type)} categories',
-          body: 'Tap the + button to create a category.',
-        ),
-        itemBuilder: (context, index) {
-          final category = cats[index];
-          return CategoryTile(
-            category: category,
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => showCategoryEditor(context, category: category),
-          );
-        },
-      ),
+      child: ResponsiveContent(child: LayoutBuilder(builder: (context, constraints) {
+        if (cats.isEmpty) return EmptyCard(icon: Icons.category_outlined,
+          title: 'No ${enumName(type)} categories', body: 'Tap the + button to create a category.');
+        final columns = constraints.maxWidth >= 900 ? 4 : constraints.maxWidth >= 600 ? 3 : constraints.maxWidth < 300 ? 1 : 2;
+        final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
+        return Wrap(spacing: 12, runSpacing: 12, children: [
+          for (final category in cats) SizedBox(width: width, child: Material(color: Colors.transparent,
+            child: InkWell(onTap: () => showCategoryEditor(context, category: category),
+              borderRadius: BorderRadius.circular(16),
+              child: ExpressiveCard(padding: const EdgeInsets.all(18), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  iconBubble(context, category.iconName, category.iconColor, size: 40),
+                  const SizedBox(height: 14),
+                  Text(category.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 4), Text(enumName(category.type), style: Theme.of(context).textTheme.bodySmall),
+                ])),
+            ))),
+        ]);
+      })),
     );
   }
 }
-
 
 class CategoryBreakdownCard extends StatelessWidget {
   const CategoryBreakdownCard({super.key, required this.type, this.interactive = false});
@@ -11688,14 +9828,14 @@ class CategoryBreakdownCard extends StatelessWidget {
 
   Color _fallbackColor(int index) {
     const palette = [
-      Color(0xFF10B981),
-      Color(0xFFF59E0B),
-      Color(0xFF3B82F6),
-      Color(0xFF8B5CF6),
-      Color(0xFFEC4899),
-      Color(0xFF06B6D4),
-      Color(0xFF84CC16),
-      Color(0xFF64748B),
+      Color(0xFF18D8CF),
+      Color(0xFFA79BFF),
+      Color(0xFF7EDBD3),
+      Color(0xFF1EC7BD),
+      Color(0xFFB9B1FF),
+      Color(0xFF5BE6DB),
+      Color(0xFFF7C66D),
+      Color(0xFFF49DBE),
     ];
     return palette[index % palette.length];
   }
@@ -11771,10 +9911,10 @@ class CategoryBreakdownCard extends StatelessWidget {
     final rangeLabel = state.activeRange().label;
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chartSurfaceTop = isDark ? kSleekSurfaceHigh : kSleekLightCardHigh;
-    final chartSurfaceBottom = isDark ? kSleekSurfaceHigh : Colors.white;
-    final chartBorderColor = isDark ? Colors.transparent : kSleekLightBorder;
-    final donutTrackColor = isDark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB);
+    final chartSurfaceTop = isDark ? scheme.surfaceContainerHighest.withOpacity(.18) : const Color(0xFFF7FCFD);
+    final chartSurfaceBottom = isDark ? scheme.surfaceContainerHigh.withOpacity(.06) : Colors.white;
+    final chartBorderColor = isDark ? Colors.transparent : const Color(0xFFDCEBEE).withOpacity(.95);
+    final donutTrackColor = isDark ? const Color(0xFF26383C).withOpacity(.36) : const Color(0xFFE1ECEF);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -11784,19 +9924,9 @@ class CategoryBreakdownCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      chartTitle,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
-                    ),
-                  ),
-                  Text(
-                    rangeLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: isDark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
-                  ),
-                ],
+              Text(
+                chartTitle,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -11946,7 +10076,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                     height: centerSize,
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF111417).withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      color: isDark ? const Color(0xFF171317).withOpacity(.97) : Colors.white.withOpacity(.98),
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
@@ -11970,7 +10100,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               state.format(total),
                                               maxLines: 1,
                                               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                                    fontWeight: FontWeight.w800,
+                                                    fontWeight: FontWeight.w600,
                                                     letterSpacing: -.8,
                                                     color: isDark ? Colors.white : scheme.onSurface,
                                                   ),
@@ -11988,7 +10118,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               textAlign: TextAlign.center,
                                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                                     color: const Color(0xFF10CADA),
-                                                    fontWeight: FontWeight.w800,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                             ),
                                           ),
@@ -12004,7 +10134,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               textAlign: TextAlign.center,
                                               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                                                     color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant.withOpacity(.88),
-                                                    fontWeight: FontWeight.w800,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                             ),
                                           ),
@@ -12061,12 +10191,12 @@ class CategoryBreakdownCard extends StatelessWidget {
                                 slice.label,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 '${percentage.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
@@ -12074,7 +10204,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           state.format(slice.value),
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         if (interactive && slice.category != null) ...[
                           const SizedBox(width: 8),
@@ -12226,14 +10356,14 @@ class _DonutPercentBadge extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final badgeBackground = selected
         ? (isDark ? color.withOpacity(.28) : color.withOpacity(.20))
-        : (isDark ? const Color(0xFF181B1F).withOpacity(.96) : Colors.white.withOpacity(.96));
-    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : const Color(0xFFD8E6EA));
+        : (isDark ? const Color(0xFF211B20).withOpacity(.96) : Colors.white.withOpacity(.96));
+    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : const Color(0xFFE9E5E8));
     final textColor = isDark ? Colors.white.withOpacity(.96) : scheme.onSurface;
     final iconBackground = useTextBadge
         ? (isDark ? Colors.black : const Color(0xFFF3F8F9))
         : color.withOpacity(isDark ? .18 : .16);
     final iconBorder = useTextBadge
-        ? (isDark ? Colors.white.withOpacity(.06) : const Color(0xFFDCEBED))
+        ? (isDark ? Colors.white.withOpacity(.06) : const Color(0xFFE9E5E8))
         : color.withOpacity(isDark ? .28 : .30);
     final iconColor = isDark ? Colors.white : color;
 
@@ -12273,7 +10403,7 @@ class _DonutPercentBadge extends StatelessWidget {
                           maxLines: 1,
                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: textColor,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w600,
                                 letterSpacing: .4,
                               ),
                         ),
@@ -12291,7 +10421,7 @@ class _DonutPercentBadge extends StatelessWidget {
                 label,
                 maxLines: 1,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                       letterSpacing: -.2,
                       color: textColor,
                     ),
@@ -12373,61 +10503,25 @@ class BudgetProgressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final ratio = progress.ratio;
-    final color = ratio >= 1
-        ? kSleekExpense
-        : ratio >= .8
-            ? kSleekWarning
-            : ratio >= .5
-                ? const Color(0xFFD97706)
-                : kSleekIncome;
-    return MotionPressable(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      scale: .98,
-      child: ExpressiveCard(
-        padding: const EdgeInsets.all(16),
-        radius: 20,
+    final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
+    return ExpressiveCard(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              iconBubble(context, 'wallet', colorToHex(color), size: 42),
+              iconBubble(context, 'wallet', colorToHex(color)),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  DateFormat('MMMM yyyy').format(progress.budget.selectedMonth),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
-                ),
-              ),
-              Text(
-                '${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2, color: color),
-              ),
+              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: const TextStyle(fontWeight: FontWeight.w600))),
+              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w600)),
             ]),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(99),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: ratio.clamp(0, 1).toDouble()),
-                duration: AppMotion.slow,
-                curve: AppMotion.emphasized,
-                builder: (context, value, _) => LinearProgressIndicator(
-                  value: value,
-                  minHeight: 10,
-                  color: color,
-                  backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
-            ),
+            const SizedBox(height: 12),
+            ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 12, color: color)),
+            const SizedBox(height: 8),
+            Text('${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}'),
           ],
         ),
       ),
@@ -12507,7 +10601,7 @@ class _BudgetEditorState extends State<BudgetEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
             const SizedBox(height: 12),
@@ -12542,90 +10636,88 @@ class _BudgetEditorState extends State<BudgetEditor> {
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    return PageScaffold(
-      title: 'Settings',
-      child: ResponsiveContent(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        child: Column(
-          children: [
-            SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
-            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#10B981', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
-            SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
-            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
-            SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
-          ],
-        ),
-      ),
+    return PageScaffold(title: 'Settings', subtitle: 'Profile, sync & preferences',
+      child: ResponsiveContent(desktopMaxWidth: 740, mobileMaxWidth: 740,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          ExpressiveCard(child: Row(children: [
+            const ProfileAvatarButton(), const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(state.profileDisplayLabel, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(state.syncAccountEmail.isEmpty ? 'Your personal finance profile' : state.syncAccountEmail,
+                style: Theme.of(context).textTheme.bodySmall),
+            ])),
+            TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen())), child: const Text('Edit')),
+          ])),
+          const SizedBox(height: 20),
+          _SettingsGroup(title: 'APPEARANCE', children: [
+SettingsTile(framed: false, icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
+SettingsTile(framed: false, icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
+          ]),
+          const SizedBox(height: 20),
+          _SettingsGroup(title: 'SYNC & DATA', children: [
+SettingsTile(framed: false, icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+SettingsTile(framed: false, icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
+          ]),
+          const SizedBox(height: 20),
+          _SettingsGroup(title: 'PREFERENCES', children: [
+SettingsTile(framed: false, icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
+SettingsTile(framed: false, icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
+          ]),
+          const SizedBox(height: 20),
+          _SettingsGroup(title: 'ABOUT KOINLY', children: [
+SettingsTile(framed: false, icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+SettingsTile(framed: false, icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
+          ]),
+        ])),
     );
   }
 }
 
+class _SettingsGroup extends StatelessWidget {
+  const _SettingsGroup({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => ExpressiveCard(padding: EdgeInsets.zero,
+    child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+        child: Text(title, style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 2, fontWeight: FontWeight.w600))),
+      for (final child in children) ...[
+        Divider(height: 1, thickness: 1, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(.5)), child,
+      ],
+    ]));
+}
 
 class SettingsTile extends StatelessWidget {
-  const SettingsTile({super.key, required this.icon, required this.title, this.subtitle, required this.color, this.onTap});
+  const SettingsTile({super.key, required this.icon, required this.title, this.subtitle,
+    required this.color, this.onTap, this.framed = true});
   final IconData icon;
   final String title;
   final String? subtitle;
   final String color;
   final VoidCallback? onTap;
-
+  final bool framed;
   @override
   Widget build(BuildContext context) {
-    final c = colorFromHex(color);
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: MotionPressable(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        scale: .98,
-        child: ExpressiveCard(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
-          radius: 20,
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: c.withOpacity(dark ? .14 : .11),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: c, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
-                    if (hasSubtitle) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
+    final scheme = Theme.of(context).colorScheme;
+    final row = ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      leading: Container(width: 36, height: 36,
+        decoration: BoxDecoration(color: scheme.surfaceContainerHigh, shape: BoxShape.circle),
+        child: Icon(icon, color: scheme.onSurfaceVariant, size: 19)),
+      title: Text(title, style: Theme.of(context).textTheme.bodyMedium),
+      subtitle: subtitle == null || subtitle!.trim().isEmpty ? null : Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
+      trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant, size: 18),
+      onTap: onTap,
     );
+    if (!framed) return row;
+    return Padding(padding: const EdgeInsets.only(bottom: 10),
+      child: ExpressiveCard(padding: EdgeInsets.zero, child: row));
   }
 }
 
@@ -12651,15 +10743,15 @@ class UpdatesScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#10B981', size: 54),
+                      iconBubble(context, 'download', '#00D7E8', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
-                            Text(state.updateStatusMessage, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                            Text(state.updateStatusMessage, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                           ],
                         ),
                       ),
@@ -12737,15 +10829,15 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#10B981', size: 54),
+                      iconBubble(context, 'download', '#00D7E8', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 3),
-                            Text(releaseDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
+                            Text(releaseDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -12756,7 +10848,7 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 10),
                         ReleaseChangelogView(markdown: release.body),
                       ],
@@ -12788,9 +10880,9 @@ class UpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Text('Open the GitHub release page for this platform.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+          Text('Open the GitHub release page for this platform.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: () {
@@ -12831,7 +10923,7 @@ class _AndroidUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -12886,11 +10978,11 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 8),
             Text(
               'This release does not include a Windows installer asset.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -12914,11 +11006,11 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           Text(
             '${asset.name}${asset.sizeBytes > 0 ? ' • ${formatBytes(asset.sizeBytes)}' : ''}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
           ),
           if (pendingForThisRelease) ...[
             const SizedBox(height: 12),
@@ -12955,8 +11047,8 @@ class DownloadProgressCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
-              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: kSleekAccent)),
+              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: kSleekAccent)),
             ],
           ),
           const SizedBox(height: 12),
@@ -12964,12 +11056,12 @@ class DownloadProgressCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: Text('${progress.downloadedText} / ${progress.totalText}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800))),
-              Text(progress.speedText, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
+              Expanded(child: Text('${progress.downloadedText} / ${progress.totalText}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600))),
+              Text(progress.speedText, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
             ],
           ),
           const SizedBox(height: 6),
-          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w800)),
+          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w600)),
           const SizedBox(height: 10),
           OutlinedButton.icon(onPressed: onCancel, icon: const Icon(Icons.close_rounded), label: const Text('Cancel download')),
         ],
@@ -13126,7 +11218,7 @@ class ReleaseChangelogView extends StatelessWidget {
   Widget build(BuildContext context) {
     final blocks = ChangelogParser.parse(markdown);
     if (blocks.isEmpty) {
-      return Text('No changelog was provided for this release.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700));
+      return Text('No changelog was provided for this release.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13147,7 +11239,7 @@ class _ChangelogBlockView extends StatelessWidget {
       case ChangelogBlockType.heading:
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 6),
-          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
         );
       case ChangelogBlockType.bullet:
         return _ChangelogLine(prefix: '•', block: block);
@@ -13175,7 +11267,7 @@ class _ChangelogLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w800, color: kSleekAccent))),
+          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w600, color: kSleekAccent))),
           Expanded(child: _LinkedSegmentsText(segments: block.segments)),
         ],
       ),
@@ -13190,13 +11282,13 @@ class _LinkedSegmentsText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.35, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92), fontWeight: FontWeight.w700);
+    final style = Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.35, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92), fontWeight: FontWeight.w500);
     return Wrap(
       children: segments.map((segment) {
         if (segment.url == null) return Text(segment.text, style: style);
         return InkWell(
           onTap: () => launchUrl(Uri.parse(segment.url!), mode: LaunchMode.externalApplication),
-          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w800)),
+          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w600)),
         );
       }).toList(),
     );
@@ -13390,7 +11482,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 10),
                   SegmentedButton<bool>(
                     segments: const [
@@ -13433,7 +11525,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Changing services signs out this device because each backend has separate accounts and tokens.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ],
@@ -13461,11 +11553,11 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
                             Text(
                               state.cloudSyncLastAt == null ? 'Not synced yet' : 'Last synced ${DateFormat('MMM d, yyyy HH:mm').format(state.cloudSyncLastAt!.toLocal())}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -13474,7 +11566,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   ),
                   if (state.cloudSyncError != null && state.cloudSyncError!.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Text(state.cloudSyncError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
+                    Text(state.cloudSyncError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w600)),
                   ],
                 ],
               ),
@@ -13521,13 +11613,13 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             if (!signedIn) ...[
               Text(
                 _registerMode ? 'Create your Koinly sync account' : 'Login to your Koinly sync account',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               if (!_registerMode) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Login downloads your cloud copy and completely replaces local finance data on this device.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
                 ),
               ],
               const SizedBox(height: 10),
@@ -13751,7 +11843,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
             ),
             if (state.cloudSyncError != null && state.cloudSyncError!.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(state.cloudSyncError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w800)),
+              Text(state.cloudSyncError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -13770,7 +11862,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
             const SizedBox(height: 14),
             Text(
               'Important: Sync downloads/restores the latest database data to this device. Upload Data uploads this device’s local data to the configured database. Automatic sync still runs after local changes once a database method is configured. Conflict handling is last-upload-wins.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -13814,7 +11906,7 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Select database method',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       ),
                     ),
                     Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -14049,9 +12141,9 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 4),
-                        Text(syncDatabaseProviderSubtitle(_provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        Text(syncDatabaseProviderSubtitle(_provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -14062,7 +12154,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
             _providerFields(),
             if (_status != null && _status!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(_status!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800)),
+              Text(_status!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 18),
             Row(
@@ -14117,7 +12209,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
           padding: const EdgeInsets.all(16),
           child: Text(
             '$label uses your Koinly sync backend API. Configure that backend to store snapshots in $label, then paste the API URL here. Sync ID and Sync PIN stay on this database method page.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -14162,7 +12254,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
             const SizedBox(height: 8),
             Text(
               'Use your own MongoDB database. Koinly stores one latest app snapshot in its internal collection.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
             ),
           ],
         );
@@ -14215,7 +12307,7 @@ class _ProviderSyncActions extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -14341,14 +12433,14 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
                   child: const Icon(Icons.tune_rounded, color: kSleekAccent),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
+                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600))),
                 IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
               ],
             ),
             const SizedBox(height: 14),
             Text(
               'Choose where Koinly stores online sync snapshots. Credentials are saved with platform secure storage and are not included in backups.',
-              style: theme.textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              style: theme.textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
             ),
             const SizedBox(height: 16),
             ...userSyncDatabaseProviders.map((provider) => _ProviderChoiceCard(
@@ -14358,14 +12450,14 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
                 )),
             const SizedBox(height: 10),
             AnimatedSwitcher(
-              duration: AppMotion.medium,
+              duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.medium,
               switchInCurve: AppMotion.emphasized,
               switchOutCurve: AppMotion.emphasizedAccelerate,
               child: _providerFields(),
             ),
             if (_status != null && _status!.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(_status!, style: theme.textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800)),
+              Text(_status!, style: theme.textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w600)),
             ],
             const SizedBox(height: 18),
             Row(
@@ -14413,7 +12505,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
           padding: const EdgeInsets.all(16),
           child: Text(
             '$label uses your Koinly sync backend API. Configure that backend to store snapshots in $label, then paste the API URL here. Sync ID and Sync PIN stay on this database method page.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
           ),
         ),
       ],
@@ -14457,7 +12549,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
             const SizedBox(height: 8),
             Text(
               'Use your own MongoDB database. Koinly stores one latest app snapshot in its internal collection.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
             ),
           ],
         );
@@ -14488,7 +12580,7 @@ class _ProviderChoiceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: AnimatedContainer(
-          duration: AppMotion.fast,
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
           curve: AppMotion.emphasized,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -14504,9 +12596,9 @@ class _ProviderChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
-                    Text(syncDatabaseProviderSubtitle(provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                    Text(syncDatabaseProviderSubtitle(provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -14843,7 +12935,7 @@ class _CurrencyFormState extends State<CurrencyForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.closeAfterSave) ...[
-          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 14),
         ],
         CurrencyCustomizationButton(
@@ -14930,13 +13022,13 @@ class CurrencyCustomizationButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 3),
                     Text(
                       '$country • $symbol • $code',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -15003,9 +13095,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
-        final innerBorderColor = dark ? const Color(0xFF26302C) : kSleekLightBorder;
-        final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
+        final innerColor = dark ? const Color(0xFF171317) : const Color(0xFFFCFAFA);
+        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
+        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -15021,7 +13113,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               Text(
                 'Choose currency',
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -15042,7 +13134,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               ),
               const SizedBox(height: 12),
               AnimatedContainer(
-                duration: AppMotion.fast,
+                duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
                 curve: AppMotion.emphasized,
                 height: listHeight,
                 decoration: BoxDecoration(
@@ -15055,7 +13147,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                     ? Center(
                         child: Text(
                           'No currency found',
-                          style: Theme.of(dialogContext).textTheme.bodyLarge?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                          style: Theme.of(dialogContext).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                         ),
                       )
                     : Scrollbar(
@@ -15121,7 +13213,7 @@ class _CurrencyWheelRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return AnimatedContainer(
-      duration: AppMotion.fast,
+      duration: MediaQuery.of(context).disableAnimations ? Duration.zero : AppMotion.fast,
       curve: AppMotion.emphasized,
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -15148,7 +13240,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w600,
                         color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
                       ),
                 ),
@@ -15159,7 +13251,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
                       ),
                 ),
               ],
@@ -15199,7 +13291,7 @@ class _CurrencySymbolBubble extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: kSleekAccent,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w600,
             ),
       ),
     );
@@ -15236,7 +13328,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 24),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
         SwitchListTile(value: enabled, onChanged: (v) => setState(() => enabled = v), title: const Text('Enable reminder'), subtitle: const Text('Notification text: “Don’t forget to record your expenses”')),
         OutlinedButton.icon(onPressed: () async { final t = await pickTime(context, time); if (t != null) setState(() => time = t); }, icon: const Icon(Icons.schedule_rounded), label: Text(time.format(context))),
         const SizedBox(height: 12),
@@ -15267,7 +13359,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
             icon: Icons.fact_check_rounded,
             title: 'Data health',
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
-            color: '#10B981',
+            color: '#00D7E8',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
           ),
           SettingsTile(
@@ -15331,11 +13423,11 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
                             Text(
                               report == null ? 'Run a quick scan before blaming ghosts in the machine.' : report.statusBody,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -15435,7 +13527,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
               Text(
                 'Last checked ${DateFormat('MMM d, yyyy • h:mm a').format(report.checkedAt)}',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
               ),
             ],
           ],
@@ -15482,12 +13574,12 @@ class DataHealthFindingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text(item.body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                Text(item.body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                 if (item.actionLabel != null) ...[
                   const SizedBox(height: 8),
-                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w800)),
+                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w600)),
                 ],
               ],
             ),
@@ -15565,17 +13657,12 @@ class AboutScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ExpressiveCard(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
               child: Column(children: [
-                const _KoinlyBrandMark(size: 72),
-                const SizedBox(height: 16),
-                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.4), textAlign: TextAlign.center),
-                const SizedBox(height: 6),
-                Text('PRIVATE FINANCE', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w700, letterSpacing: 1.6), textAlign: TextAlign.center),
+                const Icon(Icons.account_balance_wallet_rounded, size: 64),
                 const SizedBox(height: 12),
-                const KoinlyAppIcon(size: 56, borderRadius: 18),
-                const SizedBox(height: 12),
-                Text('Version: $appVersion', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                Text('Version: $appVersion', textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 Wrap(
                   alignment: WrapAlignment.center,
@@ -15637,7 +13724,7 @@ class _AboutLinkButton extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w600,
                     ),
               ),
             ],
@@ -15748,13 +13835,13 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                                   child: const Icon(Icons.account_balance_wallet_rounded, color: kSleekAccent, size: 38),
                                 ),
                                 const SizedBox(height: 14),
-                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600), textAlign: TextAlign.center),
                                 const SizedBox(height: 4),
-                                Text('Version $appVersion', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+                                Text('Version $appVersion', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
                                 const SizedBox(height: 12),
                                 Text(
                                   'Powered by Flutter • ${licenses.length} packages with license notices',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -15785,9 +13872,9 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                               item.name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w800),
+                              style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
-                            subtitle: Text(countLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                            subtitle: Text(countLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
                             trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
                             onTap: () => Navigator.push(
                               context,
@@ -15878,11 +13965,11 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
+                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 8),
                                   Text(
                                     widget.licenseCount == 1 ? '1 license notice' : '${widget.licenseCount} license notices',
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                                   ),
                                 ],
                               ),
@@ -15906,7 +13993,7 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
                                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                               color: scheme.onSurfaceVariant,
                                               height: 1.42,
-                                              fontWeight: paragraph.indent == LicenseParagraph.centeredIndent ? FontWeight.w800 : FontWeight.w500,
+                                              fontWeight: paragraph.indent == LicenseParagraph.centeredIndent ? FontWeight.w600 : FontWeight.w500,
                                             ),
                                         textAlign: paragraph.indent == LicenseParagraph.centeredIndent ? TextAlign.center : TextAlign.start,
                                       ),

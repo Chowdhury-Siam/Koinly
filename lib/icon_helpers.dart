@@ -148,21 +148,9 @@ Widget iconBubble(BuildContext context, String icon, String color, {double size 
   final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
   final dark = Theme.of(context).brightness == Brightness.dark;
   return Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: c.withOpacity(dark ? .16 : .13),
-      shape: BoxShape.circle,
-      border: Border.all(color: c.withOpacity(dark ? .22 : .18), width: 1),
-    ),
-    child: Center(
-      child: iconGlyph(
-        context,
-        icon,
-        color: c,
-        size: size * .54,
-        imageBackground: Colors.white.withOpacity(.88),
-      ),
-    ),
+    width: size, height: size,
+    decoration: BoxDecoration(color: c.withOpacity(dark ? .12 : .10), shape: BoxShape.circle),
+    child: Center(child: iconGlyph(context, icon, color: c, size: size * .50,
+      imageBackground: Colors.white.withOpacity(.84))),
   );
 }
