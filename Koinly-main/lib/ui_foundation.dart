@@ -23,9 +23,9 @@ class AppBreakpoints {
 class AppMotion {
   const AppMotion._();
 
-  static const Duration fast = Duration(milliseconds: 140);
-  static const Duration medium = Duration(milliseconds: 220);
-  static const Duration slow = Duration(milliseconds: 300);
+  static const Duration fast = Duration(milliseconds: 90);
+  static const Duration medium = Duration(milliseconds: 140);
+  static const Duration slow = Duration(milliseconds: 220);
 
   static const Curve standard = Cubic(0.2, 0.0, 0.0, 1.0);
   static const Curve emphasized = Cubic(0.05, 0.7, 0.1, 1.0);
@@ -36,12 +36,12 @@ class AppMotion {
 class AppShapes {
   const AppShapes._();
 
-  static BorderRadius extraSmall = BorderRadius.circular(8);
-  static BorderRadius small = BorderRadius.circular(12);
-  static BorderRadius medium = BorderRadius.circular(14);
-  static BorderRadius large = BorderRadius.circular(16);
-  static BorderRadius extraLarge = BorderRadius.circular(20);
-  static BorderRadius dialog = BorderRadius.circular(22);
+  static BorderRadius extraSmall = BorderRadius.circular(12);
+  static BorderRadius small = BorderRadius.circular(16);
+  static BorderRadius medium = BorderRadius.circular(20);
+  static BorderRadius large = BorderRadius.circular(24);
+  static BorderRadius extraLarge = BorderRadius.circular(30);
+  static BorderRadius dialog = BorderRadius.circular(32);
   static BorderRadius full = BorderRadius.circular(999);
 
   static RoundedRectangleBorder squircle(double radius) => RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));

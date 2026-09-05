@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_config.dart';
 import 'models.dart';
 
 IconData iconFor(String name) {
@@ -148,9 +149,30 @@ Widget iconBubble(BuildContext context, String icon, String color, {double size 
   final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
   final dark = Theme.of(context).brightness == Brightness.dark;
   return Container(
-    width: size, height: size,
-    decoration: BoxDecoration(color: c.withOpacity(dark ? .12 : .10), shape: BoxShape.circle),
-    child: Center(child: iconGlyph(context, icon, color: c, size: size * .50,
-      imageBackground: Colors.white.withOpacity(.84))),
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: c.withOpacity(dark ? .20 : .16),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          c.withOpacity(dark ? .26 : .18),
+          c.withOpacity(dark ? .10 : .08),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(size * .32),
+      border: Border.all(color: c.withOpacity(dark ? .34 : .25), width: 1),
+      boxShadow: kIsDesktopApp ? null : [BoxShadow(color: c.withOpacity(.15), blurRadius: 14, offset: const Offset(0, 6))],
+    ),
+    child: Center(
+      child: iconGlyph(
+        context,
+        icon,
+        color: c,
+        size: size * .56,
+        imageBackground: Colors.white.withOpacity(.84),
+      ),
+    ),
   );
 }

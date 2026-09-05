@@ -3,15 +3,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-const Color kSleekBackground = Color(0xFF09090B);
-const Color kSleekSurface = Color(0xFF131011);
-const Color kSleekSurfaceHigh = Color(0xFF201B1E);
-const Color kSleekSurfaceHigher = Color(0xFF30292D);
-const Color kSleekAccent = Color(0xFFFF2D68);
-const Color kSleekIncome = Color(0xFF00BF69);
-const Color kSleekExpense = Color(0xFFF04B69);
+const Color kSleekBackground = Color(0xFF020B0F);
+const Color kSleekSurface = Color(0xFF07171D);
+const Color kSleekSurfaceHigh = Color(0xFF0C2028);
+const Color kSleekSurfaceHigher = Color(0xFF132B34);
+const Color kSleekAccent = Color(0xFF00D7E8);
+const Color kSleekIncome = Color(0xFF27D17F);
+const Color kSleekExpense = Color(0xFFFF5353);
 const Color kSleekWarning = Color(0xFFF59E0B);
-const Color kSleekMuted = Color(0xFF85818C);
+const Color kSleekMuted = Color(0xFF90A4AD);
 
 const appTitle = 'Koinly';
 const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1062');
