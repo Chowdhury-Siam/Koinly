@@ -152,17 +152,26 @@ Widget iconBubble(BuildContext context, String icon, String color, {double size 
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: c.withOpacity(dark ? .24 : .17),
-      shape: BoxShape.circle,
-      border: Border.all(color: c.withOpacity(dark ? .22 : .18), width: 1),
+      color: c.withOpacity(dark ? .20 : .16),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          c.withOpacity(dark ? .26 : .18),
+          c.withOpacity(dark ? .10 : .08),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(size * .32),
+      border: Border.all(color: c.withOpacity(dark ? .34 : .25), width: 1),
+      boxShadow: kIsDesktopApp ? null : [BoxShadow(color: c.withOpacity(.15), blurRadius: 14, offset: const Offset(0, 6))],
     ),
     child: Center(
       child: iconGlyph(
         context,
         icon,
-        color: dark ? Color.lerp(c, Colors.white, .12)! : Color.lerp(c, Colors.black, .08)!,
-        size: size * .52,
-        imageBackground: null,
+        color: c,
+        size: size * .56,
+        imageBackground: Colors.white.withOpacity(.84),
       ),
     ),
   );

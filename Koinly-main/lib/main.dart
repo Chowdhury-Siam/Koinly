@@ -225,7 +225,7 @@ class KoinlyDatabase {
         phone TEXT NOT NULL DEFAULT '',
         note TEXT NOT NULL DEFAULT '',
         icon_name TEXT NOT NULL DEFAULT 'exchange',
-        icon_color TEXT NOT NULL DEFAULT '#FBC879',
+        icon_color TEXT NOT NULL DEFAULT '#FFB547',
         archived INTEGER NOT NULL DEFAULT 0,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
@@ -349,7 +349,7 @@ class KoinlyDatabase {
     if (count > 0) return;
     final now = DateTime.now();
     final accounts = [
-      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#78D8E8', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
+      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#FF5A3C', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Card', type: AccountType.credit, iconName: 'credit_card', iconColor: '#89A7FF', amount: 0, creditLimit: 0, sequence: 1, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Bank Account', type: AccountType.regular, iconName: 'bank', iconColor: '#A6E3A1', amount: 0, creditLimit: 0, sequence: 2, createdOn: now, updatedOn: now),
     ];
@@ -360,7 +360,7 @@ class KoinlyDatabase {
     final expense = [
       ['Clothing', 'apparel', '#F5A3A3'],
       ['Entertainment', 'games', '#B5A7FF'],
-      ['Food', 'food', '#FBC879'],
+      ['Food', 'food', '#FFB547'],
       ['Health', 'health', '#98E2C6'],
       ['Leisure', 'leisure', '#A7D0FF'],
       ['Shopping', 'cart', '#FFB5D0'],
@@ -3602,11 +3602,11 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
     add('start-savings-buffer', 'Start a savings buffer', state.format(500), 'Your savings account is empty, so the safest first idea is building a small buffer before buying anything.', 'A low target helps you start without creating pressure.', 'savings', '#A6E3A1');
   }
   if (text.contains('student') || text.contains('study') || text.contains('school') || text.contains('college') || text.contains('university')) {
-    add('student-study-kit', 'Study upgrade kit', range(.08, .18, min: 500, max: 8000), 'Useful for a student profile: notebooks, stationery, flash drive, or a focused study accessory.', 'Keep this below a small part of your savings so the account still grows.', 'book', '#78D8E8');
+    add('student-study-kit', 'Study upgrade kit', range(.08, .18, min: 500, max: 8000), 'Useful for a student profile: notebooks, stationery, flash drive, or a focused study accessory.', 'Keep this below a small part of your savings so the account still grows.', 'book', '#FF5A3C');
     add('course-or-exam', 'Course or exam prep', range(.12, .28, min: 800, max: 15000), 'A skill course or exam prep material can support your education instead of becoming a short-term impulse buy.', 'Best when it helps your current savings goal.', 'school', '#B4A5FF');
   }
   if (text.contains('game') || text.contains('gaming') || text.contains('gamer')) {
-    add('gaming-accessory', 'Gaming accessory', range(.10, .22, min: 1000, max: 18000), 'Your profile mentions gaming, so a controller, headset, or mouse can be a relevant planned purchase.', 'Choose this only if it does not reduce your main savings goal too much.', 'sports_esports', '#FBC879');
+    add('gaming-accessory', 'Gaming accessory', range(.10, .22, min: 1000, max: 18000), 'Your profile mentions gaming, so a controller, headset, or mouse can be a relevant planned purchase.', 'Choose this only if it does not reduce your main savings goal too much.', 'sports_esports', '#FFB547');
     add('gaming-audio', 'Gaming audio upgrade', range(.08, .18, min: 900, max: 12000), 'A headset or speakers can improve long gaming sessions more than random impulse spending.', 'Keep hobby spending within a fixed limit.', 'headphones', '#B4A5FF');
   }
   if (text.contains('anime') || text.contains('manga') || text.contains('otaku')) {
@@ -3616,13 +3616,13 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
   }
   if (text.contains('creator') || text.contains('youtube') || text.contains('video') || text.contains('content') || text.contains('stream')) {
     add('creator-gear', 'Creator gear upgrade', range(.14, .32, min: 1500, max: 25000), 'A mic, tripod, light, or storage upgrade fits a content-creator profile and can improve output quality.', 'Prefer gear that solves a real workflow problem.', 'camera_alt', '#86E3CE');
-    add('creator-audio', 'Microphone or audio accessory', range(.10, .22, min: 1200, max: 16000), 'Clearer audio can be one of the best-value upgrades for content creation.', 'Buy it only if it improves your current setup.', 'mic', '#78D8E8');
+    add('creator-audio', 'Microphone or audio accessory', range(.10, .22, min: 1200, max: 16000), 'Clearer audio can be one of the best-value upgrades for content creation.', 'Buy it only if it improves your current setup.', 'mic', '#FF5A3C');
   }
   if (text.contains('read') || text.contains('book') || text.contains('novel')) {
-    add('reader-stack', 'Book stack', range(.05, .14, min: 400, max: 8000), 'A planned book purchase fits your reading interest while keeping the amount modest.', 'Buy from a wishlist instead of impulse browsing.', 'book', '#FBC879');
+    add('reader-stack', 'Book stack', range(.05, .14, min: 400, max: 8000), 'A planned book purchase fits your reading interest while keeping the amount modest.', 'Buy from a wishlist instead of impulse browsing.', 'book', '#FFB547');
   }
   if (text.contains('travel') || text.contains('trip')) {
-    add('travel-day-plan', 'Small travel plan', range(.15, .35, min: 1500, max: 30000), 'Your profile suggests travel, so a controlled day-trip fund may fit better than random spending.', 'Keep transport, food, and emergency money inside the estimate.', 'flight', '#78D8E8');
+    add('travel-day-plan', 'Small travel plan', range(.15, .35, min: 1500, max: 30000), 'Your profile suggests travel, so a controlled day-trip fund may fit better than random spending.', 'Keep transport, food, and emergency money inside the estimate.', 'flight', '#FF5A3C');
   }
   if (text.contains('work') || text.contains('job') || text.contains('office') || text.contains('freelance')) {
     add('work-productivity', 'Work productivity item', range(.08, .22, min: 800, max: 16000), 'A practical desk, bag, keyboard, or app subscription can support your work routine.', 'Use this only if it improves daily productivity.', 'work', '#A6E3A1');
@@ -3633,11 +3633,11 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
   add('wishlist-item', 'Planned wishlist item', balance <= 0 ? state.format(500) : range(.05, .15, min: 500, max: 12000), 'A small planned item can be reasonable if it stays within your savings limit.', 'Avoid buying it if it delays a higher-priority goal.', 'gift', '#FFB5D0');
   add('audio-upgrade', 'Headphones or earphones', balance <= 0 ? state.format(700) : range(.06, .18, min: 700, max: 10000), 'Audio gear can be a practical upgrade for study, work, or entertainment when chosen carefully.', 'Keep it in a comfortable range that does not hurt your goal.', 'headphones', '#89A7FF');
   add('digital-subscription', 'Useful subscription or membership', balance <= 0 ? state.format(300) : range(.03, .10, min: 300, max: 5000), 'A single useful subscription can be more valuable than multiple impulse purchases.', 'Only continue it if you actually use it regularly.', 'subscription', '#86E3CE');
-  add('creative-hobby', 'Creative hobby supplies', balance <= 0 ? state.format(400) : range(.05, .14, min: 400, max: 8000), 'Art, journaling, or other hobby supplies can be a controlled way to enjoy your savings.', 'Set a spending ceiling before buying.', 'art', '#FBC879');
-  add('small-tech-upgrade', 'Small tech or desk upgrade', balance <= 0 ? state.format(900) : range(.08, .20, min: 900, max: 18000), 'A keyboard, stand, or small device can improve daily comfort if it solves a real need.', 'Choose practical upgrades over impulse gadgets.', 'keyboard', '#78D8E8');
+  add('creative-hobby', 'Creative hobby supplies', balance <= 0 ? state.format(400) : range(.05, .14, min: 400, max: 8000), 'Art, journaling, or other hobby supplies can be a controlled way to enjoy your savings.', 'Set a spending ceiling before buying.', 'art', '#FFB547');
+  add('small-tech-upgrade', 'Small tech or desk upgrade', balance <= 0 ? state.format(900) : range(.08, .20, min: 900, max: 18000), 'A keyboard, stand, or small device can improve daily comfort if it solves a real need.', 'Choose practical upgrades over impulse gadgets.', 'keyboard', '#FF5A3C');
   add('essential-replacement', 'Essential replacement fund', balance <= 0 ? state.format(600) : range(.05, .16, min: 600, max: 12000), 'Set aside money for replacing something useful before it becomes urgent.', 'This keeps savings practical instead of only entertainment-focused.', 'tools', '#A6E3A1');
   add('health-comfort-item', 'Health or comfort item', balance <= 0 ? state.format(500) : range(.04, .14, min: 500, max: 10000), 'A planned health, comfort, or daily-use item can be reasonable when it improves routine life.', 'Keep it below your main savings target.', 'health', '#86E3CE');
-  add('home-organizer', 'Home organizer or storage', balance <= 0 ? state.format(500) : range(.04, .13, min: 500, max: 9000), 'Small home organization purchases can reduce clutter without becoming a large expense.', 'Choose only one useful item and avoid extra add-ons.', 'home', '#FBC879');
+  add('home-organizer', 'Home organizer or storage', balance <= 0 ? state.format(500) : range(.04, .13, min: 500, max: 9000), 'Small home organization purchases can reduce clutter without becoming a large expense.', 'Choose only one useful item and avoid extra add-ons.', 'home', '#FFB547');
   add('small-gift-plan', 'Small gift plan', balance <= 0 ? state.format(400) : range(.04, .12, min: 400, max: 8000), 'Planning a gift ahead of time prevents last-minute overspending.', 'Use a fixed cap so generosity does not break the budget.', 'gift', '#FFB5D0');
   add('do-not-buy-yet', 'Wait and compare prices', state.format(0), 'Sometimes the best suggestion is not buying now. Compare prices and wait if the item is not needed.', 'This keeps your savings intact.', 'schedule', '#9AD0F5');
 
@@ -3674,7 +3674,6 @@ class KoinlyApp extends StatelessWidget {
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
-            disableAnimations: media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
         );
@@ -3684,88 +3683,72 @@ class KoinlyApp extends StatelessWidget {
 
   ThemeData _theme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
+    // Warm "Ember" palette derived from the Koinly logo.
+    final seed = kSleekAccent;
+    final baseScheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
     final scheme = isDark
-        ? const ColorScheme.dark(
-            primary: Color(0xFFE6B8F5),
-            onPrimary: Color(0xFF2A1530),
-            primaryContainer: Color(0xFF4A2D4D),
-            onPrimaryContainer: Color(0xFFFFE7FF),
-            secondary: Color(0xFFF1A8C5),
-            onSecondary: Color(0xFF3B1727),
-            secondaryContainer: Color(0xFF4B2635),
-            onSecondaryContainer: Color(0xFFFFD9E8),
-            tertiary: Color(0xFFFFC174),
-            onTertiary: Color(0xFF3D2500),
-            tertiaryContainer: Color(0xFF4F371B),
-            onTertiaryContainer: Color(0xFFFFE1B5),
-            error: Color(0xFFFF8594),
-            onError: Color(0xFF45000D),
-            background: Color(0xFF0C080D),
-            onBackground: Color(0xFFF5EAF1),
-            surface: Color(0xFF171016),
-            onSurface: Color(0xFFF5EAF1),
-            surfaceVariant: Color(0xFF2B1D25),
-            onSurfaceVariant: Color(0xFFCDBDC7),
-            outline: Color(0xFF66535F),
-            outlineVariant: Color(0xFF3B2B34),
-            shadow: Color(0xFF000000),
-            scrim: Color(0xFF000000),
-            inverseSurface: Color(0xFFF2E7EE),
-            onInverseSurface: Color(0xFF2E252B),
-            inversePrimary: Color(0xFF76507E),
-            surfaceTint: Color(0xFFE6B8F5),
-          ).copyWith(
-            surfaceContainerLowest: const Color(0xFF090609),
-            surfaceContainerLow: const Color(0xFF120D12),
-            surfaceContainer: const Color(0xFF1A1218),
-            surfaceContainerHigh: const Color(0xFF241820),
-            surfaceContainerHighest: const Color(0xFF302029),
+        ? baseScheme.copyWith(
+            primary: kSleekAccent,
+            onPrimary: Colors.white,
+            primaryContainer: const Color(0xFF5C1F12),
+            onPrimaryContainer: Colors.white,
+            secondary: kSleekAccent2,
+            onSecondary: Colors.white,
+            tertiary: kSleekAccent3,
+            onTertiary: const Color(0xFF2A1A00),
+            tertiaryContainer: const Color(0xFF52300A),
+            onTertiaryContainer: Colors.white,
+            surface: kSleekSurfaceDark,
+            onSurface: const Color(0xFFF6EFEA),
+            onSurfaceVariant: const Color(0xFFC9BFB8),
+            surfaceContainerLowest: const Color(0xFF0E0B0F),
+            surfaceContainerLow: const Color(0xFF171316),
+            surfaceContainer: kSleekSurfaceDark,
+            surfaceContainerHigh: kSleekSurfaceHighDark,
+            surfaceContainerHighest: kSleekSurfaceHigherDark,
+            background: kSleekBackgroundDark,
+            onBackground: const Color(0xFFF6EFEA),
+            outline: const Color(0xFF514849),
+            outlineVariant: const Color(0xFF342D31),
+            error: const Color(0xFFFF6B6B),
+            onError: Colors.white,
+            shadow: Colors.black,
           )
-        : const ColorScheme.light(
-            primary: Color(0xFF83508E),
-            onPrimary: Color(0xFFFFFFFF),
-            primaryContainer: Color(0xFFF6D9FF),
-            onPrimaryContainer: Color(0xFF32133A),
-            secondary: Color(0xFFA75B7B),
-            onSecondary: Color(0xFFFFFFFF),
-            secondaryContainer: Color(0xFFFFD9E8),
-            onSecondaryContainer: Color(0xFF3D1727),
-            tertiary: Color(0xFF8B5E18),
-            onTertiary: Color(0xFFFFFFFF),
-            tertiaryContainer: Color(0xFFFFDDA9),
-            onTertiaryContainer: Color(0xFF2E1B00),
-            error: Color(0xFFBA1A1A),
-            onError: Color(0xFFFFFFFF),
-            background: Color(0xFFFFF8FC),
-            onBackground: Color(0xFF211A1F),
-            surface: Color(0xFFFFF8FC),
-            onSurface: Color(0xFF211A1F),
-            surfaceVariant: Color(0xFFF2E4EC),
-            onSurfaceVariant: Color(0xFF5A4A54),
-            outline: Color(0xFF8C7884),
-            outlineVariant: Color(0xFFDCC9D4),
-            shadow: Color(0xFF000000),
-            scrim: Color(0xFF000000),
-            inverseSurface: Color(0xFF372F34),
-            onInverseSurface: Color(0xFFFCEFF6),
-            inversePrimary: Color(0xFFE6B8F5),
-            surfaceTint: Color(0xFF83508E),
-          ).copyWith(
-            surfaceContainerLowest: const Color(0xFFFFFFFF),
-            surfaceContainerLow: const Color(0xFFFFF2F9),
-            surfaceContainer: const Color(0xFFFBEAF3),
-            surfaceContainerHigh: const Color(0xFFF5E2EC),
-            surfaceContainerHighest: const Color(0xFFEDD7E3),
+        : baseScheme.copyWith(
+            primary: kSleekAccent,
+            onPrimary: Colors.white,
+            primaryContainer: const Color(0xFFFFE3D8),
+            onPrimaryContainer: const Color(0xFF4A1500),
+            secondary: kSleekAccent2,
+            onSecondary: Colors.white,
+            tertiary: kSleekAccent3,
+            onTertiary: const Color(0xFF2A1A00),
+            tertiaryContainer: const Color(0xFFFFE9C7),
+            onTertiaryContainer: const Color(0xFF3A2400),
+            surface: kSleekSurface,
+            onSurface: const Color(0xFF231C18),
+            onSurfaceVariant: const Color(0xFF6E645D),
+            surfaceContainerLowest: Colors.white,
+            surfaceContainerLow: const Color(0xFFFDFAF6),
+            surfaceContainer: const Color(0xFFF8F3EC),
+            surfaceContainerHigh: kSleekSurfaceHigh,
+            surfaceContainerHighest: kSleekSurfaceHigher,
+            background: kSleekBackground,
+            onBackground: const Color(0xFF231C18),
+            outline: const Color(0xFFB8ACA2),
+            outlineVariant: const Color(0xFFE0D6CA),
+            error: const Color(0xFFDC2F2F),
+            onError: Colors.white,
+            shadow: const Color(0xFF4A2A1A),
           );
 
-    final baseTypography = Typography.material2021(platform: TargetPlatform.android);
-    final rawTextTheme = isDark ? baseTypography.white : baseTypography.black;
-    final textTheme = rawTextTheme.apply(
-      fontFamily: 'Roboto',
-      displayColor: scheme.onSurface,
-      bodyColor: scheme.onSurface,
-    );
-    const pageTransitionBuilder = KoinlyPageTransitionsBuilder();
+    final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
+          fontFamily: 'Roboto',
+          displayColor: scheme.onSurface,
+          bodyColor: scheme.onSurface,
+        );
+
+    final pageTransitionBuilder = const KoinlyPageTransitionsBuilder();
 
     WidgetStateProperty<T> states<T>({required T normal, T? selected, T? pressed, T? disabled}) {
       return WidgetStateProperty.resolveWith((state) {
@@ -3782,21 +3765,21 @@ class KoinlyApp extends StatelessWidget {
       scaffoldBackgroundColor: scheme.background,
       canvasColor: scheme.background,
       visualDensity: VisualDensity.standard,
-      dividerColor: scheme.outlineVariant.withOpacity(.35),
-      splashFactory: InkRipple.splashFactory,
+      dividerColor: Colors.transparent,
+      splashFactory: InkSparkle.splashFactory,
       textTheme: textTheme.copyWith(
-        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.35, height: .98),
-        headlineLarge: textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.0),
-        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.75),
-        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.45),
-        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.25),
-        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.32),
-        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.32),
-        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.4),
+        displayMedium: textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.5),
+        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.6),
+        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.8),
+        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2),
+        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.45),
+        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.45),
+        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: .2),
       ),
-      pageTransitionsTheme: const PageTransitionsTheme(
+      pageTransitionsTheme: PageTransitionsTheme(
         builders: {
           TargetPlatform.android: pageTransitionBuilder,
           TargetPlatform.windows: pageTransitionBuilder,
@@ -3807,146 +3790,139 @@ class KoinlyApp extends StatelessWidget {
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: scheme.surfaceContainer,
+        color: scheme.surface,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
-        shape: AppShapes.squircle(20),
+        shape: AppShapes.squircle(28),
       ),
       dialogTheme: DialogThemeData(
-        elevation: 0,
-        backgroundColor: scheme.surfaceContainer,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: AppShapes.dialog),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.36),
+        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        elevation: 0,
-        backgroundColor: scheme.surfaceContainer,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
-        modalBackgroundColor: scheme.surfaceContainer,
-        modalBarrierColor: Colors.black.withOpacity(isDark ? .66 : .38),
+        modalBackgroundColor: scheme.surface,
+        modalBarrierColor: Colors.black.withOpacity(isDark ? .64 : .36),
         showDragHandle: true,
-        dragHandleColor: scheme.onSurfaceVariant.withOpacity(.55),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        dragHandleColor: scheme.outlineVariant,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(kIsDesktopApp ? 36 : 32))),
         constraints: const BoxConstraints(maxWidth: 720),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF3A2632) : const Color(0xFF32252D),
-        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        backgroundColor: isDark ? const Color(0xFF252025) : const Color(0xFF2A1A14),
+        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         shape: RoundedRectangleBorder(borderRadius: AppShapes.medium),
       ),
       listTileTheme: ListTileThemeData(
-        minLeadingWidth: 44,
-        minVerticalPadding: 10,
+        minLeadingWidth: 46,
         contentPadding: EdgeInsets.zero,
-        shape: AppShapes.squircle(18),
-        iconColor: scheme.onSurfaceVariant,
-        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
-        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+        shape: AppShapes.squircle(22),
+        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        indicatorColor: scheme.primaryContainer,
-        indicatorShape: AppShapes.squircle(18),
-        selectedIconTheme: IconThemeData(color: isDark ? scheme.primary : scheme.primary, size: 25),
-        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.78), size: 23),
-        selectedLabelTextStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800, fontSize: 12),
-        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.78), fontWeight: FontWeight.w600, fontSize: 11),
+        indicatorColor: kSleekAccent.withOpacity(isDark ? .26 : .14),
+        indicatorShape: AppShapes.squircle(22),
+        selectedIconTheme: const IconThemeData(color: kSleekAccent, size: 26),
+        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.82), size: 24),
+        selectedLabelTextStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900, fontSize: 12),
+        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.82), fontWeight: FontWeight.w800, fontSize: 11),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surfaceContainer,
-        indicatorColor: scheme.primaryContainer,
-        height: 72,
+        backgroundColor: isDark ? const Color(0xF21A1518) : Colors.white.withOpacity(.96),
+        indicatorColor: kSleekAccent.withOpacity(isDark ? .24 : .16),
+        height: 78,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((state) => TextStyle(
-              fontWeight: state.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600,
-              fontSize: 11,
-              color: state.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+              fontSize: state.contains(WidgetState.selected) ? 12 : 11,
+              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant,
             )),
         iconTheme: WidgetStateProperty.resolveWith((state) => IconThemeData(
-              color: state.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant.withOpacity(.78),
-              size: state.contains(WidgetState.selected) ? 25 : 23,
+              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant.withOpacity(.82),
+              size: state.contains(WidgetState.selected) ? 26 : 23,
             )),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: scheme.surfaceContainerHigh,
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.74), fontWeight: FontWeight.w500),
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-        floatingLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w700),
+        fillColor: isDark ? scheme.surfaceContainerHigh.withOpacity(.82) : Colors.white,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.78), fontWeight: FontWeight.w600),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+        floatingLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(.58), width: 1)),
-        focusedBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.primary.withOpacity(.86), width: 1.4)),
-        errorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error.withOpacity(.76), width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error, width: 1.4)),
+        enabledBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(.45), width: 1)),
+        focusedBorder: OutlineInputBorder(borderRadius: AppShapes.large, borderSide: BorderSide(color: kSleekAccent.withOpacity(.78), width: 1.4)),
+        errorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error.withOpacity(.72), width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: AppShapes.large, borderSide: BorderSide(color: scheme.error, width: 1.4)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: states(normal: isDark ? kSleekAccent : scheme.primary, pressed: isDark ? const Color(0xFFD9A7EA) : const Color(0xFF70427A), disabled: scheme.onSurface.withOpacity(.10)),
-          foregroundColor: states(normal: isDark ? const Color(0xFF2A1530) : Colors.white, disabled: scheme.onSurface.withOpacity(.35)),
-          overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.08)),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
-          elevation: const WidgetStatePropertyAll(0),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
+          backgroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
+          foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
+          overlayColor: const WidgetStatePropertyAll(Colors.white10),
+          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 24 : 20)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900, letterSpacing: .1)),
+          elevation: states(normal: 0.0, pressed: 0.0),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: states(normal: scheme.primary, pressed: scheme.secondary),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(16)),
+          foregroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.75)),
+          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: states(normal: scheme.onSurface, pressed: scheme.primary, disabled: scheme.onSurface.withOpacity(.35)),
+          foregroundColor: states(normal: scheme.onSurface, pressed: kSleekAccent, disabled: scheme.onSurface.withOpacity(.38)),
           side: states(
-            normal: BorderSide(color: scheme.outlineVariant.withOpacity(.78), width: 1.1),
-            pressed: BorderSide(color: scheme.primary.withOpacity(.70), width: 1.2),
-            disabled: BorderSide(color: scheme.onSurface.withOpacity(.10), width: 1),
+            normal: BorderSide(color: scheme.outlineVariant.withOpacity(.95), width: 1.2),
+            pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.3),
+            disabled: BorderSide(color: scheme.onSurface.withOpacity(.12), width: 1),
           ),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 18, vertical: 14)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
+          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
         ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.primaryContainer : scheme.surfaceContainerHigh),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onPrimaryContainer : scheme.onSurfaceVariant),
-          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.72), width: 1)),
-          shape: WidgetStatePropertyAll(AppShapes.squircle(18)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w800)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 13, horizontal: 15)),
+          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent.withOpacity(isDark ? .42 : .22) : scheme.surfaceContainerHigh.withOpacity(isDark ? .58 : .72)),
+          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? (isDark ? Colors.white : const Color(0xFF3A0F00)) : scheme.onSurfaceVariant),
+          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.9), width: 1.1)),
+          shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(22)))),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 16)),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: isDark ? kSleekAccent : scheme.primary,
-        foregroundColor: isDark ? const Color(0xFF2A1530) : Colors.white,
-        elevation: 0,
-        focusElevation: 0,
-        hoverElevation: 0,
-        highlightElevation: 0,
-        shape: const CircleBorder(),
+        backgroundColor: kSleekAccent,
+        foregroundColor: Colors.white,
+        elevation: 6,
+        highlightElevation: 2,
+        shape: AppShapes.squircle(22),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.primaryContainer : scheme.surfaceContainerHigh),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? scheme.primary : scheme.onSurface),
-          shape: const WidgetStatePropertyAll(CircleBorder()),
+          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent.withOpacity(.16) : (isDark ? scheme.surfaceContainerHigh.withOpacity(.72) : Colors.white.withOpacity(.92))),
+          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface),
+          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.all(10)),
         ),
       ),
       appBarTheme: AppBarTheme(
@@ -3956,26 +3932,25 @@ class KoinlyApp extends StatelessWidget {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         iconTheme: IconThemeData(color: scheme.onSurface),
-        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800, letterSpacing: -.55),
+        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900, letterSpacing: -.6),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: scheme.surfaceContainerHigh,
-        selectedColor: scheme.primaryContainer,
+        selectedColor: kSleekAccent.withOpacity(isDark ? .34 : .22),
         disabledColor: scheme.onSurface.withOpacity(.08),
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(.68)),
-        shape: AppShapes.squircle(16),
-        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w700),
-        secondaryLabelStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        side: BorderSide(color: scheme.outlineVariant.withOpacity(.92)),
+        shape: AppShapes.squircle(18),
+        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w800),
+        secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
-        color: scheme.primary,
-        linearTrackColor: scheme.surfaceContainerHighest,
-        circularTrackColor: scheme.surfaceContainerHighest,
+        color: kSleekAccent,
+        linearTrackColor: kSleekAccent.withOpacity(.18),
       ),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.onPrimary : scheme.outline),
-        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? scheme.primary : scheme.surfaceContainerHighest),
+        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.white : scheme.outline),
+        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent : scheme.surfaceContainerHighest),
         trackOutlineColor: WidgetStatePropertyAll(scheme.outlineVariant),
       ),
     );
@@ -4143,7 +4118,7 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
             child: Row(
               children: [
-                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 48),
+                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? '#FF5A3C' : '#FFB547', size: 48),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -4206,23 +4181,116 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
   }
 }
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+  late final AnimationController _fade;
+  late final AnimationController _rise;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _riseAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
+    _rise = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _fadeAnim = CurvedAnimation(parent: _fade, curve: AppMotion.emphasized);
+    _riseAnim = Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _rise, curve: AppMotion.spring));
+    Future.delayed(const Duration(milliseconds: 80), _fade.forward);
+    Future.delayed(const Duration(milliseconds: 220), _rise.forward);
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    _rise.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const KoinlyAppIcon(size: 92, borderRadius: 30),
-            const SizedBox(height: 24),
-            Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 16),
-            const CircularProgressIndicator(),
-          ],
-        ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Warm radial atmosphere.
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.center,
+                radius: 1.2,
+                colors: dark
+                    ? [
+                        const Color(0xFF2A1A14),
+                        kSleekBackgroundDark,
+                        const Color(0xFF0A0608),
+                      ]
+                    : [
+                        const Color(0xFFFFEAD8),
+                        kSleekBackground,
+                        const Color(0xFFFFF5EC),
+                      ],
+              ),
+            ),
+          ),
+          // Floating logo + wordmark.
+          Center(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _riseAnim,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const KoinlyAnimatedLogo(size: 124),
+                    const SizedBox(height: 32),
+                    Text(
+                      appTitle,
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -1.4,
+                        fontSize: 40,
+                        foreground: Paint()
+                          ..shader = LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
+                          ).createShader(const Rect.fromLTWH(0, 0, 240, 60)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Personal finance tracker',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(.85),
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        valueColor: AlwaysStoppedAnimation<Color>(kSleekAccent),
+                        backgroundColor: kSleekAccent.withOpacity(.18),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4346,12 +4414,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
 
     final Widget? actionButton = tabIndex == kTransactionTabIndex
-        ? FloatingActionButton(
-            heroTag: 'transactionAddFab',
-            tooltip: 'Add transaction',
-            onPressed: () => showTransactionEditor(context),
-            child: const Icon(Icons.add_rounded, size: 28),
-          )
+        ? _KoinlyAddTransactionFab(onPressed: () => showTransactionEditor(context))
         : null;
 
     return LayoutBuilder(
@@ -4378,26 +4441,23 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
-                        duration: AppMotion.fast,
-                        switchInCurve: AppMotion.standard,
+                        duration: AppMotion.medium,
+                        switchInCurve: AppMotion.emphasized,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
-                        transitionBuilder: (child, animation) {
-                          final curved = CurvedAnimation(parent: animation, curve: AppMotion.standard);
-                          return FadeTransition(
-                            opacity: curved,
-                            child: ScaleTransition(
-                              scale: Tween<double>(begin: .992, end: 1).animate(curved),
-                              child: child,
-                            ),
-                          );
-                        },
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.985, end: 1.0).animate(animation),
+                            child: child,
+                          ),
+                        ),
                         child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
                     if (actionButton != null)
                       Positioned(
-                        right: useDesktopNavigation ? 34 : 28,
-                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
+                        right: useDesktopNavigation ? 34 : 24,
+                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 108),
                         child: actionButton,
                       ),
                     if (!useDesktopNavigation)
@@ -4417,6 +4477,70 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
         );
       },
+    );
+  }
+}
+
+/// Brand-gradient "Add transaction" FAB — premium feel with a soft glow.
+class _KoinlyAddTransactionFab extends StatelessWidget {
+  const _KoinlyAddTransactionFab({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return MotionPressable(
+      scale: 0.94,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: kSleekAccent.withOpacity(.45),
+              blurRadius: 26,
+              offset: const Offset(0, 12),
+            ),
+            BoxShadow(
+              color: kSleekAccent3.withOpacity(.30),
+              blurRadius: 36,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: onPressed,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, color: Colors.white, size: 22),
+                  SizedBox(width: 8),
+                  Text(
+                    'Add',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: .2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4447,40 +4571,49 @@ class _SideRailNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = dark ? Colors.white.withOpacity(.06) : scheme.outlineVariant.withOpacity(.7);
+    final railColor = dark ? kSleekSurfaceDark : kSleekSurface;
+
     return Material(
-      color: scheme.surfaceContainerLow,
+      color: railColor,
       child: SafeArea(
         right: false,
         child: Container(
-          width: extended ? 230 : 86,
+          width: extended ? 248 : 92,
           decoration: BoxDecoration(
-            border: Border(right: BorderSide(color: scheme.outlineVariant.withOpacity(.42))),
+            border: Border(right: BorderSide(color: borderColor, width: 1)),
+            boxShadow: kIsDesktopApp
+                ? null
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(dark ? .22 : .04),
+                      blurRadius: 22,
+                      offset: const Offset(6, 0),
+                    ),
+                  ],
           ),
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(extended ? 18 : 13, 16, extended ? 18 : 13, 14),
+                padding: EdgeInsets.fromLTRB(extended ? 20 : 14, 22, extended ? 20 : 14, 14),
                 child: Row(
                   mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.account_balance_wallet_rounded, color: scheme.onPrimaryContainer, size: 23),
-                    ),
+                    const KoinlyAppIcon(size: 44, borderRadius: 14),
                     if (extended) ...[
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(appTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge),
-                            const SizedBox(height: 1),
-                            Text('Your money', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant)),
+                            Text(appTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                            Text('Desktop',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                    color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
                           ],
                         ),
                       ),
@@ -4489,27 +4622,111 @@ class _SideRailNavigation extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: NavigationRail(
-                  selectedIndex: selectedIndex,
-                  extended: extended,
-                  minWidth: 86,
-                  minExtendedWidth: 230,
-                  groupAlignment: -0.82,
-                  backgroundColor: Colors.transparent,
-                  labelType: extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
-                  onDestinationSelected: onSelected,
-                  destinations: _FloatingDockNavigation.destinations
-                      .map(
-                        (destination) => NavigationRailDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.activeIcon),
-                          label: Text(destination.label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                      )
-                      .toList(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: _FloatingDockNavigation.destinations.length,
+                  itemBuilder: (context, index) {
+                    final destination = _FloatingDockNavigation.destinations[index];
+                    final selected = selectedIndex == index;
+                    return _SideRailTile(
+                      destination: destination,
+                      selected: selected,
+                      extended: extended,
+                      onTap: () => onSelected(index),
+                    );
+                  },
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SideRailTile extends StatelessWidget {
+  const _SideRailTile({
+    required this.destination,
+    required this.selected,
+    required this.extended,
+    required this.onTap,
+  });
+
+  final _DockDestination destination;
+  final bool selected;
+  final bool extended;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = kSleekAccent;
+    final inactiveColor = scheme.onSurfaceVariant.withOpacity(.78);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Tooltip(
+        message: destination.label,
+        child: Semantics(
+          selected: selected,
+          button: true,
+          label: destination.label,
+          child: MotionPressable(
+            scale: 0.96,
+            borderRadius: BorderRadius.circular(18),
+            onTap: onTap,
+            child: AnimatedContainer(
+              duration: AppMotion.medium,
+              curve: AppMotion.emphasized,
+              padding: EdgeInsets.symmetric(
+                horizontal: extended ? 14 : 8,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                gradient: selected
+                    ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: dark
+                            ? [kSleekAccent.withOpacity(.36), kSleekAccent3.withOpacity(.18)]
+                            : [kSleekAccent.withOpacity(.20), kSleekAccent3.withOpacity(.10)],
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(18),
+                border: selected
+                    ? Border.all(color: kSleekAccent.withOpacity(dark ? .42 : .30), width: 1)
+                    : Border.all(color: Colors.transparent, width: 1),
+                boxShadow: selected
+                    ? [BoxShadow(color: kSleekAccent.withOpacity(.16), blurRadius: 16, offset: const Offset(0, 6))]
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    selected ? destination.activeIcon : destination.icon,
+                    color: selected ? activeColor : inactiveColor,
+                    size: selected ? 26 : 24,
+                  ),
+                  if (extended) ...[
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: selected ? activeColor : scheme.onSurface,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -4537,75 +4754,78 @@ class _FloatingDockNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final active = Colors.white;
+    final inactive = dark ? scheme.onSurface.withOpacity(.62) : scheme.onSurfaceVariant.withOpacity(.78);
+
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
       child: Center(
         heightFactor: 1,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Material(
-            color: scheme.surfaceContainer,
-            elevation: 0,
-            borderRadius: BorderRadius.circular(25),
-            child: Container(
-              height: 72,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: scheme.outlineVariant.withOpacity(.48)),
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Container(
+            height: 72,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: dark
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFF262025),
+                        const Color(0xFF181315),
+                      ],
+                    )
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white,
+                        const Color(0xFFFDFAF6),
+                      ],
+                    ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: dark ? Colors.white.withOpacity(.08) : scheme.outlineVariant.withOpacity(.7),
+                width: 1,
               ),
-              child: Row(
-                children: List.generate(destinations.length, (index) {
-                  final destination = destinations[index];
-                  final selected = selectedIndex == index;
-                  return Expanded(
-                    child: Tooltip(
-                      message: destination.label,
-                      child: Semantics(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(dark ? .42 : .12),
+                  blurRadius: 32,
+                  offset: const Offset(0, 16),
+                ),
+                BoxShadow(
+                  color: kSleekAccent.withOpacity(dark ? .14 : .06),
+                  blurRadius: 30,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: List.generate(destinations.length, (index) {
+                final destination = destinations[index];
+                final selected = selectedIndex == index;
+                return Expanded(
+                  child: Tooltip(
+                    message: destination.label,
+                    child: Semantics(
+                      selected: selected,
+                      button: true,
+                      label: destination.label,
+                      child: _DockPill(
+                        destination: destination,
                         selected: selected,
-                        button: true,
-                        label: destination.label,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(19),
-                          onTap: () => onSelected(index),
-                          child: AnimatedContainer(
-                            duration: AppMotion.medium,
-                            curve: AppMotion.standard,
-                            decoration: BoxDecoration(
-                              color: selected ? scheme.primaryContainer : Colors.transparent,
-                              borderRadius: BorderRadius.circular(19),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  selected ? destination.activeIcon : destination.icon,
-                                  color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                                  size: selected ? 24 : 22,
-                                ),
-                                const SizedBox(height: 3),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    destination.label,
-                                    maxLines: 1,
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                          color: selected ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
-                                          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                                          fontSize: 10.5,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        activeColor: active,
+                        inactiveColor: inactive,
+                        onTap: () => onSelected(index),
                       ),
                     ),
-                  );
-                }),
-              ),
+                  ),
+                );
+              }),
             ),
           ),
         ),
@@ -4613,6 +4833,93 @@ class _FloatingDockNavigation extends StatelessWidget {
     );
   }
 }
+
+/// Pill-shaped dock button — when selected it grows into a brand-gradient
+/// pill with the icon + label; when unselected it's a quiet icon-only dot.
+class _DockPill extends StatelessWidget {
+  const _DockPill({
+    required this.destination,
+    required this.selected,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onTap,
+  });
+
+  final _DockDestination destination;
+  final bool selected;
+  final Color activeColor;
+  final Color inactiveColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return MotionPressable(
+      scale: 0.92,
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppMotion.medium,
+        curve: AppMotion.spring,
+        padding: EdgeInsets.symmetric(
+          horizontal: selected ? 14 : 8,
+          vertical: selected ? 10 : 8,
+        ),
+        decoration: BoxDecoration(
+          gradient: selected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: kSleekAccent.withOpacity(dark ? .42 : .30),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              selected ? destination.activeIcon : destination.icon,
+              color: selected ? activeColor : inactiveColor,
+              size: selected ? 24 : 23,
+            ),
+            AnimatedSize(
+              duration: AppMotion.medium,
+              curve: AppMotion.spring,
+              child: selected
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 7),
+                      child: Text(
+                        destination.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: activeColor,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          letterSpacing: .1,
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 class PageScaffold extends StatelessWidget {
   const PageScaffold({super.key, required this.title, this.actions = const [], required this.child, this.subtitle});
@@ -4624,84 +4931,33 @@ class PageScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      backgroundColor: scheme.background,
-      body: KoinlyAtmosphere(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _PixelPageHeader(title: title, subtitle: subtitle, actions: actions),
-              Expanded(child: child),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PixelPageHeader extends StatelessWidget {
-  const _PixelPageHeader({required this.title, required this.subtitle, required this.actions});
-
-  final String title;
-  final String? subtitle;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final small = AppBreakpoints.isSmall(context);
     final desktop = AppBreakpoints.isExpanded(context);
-    final canPop = Navigator.of(context).canPop();
-    return Padding(
-      padding: EdgeInsets.fromLTRB(desktop ? 28 : small ? 10 : 14, 10, desktop ? 28 : small ? 10 : 14, 8),
-      child: Row(
-        children: [
-          if (canPop) ...[
-            IconButton(
-              tooltip: 'Back',
-              onPressed: () => Navigator.maybePop(context),
-              icon: const Icon(Icons.arrow_back_rounded),
-            ),
-            const SizedBox(width: 6),
+    return Scaffold(
+      backgroundColor: scheme.background,
+      appBar: AppBar(
+        toolbarHeight: desktop ? 76 : small ? 68 : 76,
+        titleSpacing: small ? 12 : 18,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 26 : small ? 23 : 27)),
+            if (subtitle != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              ),
           ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontSize: desktop ? 28 : small ? 23 : 25,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -.65,
-                      ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (actions.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            ...actions.map((action) => Padding(padding: const EdgeInsets.only(left: 6), child: action)),
-          ],
-        ],
+        ),
+        actions: actions
+            .map((action) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: action,
+                ))
+            .toList(),
       ),
+      body: KoinlyAtmosphere(child: SafeArea(top: false, child: child)),
     );
   }
 }
@@ -4714,14 +4970,26 @@ class KoinlyAtmosphere extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
+    if (!dark) {
+      return DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFF5EC), Color(0xFFFBF7F2), Color(0xFFFFFFFF)],
+          ),
+        ),
+        child: child,
+      );
+    }
+
     return DecoratedBox(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
+        color: kSleekBackgroundDark,
         gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: dark
-              ? const [Color(0xFF0C080D), Color(0xFF100A0F), Color(0xFF0C080D)]
-              : const [Color(0xFFFFF8FC), Color(0xFFFFF4FA), Color(0xFFFFFAFD)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E161A), Color(0xFF141113), Color(0xFF0E0A0D)],
         ),
       ),
       child: child,
@@ -4856,9 +5124,9 @@ class ExpressiveCard extends StatelessWidget {
   const ExpressiveCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(18),
+    this.padding = const EdgeInsets.all(20),
     this.color,
-    this.radius = 20,
+    this.radius = 28,
     this.surfaceTint = true,
   });
 
@@ -4872,30 +5140,52 @@ class ExpressiveCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = color ?? scheme.surfaceContainer;
-    final topTint = Color.alphaBlend(
-      scheme.primary.withOpacity(dark ? .045 : .035),
-      baseColor,
-    );
-    return Material(
-      color: Colors.transparent,
+    final baseColor = color ?? (dark ? kSleekSurfaceDark : Colors.white);
+    final borderColor = dark ? Colors.white.withOpacity(.07) : scheme.outlineVariant.withOpacity(.6);
+    final decoration = BoxDecoration(
+      color: baseColor,
+      gradient: surfaceTint
+          ? LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: dark
+                  ? [
+                      Color.alphaBlend(kSleekAccent.withOpacity(.06), baseColor),
+                      baseColor,
+                      Color.alphaBlend(kSleekAccent3.withOpacity(.04), baseColor),
+                    ]
+                  : [
+                      Color.alphaBlend(kSleekAccent.withOpacity(.025), baseColor),
+                      baseColor,
+                      Color.alphaBlend(kSleekAccent3.withOpacity(.018), baseColor),
+                    ],
+            )
+          : null,
       borderRadius: BorderRadius.circular(radius),
-      clipBehavior: Clip.antiAlias,
-      child: Ink(
-        decoration: BoxDecoration(
-          color: baseColor,
-          gradient: surfaceTint
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [topTint, baseColor],
-                )
-              : null,
-          borderRadius: BorderRadius.circular(radius),
-          border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .35 : .48)),
+      border: Border.all(color: borderColor, width: 1),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(dark ? .28 : .045),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
         ),
-        child: Padding(padding: padding, child: child),
-      ),
+        if (dark)
+          BoxShadow(
+            color: kSleekAccent.withOpacity(.05),
+            blurRadius: 28,
+            offset: const Offset(0, 4),
+          ),
+      ],
+    );
+    final cardChild = ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Padding(padding: padding, child: child),
+    );
+    return AnimatedContainer(
+      duration: AppMotion.medium,
+      curve: AppMotion.emphasized,
+      decoration: decoration,
+      child: cardChild,
     );
   }
 }
@@ -4909,29 +5199,17 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(3, 26, 3, 10),
+      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -.35,
-                  ),
-            ),
-          ),
-          if (trailing != null)
-            DefaultTextStyle.merge(
-              style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
-              child: trailing!,
-            ),
+          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.2))),
+          if (trailing != null) DefaultTextStyle.merge(style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800), child: trailing!),
         ],
       ),
     );
   }
 }
+
 
 class SleekPillOption<T> {
   const SleekPillOption({required this.value, required this.label, this.icon});
@@ -5280,9 +5558,9 @@ Future<String?> showAppleWheelSelectionSheet(
                 ? options.length - 1
                 : selectedIndex;
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+        final innerColor = dark ? kSleekSurfaceDark : const Color(0xFFFBF7F2);
+        final innerBorderColor = dark ? const Color(0xFF342D31) : const Color(0xFFE0D6CA);
+        final handleColor = dark ? const Color(0xFF7A7286) : const Color(0xFFB8ACA2);
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -5694,11 +5972,11 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: AppMotion.medium,
-      reverseDuration: AppMotion.fast,
+      duration: const Duration(milliseconds: 620),
+      reverseDuration: const Duration(milliseconds: 260),
     );
     _controller.forward();
-    _hideTimer = Timer(const Duration(milliseconds: 3200), () async {
+    _hideTimer = Timer(const Duration(milliseconds: 3400), () async {
       if (!mounted) return;
       await _controller.reverse();
       if (mounted) widget.onDismissed();
@@ -5716,64 +5994,152 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     final maxWidth = math.min(kIsDesktopApp ? 520.0 : 560.0, math.max(280.0, media.size.width - 28));
-    final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
-    final iconColor = _isProblemMessage ? kSleekWarning : kSleekIncome;
-    final curved = CurvedAnimation(parent: _controller, curve: AppMotion.emphasized, reverseCurve: AppMotion.emphasizedAccelerate);
+    final expandedHeight = widget.message.length > 96 ? 108.0 : widget.message.length > 54 ? 86.0 : 64.0;
+    final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 8.0);
 
     return IgnorePointer(
       child: Material(
         type: MaterialType.transparency,
-        child: SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: EdgeInsets.only(top: kIsDesktopApp ? 14 : 8),
-              child: FadeTransition(
-                opacity: curved,
-                child: SlideTransition(
-                  position: Tween<Offset>(begin: const Offset(0, -.35), end: Offset.zero).animate(curved),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxWidth),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 14),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: scheme.outlineVariant.withOpacity(.52)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(color: iconColor.withOpacity(.16), shape: BoxShape.circle),
-                            child: Icon(icon, color: iconColor, size: 20),
-                          ),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Text(
-                              widget.message,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, height: 1.18),
+        child: Stack(
+          children: [
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final raw = _controller.value;
+                final t = AppMotion.emphasized.transform(raw);
+                final contentT = (((t - .34) / .66).clamp(0.0, 1.0)).toDouble();
+                final width = ui.lerpDouble(92, maxWidth, t)!;
+                final height = ui.lerpDouble(38, expandedHeight, t)!;
+                final radius = ui.lerpDouble(999, 28, t)!;
+                final y = ui.lerpDouble(-52, 0, t)!;
+                final compactScale = ui.lerpDouble(.72, 1, t)!;
+                final borderOpacity = ui.lerpDouble(.16, .09, t)!;
+                final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
+                final iconColor = _isProblemMessage ? kSleekWarning : kSleekAccent;
+
+                return Positioned(
+                  top: topInset + y,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Transform.scale(
+                      scale: compactScale,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 80),
+                            curve: Curves.linear,
+                            width: width,
+                            height: height,
+                            decoration: BoxDecoration(
+                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
+                              borderRadius: BorderRadius.circular(radius),
+                              border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(dark ? .42 : .24),
+                                  blurRadius: 34,
+                                  offset: const Offset(0, 16),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(radius),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  // Soft brand-tinted gradient wash on success.
+                                  if (!_isProblemMessage)
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            kSleekAccent.withOpacity(.18),
+                                            kSleekAccent3.withOpacity(.12),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  Align(
+                                    alignment: Alignment.center,
+                                    child: Container(
+                                      width: ui.lerpDouble(34, 0, contentT)!,
+                                      height: ui.lerpDouble(6, 0, contentT)!,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(ui.lerpDouble(.72, 0, contentT)!),
+                                        borderRadius: AppShapes.full,
+                                      ),
+                                    ),
+                                  ),
+                                  Opacity(
+                                    opacity: contentT,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              gradient: _isProblemMessage
+                                                  ? null
+                                                  : LinearGradient(
+                                                      begin: Alignment.topLeft,
+                                                      end: Alignment.bottomRight,
+                                                      colors: kKoinlyBrandGradient,
+                                                    ),
+                                              color: _isProblemMessage ? iconColor.withOpacity(.22) : null,
+                                              borderRadius: BorderRadius.circular(18),
+                                              border: Border.all(
+                                                color: _isProblemMessage
+                                                    ? iconColor.withOpacity(.40)
+                                                    : Colors.white.withOpacity(.25),
+                                              ),
+                                            ),
+                                            child: Icon(icon, color: _isProblemMessage ? iconColor : Colors.white, size: 21),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              widget.message,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                                height: 1.14,
+                                                letterSpacing: -.1,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
+
 
 Future<T?> showKoinlyPopup<T>(
   BuildContext context, {
@@ -5786,7 +6152,7 @@ Future<T?> showKoinlyPopup<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withOpacity(.62),
+    barrierColor: Colors.black.withOpacity(.58),
     transitionDuration: AppMotion.medium,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return _KoinlyPopupFrame(maxWidth: maxWidth, maxHeight: maxHeight, child: child);
@@ -5796,9 +6162,9 @@ Future<T?> showKoinlyPopup<T>(
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          scale: Tween<double>(begin: .94, end: 1).animate(curved),
+          scale: Tween<double>(begin: .92, end: 1).animate(curved),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(curved),
             child: child,
           ),
         ),
@@ -5818,6 +6184,7 @@ class _KoinlyPopupFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final horizontalInset = media.size.width < 420 ? 12.0 : 20.0;
     final verticalInset = media.size.height < 720 ? 10.0 : 20.0;
     final availableWidth = math.max(280.0, media.size.width - (horizontalInset * 2));
@@ -5840,15 +6207,15 @@ class _KoinlyPopupFrame extends StatelessWidget {
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
               child: Material(
-                color: scheme.surfaceContainer,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 28),
+                color: dark ? kSleekSurfaceDark : scheme.surface,
+                elevation: 24,
+                shadowColor: kSleekAccent.withOpacity(.18),
+                borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 36),
                 clipBehavior: Clip.antiAlias,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 28),
-                    border: Border.all(color: scheme.outlineVariant.withOpacity(.52)),
+                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 36),
+                    border: Border.all(color: dark ? Colors.white.withOpacity(.08) : scheme.outlineVariant.withOpacity(.7)),
                   ),
                   child: child,
                 ),
@@ -6051,19 +6418,44 @@ class _OnboardingPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return OnboardingPageFrame(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 112, borderRadius: 36),
-          const SizedBox(height: 28),
-          Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 16),
-          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+          const KoinlyAnimatedLogo(size: 112),
+          const SizedBox(height: 32),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [kSleekAccent.withOpacity(.18), kSleekAccent3.withOpacity(.12)],
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: kSleekAccent.withOpacity(.28), width: 1),
+            ),
+            child: Icon(icon, size: 34, color: kSleekAccent),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
           if (actions != null) ...[
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             actions!,
           ],
         ],
@@ -6082,7 +6474,7 @@ class CurrencySetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const KoinlyAnimatedLogo(size: 86),
           const SizedBox(height: 24),
           Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
@@ -6106,7 +6498,7 @@ class AccountSetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const KoinlyAnimatedLogo(size: 86),
           const SizedBox(height: 24),
           Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
@@ -6157,11 +6549,6 @@ class HomeDashboardScreen extends StatelessWidget {
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
 
-    final homeIntro = HomeIntroHeader(
-      rangeLabel: range.label,
-      onAnalysis: () => state.selectTabIndex(kAnalysisTabIndex),
-    );
-
     final balanceCard = BalanceHeroCard(
       balance: state.format(accountBalance),
       income: state.format(summary.income),
@@ -6175,7 +6562,7 @@ class HomeDashboardScreen extends StatelessWidget {
       const SectionHeader('Accounts'),
       HomeNavigationTile(
         iconName: 'wallet',
-        iconColor: '#78D8E8',
+        iconColor: '#FF5A3C',
         title: 'Accounts',
         subtitle: '${state.operatingAccounts.length} regular accounts',
         amount: state.format(state.operatingAccountBalance),
@@ -6233,7 +6620,7 @@ class HomeDashboardScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  iconBubble(context, 'wallet', '#78D8E8', size: 50),
+                  iconBubble(context, 'wallet', '#FF5A3C', size: 50),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -6277,8 +6664,8 @@ class HomeDashboardScreen extends StatelessWidget {
 
 
     return PageScaffold(
-      title: appTitle,
-      subtitle: 'Personal finance',
+      title: 'Home',
+      subtitle: range.label,
       actions: [
         IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
         IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_rounded)),
@@ -6291,8 +6678,6 @@ class HomeDashboardScreen extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  homeIntro,
-                  const SizedBox(height: 18),
                   balanceCard,
                   ...startEmptySection,
                   ...accountsSection,
@@ -6310,8 +6695,6 @@ class HomeDashboardScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      homeIntro,
-                      const SizedBox(height: 18),
                       balanceCard,
                       ...startEmptySection,
                       ...accountsSection,
@@ -6338,69 +6721,6 @@ class HomeDashboardScreen extends StatelessWidget {
   }
 }
 
-
-class HomeIntroHeader extends StatelessWidget {
-  const HomeIntroHeader({super.key, required this.rangeLabel, required this.onAnalysis});
-
-  final String rangeLabel;
-  final VoidCallback onAnalysis;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your\nMoney',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                        fontSize: AppBreakpoints.isSmall(context) ? 48 : 58,
-                        height: .84,
-                        letterSpacing: -2.6,
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '$rangeLabel overview',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w500,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          MotionPressable(
-            onTap: onAnalysis,
-            borderRadius: AppShapes.full,
-            scale: .96,
-            child: Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                color: dark ? kSleekAccent.withOpacity(.78) : scheme.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.insights_rounded,
-                size: 31,
-                color: dark ? const Color(0xFF2A1530) : scheme.onPrimaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class HomeNavigationTile extends StatelessWidget {
   const HomeNavigationTile({
@@ -6478,14 +6798,14 @@ class QuickActionTile extends StatelessWidget {
           curve: AppMotion.spring,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
-            color: dark ? const Color(0xFF0B1B21).withOpacity(.78) : Colors.white.withOpacity(.94),
+            color: dark ? kSleekSurfaceDark.withOpacity(.78) : Colors.white.withOpacity(.94),
             gradient: dark
                 ? LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color.alphaBlend(accent.withOpacity(.09), const Color(0xFF0B1B21)),
-                      const Color(0xFF09151A),
+                      Color.alphaBlend(accent.withOpacity(.09), kSleekSurfaceDark),
+                      kSleekSurfaceDark,
                     ],
                   )
                 : null,
@@ -6529,10 +6849,10 @@ class MiniMetric extends StatelessWidget {
     final lower = label.toLowerCase();
     if (lower.contains('income') || lower.contains('saving')) return kSleekIncome;
     if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue')) return kSleekExpense;
-    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent;
+    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent2;
     if (lower.contains('open')) return const Color(0xFF8AB4FF);
-    if (lower.contains('completed')) return const Color(0xFF2BD9A1);
-    return kSleekAccent;
+    if (lower.contains('completed')) return kSleekIncome;
+    return kSleekAccent3;
   }
 
   @override
@@ -6628,95 +6948,153 @@ class BalanceHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final cardBase = dark ? const Color(0xFF271923) : const Color(0xFFF6E1ED);
-    final cardTop = dark ? const Color(0xFF32202D) : const Color(0xFFFFEDF6);
-    final onCard = dark ? const Color(0xFFFFEEF7) : const Color(0xFF2D1E27);
-    final muted = dark ? const Color(0xFFCDB9C5) : const Color(0xFF705C68);
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+
+    // The signature Koinly gradient hero — coral → tangerine → amber.
+    final heroGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
+    );
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [cardTop, cardBase],
-        ),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: scheme.primary.withOpacity(dark ? .16 : .12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                decoration: BoxDecoration(
-                  color: scheme.primary.withOpacity(dark ? .12 : .10),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  'Net balance',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: onCard,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                onPressed: onToggleAmounts,
-                style: ButtonStyle(
-                  backgroundColor: WidgetStatePropertyAll(Colors.white.withOpacity(dark ? .08 : .38)),
-                  foregroundColor: WidgetStatePropertyAll(onCard),
-                  shape: const WidgetStatePropertyAll(CircleBorder()),
-                ),
-                icon: Icon(amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 19),
-              ),
-            ],
+        borderRadius: BorderRadius.circular(32),
+        gradient: heroGradient,
+        boxShadow: [
+          BoxShadow(
+            color: kSleekAccent.withOpacity(dark ? .50 : .38),
+            blurRadius: 32,
+            offset: const Offset(0, 16),
           ),
-          const SizedBox(height: 14),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              balance,
-              maxLines: 1,
-              softWrap: false,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    color: onCard,
-                    fontSize: 42,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.8,
-                  ),
+          BoxShadow(
+            color: kSleekAccent3.withOpacity(dark ? .30 : .20),
+            blurRadius: 44,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Soft decorative halo in the top-right corner.
+          Positioned(
+            top: -40,
+            right: -30,
+            child: Container(
+              width: 160,
+              height: 160,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(.10),
+              ),
             ),
           ),
-          const SizedBox(height: 7),
-          Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w500)),
-          const SizedBox(height: 14),
-          const _DecorativeSparkline(),
-          const SizedBox(height: 16),
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: _BalanceMetricBlock(
-                  label: 'Income',
-                  value: income,
-                  icon: Icons.south_west_rounded,
-                  tint: kSleekIncome,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(.22),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white.withOpacity(.30), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.account_balance_wallet_rounded,
+                            size: 14, color: Colors.white.withOpacity(.95)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Net Balance',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Tooltip(
+                    message: amountsHidden ? 'Show amounts' : 'Hide amounts',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: onToggleAmounts,
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(.20),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(.30), width: 1),
+                        ),
+                        child: Icon(
+                          amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    balance,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: theme.textTheme.displayMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1.6,
+                      color: Colors.white,
+                      height: 1.0,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _BalanceMetricBlock(
-                  label: 'Expense',
-                  value: expense,
-                  icon: Icons.north_east_rounded,
-                  tint: kSleekExpense,
+              const SizedBox(height: 10),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withOpacity(.86),
+                  fontWeight: FontWeight.w700,
                 ),
+              ),
+              const SizedBox(height: 18),
+              const _DecorativeSparkline(),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _HeroMetricChip(
+                      label: 'Income',
+                      value: income,
+                      icon: Icons.south_west_rounded,
+                      iconColor: const Color(0xFFE9FFF5),
+                      tint: const Color(0xFF20C997),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _HeroMetricChip(
+                      label: 'Expense',
+                      value: expense,
+                      icon: Icons.north_east_rounded,
+                      iconColor: const Color(0xFFFFE5DC),
+                      tint: kSleekRose,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -6726,39 +7104,74 @@ class BalanceHeroCard extends StatelessWidget {
   }
 }
 
-class _BalanceMetricBlock extends StatelessWidget {
-  const _BalanceMetricBlock({required this.label, required this.value, required this.icon, required this.tint});
+class _HeroMetricChip extends StatelessWidget {
+  const _HeroMetricChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.iconColor,
+    required this.tint,
+  });
 
   final String label;
   final String value;
   final IconData icon;
+  final Color iconColor;
   final Color tint;
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final onSurface = dark ? const Color(0xFFFFEEF7) : Theme.of(context).colorScheme.onSurface;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: tint.withOpacity(dark ? .11 : .10),
+        color: Colors.white.withOpacity(.18),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(.26), width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: tint),
-              const SizedBox(width: 6),
-              Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: onSurface.withOpacity(.72), fontWeight: FontWeight.w600)),
-            ],
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(.22),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 18, color: iconColor),
           ),
-          const SizedBox(height: 7),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: onSurface, fontWeight: FontWeight.w800)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(.82),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                    letterSpacing: .4,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: -.2,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -6799,7 +7212,11 @@ class _DecorativeSparkline extends StatelessWidget {
               spots: spots,
               isCurved: true,
               preventCurveOverShooting: true,
-              color: kSleekAccent,
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Colors.white.withOpacity(.95), Colors.white.withOpacity(.65)],
+              ),
               barWidth: 3,
               dotData: const FlDotData(show: false),
               belowBarData: BarAreaData(
@@ -6807,7 +7224,7 @@ class _DecorativeSparkline extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [kSleekAccent.withOpacity(.25), kSleekAccent.withOpacity(0)],
+                  colors: [Colors.white.withOpacity(.30), Colors.white.withOpacity(0)],
                 ),
               ),
             ),
@@ -7357,7 +7774,7 @@ class _AccountEditorState extends State<AccountEditor> {
   final creditLimit = TextEditingController();
   AccountType type = AccountType.regular;
   String icon = 'wallet';
-  String color = '#78D8E8';
+  String color = '#FF5A3C';
 
   List<AccountType> get allowedTypes => widget.allowedTypes ?? AccountType.values;
 
@@ -7493,9 +7910,9 @@ class IconColorPicker extends StatelessWidget {
     'calendar', 'time', 'flag', 'profile'
   ];
   static const colors = [
-    '#78D8E8', '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
+    '#FF5A3C', '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
     '#D946EF', '#EC4899', '#F472B6', '#FB7185', '#EF4444', '#F97316', '#FB923C', '#F59E0B',
-    '#FBC879', '#FACC15', '#A3E635', '#84CC16', '#22C55E', '#16A34A', '#10B981', '#14B8A6',
+    '#FFB547', '#FACC15', '#A3E635', '#84CC16', '#22C55E', '#16A34A', '#10B981', '#14B8A6',
     '#2DD4BF', '#86E3CE', '#A6E3A1', '#89A7FF', '#B4A5FF', '#C4B5FD', '#F5A3A3', '#FFB5D0',
     '#FFB86B', '#94A3B8', '#64748B', '#475569', '#334155', '#1F2937', '#111827', '#F8FAFC'
   ];
@@ -7652,7 +8069,7 @@ class ColorSelectionPage extends StatelessWidget {
   }
 
   Future<String?> _showCustomColorOptions(BuildContext context) async {
-    final initial = _normalizeColor(selectedColor).isEmpty ? '#78D8E8' : _normalizeColor(selectedColor);
+    final initial = _normalizeColor(selectedColor).isEmpty ? '#FF5A3C' : _normalizeColor(selectedColor);
 
     final choice = await showKoinlyPopup<String>(
       context,
@@ -8587,7 +9004,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
   final name = TextEditingController();
   CategoryType type = CategoryType.expense;
   String icon = 'category';
-  String color = '#78D8E8';
+  String color = '#FF5A3C';
 
   @override
   void initState() {
@@ -8730,7 +9147,7 @@ class TransactionTile extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         leading: tx.type == MoneyTransactionType.transfer
             ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
+            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#FF5A3C', size: 44),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: Text(
           subtitleParts.join(' • '),
@@ -9064,7 +9481,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'Today',
         subtitle: 'Only today',
         iconName: 'today',
-        iconColor: '#78D8E8',
+        iconColor: '#FF5A3C',
       );
     case DateRangeType.thisWeek:
       return const SelectionOption(
@@ -9080,7 +9497,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'This Month',
         subtitle: 'Current month',
         iconName: 'month',
-        iconColor: '#78D8E8',
+        iconColor: '#FF5A3C',
       );
     case DateRangeType.thisYear:
       return const SelectionOption(
@@ -9088,7 +9505,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'This Year',
         subtitle: 'Current year',
         iconName: 'year',
-        iconColor: '#FBC879',
+        iconColor: '#FFB547',
       );
     case DateRangeType.allTime:
       return const SelectionOption(
@@ -9283,7 +9700,7 @@ List<SelectionOption> financialMonthOptions() {
       title: DateFormat('MMMM yyyy').format(month),
       subtitle: index == 0 ? 'Current month' : 'Monthly health summary',
       iconName: 'month',
-      iconColor: '#78D8E8',
+      iconColor: '#FF5A3C',
     );
   });
 }
@@ -9298,7 +9715,7 @@ List<SelectionOption> financialYearOptions() {
       title: year.toString(),
       subtitle: index == 0 ? 'Current year' : 'Yearly health summary',
       iconName: 'year',
-      iconColor: '#FBC879',
+      iconColor: '#FFB547',
     );
   });
 }
@@ -9670,7 +10087,7 @@ class FinancialHealthPeriodCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
-                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 42),
+                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? '#FF5A3C' : '#FFB547', size: 42),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -10532,7 +10949,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                             tooltipRoundedRadius: 14,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
+                            getTooltipColor: (_) => dark ? kSleekSurfaceDark : kSleekSurface,
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
@@ -11049,7 +11466,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                     height: centerSize,
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF111417).withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      color: isDark ? kSleekSurfaceDark.withOpacity(.97) : Colors.white.withOpacity(.98),
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
@@ -11090,7 +11507,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               maxLines: 1,
                                               textAlign: TextAlign.center,
                                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: const Color(0xFF10CADA),
+                                                    color: kSleekAccent,
                                                     fontWeight: FontWeight.w900,
                                                   ),
                                             ),
@@ -11620,10 +12037,10 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           children: [
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
-            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#FF5A3C', onTap: () => showCurrencySheet(context)),
+            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FFB547', onTap: () => showReminderSheet(context)),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#FF5A3C', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#FF5A3C', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
@@ -11646,44 +12063,31 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colorFromHex(color);
-    final scheme = Theme.of(context).colorScheme;
     final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: ExpressiveCard(
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: hasSubtitle ? 9 : 11),
-        radius: 19,
-        surfaceTint: false,
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
-          minVerticalPadding: 3,
           leading: Container(
-            width: 46,
-            height: 46,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: c.withOpacity(Theme.of(context).brightness == Brightness.dark ? .28 : .17),
-              shape: BoxShape.circle,
+              color: c.withOpacity(.16),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: c.withOpacity(.20)),
             ),
-            child: Icon(icon, color: c, size: 23),
+            child: Icon(icon, color: c),
           ),
-          title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
           subtitle: hasSubtitle
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                  ),
+              ? Text(
+                  subtitle!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                 )
               : null,
-          trailing: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: scheme.surfaceContainerHigh, shape: BoxShape.circle),
-            child: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant, size: 20),
-          ),
+          trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
           onTap: onTap,
         ),
       ),
@@ -11713,7 +12117,7 @@ class UpdatesScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#00D7E8', size: 54),
+                      iconBubble(context, 'download', '#FF5A3C', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -11799,7 +12203,7 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#00D7E8', size: 54),
+                      iconBubble(context, 'download', '#FF5A3C', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -13613,7 +14017,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
         title: 'Light',
         subtitle: 'Bright interface',
         iconName: 'theme_light',
-        iconColor: '#FBC879',
+        iconColor: '#FFB547',
       );
     case ThemePreference.dark:
       return const SelectionOption(
@@ -13629,7 +14033,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
         title: 'Battery Saver / System',
         subtitle: 'Use system behavior',
         iconName: 'theme_battery',
-        iconColor: '#78D8E8',
+        iconColor: '#FF5A3C',
       );
   }
 }
@@ -14065,9 +14469,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+        final innerColor = dark ? kSleekSurfaceDark : const Color(0xFFFBF7F2);
+        final innerBorderColor = dark ? const Color(0xFF342D31) : const Color(0xFFE0D6CA);
+        final handleColor = dark ? const Color(0xFF7A7286) : const Color(0xFFB8ACA2);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -14319,24 +14723,24 @@ class AdvancedSettingsScreen extends StatelessWidget {
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(children: [
-          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#78D8E8', onTap: () => showDefaultSelection(context, 'account')),
+          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#FF5A3C', onTap: () => showDefaultSelection(context, 'account')),
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
-          SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
+          SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FFB547', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
           SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
           SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and overwrite this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(
             icon: Icons.fact_check_rounded,
             title: 'Data health',
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
-            color: '#00D7E8',
+            color: '#FF5A3C',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
           ),
           SettingsTile(
             icon: Icons.health_and_safety_rounded,
             title: 'Restore last safety backup',
             subtitle: state.lastSafetyBackupLabel,
-            color: '#78D8E8',
+            color: '#FF5A3C',
             onTap: state.hasLastSafetyBackup ? () => runRestoreLastSafetyBackupFlow(context, state) : null,
           ),
         ]),
@@ -14643,9 +15047,9 @@ class AboutScreen extends StatelessWidget {
               ]),
             ),
             const SectionHeader('Legal'),
-            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: '#78D8E8', onTap: () => _showLegal(context, 'Privacy Policy')),
+            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: '#FF5A3C', onTap: () => _showLegal(context, 'Privacy Policy')),
             SettingsTile(icon: Icons.description_rounded, title: 'Terms and conditions', subtitle: 'Usage terms', color: '#A6E3A1', onTap: () => _showLegal(context, 'Terms and conditions')),
-            SettingsTile(icon: Icons.balance_rounded, title: 'Open-source licenses', subtitle: 'Apache License 2.0 and Flutter package notices', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KoinlyLicenseScreen()))),
+            SettingsTile(icon: Icons.balance_rounded, title: 'Open-source licenses', subtitle: 'Apache License 2.0 and Flutter package notices', color: '#FFB547', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KoinlyLicenseScreen()))),
           ],
         ),
       ),

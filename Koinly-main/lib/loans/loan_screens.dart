@@ -184,7 +184,6 @@ class _LoanSummaryHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
     return ExpressiveCard(
-      color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF2A1B25) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

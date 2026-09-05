@@ -1,13 +1,5 @@
 # Changelog
 
-## [1.0.1063] - 2026-09-05
-
-### Changed
-- Replaced the previous Koinly presentation layer with a PixelPlayer-inspired visual system across the shared app shell, navigation, cards, page headers, forms, dialogs, sheets, settings rows, account/category/transaction surfaces, and Home dashboard.
-- Added a new warm dark palette with rose/lavender emphasis, flatter grouped surfaces, circular icon treatments, compact expressive navigation, and large editorial Home typography.
-- Reworked the Home balance surface and navigation treatment while preserving all existing finance features, workflows, data models, sync, loans, budgets, accounts, transactions, categories, analysis, profile media, updates, backup, and settings behavior.
-- Replaced heavy blur-based transient feedback with lightweight fade/slide motion and kept navigation/page animations short and compositor-friendly for lower-end devices.
-
 ## [1.0.1062] - 2026-09-04
 
 ### Fixed
