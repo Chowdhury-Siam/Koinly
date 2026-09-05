@@ -190,7 +190,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
         children: [
           Row(
             children: [
-              Expanded(child: Text(editing ? 'Edit loan' : 'New loan', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(child: Text(editing ? 'Edit loan' : 'New loan', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
               IconButton(onPressed: busy ? null : () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
             ],
           ),
@@ -217,7 +217,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(labelText: 'Amount', prefixText: state.currencyPosition == CurrencyPosition.prefix ? state.currencySymbol : null, suffixText: state.currencyPosition == CurrencyPosition.suffix ? state.currencySymbol : null),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -280,7 +280,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
           ),
           if (emi != null) ...[
             const SizedBox(height: 8),
-            Text('Estimated monthly payment: ${state.format(emi)}', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900)),
+            Text('Estimated monthly payment: ${state.format(emi)}', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w800)),
           ],
           const SizedBox(height: 10),
           SwitchListTile(
@@ -432,19 +432,19 @@ class _LoanPaymentSheetState extends State<_LoanPaymentSheet> {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Record payment', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(child: Text('Record payment', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
               IconButton(onPressed: busy ? null : () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
             ],
           ),
           const SizedBox(height: 8),
-          Text('Remaining ${state.format(remaining)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w900)),
+          Text('Remaining ${state.format(remaining)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800)),
           const SizedBox(height: 14),
           TextField(
             controller: amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(labelText: 'Payment amount', suffixText: state.currencyPosition == CurrencyPosition.suffix ? state.currencySymbol : null),
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -539,7 +539,7 @@ class _LoanPreferencesSheet extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Loan preferences', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(child: Text('Loan preferences', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
             ],
           ),

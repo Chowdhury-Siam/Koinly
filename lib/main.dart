@@ -225,7 +225,7 @@ class KoinlyDatabase {
         phone TEXT NOT NULL DEFAULT '',
         note TEXT NOT NULL DEFAULT '',
         icon_name TEXT NOT NULL DEFAULT 'exchange',
-        icon_color TEXT NOT NULL DEFAULT '#FFB547',
+        icon_color TEXT NOT NULL DEFAULT '#FBC879',
         archived INTEGER NOT NULL DEFAULT 0,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
@@ -349,7 +349,7 @@ class KoinlyDatabase {
     if (count > 0) return;
     final now = DateTime.now();
     final accounts = [
-      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#FF5A3C', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
+      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#78D8E8', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Card', type: AccountType.credit, iconName: 'credit_card', iconColor: '#89A7FF', amount: 0, creditLimit: 0, sequence: 1, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Bank Account', type: AccountType.regular, iconName: 'bank', iconColor: '#A6E3A1', amount: 0, creditLimit: 0, sequence: 2, createdOn: now, updatedOn: now),
     ];
@@ -360,7 +360,7 @@ class KoinlyDatabase {
     final expense = [
       ['Clothing', 'apparel', '#F5A3A3'],
       ['Entertainment', 'games', '#B5A7FF'],
-      ['Food', 'food', '#FFB547'],
+      ['Food', 'food', '#FBC879'],
       ['Health', 'health', '#98E2C6'],
       ['Leisure', 'leisure', '#A7D0FF'],
       ['Shopping', 'cart', '#FFB5D0'],
@@ -3405,6 +3405,13 @@ class AppController extends ChangeNotifier {
     await queuePreferenceSync();
   }
 
+  /// Quick light/dark flip used by the header toggle; keeps the existing
+  /// theme preference pipeline intact.
+  Future<void> cycleThemePreference() async {
+    final dark = themeMode == ThemeMode.dark;
+    await saveTheme(dark ? ThemePreference.light : ThemePreference.dark);
+  }
+
   Future<void> saveCurrency({required String symbol, required String code, required CurrencyPosition position, required bool separators}) async {
     currencySymbol = symbol;
     currencyCode = code;
@@ -3602,11 +3609,11 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
     add('start-savings-buffer', 'Start a savings buffer', state.format(500), 'Your savings account is empty, so the safest first idea is building a small buffer before buying anything.', 'A low target helps you start without creating pressure.', 'savings', '#A6E3A1');
   }
   if (text.contains('student') || text.contains('study') || text.contains('school') || text.contains('college') || text.contains('university')) {
-    add('student-study-kit', 'Study upgrade kit', range(.08, .18, min: 500, max: 8000), 'Useful for a student profile: notebooks, stationery, flash drive, or a focused study accessory.', 'Keep this below a small part of your savings so the account still grows.', 'book', '#FF5A3C');
+    add('student-study-kit', 'Study upgrade kit', range(.08, .18, min: 500, max: 8000), 'Useful for a student profile: notebooks, stationery, flash drive, or a focused study accessory.', 'Keep this below a small part of your savings so the account still grows.', 'book', '#78D8E8');
     add('course-or-exam', 'Course or exam prep', range(.12, .28, min: 800, max: 15000), 'A skill course or exam prep material can support your education instead of becoming a short-term impulse buy.', 'Best when it helps your current savings goal.', 'school', '#B4A5FF');
   }
   if (text.contains('game') || text.contains('gaming') || text.contains('gamer')) {
-    add('gaming-accessory', 'Gaming accessory', range(.10, .22, min: 1000, max: 18000), 'Your profile mentions gaming, so a controller, headset, or mouse can be a relevant planned purchase.', 'Choose this only if it does not reduce your main savings goal too much.', 'sports_esports', '#FFB547');
+    add('gaming-accessory', 'Gaming accessory', range(.10, .22, min: 1000, max: 18000), 'Your profile mentions gaming, so a controller, headset, or mouse can be a relevant planned purchase.', 'Choose this only if it does not reduce your main savings goal too much.', 'sports_esports', '#FBC879');
     add('gaming-audio', 'Gaming audio upgrade', range(.08, .18, min: 900, max: 12000), 'A headset or speakers can improve long gaming sessions more than random impulse spending.', 'Keep hobby spending within a fixed limit.', 'headphones', '#B4A5FF');
   }
   if (text.contains('anime') || text.contains('manga') || text.contains('otaku')) {
@@ -3616,13 +3623,13 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
   }
   if (text.contains('creator') || text.contains('youtube') || text.contains('video') || text.contains('content') || text.contains('stream')) {
     add('creator-gear', 'Creator gear upgrade', range(.14, .32, min: 1500, max: 25000), 'A mic, tripod, light, or storage upgrade fits a content-creator profile and can improve output quality.', 'Prefer gear that solves a real workflow problem.', 'camera_alt', '#86E3CE');
-    add('creator-audio', 'Microphone or audio accessory', range(.10, .22, min: 1200, max: 16000), 'Clearer audio can be one of the best-value upgrades for content creation.', 'Buy it only if it improves your current setup.', 'mic', '#FF5A3C');
+    add('creator-audio', 'Microphone or audio accessory', range(.10, .22, min: 1200, max: 16000), 'Clearer audio can be one of the best-value upgrades for content creation.', 'Buy it only if it improves your current setup.', 'mic', '#78D8E8');
   }
   if (text.contains('read') || text.contains('book') || text.contains('novel')) {
-    add('reader-stack', 'Book stack', range(.05, .14, min: 400, max: 8000), 'A planned book purchase fits your reading interest while keeping the amount modest.', 'Buy from a wishlist instead of impulse browsing.', 'book', '#FFB547');
+    add('reader-stack', 'Book stack', range(.05, .14, min: 400, max: 8000), 'A planned book purchase fits your reading interest while keeping the amount modest.', 'Buy from a wishlist instead of impulse browsing.', 'book', '#FBC879');
   }
   if (text.contains('travel') || text.contains('trip')) {
-    add('travel-day-plan', 'Small travel plan', range(.15, .35, min: 1500, max: 30000), 'Your profile suggests travel, so a controlled day-trip fund may fit better than random spending.', 'Keep transport, food, and emergency money inside the estimate.', 'flight', '#FF5A3C');
+    add('travel-day-plan', 'Small travel plan', range(.15, .35, min: 1500, max: 30000), 'Your profile suggests travel, so a controlled day-trip fund may fit better than random spending.', 'Keep transport, food, and emergency money inside the estimate.', 'flight', '#78D8E8');
   }
   if (text.contains('work') || text.contains('job') || text.contains('office') || text.contains('freelance')) {
     add('work-productivity', 'Work productivity item', range(.08, .22, min: 800, max: 16000), 'A practical desk, bag, keyboard, or app subscription can support your work routine.', 'Use this only if it improves daily productivity.', 'work', '#A6E3A1');
@@ -3633,11 +3640,11 @@ List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController st
   add('wishlist-item', 'Planned wishlist item', balance <= 0 ? state.format(500) : range(.05, .15, min: 500, max: 12000), 'A small planned item can be reasonable if it stays within your savings limit.', 'Avoid buying it if it delays a higher-priority goal.', 'gift', '#FFB5D0');
   add('audio-upgrade', 'Headphones or earphones', balance <= 0 ? state.format(700) : range(.06, .18, min: 700, max: 10000), 'Audio gear can be a practical upgrade for study, work, or entertainment when chosen carefully.', 'Keep it in a comfortable range that does not hurt your goal.', 'headphones', '#89A7FF');
   add('digital-subscription', 'Useful subscription or membership', balance <= 0 ? state.format(300) : range(.03, .10, min: 300, max: 5000), 'A single useful subscription can be more valuable than multiple impulse purchases.', 'Only continue it if you actually use it regularly.', 'subscription', '#86E3CE');
-  add('creative-hobby', 'Creative hobby supplies', balance <= 0 ? state.format(400) : range(.05, .14, min: 400, max: 8000), 'Art, journaling, or other hobby supplies can be a controlled way to enjoy your savings.', 'Set a spending ceiling before buying.', 'art', '#FFB547');
-  add('small-tech-upgrade', 'Small tech or desk upgrade', balance <= 0 ? state.format(900) : range(.08, .20, min: 900, max: 18000), 'A keyboard, stand, or small device can improve daily comfort if it solves a real need.', 'Choose practical upgrades over impulse gadgets.', 'keyboard', '#FF5A3C');
+  add('creative-hobby', 'Creative hobby supplies', balance <= 0 ? state.format(400) : range(.05, .14, min: 400, max: 8000), 'Art, journaling, or other hobby supplies can be a controlled way to enjoy your savings.', 'Set a spending ceiling before buying.', 'art', '#FBC879');
+  add('small-tech-upgrade', 'Small tech or desk upgrade', balance <= 0 ? state.format(900) : range(.08, .20, min: 900, max: 18000), 'A keyboard, stand, or small device can improve daily comfort if it solves a real need.', 'Choose practical upgrades over impulse gadgets.', 'keyboard', '#78D8E8');
   add('essential-replacement', 'Essential replacement fund', balance <= 0 ? state.format(600) : range(.05, .16, min: 600, max: 12000), 'Set aside money for replacing something useful before it becomes urgent.', 'This keeps savings practical instead of only entertainment-focused.', 'tools', '#A6E3A1');
   add('health-comfort-item', 'Health or comfort item', balance <= 0 ? state.format(500) : range(.04, .14, min: 500, max: 10000), 'A planned health, comfort, or daily-use item can be reasonable when it improves routine life.', 'Keep it below your main savings target.', 'health', '#86E3CE');
-  add('home-organizer', 'Home organizer or storage', balance <= 0 ? state.format(500) : range(.04, .13, min: 500, max: 9000), 'Small home organization purchases can reduce clutter without becoming a large expense.', 'Choose only one useful item and avoid extra add-ons.', 'home', '#FFB547');
+  add('home-organizer', 'Home organizer or storage', balance <= 0 ? state.format(500) : range(.04, .13, min: 500, max: 9000), 'Small home organization purchases can reduce clutter without becoming a large expense.', 'Choose only one useful item and avoid extra add-ons.', 'home', '#FBC879');
   add('small-gift-plan', 'Small gift plan', balance <= 0 ? state.format(400) : range(.04, .12, min: 400, max: 8000), 'Planning a gift ahead of time prevents last-minute overspending.', 'Use a fixed cap so generosity does not break the budget.', 'gift', '#FFB5D0');
   add('do-not-buy-yet', 'Wait and compare prices', state.format(0), 'Sometimes the best suggestion is not buying now. Compare prices and wait if the item is not needed.', 'This keeps your savings intact.', 'schedule', '#9AD0F5');
 
@@ -3674,6 +3681,7 @@ class KoinlyApp extends StatelessWidget {
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
+            disableAnimations: kLowEndFriendlyUi || media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
         );
@@ -3683,63 +3691,66 @@ class KoinlyApp extends StatelessWidget {
 
   ThemeData _theme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    // Warm "Ember" palette derived from the Koinly logo.
-    final seed = kSleekAccent;
-    final baseScheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
     final scheme = isDark
-        ? baseScheme.copyWith(
+        ? ColorScheme(
+            brightness: brightness,
             primary: kSleekAccent,
-            onPrimary: Colors.white,
-            primaryContainer: const Color(0xFF5C1F12),
-            onPrimaryContainer: Colors.white,
-            secondary: kSleekAccent2,
-            onSecondary: Colors.white,
-            tertiary: kSleekAccent3,
-            onTertiary: const Color(0xFF2A1A00),
-            tertiaryContainer: const Color(0xFF52300A),
-            onTertiaryContainer: Colors.white,
-            surface: kSleekSurfaceDark,
-            onSurface: const Color(0xFFF6EFEA),
-            onSurfaceVariant: const Color(0xFFC9BFB8),
-            surfaceContainerLowest: const Color(0xFF0E0B0F),
-            surfaceContainerLow: const Color(0xFF171316),
-            surfaceContainer: kSleekSurfaceDark,
-            surfaceContainerHigh: kSleekSurfaceHighDark,
-            surfaceContainerHighest: kSleekSurfaceHigherDark,
-            background: kSleekBackgroundDark,
-            onBackground: const Color(0xFFF6EFEA),
-            outline: const Color(0xFF514849),
-            outlineVariant: const Color(0xFF342D31),
-            error: const Color(0xFFFF6B6B),
+            onPrimary: kSleekOnAccent,
+            primaryContainer: const Color(0xFF0E3D2E),
+            onPrimaryContainer: const Color(0xFFA7F3D0),
+            secondary: const Color(0xFF34D399),
+            onSecondary: const Color(0xFF022C22),
+            secondaryContainer: const Color(0xFF124A38),
+            onSecondaryContainer: const Color(0xFFBBF7D0),
+            tertiary: const Color(0xFFF59E0B),
+            onTertiary: const Color(0xFF451A03),
+            error: kSleekExpense,
             onError: Colors.white,
-            shadow: Colors.black,
-          )
-        : baseScheme.copyWith(
-            primary: kSleekAccent,
-            onPrimary: Colors.white,
-            primaryContainer: const Color(0xFFFFE3D8),
-            onPrimaryContainer: const Color(0xFF4A1500),
-            secondary: kSleekAccent2,
-            onSecondary: Colors.white,
-            tertiary: kSleekAccent3,
-            onTertiary: const Color(0xFF2A1A00),
-            tertiaryContainer: const Color(0xFFFFE9C7),
-            onTertiaryContainer: const Color(0xFF3A2400),
             surface: kSleekSurface,
-            onSurface: const Color(0xFF231C18),
-            onSurfaceVariant: const Color(0xFF6E645D),
-            surfaceContainerLowest: Colors.white,
-            surfaceContainerLow: const Color(0xFFFDFAF6),
-            surfaceContainer: const Color(0xFFF8F3EC),
+            onSurface: const Color(0xFFF4F7F5),
+            onSurfaceVariant: const Color(0xFF9CA3AF),
+            surfaceContainerLowest: const Color(0xFF0D1210),
+            surfaceContainerLow: const Color(0xFF111714),
+            surfaceContainer: kSleekSurface,
             surfaceContainerHigh: kSleekSurfaceHigh,
             surfaceContainerHighest: kSleekSurfaceHigher,
-            background: kSleekBackground,
-            onBackground: const Color(0xFF231C18),
-            outline: const Color(0xFFB8ACA2),
-            outlineVariant: const Color(0xFFE0D6CA),
-            error: const Color(0xFFDC2F2F),
+            onInverseSurface: const Color(0xFF111714),
+            inverseSurface: const Color(0xFFEDF2EF),
+            inversePrimary: const Color(0xFF047857),
+            outline: const Color(0xFF26302C),
+            outlineVariant: const Color(0xFF1E2724),
+            shadow: Colors.black,
+            scrim: Colors.black,
+          )
+        : ColorScheme(
+            brightness: brightness,
+            primary: const Color(0xFF059669),
+            onPrimary: Colors.white,
+            primaryContainer: const Color(0xFFD1FAE5),
+            onPrimaryContainer: const Color(0xFF064E3B),
+            secondary: const Color(0xFF059669),
+            onSecondary: Colors.white,
+            secondaryContainer: const Color(0xFFD1FAE5),
+            onSecondaryContainer: const Color(0xFF065F46),
+            tertiary: const Color(0xFFD97706),
+            onTertiary: Colors.white,
+            error: kSleekLightExpense,
             onError: Colors.white,
-            shadow: const Color(0xFF4A2A1A),
+            surface: kSleekLightCard,
+            onSurface: kSleekLightText,
+            onSurfaceVariant: kSleekLightSecondaryText,
+            surfaceContainerLowest: Colors.white,
+            surfaceContainerLow: const Color(0xFFFCFDFC),
+            surfaceContainer: const Color(0xFFF8FAF8),
+            surfaceContainerHigh: kSleekLightCardHigh,
+            surfaceContainerHighest: const Color(0xFFECEEE9),
+            onInverseSurface: const Color(0xFFF1F5F2),
+            inverseSurface: const Color(0xFF1F2926),
+            inversePrimary: kSleekAccent,
+            outline: kSleekLightBorder,
+            outlineVariant: const Color(0xFFEDEFEA),
+            shadow: const Color(0x1A111111),
+            scrim: Colors.black,
           );
 
     final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
@@ -3762,22 +3773,24 @@ class KoinlyApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: scheme.background,
-      canvasColor: scheme.background,
+      scaffoldBackgroundColor: isDark ? kSleekBackground : kSleekLightBackground,
+      canvasColor: isDark ? kSleekBackground : kSleekLightBackground,
       visualDensity: VisualDensity.standard,
       dividerColor: Colors.transparent,
       splashFactory: InkSparkle.splashFactory,
       textTheme: textTheme.copyWith(
-        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.4),
-        displayMedium: textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.5),
-        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.6),
-        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.8),
-        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2),
-        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.45),
-        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.45),
-        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: .2),
+        displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.6),
+        displayLarge: textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -2.0),
+        headlineMedium: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.9),
+        headlineSmall: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.5),
+        titleLarge: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.3),
+        titleMedium: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+        titleSmall: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        labelLarge: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+        labelMedium: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600, letterSpacing: .1),
+        labelSmall: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600, letterSpacing: .2),
+        bodyMedium: textTheme.bodyMedium?.copyWith(height: 1.4),
+        bodyLarge: textTheme.bodyLarge?.copyWith(height: 1.4),
       ),
       pageTransitionsTheme: PageTransitionsTheme(
         builders: {
@@ -3793,135 +3806,153 @@ class KoinlyApp extends StatelessWidget {
         color: scheme.surface,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
-        shape: AppShapes.squircle(28),
+        shape: AppShapes.squircle(20),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: AppShapes.dialog),
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900),
+        titleTextStyle: textTheme.titleLarge?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
         contentTextStyle: textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: scheme.surface,
-        modalBarrierColor: Colors.black.withOpacity(isDark ? .64 : .36),
+        modalBarrierColor: Colors.black.withOpacity(isDark ? .60 : .32),
         showDragHandle: true,
         dragHandleColor: scheme.outlineVariant,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(kIsDesktopApp ? 36 : 32))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(kIsDesktopApp ? 28 : 24))),
         constraints: const BoxConstraints(maxWidth: 720),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF252025) : const Color(0xFF2A1A14),
-        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        shape: RoundedRectangleBorder(borderRadius: AppShapes.medium),
+        backgroundColor: isDark ? kSleekSurfaceHigher : const Color(0xFF111714),
+        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: AppShapes.full),
       ),
       listTileTheme: ListTileThemeData(
         minLeadingWidth: 46,
         contentPadding: EdgeInsets.zero,
-        shape: AppShapes.squircle(22),
-        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w800),
-        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+        shape: AppShapes.squircle(18),
+        titleTextStyle: textTheme.titleSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700),
+        subtitleTextStyle: textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        indicatorColor: kSleekAccent.withOpacity(isDark ? .26 : .14),
-        indicatorShape: AppShapes.squircle(22),
-        selectedIconTheme: const IconThemeData(color: kSleekAccent, size: 26),
-        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant.withOpacity(.82), size: 24),
-        selectedLabelTextStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900, fontSize: 12),
-        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.82), fontWeight: FontWeight.w800, fontSize: 11),
+        indicatorColor: kSleekAccent.withOpacity(isDark ? .22 : .14),
+        indicatorShape: AppShapes.squircle(16),
+        selectedIconTheme: const IconThemeData(color: kSleekAccent, size: 24),
+        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant, size: 22),
+        selectedLabelTextStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700, fontSize: 12),
+        unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500, fontSize: 12),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xF21A1518) : Colors.white.withOpacity(.96),
-        indicatorColor: kSleekAccent.withOpacity(isDark ? .24 : .16),
-        height: 78,
+        backgroundColor: isDark ? kSleekSurface : Colors.white,
+        indicatorColor: kSleekAccent.withOpacity(isDark ? .20 : .12),
+        height: 74,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         labelTextStyle: WidgetStateProperty.resolveWith((state) => TextStyle(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
               fontSize: state.contains(WidgetState.selected) ? 12 : 11,
               color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant,
             )),
         iconTheme: WidgetStateProperty.resolveWith((state) => IconThemeData(
-              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant.withOpacity(.82),
-              size: state.contains(WidgetState.selected) ? 26 : 23,
+              color: state.contains(WidgetState.selected) ? kSleekAccent : scheme.onSurfaceVariant,
+              size: state.contains(WidgetState.selected) ? 26 : 24,
             )),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? scheme.surfaceContainerHigh.withOpacity(.82) : Colors.white,
-        hintStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.78), fontWeight: FontWeight.w600),
-        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
-        floatingLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
+        fillColor: isDark ? kSleekSurfaceHigh : Colors.white,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+        labelStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+        floatingLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700),
         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        border: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.outlineVariant.withOpacity(.45), width: 1)),
-        focusedBorder: OutlineInputBorder(borderRadius: AppShapes.large, borderSide: BorderSide(color: kSleekAccent.withOpacity(.78), width: 1.4)),
-        errorBorder: OutlineInputBorder(borderRadius: AppShapes.medium, borderSide: BorderSide(color: scheme.error.withOpacity(.72), width: 1.2)),
-        focusedErrorBorder: OutlineInputBorder(borderRadius: AppShapes.large, borderSide: BorderSide(color: scheme.error, width: 1.4)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: kSleekAccent.withOpacity(.85), width: 1.4)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.error.withOpacity(.72), width: 1.2)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.error, width: 1.4)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
+          backgroundColor: states(
+            normal: isDark ? kSleekPrimaryButton : scheme.primary,
+            pressed: isDark ? const Color(0xFF059669) : const Color(0xFF047857),
+            disabled: scheme.onSurface.withOpacity(.10),
+          ),
           foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
-          overlayColor: const WidgetStatePropertyAll(Colors.white10),
-          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 24 : 20)),
+          overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.10)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900, letterSpacing: .1)),
-          elevation: states(normal: 0.0, pressed: 0.0),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700, letterSpacing: -.1)),
+          elevation: const WidgetStatePropertyAll(0.0),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.75)),
-          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
+          foregroundColor: states(normal: isDark ? kSleekAccent : scheme.primary, pressed: kSleekAccent.withOpacity(.75)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(
+          backgroundColor: states(
+            normal: isDark ? kSleekSurfaceHigh : Colors.white,
+            pressed: isDark ? kSleekSurfaceHigher : kSleekLightCardHigh,
+          ),
           foregroundColor: states(normal: scheme.onSurface, pressed: kSleekAccent, disabled: scheme.onSurface.withOpacity(.38)),
           side: states(
-            normal: BorderSide(color: scheme.outlineVariant.withOpacity(.95), width: 1.2),
-            pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.3),
-            disabled: BorderSide(color: scheme.onSurface.withOpacity(.12), width: 1),
+            normal: BorderSide(color: isDark ? const Color(0xFF2A3531) : kSleekLightBorder, width: 1),
+            pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.2),
+            disabled: BorderSide(color: scheme.onSurface.withOpacity(.10), width: 1),
           ),
-          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
+          elevation: const WidgetStatePropertyAll(0.0),
         ),
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent.withOpacity(isDark ? .42 : .22) : scheme.surfaceContainerHigh.withOpacity(isDark ? .58 : .72)),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? (isDark ? Colors.white : const Color(0xFF3A0F00)) : scheme.onSurfaceVariant),
-          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.9), width: 1.1)),
-          shape: const WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(22)))),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
+          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected)
+              ? kSleekAccent.withOpacity(isDark ? .26 : .16)
+              : scheme.surfaceContainerHigh),
+          foregroundColor: WidgetStateProperty.resolveWith((state) =>
+              state.contains(WidgetState.selected) ? (isDark ? kSleekAccent : const Color(0xFF047857)) : scheme.onSurfaceVariant),
+          side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant, width: 1)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w700)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 16)),
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: kSleekAccent,
         foregroundColor: Colors.white,
-        elevation: 6,
+        elevation: 4,
         highlightElevation: 2,
-        shape: AppShapes.squircle(22),
+        shape: const CircleBorder(),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent.withOpacity(.16) : (isDark ? scheme.surfaceContainerHigh.withOpacity(.72) : Colors.white.withOpacity(.92))),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface),
-          shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? kSleekAccent.withOpacity(.14)
+                : (isDark ? kSleekSurfaceHigh : kSleekLightCardHigh),
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface,
+          ),
+          shape: const WidgetStatePropertyAll(CircleBorder()),
           minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
         ),
       ),
@@ -3932,26 +3963,26 @@ class KoinlyApp extends StatelessWidget {
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         iconTheme: IconThemeData(color: scheme.onSurface),
-        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w900, letterSpacing: -.6),
+        titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface, fontWeight: FontWeight.w700, letterSpacing: -.5),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: scheme.surfaceContainerHigh,
-        selectedColor: kSleekAccent.withOpacity(isDark ? .34 : .22),
+        backgroundColor: isDark ? kSleekSurfaceHigh : kSleekLightCardHigh,
+        selectedColor: kSleekAccent.withOpacity(isDark ? .26 : .16),
         disabledColor: scheme.onSurface.withOpacity(.08),
-        side: BorderSide(color: scheme.outlineVariant.withOpacity(.92)),
-        shape: AppShapes.squircle(18),
-        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w800),
-        secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        side: BorderSide(color: scheme.outlineVariant),
+        shape: const StadiumBorder(),
+        labelStyle: TextStyle(color: scheme.onSurface, fontWeight: FontWeight.w600),
+        secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w700),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: kSleekAccent,
-        linearTrackColor: kSleekAccent.withOpacity(.18),
+        linearTrackColor: isDark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
       ),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.white : scheme.outline),
         trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent : scheme.surfaceContainerHighest),
-        trackOutlineColor: WidgetStatePropertyAll(scheme.outlineVariant),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       ),
     );
   }
@@ -4118,13 +4149,13 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
             child: Row(
               children: [
-                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? '#FF5A3C' : '#FFB547', size: 48),
+                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 48),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      Text(prompt.title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                       Text(prompt.subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                     ],
                   ),
@@ -4181,116 +4212,44 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
   }
 }
 
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
-}
-
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
-  late final AnimationController _fade;
-  late final AnimationController _rise;
-  late final Animation<double> _fadeAnim;
-  late final Animation<Offset> _riseAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
-    _rise = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _fadeAnim = CurvedAnimation(parent: _fade, curve: AppMotion.emphasized);
-    _riseAnim = Tween<Offset>(begin: const Offset(0, 0.18), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _rise, curve: AppMotion.spring));
-    Future.delayed(const Duration(milliseconds: 80), _fade.forward);
-    Future.delayed(const Duration(milliseconds: 220), _rise.forward);
-  }
-
-  @override
-  void dispose() {
-    _fade.dispose();
-    _rise.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Warm radial atmosphere.
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment.center,
-                radius: 1.2,
-                colors: dark
-                    ? [
-                        const Color(0xFF2A1A14),
-                        kSleekBackgroundDark,
-                        const Color(0xFF0A0608),
-                      ]
-                    : [
-                        const Color(0xFFFFEAD8),
-                        kSleekBackground,
-                        const Color(0xFFFFF5EC),
-                      ],
+      backgroundColor: dark ? kSleekBackground : kSleekLightBackground,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const _KoinlyBrandMark(size: 84),
+            const SizedBox(height: 22),
+            Text(
+              appTitle,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -1.0),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'PRIVATE FINANCE',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: dark ? kSleekMuted : kSleekLightSecondaryText,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2.2,
+                  ),
+            ),
+            const SizedBox(height: 26),
+            SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.6,
+                color: dark ? kSleekAccent : const Color(0xFF059669),
               ),
             ),
-          ),
-          // Floating logo + wordmark.
-          Center(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: SlideTransition(
-                position: _riseAnim,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const KoinlyAnimatedLogo(size: 124),
-                    const SizedBox(height: 32),
-                    Text(
-                      appTitle,
-                      style: theme.textTheme.displaySmall?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -1.4,
-                        fontSize: 40,
-                        foreground: Paint()
-                          ..shader = LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
-                          ).createShader(const Rect.fromLTWH(0, 0, 240, 60)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Personal finance tracker',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant.withOpacity(.85),
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 36),
-                    SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        valueColor: AlwaysStoppedAnimation<Color>(kSleekAccent),
-                        backgroundColor: kSleekAccent.withOpacity(.18),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -4413,10 +4372,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       });
     }
 
-    final Widget? actionButton = tabIndex == kTransactionTabIndex
-        ? _KoinlyAddTransactionFab(onPressed: () => showTransactionEditor(context))
-        : null;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final useDesktopNavigation = constraints.maxWidth >= 900;
@@ -4442,25 +4397,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     Positioned.fill(
                       child: AnimatedSwitcher(
                         duration: AppMotion.medium,
-                        switchInCurve: AppMotion.emphasized,
+                        switchInCurve: AppMotion.standard,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
                         transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.985, end: 1.0).animate(animation),
+                          opacity: CurvedAnimation(parent: animation, curve: AppMotion.standard),
+                          child: SlideTransition(
+                            position: Tween<Offset>(begin: const Offset(0, .015), end: Offset.zero).animate(animation),
                             child: child,
                           ),
                         ),
                         child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
-                    if (actionButton != null)
+                    if (!useDesktopNavigation) ...[
                       Positioned(
-                        right: useDesktopNavigation ? 34 : 24,
-                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 108),
-                        child: actionButton,
+                        left: 0,
+                        right: 0,
+                        bottom: MediaQuery.of(context).padding.bottom + 96,
+                        child: Center(
+                          child: _KoinlyAddFab(onPressed: () => showTransactionEditor(context)),
+                        ),
                       ),
-                    if (!useDesktopNavigation)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -4470,6 +4427,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           onSelected: selectTab,
                         ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -4481,62 +4439,58 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 }
 
-/// Brand-gradient "Add transaction" FAB — premium feel with a soft glow.
-class _KoinlyAddTransactionFab extends StatelessWidget {
-  const _KoinlyAddTransactionFab({required this.onPressed});
+class _KoinlyAddFab extends StatefulWidget {
+  const _KoinlyAddFab({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
+  State<_KoinlyAddFab> createState() => _KoinlyAddFabState();
+}
+
+class _KoinlyAddFabState extends State<_KoinlyAddFab> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value || !mounted) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return MotionPressable(
-      scale: 0.94,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: kSleekAccent.withOpacity(.45),
-              blurRadius: 26,
-              offset: const Offset(0, 12),
-            ),
-            BoxShadow(
-              color: kSleekAccent3.withOpacity(.30),
-              blurRadius: 36,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: onPressed,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text(
-                    'Add',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: .2,
-                    ),
-                  ),
+    final reducedMotion = MediaQuery.of(context).disableAnimations;
+    return Semantics(
+      button: true,
+      label: 'Add transaction',
+      child: Tooltip(
+        message: 'Add transaction',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapCancel: () => _setPressed(false),
+          onTapUp: (_) => _setPressed(false),
+          onTap: widget.onPressed,
+          child: AnimatedScale(
+            duration: AppMotion.fast,
+            curve: _pressed ? Curves.easeOutCubic : AppMotion.spring,
+            scale: _pressed ? .92 : 1,
+            child: AnimatedContainer(
+              duration: AppMotion.fast,
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF34D399), Color(0xFF10B981), Color(0xFF059669)],
+                ),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF10B981).withOpacity(reducedMotion ? 0 : .38), blurRadius: 22, offset: const Offset(0, 10)),
+                  BoxShadow(color: Colors.black.withOpacity(.30), blurRadius: 14, offset: const Offset(0, 6)),
                 ],
               ),
+              child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
             ),
           ),
         ),
@@ -4557,6 +4511,8 @@ class _DockDestination {
   final IconData activeIcon;
 }
 
+/// Reference-style sidebar: brand block on top, pill-highlighted destinations
+/// in the middle, and a sync/local-mode status card pinned to the bottom.
 class _SideRailNavigation extends StatelessWidget {
   const _SideRailNavigation({
     required this.selectedIndex,
@@ -4568,75 +4524,88 @@ class _SideRailNavigation extends StatelessWidget {
   final bool extended;
   final ValueChanged<int> onSelected;
 
+  static const List<_DockDestination> _destinations = [
+    _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
+    _DockDestination(label: 'Insights', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
+    _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
+    _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
+    _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = dark ? Colors.white.withOpacity(.06) : scheme.outlineVariant.withOpacity(.7);
-    final railColor = dark ? kSleekSurfaceDark : kSleekSurface;
+    final railColor = dark ? kSleekBackground : kSleekLightSidebar;
+    final dividerColor = dark ? Colors.white.withOpacity(.05) : kSleekLightBorder;
 
     return Material(
       color: railColor,
       child: SafeArea(
         right: false,
         child: Container(
-          width: extended ? 248 : 92,
+          width: extended ? kSidebarExtendedWidth : kSidebarCompactWidth,
           decoration: BoxDecoration(
-            border: Border(right: BorderSide(color: borderColor, width: 1)),
-            boxShadow: kIsDesktopApp
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(dark ? .22 : .04),
-                      blurRadius: 22,
-                      offset: const Offset(6, 0),
-                    ),
-                  ],
+            border: Border(right: BorderSide(color: dividerColor, width: 1)),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Brand block: emerald "K" + Koinly + PRIVATE FINANCE.
               Padding(
-                padding: EdgeInsets.fromLTRB(extended ? 20 : 14, 22, extended ? 20 : 14, 14),
-                child: Row(
-                  mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                  children: [
-                    const KoinlyAppIcon(size: 44, borderRadius: 14),
-                    if (extended) ...[
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(appTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
-                            Text('Desktop',
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                padding: EdgeInsets.fromLTRB(extended ? 18 : 16, 22, extended ? 18 : 16, 18),
+                child: extended
+                    ? Row(
+                        children: [
+                          const _KoinlyBrandMark(size: 42),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(appTitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2)),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'PRIVATE FINANCE',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 1.4,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      )
+                    : Center(child: const _KoinlyBrandMark(size: 44)),
               ),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: _FloatingDockNavigation.destinations.length,
-                  itemBuilder: (context, index) {
-                    final destination = _FloatingDockNavigation.destinations[index];
-                    final selected = selectedIndex == index;
-                    return _SideRailTile(
-                      destination: destination,
-                      selected: selected,
-                      extended: extended,
-                      onTap: () => onSelected(index),
-                    );
-                  },
+                child: SingleChildScrollView(
+                  physics: optimizedScrollPhysics(context),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < _destinations.length; i++)
+                        _SidebarDestination(
+                          destination: _destinations[i],
+                          extended: extended,
+                          selected: selectedIndex == i,
+                          onTap: () => onSelected(i),
+                        ),
+                      _SidebarDestination(
+                        destination: const _DockDestination(label: 'Settings', icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded),
+                        extended: extended,
+                        selected: false,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              _SidebarSyncCard(extended: extended),
+              const SizedBox(height: 14),
             ],
           ),
         ),
@@ -4645,72 +4614,84 @@ class _SideRailNavigation extends StatelessWidget {
   }
 }
 
-class _SideRailTile extends StatelessWidget {
-  const _SideRailTile({
+class _KoinlyBrandMark extends StatelessWidget {
+  const _KoinlyBrandMark({this.size = 40});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF34D399), Color(0xFF10B981), Color(0xFF059669)],
+        ),
+        boxShadow: [BoxShadow(color: const Color(0xFF10B981).withOpacity(.32), blurRadius: size * .5, offset: Offset(0, size * .18))],
+      ),
+      child: Center(
+        child: Text(
+          'K',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: size * .48,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.5,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarDestination extends StatelessWidget {
+  const _SidebarDestination({
     required this.destination,
-    required this.selected,
     required this.extended,
+    required this.selected,
     required this.onTap,
   });
 
   final _DockDestination destination;
-  final bool selected;
   final bool extended;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = kSleekAccent;
-    final inactiveColor = scheme.onSurfaceVariant.withOpacity(.78);
+    final activeColor = dark ? kSleekAccent : const Color(0xFF047857);
+    final activeBackground = dark ? const Color(0xFF11281F) : const Color(0xFFDCEEE6);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Tooltip(
-        message: destination.label,
-        child: Semantics(
-          selected: selected,
-          button: true,
-          label: destination.label,
-          child: MotionPressable(
-            scale: 0.96,
-            borderRadius: BorderRadius.circular(18),
-            onTap: onTap,
-            child: AnimatedContainer(
-              duration: AppMotion.medium,
-              curve: AppMotion.emphasized,
-              padding: EdgeInsets.symmetric(
-                horizontal: extended ? 14 : 8,
-                vertical: 12,
-              ),
-              decoration: BoxDecoration(
-                gradient: selected
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: dark
-                            ? [kSleekAccent.withOpacity(.36), kSleekAccent3.withOpacity(.18)]
-                            : [kSleekAccent.withOpacity(.20), kSleekAccent3.withOpacity(.10)],
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(18),
-                border: selected
-                    ? Border.all(color: kSleekAccent.withOpacity(dark ? .42 : .30), width: 1)
-                    : Border.all(color: Colors.transparent, width: 1),
-                boxShadow: selected
-                    ? [BoxShadow(color: kSleekAccent.withOpacity(.16), blurRadius: 16, offset: const Offset(0, 6))]
-                    : null,
-              ),
-              child: Row(
-                mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    selected ? destination.activeIcon : destination.icon,
-                    color: selected ? activeColor : inactiveColor,
-                    size: selected ? 26 : 24,
-                  ),
-                  if (extended) ...[
+      padding: EdgeInsets.symmetric(horizontal: extended ? 12 : 12),
+      child: MotionPressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        scale: .97,
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          curve: AppMotion.spring,
+          height: 52,
+          decoration: BoxDecoration(
+            color: selected ? activeBackground : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: extended ? 14 : 0),
+          child: extended
+              ? Row(
+                  children: [
+                    Icon(
+                      selected ? destination.activeIcon : destination.icon,
+                      color: selected ? activeColor : scheme.onSurfaceVariant,
+                      size: 23,
+                    ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
@@ -4718,16 +4699,118 @@ class _SideRailTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: selected ? activeColor : scheme.onSurface,
-                              fontWeight: FontWeight.w900,
+                              color: selected ? (dark ? Colors.white : kSleekLightText) : scheme.onSurfaceVariant,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                             ),
                       ),
                     ),
                   ],
-                ],
-              ),
+                )
+              : Center(
+                  child: Tooltip(
+                    message: destination.label,
+                    child: Icon(
+                      selected ? destination.activeIcon : destination.icon,
+                      color: selected ? activeColor : scheme.onSurfaceVariant,
+                      size: 24,
+                    ),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sidebar footer: local-only / sync status with a link into device sync.
+class _SidebarSyncCard extends StatelessWidget {
+  const _SidebarSyncCard({required this.extended});
+
+  final bool extended;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final online = state.cloudSyncEnabled;
+    final cardColor = dark ? kSleekSurface : Colors.white;
+    final statusColor = online ? kSleekAccent : kSleekMuted;
+
+    if (!extended) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Tooltip(
+          message: online ? 'Cloud sync on' : 'Local-only mode',
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+            child: Icon(
+              online ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+              color: statusColor,
+              size: 20,
             ),
           ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: dark ? Colors.white.withOpacity(.05) : kSleekLightBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(shape: BoxShape.circle, color: statusColor, boxShadow: [BoxShadow(color: statusColor.withOpacity(.55), blurRadius: 6)]),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    online ? 'CLOUD SYNC ON' : 'LOCAL-ONLY MODE',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: online ? kSleekAccent : scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              online ? state.syncAccountEmail : 'Data stays on this device.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 38,
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen())),
+                child: const Text('Device sync'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -4745,9 +4828,9 @@ class _FloatingDockNavigation extends StatelessWidget {
 
   static List<_DockDestination> get destinations => [
     const _DockDestination(label: 'Home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
-    const _DockDestination(label: 'Analysis', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
+    const _DockDestination(label: 'Insights', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
     const _DockDestination(label: 'Loans', icon: Icons.currency_exchange_outlined, activeIcon: Icons.currency_exchange_rounded),
-    const _DockDestination(label: 'Transaction', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
+    const _DockDestination(label: 'Activity', icon: Icons.receipt_long_outlined, activeIcon: Icons.receipt_long_rounded),
     const _DockDestination(label: 'Categories', icon: Icons.category_outlined, activeIcon: Icons.category_rounded),
   ];
 
@@ -4755,53 +4838,27 @@ class _FloatingDockNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final active = Colors.white;
-    final inactive = dark ? scheme.onSurface.withOpacity(.62) : scheme.onSurfaceVariant.withOpacity(.78);
+    final active = dark ? kSleekAccent : const Color(0xFF047857);
+    final inactive = scheme.onSurfaceVariant;
+    final dockColor = dark ? const Color(0xF2141A17) : Colors.white.withOpacity(.97);
+    final selectedColor = dark ? const Color(0xFF2A3B33) : const Color(0xFFE2F2EA);
 
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Center(
         heightFactor: 1,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
+          constraints: const BoxConstraints(maxWidth: 430),
           child: Container(
-            height: 72,
+            height: 68,
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
-              gradient: dark
-                  ? LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF262025),
-                        const Color(0xFF181315),
-                      ],
-                    )
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white,
-                        const Color(0xFFFDFAF6),
-                      ],
-                    ),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(
-                color: dark ? Colors.white.withOpacity(.08) : scheme.outlineVariant.withOpacity(.7),
-                width: 1,
-              ),
+              color: dockColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: dark ? Colors.white.withOpacity(.07) : kSleekLightBorder, width: 1),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(dark ? .42 : .12),
-                  blurRadius: 32,
-                  offset: const Offset(0, 16),
-                ),
-                BoxShadow(
-                  color: kSleekAccent.withOpacity(dark ? .14 : .06),
-                  blurRadius: 30,
-                  offset: const Offset(0, -4),
-                ),
+                BoxShadow(color: Colors.black.withOpacity(dark ? .40 : .10), blurRadius: 26, offset: const Offset(0, 12)),
               ],
             ),
             child: Row(
@@ -4815,12 +4872,48 @@ class _FloatingDockNavigation extends StatelessWidget {
                       selected: selected,
                       button: true,
                       label: destination.label,
-                      child: _DockPill(
-                        destination: destination,
-                        selected: selected,
-                        activeColor: active,
-                        inactiveColor: inactive,
+                      child: MotionPressable(
                         onTap: () => onSelected(index),
+                        borderRadius: BorderRadius.circular(18),
+                        scale: .94,
+                        child: AnimatedContainer(
+                          duration: AppMotion.medium,
+                          curve: AppMotion.spring,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            color: selected ? selectedColor : Colors.transparent,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              AnimatedScale(
+                                duration: AppMotion.medium,
+                                curve: AppMotion.spring,
+                                scale: selected ? 1.08 : 1,
+                                child: Icon(
+                                  selected ? destination.activeIcon : destination.icon,
+                                  color: selected ? active : inactive,
+                                  size: 23,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              AnimatedDefaultTextStyle(
+                                duration: AppMotion.fast,
+                                style: (Theme.of(context).textTheme.labelSmall ?? const TextStyle()).copyWith(
+                                      color: selected ? active : inactive,
+                                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                                      fontSize: 10.5,
+                                    ),
+                                child: Text(
+                                  destination.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -4828,92 +4921,6 @@ class _FloatingDockNavigation extends StatelessWidget {
               }),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Pill-shaped dock button — when selected it grows into a brand-gradient
-/// pill with the icon + label; when unselected it's a quiet icon-only dot.
-class _DockPill extends StatelessWidget {
-  const _DockPill({
-    required this.destination,
-    required this.selected,
-    required this.activeColor,
-    required this.inactiveColor,
-    required this.onTap,
-  });
-
-  final _DockDestination destination;
-  final bool selected;
-  final Color activeColor;
-  final Color inactiveColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return MotionPressable(
-      scale: 0.92,
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppMotion.medium,
-        curve: AppMotion.spring,
-        padding: EdgeInsets.symmetric(
-          horizontal: selected ? 14 : 8,
-          vertical: selected ? 10 : 8,
-        ),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
-                )
-              : null,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: kSleekAccent.withOpacity(dark ? .42 : .30),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              selected ? destination.activeIcon : destination.icon,
-              color: selected ? activeColor : inactiveColor,
-              size: selected ? 24 : 23,
-            ),
-            AnimatedSize(
-              duration: AppMotion.medium,
-              curve: AppMotion.spring,
-              child: selected
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 7),
-                      child: Text(
-                        destination.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: activeColor,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          letterSpacing: .1,
-                        ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
         ),
       ),
     );
@@ -4934,19 +4941,19 @@ class PageScaffold extends StatelessWidget {
     final small = AppBreakpoints.isSmall(context);
     final desktop = AppBreakpoints.isExpanded(context);
     return Scaffold(
-      backgroundColor: scheme.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        toolbarHeight: desktop ? 76 : small ? 68 : 76,
-        titleSpacing: small ? 12 : 18,
+        toolbarHeight: desktop ? 78 : small ? 66 : 74,
+        titleSpacing: small ? 14 : 20,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 26 : small ? 23 : 27)),
+            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 24 : small ? 21 : 23)),
             if (subtitle != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
               ),
           ],
         ),
@@ -4974,9 +4981,9 @@ class KoinlyAtmosphere extends StatelessWidget {
       return DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFF5EC), Color(0xFFFBF7F2), Color(0xFFFFFFFF)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF7F8F5), Color(0xFFF3F5F0), Color(0xFFF7F8F5)],
           ),
         ),
         child: child,
@@ -4985,11 +4992,11 @@ class KoinlyAtmosphere extends StatelessWidget {
 
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: kSleekBackgroundDark,
+        color: kSleekBackground,
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF1E161A), Color(0xFF141113), Color(0xFF0E0A0D)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF0C110F), Color(0xFF0B0F0E), Color(0xFF090D0C)],
         ),
       ),
       child: child,
@@ -5027,7 +5034,7 @@ class ResponsiveContent extends StatelessWidget {
               desktop ? 32 : small ? 12 : 16,
               desktop ? 22 : small ? 6 : 8,
               desktop ? 32 : small ? 12 : 16,
-              desktop ? 42 : small ? 96 : 110,
+              desktop ? 42 : small ? 170 : 180,
             );
 
         return Align(
@@ -5087,7 +5094,7 @@ class ResponsiveListContent extends StatelessWidget {
               desktop ? 32 : small ? 12 : 16,
               desktop ? 22 : small ? 6 : 8,
               desktop ? 32 : small ? 12 : 16,
-              desktop ? 42 : small ? 96 : 110,
+              desktop ? 42 : small ? 170 : 180,
             );
         final bodyCount = itemCount == 0 && empty != null ? 1 : itemCount;
 
@@ -5124,9 +5131,9 @@ class ExpressiveCard extends StatelessWidget {
   const ExpressiveCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(18),
     this.color,
-    this.radius = 28,
+    this.radius = 20,
     this.surfaceTint = true,
   });
 
@@ -5138,43 +5145,18 @@ class ExpressiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = color ?? (dark ? kSleekSurfaceDark : Colors.white);
-    final borderColor = dark ? Colors.white.withOpacity(.07) : scheme.outlineVariant.withOpacity(.6);
+    final baseColor = color ?? (dark ? kSleekSurface : Colors.white);
+    final borderColor = dark ? Colors.white.withOpacity(.055) : kSleekLightBorder;
     final decoration = BoxDecoration(
       color: baseColor,
-      gradient: surfaceTint
-          ? LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: dark
-                  ? [
-                      Color.alphaBlend(kSleekAccent.withOpacity(.06), baseColor),
-                      baseColor,
-                      Color.alphaBlend(kSleekAccent3.withOpacity(.04), baseColor),
-                    ]
-                  : [
-                      Color.alphaBlend(kSleekAccent.withOpacity(.025), baseColor),
-                      baseColor,
-                      Color.alphaBlend(kSleekAccent3.withOpacity(.018), baseColor),
-                    ],
-            )
-          : null,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: borderColor, width: 1),
       boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(dark ? .28 : .045),
-          blurRadius: 22,
-          offset: const Offset(0, 10),
-        ),
         if (dark)
-          BoxShadow(
-            color: kSleekAccent.withOpacity(.05),
-            blurRadius: 28,
-            offset: const Offset(0, 4),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(.16), blurRadius: 14, offset: const Offset(0, 8))
+        else
+          BoxShadow(color: const Color(0x14118C78), blurRadius: 16, offset: const Offset(0, 8)),
       ],
     );
     final cardChild = ClipRRect(
@@ -5197,13 +5179,30 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final small = AppBreakpoints.isSmall(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
+      padding: const EdgeInsets.fromLTRB(4, 24, 4, 12),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.2))),
-          if (trailing != null) DefaultTextStyle.merge(style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800), child: trailing!),
+          Expanded(
+            child: Text(
+              title.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: dark ? Colors.white.withOpacity(.92) : kSleekLightText,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: small ? .8 : 1.2,
+                    fontSize: 13,
+                  ),
+            ),
+          ),
+          if (trailing != null)
+            DefaultTextStyle.merge(
+              style: TextStyle(color: dark ? kSleekAccent : const Color(0xFF047857), fontWeight: FontWeight.w700, fontSize: 13),
+              child: trailing!,
+            ),
         ],
       ),
     );
@@ -5263,19 +5262,20 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final selectedIndex = options.indexWhere((option) => option.value == selected);
     final currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
     final current = options[currentIndex];
     final next = options[(currentIndex + 1) % options.length];
-    final selectedColor = kSleekAccent.withOpacity(.32);
-    final textColor = Theme.of(context).colorScheme.onSurface;
-    final mutedColor = Theme.of(context).colorScheme.onSurface.withOpacity(.60);
+    final accent = dark ? kSleekAccent : const Color(0xFF047857);
+    final mutedColor = dark ? kSleekMuted : kSleekLightSecondaryText;
 
     return MotionPressable(
       onTap: () => onChanged(next.value),
       borderRadius: AppShapes.medium,
       child: Material(
-        color: selectedColor,
+        color: dark ? kSleekSurface : Colors.white,
         borderRadius: AppShapes.medium,
         child: AnimatedContainer(
           duration: AppMotion.fast,
@@ -5284,13 +5284,21 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: AppShapes.medium,
-            border: Border.all(color: kSleekAccent.withOpacity(.42), width: 1.1),
-            boxShadow: [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))],
+            color: dark ? kSleekSurface : Colors.white,
+            border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder, width: 1),
+            boxShadow: [
+              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 16, offset: const Offset(0, 8)),
+            ],
           ),
           child: Row(
             children: [
               if (current.icon != null) ...[
-                Icon(current.icon, size: 22, color: kSleekAccent),
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(color: accent.withOpacity(.12), shape: BoxShape.circle),
+                  child: Icon(current.icon, size: 19, color: accent),
+                ),
                 const SizedBox(width: 12),
               ],
               Expanded(
@@ -5303,8 +5311,9 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: textColor,
-                            fontWeight: FontWeight.w900,
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -.2,
                           ),
                     ),
                     const SizedBox(height: 2),
@@ -5314,14 +5323,14 @@ class SleekCyclePillSelector<T> extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: mutedColor,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w500,
                           ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Icon(Icons.swap_horiz_rounded, color: kSleekAccent, size: 24),
+              Icon(Icons.swap_horiz_rounded, color: accent, size: 22),
             ],
           ),
         ),
@@ -5343,35 +5352,39 @@ class _SleekPillButton<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedColor = kSleekAccent.withOpacity(.32);
-    final unselectedColor = Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.48);
-    final borderColor = selected ? kSleekAccent.withOpacity(.42) : Theme.of(context).colorScheme.outline.withOpacity(.24);
-    final textColor = selected ? Colors.white : Theme.of(context).colorScheme.onSurface.withOpacity(.76);
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = dark ? kSleekAccent : const Color(0xFF047857);
+    final selectedColor = dark ? const Color(0xFF12291F) : const Color(0xFFDDEEE5);
+    final unselectedColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
+    final textColor = selected ? (dark ? Colors.white : kSleekLightText) : scheme.onSurfaceVariant;
 
     return MotionPressable(
       onTap: onTap,
-      borderRadius: AppShapes.medium,
+      borderRadius: AppShapes.full,
+      scale: .97,
       child: Material(
         color: selected ? selectedColor : unselectedColor,
-        borderRadius: AppShapes.medium,
+        borderRadius: AppShapes.full,
         child: AnimatedContainer(
           duration: AppMotion.fast,
           curve: AppMotion.emphasized,
-          constraints: const BoxConstraints(minHeight: 58),
-          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 8 : 12, vertical: 12),
+          constraints: const BoxConstraints(minHeight: 52),
+          padding: EdgeInsets.symmetric(horizontal: AppBreakpoints.isSmall(context) ? 10 : 14, vertical: 12),
           decoration: BoxDecoration(
-            borderRadius: AppShapes.medium,
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: selected
-                ? [BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 16, offset: const Offset(0, 8))]
-                : null,
+            borderRadius: AppShapes.full,
+            color: selected ? selectedColor : unselectedColor,
+            border: Border.all(
+              color: selected ? accent.withOpacity(.45) : Colors.transparent,
+              width: 1,
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (option.icon != null) ...[
-                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 18 : 20, color: selected ? kSleekAccent : textColor),
-                SizedBox(width: AppBreakpoints.isSmall(context) ? 5 : 8),
+                Icon(option.icon, size: AppBreakpoints.isSmall(context) ? 17 : 19, color: selected ? accent : textColor),
+                SizedBox(width: AppBreakpoints.isSmall(context) ? 6 : 8),
               ],
               Flexible(
                 child: FittedBox(
@@ -5383,7 +5396,8 @@ class _SleekPillButton<T> extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: textColor,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                          letterSpacing: -.1,
                         ),
                   ),
                 ),
@@ -5502,7 +5516,7 @@ class AppleSelectionField extends StatelessWidget {
                           selected?.title ?? emptyText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -5558,9 +5572,9 @@ Future<String?> showAppleWheelSelectionSheet(
                 ? options.length - 1
                 : selectedIndex;
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? kSleekSurfaceDark : const Color(0xFFFBF7F2);
-        final innerBorderColor = dark ? const Color(0xFF342D31) : const Color(0xFFE0D6CA);
-        final handleColor = dark ? const Color(0xFF7A7286) : const Color(0xFFB8ACA2);
+        final innerColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
+        final innerBorderColor = dark ? const Color(0xFF26302C) : kSleekLightBorder;
+        final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -5576,7 +5590,7 @@ Future<String?> showAppleWheelSelectionSheet(
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               Container(
@@ -5650,7 +5664,7 @@ class _AppleWheelOptionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
           color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -5790,7 +5804,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
                 child: Text(
                   'Select transaction date range',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ),
               IconButton(
@@ -5804,7 +5818,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
           Text(
             '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}',
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 16),
           Row(
@@ -5899,7 +5913,7 @@ class _DateRangeEndpointButton extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w900)),
+              Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: selected ? kSleekAccent : scheme.onSurfaceVariant, fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w800)),
             ],
@@ -6036,7 +6050,7 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                             width: width,
                             height: height,
                             decoration: BoxDecoration(
-                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
+                              color: dark ? const Color(0xF2141A17) : const Color(0xF2141A17),
                               borderRadius: BorderRadius.circular(radius),
                               border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
                               boxShadow: [
@@ -6052,20 +6066,6 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  // Soft brand-tinted gradient wash on success.
-                                  if (!_isProblemMessage)
-                                    DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            kSleekAccent.withOpacity(.18),
-                                            kSleekAccent3.withOpacity(.12),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
                                   Align(
                                     alignment: Alignment.center,
                                     child: Container(
@@ -6087,22 +6087,11 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                                             width: 38,
                                             height: 38,
                                             decoration: BoxDecoration(
-                                              gradient: _isProblemMessage
-                                                  ? null
-                                                  : LinearGradient(
-                                                      begin: Alignment.topLeft,
-                                                      end: Alignment.bottomRight,
-                                                      colors: kKoinlyBrandGradient,
-                                                    ),
-                                              color: _isProblemMessage ? iconColor.withOpacity(.22) : null,
+                                              color: iconColor.withOpacity(.18),
                                               borderRadius: BorderRadius.circular(18),
-                                              border: Border.all(
-                                                color: _isProblemMessage
-                                                    ? iconColor.withOpacity(.40)
-                                                    : Colors.white.withOpacity(.25),
-                                              ),
+                                              border: Border.all(color: iconColor.withOpacity(.22)),
                                             ),
-                                            child: Icon(icon, color: _isProblemMessage ? iconColor : Colors.white, size: 21),
+                                            child: Icon(icon, color: iconColor, size: 21),
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
@@ -6112,7 +6101,7 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                                               overflow: TextOverflow.ellipsis,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 color: Colors.white,
-                                                fontWeight: FontWeight.w900,
+                                                fontWeight: FontWeight.w800,
                                                 height: 1.14,
                                                 letterSpacing: -.1,
                                               ),
@@ -6152,7 +6141,7 @@ Future<T?> showKoinlyPopup<T>(
     context: context,
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withOpacity(.58),
+    barrierColor: Colors.black.withOpacity(.62),
     transitionDuration: AppMotion.medium,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
       return _KoinlyPopupFrame(maxWidth: maxWidth, maxHeight: maxHeight, child: child);
@@ -6162,9 +6151,9 @@ Future<T?> showKoinlyPopup<T>(
       return FadeTransition(
         opacity: curved,
         child: ScaleTransition(
-          scale: Tween<double>(begin: .92, end: 1).animate(curved),
+          scale: Tween<double>(begin: .94, end: 1).animate(curved),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, .04), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(curved),
             child: child,
           ),
         ),
@@ -6207,15 +6196,15 @@ class _KoinlyPopupFrame extends StatelessWidget {
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
               child: Material(
-                color: dark ? kSleekSurfaceDark : scheme.surface,
-                elevation: 24,
-                shadowColor: kSleekAccent.withOpacity(.18),
-                borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 36),
+                color: dark ? kSleekSurface : scheme.surface,
+                elevation: 18,
+                shadowColor: Colors.black.withOpacity(.45),
+                borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 30),
                 clipBehavior: Clip.antiAlias,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 36),
-                    border: Border.all(color: dark ? Colors.white.withOpacity(.08) : scheme.outlineVariant.withOpacity(.7)),
+                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 26 : 30),
+                    border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder),
                   ),
                   child: child,
                 ),
@@ -6418,44 +6407,27 @@ class _OnboardingPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return OnboardingPageFrame(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAnimatedLogo(size: 112),
-          const SizedBox(height: 32),
+          const _KoinlyBrandMark(size: 88),
+          const SizedBox(height: 28),
           Container(
-            width: 72,
-            height: 72,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [kSleekAccent.withOpacity(.18), kSleekAccent3.withOpacity(.12)],
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: kSleekAccent.withOpacity(.28), width: 1),
+              color: Theme.of(context).colorScheme.primary.withOpacity(.12),
+              shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 34, color: kSleekAccent),
+            child: Icon(icon, size: 30, color: Theme.of(context).colorScheme.primary),
           ),
-          const SizedBox(height: 22),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            body,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.5,
-            ),
-          ),
+          const SizedBox(height: 18),
+          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
+          const SizedBox(height: 16),
+          Text(body, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.5)),
           if (actions != null) ...[
-            const SizedBox(height: 28),
+            const SizedBox(height: 26),
             actions!,
           ],
         ],
@@ -6474,9 +6446,9 @@ class CurrencySetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAnimatedLogo(size: 86),
+          const _KoinlyBrandMark(size: 64),
           const SizedBox(height: 24),
-          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
           const SizedBox(height: 12),
           const Text('Choose how every amount is formatted across accounts, budgets, analysis, and exports.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
@@ -6498,9 +6470,9 @@ class AccountSetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAnimatedLogo(size: 86),
+          const _KoinlyBrandMark(size: 64),
           const SizedBox(height: 24),
-          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8)),
           const SizedBox(height: 12),
           const Text('Keep the starter accounts, add your own, or remove any account you do not need. Tap an account to edit or delete it.', textAlign: TextAlign.center),
           const SizedBox(height: 24),
@@ -6549,6 +6521,13 @@ class HomeDashboardScreen extends StatelessWidget {
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
 
+    // Top budget summary rendered inside the hero (reference layout).
+    final budgetProgresses = state.budgetProgress();
+    final topBudget = budgetProgresses.isEmpty ? null : budgetProgresses.first;
+    final budgetLimit = topBudget?.budget.amount ?? 0;
+    final budgetSpent = topBudget?.spent ?? 0;
+    final budgetRatioValue = topBudget?.ratio ?? 0;
+
     final balanceCard = BalanceHeroCard(
       balance: state.format(accountBalance),
       income: state.format(summary.income),
@@ -6556,27 +6535,103 @@ class HomeDashboardScreen extends StatelessWidget {
       subtitle: '${state.accounts.length} accounts total • ${range.label} balance ${state.format(summary.balance)}',
       amountsHidden: state.amountsHidden,
       onToggleAmounts: state.toggleAmountsHidden,
+      budgetLabel: topBudget == null ? null : 'Monthly budget · ${DateFormat('MMMM yyyy').format(topBudget.budget.selectedMonth)}',
+      budgetValue: topBudget == null ? null : '${state.format(budgetSpent)} / ${state.format(budgetLimit)}',
+      budgetRatio: topBudget == null ? null : budgetRatioValue,
+      budgetCaption: topBudget == null
+          ? null
+          : '${(budgetRatioValue * 100).clamp(0, 999).round()}% used · ${state.format(math.max(0, budgetLimit - budgetSpent))} left to spend',
+      onBudgetTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetDetailScreen(progress: topBudget!))),
     );
 
+    final recentTxs = txs.take(5).toList();
+
+    // Account cards laid out like the reference "Your accounts" grid:
+    // each card is a live account; tapping opens the account editor,
+    // exactly like tapping a row in the accounts list.
     final accountsSection = <Widget>[
-      const SectionHeader('Accounts'),
-      HomeNavigationTile(
-        iconName: 'wallet',
-        iconColor: '#FF5A3C',
-        title: 'Accounts',
-        subtitle: '${state.operatingAccounts.length} regular accounts',
-        amount: state.format(state.operatingAccountBalance),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
+      SectionHeader(
+        'Your accounts',
+        trailing: TextButton(
+          style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          onPressed: () => state.selectTabIndex(kTransactionTabIndex),
+          child: const Text('View activity'),
+        ),
       ),
-      const SizedBox(height: 10),
-      HomeNavigationTile(
-        iconName: 'savings',
-        iconColor: '#A6E3A1',
-        title: 'Savings Accounts',
-        subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
-        amount: state.format(state.savingAccountBalance),
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts'))),
-      ),
+      if (state.accounts.isEmpty)
+        EmptyCard(
+          icon: Icons.account_balance_wallet_rounded,
+          title: 'No accounts yet',
+          body: 'Add an account, restore a backup, or sign in to replace this device with your cloud data.',
+          action: () => showAccountEditor(context, allowedTypes: const [AccountType.regular, AccountType.credit]),
+          actionLabel: 'Add account',
+        )
+      else
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final cardWidth = (constraints.maxWidth - 10) / 2;
+            final useTwoColumns = constraints.maxWidth >= 520;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: state.accounts.take(useTwoColumns ? 6 : 4).map((account) {
+                return SizedBox(
+                  width: useTwoColumns ? cardWidth : constraints.maxWidth,
+                  child: _AccountCardTile(
+                    account: account,
+                    onTap: () => showAccountEditor(context, account: account, allowedTypes: account.type == AccountType.savings ? const [AccountType.savings] : const [AccountType.regular, AccountType.credit]),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      if (state.accounts.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            HomeNavigationTile(
+              iconName: 'wallet',
+              iconColor: '#78D8E8',
+              title: 'All accounts',
+              subtitle: '${state.operatingAccounts.length} regular accounts',
+              amount: state.format(state.operatingAccountBalance),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen())),
+            ),
+            HomeNavigationTile(
+              iconName: 'savings',
+              iconColor: '#A6E3A1',
+              title: 'Savings Accounts',
+              subtitle: state.savingAccounts.length == 1 ? '1 savings account' : '${state.savingAccounts.length} savings accounts',
+              amount: state.format(state.savingAccountBalance),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountListScreen(filterType: AccountType.savings, title: 'Savings Accounts'))),
+            ),
+          ],
+        ),
+      ],
+    ];
+
+    // "Recent activity" mirrors the reference dashboard list; "See all"
+    // jumps to the existing activity tab.
+    final recentActivitySection = <Widget>[
+      if (recentTxs.isNotEmpty) ...[
+        SectionHeader(
+          'Recent activity',
+          trailing: TextButton(
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            onPressed: () => state.selectTabIndex(kTransactionTabIndex),
+            child: const Text('See all'),
+          ),
+        ),
+        ExpressiveCard(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+          child: Column(
+            children: recentTxs.map((tx) => TransactionTile(tx: tx, flat: true)).toList(),
+          ),
+        ),
+      ],
     ];
 
     final budgetSection = <Widget>[
@@ -6587,8 +6642,6 @@ class HomeDashboardScreen extends StatelessWidget {
         ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 10), child: BudgetProgressTile(progress: b))),
     ];
 
-
-
     final categorySection = <Widget>[
       SectionHeader('Category spending'),
       if (topCategories.isEmpty)
@@ -6598,17 +6651,22 @@ class HomeDashboardScreen extends StatelessWidget {
           child: Column(
             children: topCategories.take(4).map((entry) {
               final category = state.categoryOf(entry.key);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
-                title: Text(category?.name ?? 'Unknown'),
-                subtitle: LinearProgressIndicator(value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal),
-                trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w800)),
+              return _CategorySpendRow(
+                bubble: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
+                name: category?.name ?? 'Unknown',
+                value: state.format(entry.value),
+                progress: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
                 onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
               );
             }).toList(),
           ),
         ),
+    ];
+
+    // "Savings suggestion" card presents today's unseen purchase suggestion,
+    // opening the existing suggestion dialog on tap (same data as the bubbles).
+    final savingsSuggestionSection = <Widget>[
+      if (recentTxs.isNotEmpty) ..._buildSavingsSuggestionSection(context, state),
     ];
 
     final startEmptySection = <Widget>[
@@ -6620,15 +6678,15 @@ class HomeDashboardScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  iconBubble(context, 'wallet', '#FF5A3C', size: 50),
+                  iconBubble(context, 'wallet', '#78D8E8', size: 50),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
-                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w500)),
                       ],
                     ),
                   ),
@@ -6665,10 +6723,24 @@ class HomeDashboardScreen extends StatelessWidget {
 
     return PageScaffold(
       title: 'Home',
-      subtitle: range.label,
+      subtitle: 'Welcome back, ${state.profileDisplayLabel}',
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
-        IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_rounded)),
+        if (AppBreakpoints.isExpanded(context))
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                minimumSize: const Size(0, 44),
+              ),
+              onPressed: () => showTransactionEditor(context),
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: const Text('Add'),
+            ),
+          ),
+        IconButton(onPressed: () => showDateRangeSheet(context), tooltip: 'Date range', icon: const Icon(Icons.date_range_outlined)),
+        IconButton(onPressed: () => state.cycleThemePreference(), tooltip: 'Toggle theme', icon: Icon(Theme.of(context).brightness == Brightness.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined)),
+        const ProfileAvatarButton(size: 40),
       ],
       child: ResponsiveContent(
         child: LayoutBuilder(
@@ -6681,8 +6753,10 @@ class HomeDashboardScreen extends StatelessWidget {
                   balanceCard,
                   ...startEmptySection,
                   ...accountsSection,
+                  ...recentActivitySection,
                   ...budgetSection,
                   ...categorySection,
+                  ...savingsSuggestionSection,
                 ],
               );
             }
@@ -6698,6 +6772,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       balanceCard,
                       ...startEmptySection,
                       ...accountsSection,
+                      ...recentActivitySection,
                       ...budgetSection,
                     ],
                   ),
@@ -6709,12 +6784,255 @@ class HomeDashboardScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       ...categorySection,
+                      ...savingsSuggestionSection,
                         ],
                   ),
                 ),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+List<Widget> _buildSavingsSuggestionSection(BuildContext context, AppController state) {
+  final suggestions = state.unseenSavingsPurchaseSuggestionsForToday();
+  if (suggestions.isEmpty) return const [];
+  final suggestion = suggestions.first;
+  final color = colorFromHex(suggestion.color, fallback: kSleekAccent);
+  final dark = Theme.of(context).brightness == Brightness.dark;
+
+  return [
+    const SectionHeader('Savings suggestion'),
+    ExpressiveCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(color: color.withOpacity(.14), shape: BoxShape.circle),
+                child: iconGlyph(context, suggestion.iconName, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  suggestion.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            suggestion.reason,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500, height: 1.45),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Estimated cost',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: dark ? Colors.white.withOpacity(.55) : kSleekLightSecondaryText,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .8,
+                      ),
+                ),
+              ),
+              Text(
+                suggestion.costRange,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: dark ? kSleekIncome : kSleekLightIncome, letterSpacing: -.3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => showKoinlyPopup<void>(
+                context,
+                maxWidth: 520,
+                maxHeight: 620,
+                child: SavingsSuggestionDetailDialog(suggestion: suggestion),
+              ),
+              icon: Icon(Icons.savings_outlined, size: 18, color: color),
+              label: const Text('View suggestion'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  ];
+}
+
+/// Compact reference-style account card: circular icon, type tag, balance.
+class _AccountCardTile extends StatelessWidget {
+  const _AccountCardTile({required this.account, required this.onTap});
+
+  final Account account;
+  final VoidCallback onTap;
+
+  String get _tag {
+    switch (account.type) {
+      case AccountType.savings:
+        return 'SAVINGS';
+      case AccountType.credit:
+        return 'CREDIT';
+      default:
+        return 'REGULAR';
+    }
+  }
+
+  Color get _tagColor {
+    switch (account.type) {
+      case AccountType.savings:
+        return kSleekWarning;
+      case AccountType.credit:
+        return kSleekExpense;
+      default:
+        return kSleekIncome;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<AppController>();
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Reference uses the regular text color for negative balances; the
+    // credit utilization bar carries the warning color instead.
+    final balanceColor = dark ? Colors.white : kSleekLightText;
+
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      scale: .97,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                iconBubble(context, account.iconName, account.iconColor, size: 42),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _tagColor.withOpacity(.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    _tag,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: _tagColor, fontWeight: FontWeight.w700, letterSpacing: .8, fontSize: 9.5),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              account.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 5),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                state.format(account.amount),
+                maxLines: 1,
+                softWrap: false,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.8, color: balanceColor),
+              ),
+            ),
+            if (account.type == AccountType.credit) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: account.creditLimit <= 0 ? 0 : (-account.amount / account.creditLimit).clamp(0.0, 1.0).toDouble(),
+                  minHeight: 5,
+                  color: kSleekExpense,
+                  backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${state.format(account.availableCredit)} available',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategorySpendRow extends StatelessWidget {
+  const _CategorySpendRow({
+    required this.bubble,
+    required this.name,
+    required this.value,
+    required this.progress,
+    this.onTap,
+  });
+
+  final Widget? bubble;
+  final String name;
+  final String value;
+  final double progress;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      scale: .98,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Row(
+          children: [
+            if (bubble != null) ...[
+              bubble!,
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0).toDouble(),
+                      minHeight: 6,
+                      backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(value, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2)),
+          ],
         ),
       ),
     );
@@ -6742,27 +7060,44 @@ class HomeNavigationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, iconName, iconColor, size: 50),
-        title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      scale: .97,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
           children: [
-            Text(amount, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            iconBubble(context, iconName, iconColor, size: 44),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightMutedText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(amount, softWrap: false, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3)),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ],
         ),
-        onTap: onTap,
       ),
     );
   }
@@ -6786,48 +7121,38 @@ class QuickActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final accent = colorFromHex(iconColor, fallback: kSleekAccent);
     return Semantics(
       button: true,
       label: label.replaceAll('\n', ' '),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
+      child: MotionPressable(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        scale: .96,
         child: AnimatedContainer(
           duration: AppMotion.fast,
           curve: AppMotion.spring,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
           decoration: BoxDecoration(
-            color: dark ? kSleekSurfaceDark.withOpacity(.78) : Colors.white.withOpacity(.94),
-            gradient: dark
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.alphaBlend(accent.withOpacity(.09), kSleekSurfaceDark),
-                      kSleekSurfaceDark,
-                    ],
-                  )
-                : null,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: dark ? Colors.white.withOpacity(.07) : scheme.outlineVariant.withOpacity(.72)),
+            color: dark ? kSleekSurface : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: dark ? Colors.white.withOpacity(.055) : kSleekLightBorder),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(dark ? .20 : .06), blurRadius: 16, offset: const Offset(0, 8)),
+              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 14, offset: const Offset(0, 8)),
             ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               iconBubble(context, iconName, iconColor, size: 42),
-              const SizedBox(height: 8),
+              const SizedBox(height: 9),
               Text(
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: dark ? const Color(0xFFDDE9EC) : scheme.onSurface,
-                      fontWeight: FontWeight.w900,
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w600,
                       height: 1.05,
                     ),
               ),
@@ -6849,16 +7174,17 @@ class MiniMetric extends StatelessWidget {
     final lower = label.toLowerCase();
     if (lower.contains('income') || lower.contains('saving')) return kSleekIncome;
     if (lower.contains('expense') || lower.contains('spent') || lower.contains('overdue')) return kSleekExpense;
-    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent2;
+    if (lower.contains('balance') || lower.contains('remaining')) return kSleekAccent;
     if (lower.contains('open')) return const Color(0xFF8AB4FF);
-    if (lower.contains('completed')) return kSleekIncome;
-    return kSleekAccent3;
+    if (lower.contains('completed')) return const Color(0xFF2BD9A1);
+    return kSleekAccent;
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final accent = _accent();
 
     Widget fitted(String text, TextStyle? style, {Alignment alignment = Alignment.centerLeft, TextAlign textAlign = TextAlign.left}) => FittedBox(
@@ -6881,29 +7207,31 @@ class MiniMetric extends StatelessWidget {
           constraints: BoxConstraints(minHeight: compact ? 82 : 66),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest.withOpacity(Theme.of(context).brightness == Brightness.dark ? .42 : .48),
+            color: dark ? kSleekSurface : Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: colorScheme.outline.withOpacity(.24), width: .8),
-            boxShadow: Theme.of(context).brightness == Brightness.dark ? [BoxShadow(color: Colors.black.withOpacity(.12), blurRadius: 14, offset: const Offset(0, 8))] : null,
+            border: Border.all(color: dark ? Colors.white.withOpacity(.055) : kSleekLightBorder, width: 1),
+            boxShadow: [
+              if (dark) BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 14, offset: const Offset(0, 8)),
+            ],
           ),
           child: compact
               ? Row(
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, color: accent, size: 21),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(color: accent.withOpacity(.13), shape: BoxShape.circle),
+                      child: Icon(icon, color: accent, size: 19),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(width: double.infinity, child: fitted(label, textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w800))),
+                          SizedBox(width: double.infinity, child: fitted(label, textTheme.labelMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
                           const SizedBox(height: 5),
-                          SizedBox(width: double.infinity, child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: colorScheme.onSurface))),
+                          SizedBox(width: double.infinity, child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.onSurface, letterSpacing: -.4))),
                         ],
                       ),
                     ),
@@ -6912,15 +7240,15 @@ class MiniMetric extends StatelessWidget {
               : Row(
                   children: [
                     Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(color: accent.withOpacity(.14), borderRadius: BorderRadius.circular(12)),
-                      child: Icon(icon, color: accent, size: 21),
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(color: accent.withOpacity(.13), shape: BoxShape.circle),
+                      child: Icon(icon, color: accent, size: 19),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: fitted(label, textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700))),
+                    Expanded(child: fitted(label, textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500))),
                     const SizedBox(width: 12),
-                    Flexible(child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900), alignment: Alignment.centerRight, textAlign: TextAlign.right)),
+                    Flexible(child: fitted(value, textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3), alignment: Alignment.centerRight, textAlign: TextAlign.right)),
                   ],
                 ),
         );
@@ -6938,6 +7266,11 @@ class BalanceHeroCard extends StatelessWidget {
     required this.subtitle,
     required this.amountsHidden,
     required this.onToggleAmounts,
+    this.budgetLabel,
+    this.budgetValue,
+    this.budgetRatio,
+    this.budgetCaption,
+    this.onBudgetTap,
   });
   final String balance;
   final String income;
@@ -6945,156 +7278,208 @@ class BalanceHeroCard extends StatelessWidget {
   final String subtitle;
   final bool amountsHidden;
   final VoidCallback onToggleAmounts;
+  final String? budgetLabel;
+  final String? budgetValue;
+  final double? budgetRatio;
+  final String? budgetCaption;
+  final VoidCallback? onBudgetTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final small = AppBreakpoints.isSmall(context);
+    final cardColor = dark ? kSleekSurface : Colors.white;
+    final labelColor = dark ? Colors.white.withOpacity(.62) : kSleekLightSecondaryText;
+    final valueColor = dark ? Colors.white : kSleekLightText;
 
-    // The signature Koinly gradient hero — coral → tangerine → amber.
-    final heroGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: dark ? kKoinlyBrandGradientDark : kKoinlyBrandGradient,
-    );
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+    return AnimatedContainer(
+      duration: AppMotion.medium,
+      curve: AppMotion.emphasized,
+      padding: EdgeInsets.all(small ? 20 : 24),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: heroGradient,
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: dark ? Colors.white.withOpacity(.06) : kSleekLightBorder),
         boxShadow: [
-          BoxShadow(
-            color: kSleekAccent.withOpacity(dark ? .50 : .38),
-            blurRadius: 32,
-            offset: const Offset(0, 16),
-          ),
-          BoxShadow(
-            color: kSleekAccent3.withOpacity(dark ? .30 : .20),
-            blurRadius: 44,
-            offset: const Offset(0, 6),
-          ),
+          BoxShadow(color: Colors.black.withOpacity(dark ? .22 : .05), blurRadius: 26, offset: const Offset(0, 14)),
+          if (dark) BoxShadow(color: kSleekAccent.withOpacity(.05), blurRadius: 34, offset: const Offset(0, 6)),
         ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Soft decorative halo in the top-right corner.
-          Positioned(
-            top: -40,
-            right: -30,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(.10),
-              ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // "TOTAL BALANCE" label + currency + eye toggle.
+          Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(.22),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white.withOpacity(.30), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.account_balance_wallet_rounded,
-                            size: 14, color: Colors.white.withOpacity(.95)),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Net Balance',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: .8,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  Tooltip(
-                    message: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: onToggleAmounts,
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(.20),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(.30), width: 1),
-                        ),
-                        child: Icon(
-                          amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                          size: 16,
-                          color: Colors.white,
-                        ),
+              Icon(Icons.auto_awesome_rounded, size: 15, color: dark ? kSleekAccent : const Color(0xFF059669)),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'TOTAL BALANCE',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: labelColor,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
                       ),
+                ),
+              ),
+              Tooltip(
+                message: amountsHidden ? 'Show amounts' : 'Hide amounts',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: onToggleAmounts,
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: Icon(
+                      amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      size: 16,
+                      color: dark ? kSleekAccent.withOpacity(.85) : const Color(0xFF059669).withOpacity(.85),
                     ),
                   ),
-                ],
+                ),
               ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Hero number + currency code.
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
                     balance,
                     maxLines: 1,
                     softWrap: false,
-                    style: theme.textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -1.6,
-                      color: Colors.white,
-                      height: 1.0,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                subtitle,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withOpacity(.86),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const _DecorativeSparkline(),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _HeroMetricChip(
-                      label: 'Income',
-                      value: income,
-                      icon: Icons.south_west_rounded,
-                      iconColor: const Color(0xFFE9FFF5),
-                      tint: const Color(0xFF20C997),
-                    ),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -2.0,
+                          color: valueColor,
+                          height: 1.05,
+                        ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: _HeroMetricChip(
-                      label: 'Expense',
-                      value: expense,
-                      icon: Icons.north_east_rounded,
-                      iconColor: const Color(0xFFFFE5DC),
-                      tint: kSleekRose,
-                    ),
+                  Text(
+                    context.select<AppController, String>((state) => state.currencyCode),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: labelColor,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: .8,
+                        ),
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Income / expense stat badges.
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HeroStatBadge(
+                icon: Icons.south_west_rounded,
+                label: '+$income',
+                emphasized: true,
+              ),
+              _HeroStatBadge(
+                icon: Icons.north_east_rounded,
+                label: '-$expense',
+                emphasized: false,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500)),
+          // Monthly budget summary, reference style: label + spent/limit,
+          // green→amber gradient fill, usage caption.
+          if (budgetLabel != null && budgetValue != null && budgetRatio != null) ...[
+            const SizedBox(height: 18),
+            MotionPressable(
+              onTap: onBudgetTap,
+              borderRadius: BorderRadius.circular(16),
+              scale: .985,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          budgetLabel!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(color: labelColor, fontWeight: FontWeight.w700, letterSpacing: .6),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            budgetValue!,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: budgetRatio!.clamp(0.0, 1.0).toDouble()),
+                      duration: AppMotion.slow,
+                      curve: AppMotion.emphasized,
+                      builder: (context, value, _) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 10,
+                        color: kSleekIncome,
+                        backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
+                      ),
+                    ),
+                  ),
+                  if (budgetCaption != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      budgetCaption!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          // Stat boxes row.
+          Row(
+            children: [
+              Expanded(
+                child: _HeroStatBox(
+                  label: 'THIS MONTH IN',
+                  value: income,
+                  icon: Icons.trending_up_rounded,
+                  positive: true,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _HeroStatBox(
+                  label: 'THIS MONTH OUT',
+                  value: expense,
+                  icon: Icons.trending_down_rounded,
+                  positive: false,
+                ),
               ),
             ],
           ),
@@ -7104,40 +7489,76 @@ class BalanceHeroCard extends StatelessWidget {
   }
 }
 
-class _HeroMetricChip extends StatelessWidget {
-  const _HeroMetricChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.iconColor,
-    required this.tint,
-  });
+class _HeroStatBadge extends StatelessWidget {
+  const _HeroStatBadge({required this.icon, required this.label, required this.emphasized});
+
+  final IconData icon;
+  final String label;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final positive = emphasized;
+    final color = positive
+        ? (dark ? kSleekIncome : kSleekLightIncome)
+        : (dark ? const Color(0xFF8B9493) : kSleekLightSecondaryText);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: positive
+            ? (dark ? kSleekIncome.withOpacity(.14) : kSleekLightIncome.withOpacity(.10))
+            : (dark ? Colors.white.withOpacity(.06) : const Color(0xFFF3F4F1)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStatBox extends StatelessWidget {
+  const _HeroStatBox({required this.label, required this.value, required this.icon, required this.positive});
 
   final String label;
   final String value;
   final IconData icon;
-  final Color iconColor;
-  final Color tint;
+  final bool positive;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+    final color = positive ? (dark ? kSleekIncome : kSleekLightIncome) : (dark ? kSleekWarning : const Color(0xFFD97706));
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(.18),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(.26), width: 1),
+        color: dark ? kSleekSurfaceHigh : kSleekLightCardHigh,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(.22),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, size: 18, color: iconColor),
+            decoration: BoxDecoration(color: color.withOpacity(.14), shape: BoxShape.circle),
+            child: Icon(icon, size: 17, color: color),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -7147,14 +7568,11 @@ class _HeroMetricChip extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(.82),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                    letterSpacing: .4,
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700, letterSpacing: .9),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
@@ -7162,75 +7580,13 @@ class _HeroMetricChip extends StatelessWidget {
                     value,
                     maxLines: 1,
                     softWrap: false,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: -.2,
-                    ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.4),
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _DecorativeSparkline extends StatelessWidget {
-  const _DecorativeSparkline();
-
-  @override
-  Widget build(BuildContext context) {
-    final spots = const [
-      FlSpot(0, 1.2),
-      FlSpot(1, 1.7),
-      FlSpot(2, 1.4),
-      FlSpot(3, 2.4),
-      FlSpot(4, 2.1),
-      FlSpot(5, 3.2),
-      FlSpot(6, 2.9),
-      FlSpot(7, 4.0),
-    ];
-    return RepaintBoundary(
-      child: SizedBox(
-        height: 54,
-        child: LineChart(
-        LineChartData(
-          minX: 0,
-          maxX: 7,
-          minY: 0,
-          maxY: 4.5,
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          lineTouchData: const LineTouchData(enabled: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              preventCurveOverShooting: true,
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.white.withOpacity(.95), Colors.white.withOpacity(.65)],
-              ),
-              barWidth: 3,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.white.withOpacity(.30), Colors.white.withOpacity(0)],
-                ),
-              ),
-            ),
-          ],
-        ),
-        ),
       ),
     );
   }
@@ -7246,16 +7602,32 @@ class EmptyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
       child: Column(
         children: [
-          Icon(icon, size: 42),
-          const SizedBox(height: 12),
-          Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: (dark ? kSleekAccent : const Color(0xFF059669)).withOpacity(.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 28, color: dark ? kSleekAccent : const Color(0xFF059669)),
+          ),
+          const SizedBox(height: 14),
+          Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
           const SizedBox(height: 6),
-          Text(body, textAlign: TextAlign.center),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500, height: 1.45),
+          ),
           if (action != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             FilledButton(onPressed: action, child: Text(actionLabel ?? 'Add')),
           ],
         ],
@@ -7276,33 +7648,52 @@ class AccountTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final balanceColor = account.amount < 0 ? kSleekExpense : Theme.of(context).colorScheme.onSurface;
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-      radius: 24,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, account.iconName, account.iconColor, size: 46),
-        title: Text(account.name, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          account.type == AccountType.credit
-              ? 'Credit • Available ${state.format(account.availableCredit)}'
-              : account.type == AccountType.savings
-                  ? 'Savings Account'
-                  : 'Cash Wallet',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final balanceColor = dark ? Colors.white : kSleekLightText;
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      scale: .98,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        radius: 20,
+        child: Row(
           children: [
-            Text(state.format(account.amount), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: balanceColor)),
-            const SizedBox(width: 6),
-            Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            iconBubble(context, account.iconName, account.iconColor, size: 46),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(account.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                  const SizedBox(height: 3),
+                  Text(
+                    account.type == AccountType.credit
+                        ? 'Credit · Available ${state.format(account.availableCredit)}'
+                        : account.type == AccountType.savings
+                            ? 'Savings account'
+                            : 'Regular account',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                state.format(account.amount),
+                softWrap: false,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: balanceColor),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ],
         ),
-        onTap: onTap,
       ),
     );
   }
@@ -7576,7 +7967,7 @@ class _SavingsSuggestionBubble extends StatelessWidget {
           width: 74,
           height: 74,
           decoration: BoxDecoration(
-            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE10191D) : Colors.white.withOpacity(.96)),
+            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE141A17) : Colors.white.withOpacity(.96)),
             shape: BoxShape.circle,
             border: Border.all(color: selected ? color.withOpacity(.78) : color.withOpacity(.36), width: selected ? 2 : 1.2),
             boxShadow: [
@@ -7600,7 +7991,7 @@ class _SavingsSuggestionBubble extends StatelessWidget {
                 '?',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       color: color,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       height: 1,
                     ),
               ),
@@ -7629,7 +8020,7 @@ class SavingsSuggestionDetailDialog extends StatelessWidget {
           children: [
             iconBubble(context, suggestion.iconName, suggestion.color, size: 58),
             const SizedBox(height: 14),
-            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             _SuggestionDetailRow(icon: Icons.price_change_rounded, title: 'Estimated cost', body: suggestion.costRange, color: color),
             _SuggestionDetailRow(icon: Icons.psychology_rounded, title: 'Why this fits', body: suggestion.reason, color: color),
@@ -7676,7 +8067,7 @@ class _SuggestionDetailRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 3),
                   Text(body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
                 ],
@@ -7774,7 +8165,7 @@ class _AccountEditorState extends State<AccountEditor> {
   final creditLimit = TextEditingController();
   AccountType type = AccountType.regular;
   String icon = 'wallet';
-  String color = '#FF5A3C';
+  String color = '#78D8E8';
 
   List<AccountType> get allowedTypes => widget.allowedTypes ?? AccountType.values;
 
@@ -7822,7 +8213,7 @@ class _AccountEditorState extends State<AccountEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Account name')),
             const SizedBox(height: 12),
@@ -7910,9 +8301,9 @@ class IconColorPicker extends StatelessWidget {
     'calendar', 'time', 'flag', 'profile'
   ];
   static const colors = [
-    '#FF5A3C', '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
+    '#78D8E8', '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
     '#D946EF', '#EC4899', '#F472B6', '#FB7185', '#EF4444', '#F97316', '#FB923C', '#F59E0B',
-    '#FFB547', '#FACC15', '#A3E635', '#84CC16', '#22C55E', '#16A34A', '#10B981', '#14B8A6',
+    '#FBC879', '#FACC15', '#A3E635', '#84CC16', '#22C55E', '#16A34A', '#10B981', '#14B8A6',
     '#2DD4BF', '#86E3CE', '#A6E3A1', '#89A7FF', '#B4A5FF', '#C4B5FD', '#F5A3A3', '#FFB5D0',
     '#FFB86B', '#94A3B8', '#64748B', '#475569', '#334155', '#1F2937', '#111827', '#F8FAFC'
   ];
@@ -7943,7 +8334,7 @@ class IconColorPicker extends StatelessWidget {
             'APPEARANCE',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   letterSpacing: 3,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   color: colorScheme.onSurface.withOpacity(.82),
                 ),
           ),
@@ -8006,7 +8397,7 @@ class _AppearanceButton extends StatelessWidget {
                   child: Text(
                     label,
                     maxLines: 1,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
@@ -8069,7 +8460,7 @@ class ColorSelectionPage extends StatelessWidget {
   }
 
   Future<String?> _showCustomColorOptions(BuildContext context) async {
-    final initial = _normalizeColor(selectedColor).isEmpty ? '#FF5A3C' : _normalizeColor(selectedColor);
+    final initial = _normalizeColor(selectedColor).isEmpty ? '#78D8E8' : _normalizeColor(selectedColor);
 
     final choice = await showKoinlyPopup<String>(
       context,
@@ -8078,7 +8469,7 @@ class ColorSelectionPage extends StatelessWidget {
       child: Builder(
         builder: (dialogContext) {
           final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-          final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+          final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
@@ -8092,7 +8483,7 @@ class ColorSelectionPage extends StatelessWidget {
                 const SizedBox(height: 18),
                 Text(
                   'Custom color',
-                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -8207,7 +8598,7 @@ class ColorSelectionPage extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            Text('Custom color', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 2),
                             Text(
                               customSelected ? selectedNormalized : 'Color picker or pick from photo',
@@ -8235,7 +8626,7 @@ class ColorSelectionPage extends StatelessWidget {
                   customCard,
                 SizedBox(height: desktop ? 24 : 18),
                 if (desktop) ...[
-                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  Text('Preset colors', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
                   Text(
                     'Choose a ready-made accent color.',
@@ -8316,7 +8707,7 @@ class _CustomColorOptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                    Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
@@ -8680,7 +9071,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        Text(_hex(selectedColor), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 3),
                         Text('Selected custom color', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
@@ -8708,7 +9099,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                       borderRadius: BorderRadius.circular(18),
                       child: Container(
                         height: 300,
-                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+                        color: Theme.of(context).brightness == Brightness.dark ? kSleekSurfaceHigh : kSleekLightCardHigh,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -8967,16 +9358,37 @@ class CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      radius: 24,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, category.iconName, category.iconColor),
-        title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text(enumName(category.type)),
-        trailing: trailing,
-        onTap: onTap,
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      scale: .98,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        radius: 20,
+        child: Row(
+          children: [
+            iconBubble(context, category.iconName, category.iconColor, size: 44),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                  const SizedBox(height: 3),
+                  Text(
+                    enumName(category.type),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
+                  ),
+                ],
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing!,
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -9004,7 +9416,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
   final name = TextEditingController();
   CategoryType type = CategoryType.expense;
   String icon = 'category';
-  String color = '#FF5A3C';
+  String color = '#78D8E8';
 
   @override
   void initState() {
@@ -9030,7 +9442,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
@@ -9079,11 +9491,11 @@ class TransactionListScreen extends StatelessWidget {
     final state = context.watch<AppController>();
     final txs = state.filteredTransactions();
     return PageScaffold(
-      title: 'Transaction',
-      subtitle: '${txs.length} records • ${state.activeRange().label}',
+      title: 'Activity',
+      subtitle: '${txs.length} records · ${state.activeRange().label}',
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
-        IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded)),
+        IconButton(onPressed: () => showDateRangeSheet(context), tooltip: 'Date range', icon: const Icon(Icons.date_range_outlined)),
+        IconButton(onPressed: () => showFilterSheet(context), tooltip: 'Filters', icon: const Icon(Icons.filter_alt_outlined)),
       ],
       child: ResponsiveListContent(
         header: [ActiveFilterChips(state: state)],
@@ -9118,8 +9530,9 @@ class ActiveFilterChips extends StatelessWidget {
 }
 
 class TransactionTile extends StatelessWidget {
-  const TransactionTile({super.key, required this.tx});
+  const TransactionTile({super.key, required this.tx, this.flat = false});
   final MoneyTransaction tx;
+  final bool flat;
 
   @override
   Widget build(BuildContext context) {
@@ -9128,7 +9541,11 @@ class TransactionTile extends StatelessWidget {
     final account = state.accountOf(tx.fromAccountId);
     final toAccount = tx.toAccountId == null ? null : state.accountOf(tx.toAccountId!);
     final amountPrefix = tx.type == MoneyTransactionType.expense ? '-' : tx.type == MoneyTransactionType.income ? '+' : '';
-    final amountColor = tx.type == MoneyTransactionType.expense ? kSleekExpense : tx.type == MoneyTransactionType.income ? kSleekIncome : kSleekAccent;
+    final amountColor = tx.type == MoneyTransactionType.expense
+        ? kSleekExpense
+        : tx.type == MoneyTransactionType.income
+            ? kSleekIncome
+            : (Theme.of(context).brightness == Brightness.dark ? kSleekAccent : const Color(0xFF047857));
     final savedTitle = tx.title.trim();
     final title = tx.type == MoneyTransactionType.transfer
         ? '${account?.name ?? ''} → ${toAccount?.name ?? ''}'
@@ -9137,30 +9554,59 @@ class TransactionTile extends StatelessWidget {
             : category?.name ?? 'Unknown';
     final subtitleParts = <String>[
       if (tx.type != MoneyTransactionType.transfer && savedTitle.isNotEmpty && category != null) category.name,
-      transactionDateTimeLabel(tx),
+      transactionDateSpanLabel(tx.createdOn, tx.effectiveEndOn),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      radius: 24,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: tx.type == MoneyTransactionType.transfer
-            ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#FF5A3C', size: 44),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          subtitleParts.join(' • '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-        ),
-        trailing: Text(
-          '$amountPrefix${state.format(tx.amount)}',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
-        ),
-        onTap: () => showTransactionEditor(context, transaction: tx),
+
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      child: Row(
+        children: [
+          tx.type == MoneyTransactionType.transfer
+              ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
+              : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                const SizedBox(height: 3),
+                Text(
+                  subtitleParts.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightMutedText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$amountPrefix${state.format(tx.amount)}',
+            maxLines: 1,
+            softWrap: false,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.3, color: amountColor),
+          ),
+        ],
       ),
+    );
+
+    final tile = MotionPressable(
+      onTap: () => showTransactionEditor(context, transaction: tx),
+      borderRadius: BorderRadius.circular(16),
+      scale: .985,
+      child: row,
+    );
+
+    if (flat) return tile;
+    return ExpressiveCard(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      radius: 20,
+      child: tile,
     );
   }
 }
@@ -9256,7 +9702,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+            Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
             SleekPillSelector<MoneyTransactionType>(
               options: const [
@@ -9313,7 +9759,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                   return oldValue;
                 }),
               ],
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
               decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
             ),
             const SizedBox(height: 12),
@@ -9481,7 +9927,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'Today',
         subtitle: 'Only today',
         iconName: 'today',
-        iconColor: '#FF5A3C',
+        iconColor: '#78D8E8',
       );
     case DateRangeType.thisWeek:
       return const SelectionOption(
@@ -9497,7 +9943,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'This Month',
         subtitle: 'Current month',
         iconName: 'month',
-        iconColor: '#FF5A3C',
+        iconColor: '#78D8E8',
       );
     case DateRangeType.thisYear:
       return const SelectionOption(
@@ -9505,7 +9951,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'This Year',
         subtitle: 'Current year',
         iconName: 'year',
-        iconColor: '#FFB547',
+        iconColor: '#FBC879',
       );
     case DateRangeType.allTime:
       return const SelectionOption(
@@ -9566,7 +10012,7 @@ class _FilterSheetState extends State<FilterSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            Text('Filters', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SectionHeader('Accounts'),
             Wrap(spacing: 8, runSpacing: 8, children: state.accounts.map((a) => FilterChip(label: Text(a.name), selected: accounts.contains(a.id), onSelected: (v) => setState(() => v ? accounts.add(a.id) : accounts.remove(a.id)))).toList()),
             const SectionHeader('Categories'),
@@ -9650,29 +10096,53 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     final avgDivisor = math.max(1, days.length);
 
     return PageScaffold(
-      title: 'Analysis',
-      subtitle: range.label,
-      actions: [IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded))],
+      title: 'Insights',
+      subtitle: 'Where your money is going',
+      actions: [IconButton(onPressed: () => showFilterSheet(context), tooltip: 'Filters', icon: const Icon(Icons.filter_alt_outlined))],
       child: ResponsiveContent(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(children: [
-              Expanded(child: MiniMetric('Income', state.format(summary.income), Icons.south_west_rounded)),
-              const SizedBox(width: 10),
-              Expanded(child: MiniMetric('Expense', state.format(summary.expense), Icons.north_east_rounded)),
-            ]),
-            const SizedBox(height: 10),
-            MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
-            const SectionHeader('Cash flow'),
-            RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
-            const SectionHeader('Averages'),
-            Row(children: [
-              Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
-              const SizedBox(width: 10),
-              Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
-            ]),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final fourAcross = constraints.maxWidth >= 760;
+            final kpis = <Widget>[
+              MiniMetric('Income', state.format(summary.income), Icons.south_west_rounded),
+              MiniMetric('Expense', state.format(summary.expense), Icons.north_east_rounded),
+              MiniMetric('Balance', state.format(summary.balance), Icons.account_balance_wallet_rounded),
+              MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.local_fire_department_outlined),
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (fourAcross)
+                  Row(children: [
+                    for (var i = 0; i < kpis.length; i++) ...[
+                      Expanded(child: kpis[i]),
+                      if (i != kpis.length - 1) const SizedBox(width: 10),
+                    ],
+                  ])
+                else ...[
+                  Row(children: [
+                    Expanded(child: kpis[0]),
+                    const SizedBox(width: 10),
+                    Expanded(child: kpis[1]),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: kpis[2]),
+                    const SizedBox(width: 10),
+                    Expanded(child: kpis[3]),
+                  ]),
+                ],
+                const SectionHeader('Cash flow'),
+                RepaintBoundary(child: AnalysisTrendChart(days: days, daily: daily, rangeLabel: range.label)),
+                const SectionHeader('Averages'),
+                Row(children: [
+                  Expanded(child: MiniMetric('Income / day', state.format(summary.income / avgDivisor), Icons.trending_up_rounded)),
+                  const SizedBox(width: 10),
+                  Expanded(child: MiniMetric('Expense / day', state.format(summary.expense / avgDivisor), Icons.trending_down_rounded)),
+                ]),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -9700,7 +10170,7 @@ List<SelectionOption> financialMonthOptions() {
       title: DateFormat('MMMM yyyy').format(month),
       subtitle: index == 0 ? 'Current month' : 'Monthly health summary',
       iconName: 'month',
-      iconColor: '#FF5A3C',
+      iconColor: '#78D8E8',
     );
   });
 }
@@ -9715,7 +10185,7 @@ List<SelectionOption> financialYearOptions() {
       title: year.toString(),
       subtitle: index == 0 ? 'Current year' : 'Yearly health summary',
       iconName: 'year',
-      iconColor: '#FFB547',
+      iconColor: '#FBC879',
     );
   });
 }
@@ -10087,13 +10557,13 @@ class FinancialHealthPeriodCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
-                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? '#FF5A3C' : '#FFB547', size: 42),
+                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 42),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                          Text(selectedLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                           Text(period == FinancialHealthPeriod.monthly ? 'Tap to choose another month' : 'Tap to choose another year', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                         ],
                       ),
@@ -10191,7 +10661,7 @@ class FinancialHealthStatusCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                    Text(summary.status, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                     HealthStatusPill(label: summary.periodLabel, color: color),
                     const HealthStatusPill(label: 'Savings transfers are internal', color: kSleekAccent),
                   ],
@@ -10218,7 +10688,7 @@ class HealthStatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(color: color.withOpacity(.12), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(.24))),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w900)),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color, fontWeight: FontWeight.w800)),
     );
   }
 }
@@ -10347,7 +10817,7 @@ class HealthBarChartCard extends StatelessWidget {
             children: [
               Icon(icon, color: kSleekAccent),
               const SizedBox(width: 8),
-              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+              Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
             ],
           ),
           const SizedBox(height: 14),
@@ -10377,7 +10847,7 @@ class HealthBarRow extends StatelessWidget {
           children: [
             Expanded(child: Text(data.label, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800))),
             const SizedBox(width: 8),
-            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+            Text(data.displayValue, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800)),
           ],
         ),
         const SizedBox(height: 6),
@@ -10412,7 +10882,7 @@ class BudgetHealthCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Budget status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -10449,7 +10919,7 @@ class BillStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Reminders and scheduled payments', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -10480,7 +10950,7 @@ class OverspendingCategoriesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Overspending categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           ...summary.overspentItems.map((item) => Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -10496,8 +10966,8 @@ class OverspendingCategoriesCard extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
-                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w900)),
+                          Expanded(child: Text(item.label, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
+                          Text('${item.percentUsed.toStringAsFixed(0)}%', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
                         ],
                       ),
                       const SizedBox(height: 6),
@@ -10542,7 +11012,7 @@ class YearlyComparisonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Monthly comparison', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -10576,7 +11046,7 @@ class YearlyBreakdownCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Yearly breakdown', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           ...summary.monthlyBreakdowns.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -10610,9 +11080,9 @@ class MonthBreakdownTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900))),
+              SizedBox(width: 44, child: Text(DateFormat('MMM').format(item.month), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800))),
               Expanded(child: Text('Income ${state.format(item.income)} • Expense ${state.format(item.expense)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700))),
-              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w900)),
+              Text(state.format(item.cashFlow), style: Theme.of(context).textTheme.labelLarge?.copyWith(color: item.cashFlow >= 0 ? kSleekIncome : kSleekExpense, fontWeight: FontWeight.w800)),
             ],
           ),
           const SizedBox(height: 8),
@@ -10804,7 +11274,11 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           dotData: FlDotData(show: false),
           belowBarData: BarAreaData(
             show: _view == _TrendView.income,
-            color: kSleekIncome.withOpacity(dark ? .10 : .08),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [kSleekIncome.withOpacity(dark ? .22 : .16), kSleekIncome.withOpacity(0)],
+            ),
           ),
         ),
       if (showExpense)
@@ -10814,11 +11288,15 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           preventCurveOverShooting: true,
           barWidth: 3.2,
           isStrokeCapRound: true,
-          color: kSleekExpense,
+          color: kSleekWarning,
           dotData: FlDotData(show: false),
           belowBarData: BarAreaData(
             show: _view == _TrendView.expense,
-            color: kSleekExpense.withOpacity(dark ? .10 : .08),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [kSleekWarning.withOpacity(dark ? .22 : .16), kSleekWarning.withOpacity(0)],
+            ),
           ),
         ),
     ];
@@ -10838,7 +11316,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                   children: [
                     Text(
                       'Cash flow trend',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -10847,7 +11325,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w500,
                           ),
                     ),
                   ],
@@ -10875,7 +11353,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                 label: 'Expense',
                 value: state.format(totalExpense),
                 icon: Icons.north_east_rounded,
-                color: kSleekExpense,
+                color: kSleekWarning,
               ),
               _TrendMetricPill(
                 label: 'Net',
@@ -10949,7 +11427,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                             tooltipRoundedRadius: 14,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => dark ? kSleekSurfaceDark : kSleekSurface,
+                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
@@ -10976,7 +11454,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                           Text(
                             'No income or expense data in this range',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -10994,7 +11472,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
             children: [
               if (showIncome) const _TrendLegendDot(color: kSleekIncome, label: 'Income'),
               if (showIncome && showExpense) const SizedBox(width: 16),
-              if (showExpense) const _TrendLegendDot(color: kSleekExpense, label: 'Expense'),
+              if (showExpense) const _TrendLegendDot(color: kSleekWarning, label: 'Expense'),
             ],
           ),
         ],
@@ -11039,14 +11517,14 @@ class _TrendMetricPill extends StatelessWidget {
                 label,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w700,
                     ),
               ),
               Text(
                 value,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2),
               ),
             ],
           ),
@@ -11073,7 +11551,7 @@ class _TrendLegendDot extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 7),
-        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800)),
+        Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600)),
       ],
     );
   }
@@ -11093,7 +11571,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget build(BuildContext context) {
     return PageScaffold(
       title: 'Categories',
-      subtitle: selected == CategoryType.expense ? 'Expense breakdown' : 'Income breakdown',
+      subtitle: 'Group, budget & analyze',
       actions: const [ProfileAvatarButton()],
       child: ResponsiveContent(
         child: Column(
@@ -11124,51 +11602,43 @@ class _ManageCategoriesButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final accent = dark ? kSleekAccent : const Color(0xFF059669);
     final label = type == CategoryType.expense ? 'Expense categories' : 'Income categories';
-    return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
-        ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.28), width: .9),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: kSleekAccent.withOpacity(.16),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: kSleekAccent.withOpacity(.24)),
-                ),
-                child: const Icon(Icons.category_rounded, color: kSleekAccent),
+    return MotionPressable(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => ManageCategoriesScreen(type: type)),
+      ),
+      borderRadius: BorderRadius.circular(20),
+      scale: .98,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        radius: 20,
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: accent.withOpacity(.12), shape: BoxShape.circle),
+              child: Icon(Icons.category_rounded, color: accent, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Manage categories', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightMutedText, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Manage categories', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right_rounded, size: 20),
+          ],
         ),
       ),
     );
@@ -11218,14 +11688,14 @@ class CategoryBreakdownCard extends StatelessWidget {
 
   Color _fallbackColor(int index) {
     const palette = [
-      Color(0xFF18D8CF),
-      Color(0xFFA79BFF),
-      Color(0xFF7EDBD3),
-      Color(0xFF1EC7BD),
-      Color(0xFFB9B1FF),
-      Color(0xFF5BE6DB),
-      Color(0xFFF7C66D),
-      Color(0xFFF49DBE),
+      Color(0xFF10B981),
+      Color(0xFFF59E0B),
+      Color(0xFF3B82F6),
+      Color(0xFF8B5CF6),
+      Color(0xFFEC4899),
+      Color(0xFF06B6D4),
+      Color(0xFF84CC16),
+      Color(0xFF64748B),
     ];
     return palette[index % palette.length];
   }
@@ -11301,10 +11771,10 @@ class CategoryBreakdownCard extends StatelessWidget {
     final rangeLabel = state.activeRange().label;
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chartSurfaceTop = isDark ? scheme.surfaceContainerHighest.withOpacity(.18) : const Color(0xFFF7FCFD);
-    final chartSurfaceBottom = isDark ? scheme.surfaceContainerHigh.withOpacity(.06) : Colors.white;
-    final chartBorderColor = isDark ? Colors.transparent : const Color(0xFFDCEBEE).withOpacity(.95);
-    final donutTrackColor = isDark ? const Color(0xFF26383C).withOpacity(.36) : const Color(0xFFE1ECEF);
+    final chartSurfaceTop = isDark ? kSleekSurfaceHigh : kSleekLightCardHigh;
+    final chartSurfaceBottom = isDark ? kSleekSurfaceHigh : Colors.white;
+    final chartBorderColor = isDark ? Colors.transparent : kSleekLightBorder;
+    final donutTrackColor = isDark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -11314,9 +11784,19 @@ class CategoryBreakdownCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                chartTitle,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      chartTitle,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+                    ),
+                  ),
+                  Text(
+                    rangeLabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: isDark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               SizedBox(
@@ -11466,7 +11946,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                     height: centerSize,
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isDark ? kSleekSurfaceDark.withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      color: isDark ? const Color(0xFF111417).withOpacity(.97) : Colors.white.withOpacity(.98),
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
@@ -11490,7 +11970,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               state.format(total),
                                               maxLines: 1,
                                               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                                    fontWeight: FontWeight.w900,
+                                                    fontWeight: FontWeight.w800,
                                                     letterSpacing: -.8,
                                                     color: isDark ? Colors.white : scheme.onSurface,
                                                   ),
@@ -11507,8 +11987,8 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               maxLines: 1,
                                               textAlign: TextAlign.center,
                                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: kSleekAccent,
-                                                    fontWeight: FontWeight.w900,
+                                                    color: const Color(0xFF10CADA),
+                                                    fontWeight: FontWeight.w800,
                                                   ),
                                             ),
                                           ),
@@ -11581,7 +12061,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                 slice.label,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -11594,7 +12074,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Text(
                           state.format(slice.value),
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         if (interactive && slice.category != null) ...[
                           const SizedBox(width: 8),
@@ -11793,7 +12273,7 @@ class _DonutPercentBadge extends StatelessWidget {
                           maxLines: 1,
                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: textColor,
-                                fontWeight: FontWeight.w900,
+                                fontWeight: FontWeight.w800,
                                 letterSpacing: .4,
                               ),
                         ),
@@ -11811,7 +12291,7 @@ class _DonutPercentBadge extends StatelessWidget {
                 label,
                 maxLines: 1,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: -.2,
                       color: textColor,
                     ),
@@ -11893,25 +12373,61 @@ class BudgetProgressTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final ratio = progress.ratio;
-    final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
-    return ExpressiveCard(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
+    final color = ratio >= 1
+        ? kSleekExpense
+        : ratio >= .8
+            ? kSleekWarning
+            : ratio >= .5
+                ? const Color(0xFFD97706)
+                : kSleekIncome;
+    return MotionPressable(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      scale: .98,
+      child: ExpressiveCard(
+        padding: const EdgeInsets.all(16),
+        radius: 20,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              iconBubble(context, 'wallet', colorToHex(color)),
+              iconBubble(context, 'wallet', colorToHex(color), size: 42),
               const SizedBox(width: 12),
-              Expanded(child: Text(DateFormat('MMMM yyyy').format(progress.budget.selectedMonth), style: const TextStyle(fontWeight: FontWeight.w900))),
-              Text('${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w900)),
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(progress.budget.selectedMonth),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2),
+                ),
+              ),
+              Text(
+                '${(ratio * 100).clamp(0, 999).toStringAsFixed(0)}%',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.2, color: color),
+              ),
             ]),
-            const SizedBox(height: 12),
-            ClipRRect(borderRadius: BorderRadius.circular(99), child: LinearProgressIndicator(value: ratio.clamp(0, 1).toDouble(), minHeight: 12, color: color)),
-            const SizedBox(height: 8),
-            Text('${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}'),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: ratio.clamp(0, 1).toDouble()),
+                duration: AppMotion.slow,
+                curve: AppMotion.emphasized,
+                builder: (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  minHeight: 10,
+                  color: color,
+                  backgroundColor: dark ? const Color(0xFF1E2724) : const Color(0xFFE5E7EB),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              '${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
+            ),
           ],
         ),
       ),
@@ -11991,7 +12507,7 @@ class _BudgetEditorState extends State<BudgetEditor> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+            Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 16),
             TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
             const SizedBox(height: 12),
@@ -12037,10 +12553,10 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           children: [
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#FF5A3C', onTap: () => showCurrencySheet(context)),
-            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FFB547', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#FF5A3C', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#FF5A3C', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
+            SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#10B981', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
@@ -12063,32 +12579,50 @@ class SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colorFromHex(color);
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: ExpressiveCard(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
-        child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: c.withOpacity(.16),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.withOpacity(.20)),
-            ),
-            child: Icon(icon, color: c),
+      child: MotionPressable(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        scale: .98,
+        child: ExpressiveCard(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
+          radius: 20,
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: c.withOpacity(dark ? .14 : .11),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: c, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -.2)),
+                    if (hasSubtitle) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.chevron_right_rounded, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ],
           ),
-          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: hasSubtitle
-              ? Text(
-                  subtitle!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                )
-              : null,
-          trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          onTap: onTap,
         ),
       ),
     );
@@ -12117,13 +12651,13 @@ class UpdatesScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#FF5A3C', size: 54),
+                      iconBubble(context, 'download', '#10B981', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                            Text('Koinly updates', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 4),
                             Text(state.updateStatusMessage, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                           ],
@@ -12203,13 +12737,13 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#FF5A3C', size: 54),
+                      iconBubble(context, 'download', '#10B981', size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+                            Text('Update ${release.displayVersion}', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 3),
                             Text(releaseDate, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
                           ],
@@ -12222,7 +12756,7 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                        Text("What's New", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
                         ReleaseChangelogView(markdown: release.body),
                       ],
@@ -12254,7 +12788,7 @@ class UpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Download update', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text('Open the GitHub release page for this platform.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
@@ -12297,7 +12831,7 @@ class _AndroidUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Android architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -12352,7 +12886,7 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             Text(
               'This release does not include a Windows installer asset.',
@@ -12380,7 +12914,7 @@ class _WindowsUpdateActionPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Windows installer', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text(
             '${asset.name}${asset.sizeBytes > 0 ? ' • ${formatBytes(asset.sizeBytes)}' : ''}',
@@ -12421,8 +12955,8 @@ class DownloadProgressCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
-              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, color: kSleekAccent)),
+              Expanded(child: Text('Downloading $architecture', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800))),
+              Text('${progress.percent}%', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: kSleekAccent)),
             ],
           ),
           const SizedBox(height: 12),
@@ -12435,7 +12969,7 @@ class DownloadProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w900)),
+          Text(progress.status, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: progress.percent >= 100 ? kSleekIncome : kSleekAccent, fontWeight: FontWeight.w800)),
           const SizedBox(height: 10),
           OutlinedButton.icon(onPressed: onCancel, icon: const Icon(Icons.close_rounded), label: const Text('Cancel download')),
         ],
@@ -12613,7 +13147,7 @@ class _ChangelogBlockView extends StatelessWidget {
       case ChangelogBlockType.heading:
         return Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 6),
-          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          child: Text(block.plainText, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
         );
       case ChangelogBlockType.bullet:
         return _ChangelogLine(prefix: '•', block: block);
@@ -12641,7 +13175,7 @@ class _ChangelogLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w900, color: kSleekAccent))),
+          SizedBox(width: 24, child: Text(prefix, style: const TextStyle(fontWeight: FontWeight.w800, color: kSleekAccent))),
           Expanded(child: _LinkedSegmentsText(segments: block.segments)),
         ],
       ),
@@ -12662,7 +13196,7 @@ class _LinkedSegmentsText extends StatelessWidget {
         if (segment.url == null) return Text(segment.text, style: style);
         return InkWell(
           onTap: () => launchUrl(Uri.parse(segment.url!), mode: LaunchMode.externalApplication),
-          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
+          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w800)),
         );
       }).toList(),
     );
@@ -12856,7 +13390,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
                   SegmentedButton<bool>(
                     segments: const [
@@ -12927,7 +13461,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 4),
                             Text(
                               state.cloudSyncLastAt == null ? 'Not synced yet' : 'Last synced ${DateFormat('MMM d, yyyy HH:mm').format(state.cloudSyncLastAt!.toLocal())}',
@@ -12987,7 +13521,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             if (!signedIn) ...[
               Text(
                 _registerMode ? 'Create your Koinly sync account' : 'Login to your Koinly sync account',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
               if (!_registerMode) ...[
                 const SizedBox(height: 8),
@@ -13280,7 +13814,7 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Select database method',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ),
                     Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -13515,7 +14049,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        Text(providerLabel, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
                         Text(syncDatabaseProviderSubtitle(_provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
@@ -13681,7 +14215,7 @@ class _ProviderSyncActions extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                    Text('Sync actions', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   ],
                 ),
               ),
@@ -13807,7 +14341,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
                   child: const Icon(Icons.tune_rounded, color: kSleekAccent),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+                Expanded(child: Text('Advanced sync database', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
                 IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
               ],
             ),
@@ -13970,7 +14504,7 @@ class _ProviderChoiceCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(syncDatabaseProviderLabel(provider), style: const TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
                     Text(syncDatabaseProviderSubtitle(provider), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                   ],
@@ -14017,7 +14551,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
         title: 'Light',
         subtitle: 'Bright interface',
         iconName: 'theme_light',
-        iconColor: '#FFB547',
+        iconColor: '#FBC879',
       );
     case ThemePreference.dark:
       return const SelectionOption(
@@ -14033,7 +14567,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
         title: 'Battery Saver / System',
         subtitle: 'Use system behavior',
         iconName: 'theme_battery',
-        iconColor: '#FF5A3C',
+        iconColor: '#78D8E8',
       );
   }
 }
@@ -14309,7 +14843,7 @@ class _CurrencyFormState extends State<CurrencyForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.closeAfterSave) ...[
-          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+          Text('Currency customization', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
           const SizedBox(height: 14),
         ],
         CurrencyCustomizationButton(
@@ -14396,7 +14930,7 @@ class CurrencyCustomizationButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                    Text('Currency customization', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
                     Text(
                       '$country • $symbol • $code',
@@ -14469,9 +15003,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? kSleekSurfaceDark : const Color(0xFFFBF7F2);
-        final innerBorderColor = dark ? const Color(0xFF342D31) : const Color(0xFFE0D6CA);
-        final handleColor = dark ? const Color(0xFF7A7286) : const Color(0xFFB8ACA2);
+        final innerColor = dark ? kSleekSurfaceHigh : kSleekLightCardHigh;
+        final innerBorderColor = dark ? const Color(0xFF26302C) : kSleekLightBorder;
+        final handleColor = dark ? kSleekMuted : kSleekLightMutedText;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -14487,7 +15021,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               Text(
                 'Choose currency',
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -14614,7 +15148,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                         color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
                       ),
                 ),
@@ -14665,7 +15199,7 @@ class _CurrencySymbolBubble extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: kSleekAccent,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
       ),
     );
@@ -14702,7 +15236,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 24),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+        Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
         SwitchListTile(value: enabled, onChanged: (v) => setState(() => enabled = v), title: const Text('Enable reminder'), subtitle: const Text('Notification text: “Don’t forget to record your expenses”')),
         OutlinedButton.icon(onPressed: () async { final t = await pickTime(context, time); if (t != null) setState(() => time = t); }, icon: const Icon(Icons.schedule_rounded), label: Text(time.format(context))),
         const SizedBox(height: 12),
@@ -14723,24 +15257,24 @@ class AdvancedSettingsScreen extends StatelessWidget {
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(children: [
-          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#FF5A3C', onTap: () => showDefaultSelection(context, 'account')),
+          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#78D8E8', onTap: () => showDefaultSelection(context, 'account')),
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
-          SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FFB547', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
+          SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
           SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
           SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and overwrite this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(
             icon: Icons.fact_check_rounded,
             title: 'Data health',
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
-            color: '#FF5A3C',
+            color: '#10B981',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
           ),
           SettingsTile(
             icon: Icons.health_and_safety_rounded,
             title: 'Restore last safety backup',
             subtitle: state.lastSafetyBackupLabel,
-            color: '#FF5A3C',
+            color: '#78D8E8',
             onTap: state.hasLastSafetyBackup ? () => runRestoreLastSafetyBackupFlow(context, state) : null,
           ),
         ]),
@@ -14797,7 +15331,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+                            Text(report?.statusTitle ?? 'Not checked yet', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                             const SizedBox(height: 4),
                             Text(
                               report == null ? 'Run a quick scan before blaming ghosts in the machine.' : report.statusBody,
@@ -14948,12 +15482,12 @@ class DataHealthFindingCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                Text(item.title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
                 Text(item.body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                 if (item.actionLabel != null) ...[
                   const SizedBox(height: 8),
-                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w900)),
+                  Text(item.actionLabel!, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w800)),
                 ],
               ],
             ),
@@ -15031,12 +15565,17 @@ class AboutScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ExpressiveCard(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
               child: Column(children: [
-                const Icon(Icons.account_balance_wallet_rounded, size: 64),
+                const _KoinlyBrandMark(size: 72),
+                const SizedBox(height: 16),
+                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -.4), textAlign: TextAlign.center),
+                const SizedBox(height: 6),
+                Text('PRIVATE FINANCE', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).brightness == Brightness.dark ? kSleekMuted : kSleekLightSecondaryText, fontWeight: FontWeight.w700, letterSpacing: 1.6), textAlign: TextAlign.center),
                 const SizedBox(height: 12),
-                Text('Developed by Siam Chowdhury', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900), textAlign: TextAlign.center),
-                const SizedBox(height: 8),
-                Text('Version: $appVersion', textAlign: TextAlign.center),
+                const KoinlyAppIcon(size: 56, borderRadius: 18),
+                const SizedBox(height: 12),
+                Text('Version: $appVersion', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 16),
                 Wrap(
                   alignment: WrapAlignment.center,
@@ -15047,9 +15586,9 @@ class AboutScreen extends StatelessWidget {
               ]),
             ),
             const SectionHeader('Legal'),
-            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: '#FF5A3C', onTap: () => _showLegal(context, 'Privacy Policy')),
+            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: '#78D8E8', onTap: () => _showLegal(context, 'Privacy Policy')),
             SettingsTile(icon: Icons.description_rounded, title: 'Terms and conditions', subtitle: 'Usage terms', color: '#A6E3A1', onTap: () => _showLegal(context, 'Terms and conditions')),
-            SettingsTile(icon: Icons.balance_rounded, title: 'Open-source licenses', subtitle: 'Apache License 2.0 and Flutter package notices', color: '#FFB547', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KoinlyLicenseScreen()))),
+            SettingsTile(icon: Icons.balance_rounded, title: 'Open-source licenses', subtitle: 'Apache License 2.0 and Flutter package notices', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KoinlyLicenseScreen()))),
           ],
         ),
       ),
@@ -15209,7 +15748,7 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                                   child: const Icon(Icons.account_balance_wallet_rounded, color: kSleekAccent, size: 38),
                                 ),
                                 const SizedBox(height: 14),
-                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900), textAlign: TextAlign.center),
+                                Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800), textAlign: TextAlign.center),
                                 const SizedBox(height: 4),
                                 Text('Version $appVersion', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
                                 const SizedBox(height: 12),
@@ -15246,7 +15785,7 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
                               item.name,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w900),
+                              style: const TextStyle(fontWeight: FontWeight.w800),
                             ),
                             subtitle: Text(countLabel, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                             trailing: Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
@@ -15339,7 +15878,7 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+                                  Text(widget.packageName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800)),
                                   const SizedBox(height: 8),
                                   Text(
                                     widget.licenseCount == 1 ? '1 license notice' : '${widget.licenseCount} license notices',
