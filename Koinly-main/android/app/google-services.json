@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296722956853",
+    "project_id": "koinly-9c5f3",
+    "storage_bucket": "koinly-9c5f3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296722956853:android:cd4b6aad1f04f9fbeb277c",
+        "android_client_info": {
+          "package_name": "com.koinly.siam"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNVXybUrnsW3rmWXOjKR9reDK57qOrd-M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

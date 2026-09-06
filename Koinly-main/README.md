@@ -183,9 +183,9 @@ flutter build apk --release \
   --dart-define=KOINLY_SYNC_API_BASE_URL=https://your-default-worker.example.workers.dev
 ```
 
-Local release builds require a configured Android signing key. The GitHub
-Actions workflow can instead generate a temporary CI signing key for personal
-or test builds; see [Android signing](#android-signing).
+Android release builds require a configured permanent signing key. GitHub
+Actions refuses to build release APKs when the permanent signing secrets are
+missing; see [Android signing](#android-signing).
 
 ### Windows
 
@@ -469,10 +469,8 @@ copy the URL reported by the owner deployment into this value before building
 the app. User self-hosting does not need a matching `_U` build value because
 users paste their Worker URL inside the app.
 
-`android/app/google-services.json` is intentionally excluded from the source
-package. For GitHub Actions Android builds, add a repository secret named
-`GOOGLE_SERVICES_JSON_BASE64` containing the Base64 representation of the
-downloaded Firebase `google-services.json` file.
+`android/app/google-services.json` is committed with the Android project, so
+local Android builds and GitHub Actions use the Firebase configuration directly.
 
 The owner workflow continues using existing unprefixed entries. Create the
 six `_U` values only for user self-hosting; the two workflows never read each
@@ -492,14 +490,13 @@ ANDROID_KEY_PASSWORD
 The keystore value must be the Base64 representation of the binary keystore.
 Never commit the keystore or passwords.
 
-If all four values are absent, CI generates a temporary key and still creates
-installable APKs. That key is discarded after the job, so a build from a later
-workflow run cannot update an installation signed by the earlier temporary
-key. Uninstall the old app first, or configure a permanent key before
-distributing updates.
+All four values are mandatory for Android release builds. The workflow never
+generates a temporary or fallback signing key. If any secret is missing, the
+Android release job stops before building an APK.
 
-Supplying only some of the four values fails immediately to avoid an
-accidentally misconfigured release.
+Keep the same permanent keystore and alias for every Koinly release. Replacing
+the signing key changes the app signing certificate and prevents a normally
+installed older release from being updated by the new APK.
 
 ### Windows signing
 
@@ -714,11 +711,12 @@ exist on the currently selected service.
 
 ### Android signing configuration fails
 
-- Add all four Android signing secrets for stable release signing; or
-- remove all four to let CI create a temporary key.
+Configure all four required Android signing secrets. The Android release job
+intentionally fails when any signing value is missing or when the keystore,
+password, or alias cannot be validated. There is no temporary-key fallback.
 
-If a temporary-key APK cannot update an older build, uninstall the older app
-first. Android correctly blocks updates signed by a different key.
+Use the same permanent Koinly keystore for every release. Android blocks an
+update when the new APK is signed by a different certificate.
 
 ### Windows shows a SmartScreen warning
 

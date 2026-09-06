@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.1064] - 2026-09-07
+
+### Fixed
+- Removed the Android CI temporary signing-key fallback. Release APK builds now require the permanent Koinly signing secrets and fail immediately if any signing secret is missing.
+- Added validation for the decoded release keystore, configured alias, and store password before Flutter starts the Android release build.
+- The workflow now prints the configured release certificate SHA-256 fingerprint in the build log so the signing identity can be checked between releases.
+
+### Changed
+- Android release signing now uses only the permanent `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` repository secrets.
+
+## [1.0.1063] - 2026-09-07
+
+### Fixed
+- Restored `android/app/google-services.json` to the source tree so Android Firebase configuration is available directly during local and GitHub Actions builds.
+- Removed the `GOOGLE_SERVICES_JSON_BASE64` GitHub secret requirement and its CI decode step.
+- Stopped ignoring `android/app/google-services.json` in `.gitignore`.
+
 ## [1.0.1062] - 2026-09-04
 
 ### Fixed
