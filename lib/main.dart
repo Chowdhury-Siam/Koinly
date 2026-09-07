@@ -5237,11 +5237,9 @@ class _MobileSelectionWheelPicker extends StatefulWidget {
 
 class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker> {
   late int _selectedIndex;
-  late int _selectedAbsoluteIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
 
-  int get _cycleCount => widget.showAllOptions && widget.options.length > 1 ? 101 : 1;
-  int get _childCount => widget.options.length * _cycleCount;
+  static const double _itemExtent = 76;
 
   @override
   void initState() {
@@ -5251,10 +5249,8 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
         : widget.initialIndex >= widget.options.length
             ? widget.options.length - 1
             : widget.initialIndex;
-    _selectedAbsoluteIndex = widget.showAllOptions
-        ? (widget.options.length * (_cycleCount ~/ 2)) + _selectedIndex
-        : _selectedIndex;
-    _controller = FixedExtentScrollController(initialItem: _selectedAbsoluteIndex);
+    _controller = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealSelected(jump: true));
   }
 
   @override
@@ -5263,9 +5259,41 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
     super.dispose();
   }
 
+  void _revealSelected({bool jump = false}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final itemStart = 6.0 + (_selectedIndex * _itemExtent);
+    final itemEnd = itemStart + _itemExtent;
+    final viewportStart = position.pixels;
+    final viewportEnd = viewportStart + position.viewportDimension;
+    double? target;
+    if (itemStart < viewportStart) {
+      target = itemStart - 6;
+    } else if (itemEnd > viewportEnd) {
+      target = itemEnd - position.viewportDimension + 6;
+    }
+    if (target == null) return;
+    final clamped = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if (jump) {
+      _controller.jumpTo(clamped);
+    } else {
+      _controller.animateTo(clamped, duration: AppMotion.fast, curve: AppMotion.emphasized);
+    }
+  }
+
+  void _select(int index) {
+    if (index < 0 || index >= widget.options.length || index == _selectedIndex) return;
+    setState(() => _selectedIndex = index);
+    HapticFeedback.selectionClick();
+    _revealSelected();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final desiredHeight = (widget.options.length * _itemExtent) + 12;
+    final listHeight = math.min(widget.showAllOptions ? 468.0 : 332.0, desiredHeight);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
@@ -5278,41 +5306,35 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            height: widget.showAllOptions ? 444 : 320,
-            child: CupertinoPicker.builder(
-              scrollController: _controller,
-              itemExtent: widget.showAllOptions ? 70 : 76,
-              diameterRatio: widget.showAllOptions ? 12 : 3.2,
-              squeeze: 1.0,
-              useMagnifier: true,
-              magnification: widget.showAllOptions ? 1.02 : 1.045,
-              selectionOverlay: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+          Container(
+            height: listHeight,
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outline.withOpacity(.20)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ListView.builder(
+              controller: _controller,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemExtent: _itemExtent,
+              physics: const ClampingScrollPhysics(),
+              itemCount: widget.options.length,
+              itemBuilder: (context, index) => Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _select(index),
+                  child: _StablePickerTile(
+                    selected: index == _selectedIndex,
+                    mobile: true,
+                    child: _AdaptiveSelectionWheelRow(
+                      option: widget.options[index],
+                      selected: index == _selectedIndex,
+                      mobile: true,
+                    ),
+                  ),
                 ),
               ),
-              childCount: _childCount,
-              onSelectedItemChanged: (index) {
-                final logicalIndex = index % widget.options.length;
-                if (_selectedAbsoluteIndex == index && _selectedIndex == logicalIndex) return;
-                setState(() {
-                  _selectedAbsoluteIndex = index;
-                  _selectedIndex = logicalIndex;
-                });
-                HapticFeedback.selectionClick();
-              },
-              itemBuilder: (context, index) {
-                final logicalIndex = index % widget.options.length;
-                return _AdaptiveSelectionWheelRow(
-                  option: widget.options[logicalIndex],
-                  selected: index == _selectedAbsoluteIndex,
-                  mobile: true,
-                );
-              },
             ),
           ),
           const SizedBox(height: 14),
@@ -5359,12 +5381,10 @@ class _DesktopSelectionWheelPicker extends StatefulWidget {
 
 class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPicker> {
   late int _selectedIndex;
-  late int _selectedAbsoluteIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
   late final FocusNode _focusNode;
 
-  int get _cycleCount => widget.showAllOptions && widget.options.length > 1 ? 101 : 1;
-  int get _childCount => widget.options.length * _cycleCount;
+  static const double _itemExtent = 80;
 
   @override
   void initState() {
@@ -5374,11 +5394,9 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
         : widget.initialIndex >= widget.options.length
             ? widget.options.length - 1
             : widget.initialIndex;
-    _selectedAbsoluteIndex = widget.showAllOptions
-        ? (widget.options.length * (_cycleCount ~/ 2)) + _selectedIndex
-        : _selectedIndex;
-    _controller = FixedExtentScrollController(initialItem: _selectedAbsoluteIndex);
-    _focusNode = FocusNode(debugLabel: '${widget.title} wheel picker');
+    _controller = ScrollController();
+    _focusNode = FocusNode(debugLabel: '${widget.title} selection list');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealSelected(jump: true));
   }
 
   @override
@@ -5388,31 +5406,45 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
     super.dispose();
   }
 
+  void _revealSelected({bool jump = false}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final itemStart = 6.0 + (_selectedIndex * _itemExtent);
+    final itemEnd = itemStart + _itemExtent;
+    final viewportStart = position.pixels;
+    final viewportEnd = viewportStart + position.viewportDimension;
+    double? target;
+    if (itemStart < viewportStart) {
+      target = itemStart - 6;
+    } else if (itemEnd > viewportEnd) {
+      target = itemEnd - position.viewportDimension + 6;
+    }
+    if (target == null) return;
+    final clamped = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if (jump) {
+      _controller.jumpTo(clamped);
+    } else {
+      _controller.animateTo(clamped, duration: AppMotion.fast, curve: AppMotion.emphasized);
+    }
+  }
+
   void _moveTo(int index) {
     var target = index;
     if (target < 0) target = 0;
-    if (target >= _childCount) target = _childCount - 1;
-    final logicalIndex = target % widget.options.length;
-    if (target == _selectedAbsoluteIndex) return;
-    setState(() {
-      _selectedAbsoluteIndex = target;
-      _selectedIndex = logicalIndex;
-    });
-    _controller.animateToItem(
-      target,
-      duration: AppMotion.fast,
-      curve: AppMotion.emphasized,
-    );
+    if (target >= widget.options.length) target = widget.options.length - 1;
+    if (target == _selectedIndex) return;
+    setState(() => _selectedIndex = target);
+    _revealSelected();
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      _moveTo(_selectedAbsoluteIndex - 1);
+      _moveTo(_selectedIndex - 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      _moveTo(_selectedAbsoluteIndex + 1);
+      _moveTo(_selectedIndex + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
@@ -5430,13 +5462,8 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final wheelHeight = widget.showAllOptions
-        ? math.min(500.0, (widget.options.length * 80.0) + 20.0)
-        : widget.options.length <= 2
-            ? 210.0
-            : widget.options.length == 3
-                ? 250.0
-                : 300.0;
+    final desiredHeight = (widget.options.length * _itemExtent) + 12;
+    final listHeight = math.min(widget.showAllOptions ? 500.0 : 332.0, desiredHeight);
 
     return Focus(
       focusNode: _focusNode,
@@ -5470,7 +5497,7 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Scroll with the mouse or use the arrow keys',
+                        'Scroll to browse, click an option, or use the arrow keys',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
@@ -5483,70 +5510,41 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
             ),
             const SizedBox(height: 18),
             Container(
-              height: wheelHeight,
+              height: listHeight,
               decoration: BoxDecoration(
                 color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: scheme.outline.withOpacity(.20)),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Container(
-                          height: 80,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: kSleekAccent.withOpacity(dark ? .10 : .075),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
-                          ),
+              child: Scrollbar(
+                controller: _controller,
+                thumbVisibility: widget.options.length * _itemExtent > listHeight,
+                child: ListView.builder(
+                  controller: _controller,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  itemExtent: _itemExtent,
+                  physics: const ClampingScrollPhysics(),
+                  itemCount: widget.options.length,
+                  itemBuilder: (context, index) => Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        _focusNode.requestFocus();
+                        _moveTo(index);
+                      },
+                      child: _StablePickerTile(
+                        selected: index == _selectedIndex,
+                        mobile: false,
+                        child: _AdaptiveSelectionWheelRow(
+                          option: widget.options[index],
+                          selected: index == _selectedIndex,
+                          mobile: false,
                         ),
                       ),
                     ),
                   ),
-                  ListWheelScrollView.useDelegate(
-                    controller: _controller,
-                    itemExtent: 80,
-                    diameterRatio: widget.showAllOptions ? 12.0 : 3.0,
-                    perspective: widget.showAllOptions ? .0004 : .0015,
-                    useMagnifier: true,
-                    magnification: widget.showAllOptions ? 1.02 : 1.035,
-                    overAndUnderCenterOpacity: widget.showAllOptions ? .96 : .88,
-                    physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
-                    onSelectedItemChanged: (index) {
-                      final logicalIndex = index % widget.options.length;
-                      if (_selectedAbsoluteIndex == index && _selectedIndex == logicalIndex) return;
-                      setState(() {
-                        _selectedAbsoluteIndex = index;
-                        _selectedIndex = logicalIndex;
-                      });
-                    },
-                    childDelegate: ListWheelChildBuilderDelegate(
-                      childCount: _childCount,
-                      builder: (context, index) {
-                        final logicalIndex = index % widget.options.length;
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              _focusNode.requestFocus();
-                              _moveTo(index);
-                            },
-                            child: _AdaptiveSelectionWheelRow(
-                              option: widget.options[logicalIndex],
-                              selected: index == _selectedAbsoluteIndex,
-                              mobile: false,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -5587,6 +5585,37 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
           ],
         ),
       ),
+    );
+  }
+}
+
+class _StablePickerTile extends StatelessWidget {
+  const _StablePickerTile({
+    required this.selected,
+    required this.mobile,
+    required this.child,
+  });
+
+  final bool selected;
+  final bool mobile;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedContainer(
+      duration: AppMotion.fast,
+      curve: AppMotion.emphasized,
+      margin: EdgeInsets.symmetric(horizontal: mobile ? 8 : 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: selected ? kSleekAccent.withOpacity(dark ? .12 : .085) : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: selected ? kSleekAccent.withOpacity(.62) : Colors.transparent,
+          width: 1.25,
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -13761,7 +13790,7 @@ Future<ThemePreference?> showAdaptiveThemePicker(
     return showKoinlyPopup<ThemePreference>(
       context,
       maxWidth: 590,
-      maxHeight: 540,
+      maxHeight: 580,
       child: _DesktopThemeWheelPicker(current: current),
     );
   }
@@ -13785,13 +13814,15 @@ class _MobileThemeWheelPicker extends StatefulWidget {
 
 class _MobileThemeWheelPickerState extends State<_MobileThemeWheelPicker> {
   late int _selectedIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
+
+  static const double _itemExtent = 78;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = ThemePreference.values.indexOf(widget.current);
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _controller = ScrollController();
   }
 
   @override
@@ -13800,9 +13831,17 @@ class _MobileThemeWheelPickerState extends State<_MobileThemeWheelPicker> {
     super.dispose();
   }
 
+  void _select(int index) {
+    if (index == _selectedIndex) return;
+    setState(() => _selectedIndex = index);
+    HapticFeedback.selectionClick();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final listHeight = (ThemePreference.values.length * _itemExtent) + 12;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
@@ -13815,35 +13854,36 @@ class _MobileThemeWheelPickerState extends State<_MobileThemeWheelPicker> {
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 300,
-            child: CupertinoPicker.builder(
-              scrollController: _controller,
-              itemExtent: 78,
-              diameterRatio: 3.2,
-              squeeze: 1.0,
-              useMagnifier: true,
-              magnification: 1.045,
-              selectionOverlay: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
-                ),
-              ),
-              childCount: ThemePreference.values.length,
-              onSelectedItemChanged: (index) {
-                if (_selectedIndex == index) return;
-                setState(() => _selectedIndex = index);
-                HapticFeedback.selectionClick();
-              },
+          Container(
+            height: listHeight,
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outline.withOpacity(.20)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: ListView.builder(
+              controller: _controller,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              itemExtent: _itemExtent,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: ThemePreference.values.length,
               itemBuilder: (context, index) {
                 final theme = ThemePreference.values[index];
-                return _ThemeWheelOptionRow(
-                  option: optionFromThemePreference(theme),
-                  selected: index == _selectedIndex,
-                  mobile: true,
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _select(index),
+                    child: _StablePickerTile(
+                      selected: index == _selectedIndex,
+                      mobile: true,
+                      child: _ThemeWheelOptionRow(
+                        option: optionFromThemePreference(theme),
+                        selected: index == _selectedIndex,
+                        mobile: true,
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
@@ -13884,15 +13924,17 @@ class _DesktopThemeWheelPicker extends StatefulWidget {
 
 class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
   late int _selectedIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
   late final FocusNode _focusNode;
+
+  static const double _itemExtent = 82;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = ThemePreference.values.indexOf(widget.current);
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
-    _focusNode = FocusNode(debugLabel: 'Theme wheel picker');
+    _controller = ScrollController();
+    _focusNode = FocusNode(debugLabel: 'Theme selection list');
   }
 
   @override
@@ -13908,11 +13950,6 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
     if (target >= ThemePreference.values.length) target = ThemePreference.values.length - 1;
     if (target == _selectedIndex) return;
     setState(() => _selectedIndex = target);
-    _controller.animateToItem(
-      target,
-      duration: AppMotion.fast,
-      curve: AppMotion.emphasized,
-    );
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
@@ -13940,6 +13977,7 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final listHeight = (ThemePreference.values.length * _itemExtent) + 12;
 
     return Focus(
       focusNode: _focusNode,
@@ -13973,7 +14011,7 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Scroll with the mouse or use the arrow keys',
+                        'Click an option or use the arrow keys',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: scheme.onSurfaceVariant,
                               fontWeight: FontWeight.w700,
@@ -13986,66 +14024,40 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
             ),
             const SizedBox(height: 18),
             Container(
-              height: 300,
+              height: listHeight,
               decoration: BoxDecoration(
                 color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: scheme.outline.withOpacity(.20)),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Container(
-                          height: 82,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: kSleekAccent.withOpacity(dark ? .10 : .075),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
-                          ),
+              child: ListView.builder(
+                controller: _controller,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                itemExtent: _itemExtent,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: ThemePreference.values.length,
+                itemBuilder: (context, index) {
+                  final theme = ThemePreference.values[index];
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        _focusNode.requestFocus();
+                        _moveTo(index);
+                      },
+                      child: _StablePickerTile(
+                        selected: index == _selectedIndex,
+                        mobile: false,
+                        child: _ThemeWheelOptionRow(
+                          option: optionFromThemePreference(theme),
+                          selected: index == _selectedIndex,
+                          mobile: false,
                         ),
                       ),
                     ),
-                  ),
-                  ListWheelScrollView.useDelegate(
-                    controller: _controller,
-                    itemExtent: 82,
-                    diameterRatio: 3.0,
-                    perspective: .0015,
-                    useMagnifier: true,
-                    magnification: 1.035,
-                    overAndUnderCenterOpacity: .88,
-                    physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
-                    onSelectedItemChanged: (index) {
-                      if (_selectedIndex == index) return;
-                      setState(() => _selectedIndex = index);
-                    },
-                    childDelegate: ListWheelChildBuilderDelegate(
-                      childCount: ThemePreference.values.length,
-                      builder: (context, index) {
-                        final theme = ThemePreference.values[index];
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              _focusNode.requestFocus();
-                              _moveTo(index);
-                            },
-                            child: _ThemeWheelOptionRow(
-                              option: optionFromThemePreference(theme),
-                              selected: index == _selectedIndex,
-                              mobile: false,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 12),
@@ -14064,7 +14076,7 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -14627,7 +14639,9 @@ class _MobileCurrencyWheelPicker extends StatefulWidget {
 class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> {
   String _search = '';
   late int _selectedIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
+
+  static const double _itemExtent = 76;
 
   List<List<String>> get _visible => _filteredCurrencyCountries(widget.countries, _search);
 
@@ -14636,7 +14650,8 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
     super.initState();
     final initial = _filteredCurrencyCountries(widget.countries, '');
     _selectedIndex = _initialCurrencyIndex(initial, widget.selectedCode, widget.selectedSymbol);
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _controller = ScrollController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealSelected(jump: true));
   }
 
   @override
@@ -14651,12 +14666,42 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
       _selectedIndex = 0;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_controller.hasClients) _controller.jumpToItem(0);
+      if (_controller.hasClients) _controller.jumpTo(0);
     });
+  }
+
+  void _revealSelected({bool jump = false}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final itemStart = 6.0 + (_selectedIndex * _itemExtent);
+    final itemEnd = itemStart + _itemExtent;
+    final viewportStart = position.pixels;
+    final viewportEnd = viewportStart + position.viewportDimension;
+    double? target;
+    if (itemStart < viewportStart) {
+      target = itemStart - 6;
+    } else if (itemEnd > viewportEnd) {
+      target = itemEnd - position.viewportDimension + 6;
+    }
+    if (target == null) return;
+    final clamped = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if (jump) {
+      _controller.jumpTo(clamped);
+    } else {
+      _controller.animateTo(clamped, duration: AppMotion.fast, curve: AppMotion.emphasized);
+    }
+  }
+
+  void _select(int index) {
+    if (index == _selectedIndex) return;
+    setState(() => _selectedIndex = index);
+    HapticFeedback.selectionClick();
+    _revealSelected();
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final visible = _visible;
     final safeIndex = visible.isEmpty
@@ -14687,8 +14732,14 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
             onChanged: _updateSearch,
           ),
           const SizedBox(height: 12),
-          SizedBox(
+          Container(
             height: 340,
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outline.withOpacity(.20)),
+            ),
+            clipBehavior: Clip.antiAlias,
             child: visible.isEmpty
                 ? Center(
                     child: Text(
@@ -14699,30 +14750,24 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
                           ),
                     ),
                   )
-                : CupertinoPicker.builder(
-                    scrollController: _controller,
-                    itemExtent: 76,
-                    diameterRatio: 3.2,
-                    squeeze: 1.0,
-                    useMagnifier: true,
-                    magnification: 1.045,
-                    selectionOverlay: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+                : Scrollbar(
+                    controller: _controller,
+                    child: ListView.builder(
+                      controller: _controller,
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      itemExtent: _itemExtent,
+                      physics: const ClampingScrollPhysics(),
+                      itemCount: visible.length,
+                      itemBuilder: (context, index) => Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _select(index),
+                          child: _CurrencyWheelRow(
+                            country: visible[index],
+                            selected: index == safeIndex,
+                          ),
+                        ),
                       ),
-                    ),
-                    childCount: visible.length,
-                    onSelectedItemChanged: (index) {
-                      if (_selectedIndex == index) return;
-                      setState(() => _selectedIndex = index);
-                      HapticFeedback.selectionClick();
-                    },
-                    itemBuilder: (context, index) => _CurrencyWheelRow(
-                      country: visible[index],
-                      selected: index == safeIndex,
                     ),
                   ),
           ),
@@ -14769,8 +14814,10 @@ class _DesktopCurrencyWheelPicker extends StatefulWidget {
 class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker> {
   String _search = '';
   late int _selectedIndex;
-  late final FixedExtentScrollController _controller;
+  late final ScrollController _controller;
   late final FocusNode _wheelFocusNode;
+
+  static const double _itemExtent = 80;
 
   List<List<String>> get _visible => _filteredCurrencyCountries(widget.countries, _search);
 
@@ -14779,8 +14826,9 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
     super.initState();
     final initial = _filteredCurrencyCountries(widget.countries, '');
     _selectedIndex = _initialCurrencyIndex(initial, widget.selectedCode, widget.selectedSymbol);
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
-    _wheelFocusNode = FocusNode(debugLabel: 'Currency wheel picker');
+    _controller = ScrollController();
+    _wheelFocusNode = FocusNode(debugLabel: 'Currency selection list');
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revealSelected(jump: true));
   }
 
   @override
@@ -14796,8 +14844,30 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
       _selectedIndex = 0;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_controller.hasClients) _controller.jumpToItem(0);
+      if (_controller.hasClients) _controller.jumpTo(0);
     });
+  }
+
+  void _revealSelected({bool jump = false}) {
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    final itemStart = 6.0 + (_selectedIndex * _itemExtent);
+    final itemEnd = itemStart + _itemExtent;
+    final viewportStart = position.pixels;
+    final viewportEnd = viewportStart + position.viewportDimension;
+    double? target;
+    if (itemStart < viewportStart) {
+      target = itemStart - 6;
+    } else if (itemEnd > viewportEnd) {
+      target = itemEnd - position.viewportDimension + 6;
+    }
+    if (target == null) return;
+    final clamped = target.clamp(0.0, position.maxScrollExtent).toDouble();
+    if (jump) {
+      _controller.jumpTo(clamped);
+    } else {
+      _controller.animateTo(clamped, duration: AppMotion.fast, curve: AppMotion.emphasized);
+    }
   }
 
   void _moveTo(int index) {
@@ -14808,7 +14878,7 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
     if (target >= visible.length) target = visible.length - 1;
     if (target == _selectedIndex) return;
     setState(() => _selectedIndex = target);
-    _controller.animateToItem(target, duration: AppMotion.fast, curve: AppMotion.emphasized);
+    _revealSelected();
   }
 
   KeyEventResult _handleWheelKey(FocusNode node, KeyEvent event) {
@@ -14878,7 +14948,7 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Search, scroll with the mouse, or use the arrow keys',
+                      'Search, scroll to browse, click an option, or use the arrow keys',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: scheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
@@ -14920,55 +14990,29 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
                             ),
                       ),
                     )
-                  : Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: Center(
-                              child: Container(
-                                height: 80,
-                                margin: const EdgeInsets.symmetric(horizontal: 16),
-                                decoration: BoxDecoration(
-                                  color: kSleekAccent.withOpacity(dark ? .10 : .075),
-                                  borderRadius: BorderRadius.circular(22),
-                                  border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
-                                ),
-                              ),
+                  : Scrollbar(
+                      controller: _controller,
+                      thumbVisibility: visible.length * _itemExtent > 300,
+                      child: ListView.builder(
+                        controller: _controller,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        itemExtent: _itemExtent,
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) => Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              _wheelFocusNode.requestFocus();
+                              _moveTo(index);
+                            },
+                            child: _CurrencyWheelRow(
+                              country: visible[index],
+                              selected: index == safeIndex,
                             ),
                           ),
                         ),
-                        ListWheelScrollView.useDelegate(
-                          controller: _controller,
-                          itemExtent: 80,
-                          diameterRatio: 3.0,
-                          perspective: .0015,
-                          useMagnifier: true,
-                          magnification: 1.035,
-                          overAndUnderCenterOpacity: .88,
-                          physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
-                          onSelectedItemChanged: (index) {
-                            if (_selectedIndex == index) return;
-                            setState(() => _selectedIndex = index);
-                          },
-                          childDelegate: ListWheelChildBuilderDelegate(
-                            childCount: visible.length,
-                            builder: (context, index) => Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () {
-                                  _wheelFocusNode.requestFocus();
-                                  _moveTo(index);
-                                },
-                                child: _CurrencyWheelRow(
-                                  country: visible[index],
-                                  selected: index == safeIndex,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
             ),
           ),

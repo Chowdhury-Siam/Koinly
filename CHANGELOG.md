@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1069] - 2026-09-08
+
+### Fixed
+- Replaced the cylindrical/cyclic picker implementation across Koinly with stable bounded selection lists so visible options no longer disappear, duplicate, warp, fade into slivers, or leave large blank wheel gaps while scrolling.
+- Date Filter now renders Today, This Week, This Month, This Year, All Time, and Custom exactly once in a stable six-row selector on both Android and Windows.
+- Applied the same stable selector behavior to Theme, Currency, account/category, transfer, loan, default-account/category, and every other picker that uses Koinly's shared selection component.
+- Removed overscroll blank-space behavior from picker lists and kept the selected option highlighted in place.
+
+### Changed
+- Short pickers show every option at once; longer pickers use ordinary bounded scrolling with no cylindrical perspective. Desktop keeps mouse/touchpad scrolling, click selection, Up/Down navigation, Enter confirmation, and Escape cancellation. Android keeps touch scrolling, tap selection, haptic selection feedback, and centered popup presentation.
+
 ## [1.0.1068] - 2026-09-07
 
 ### Fixed
