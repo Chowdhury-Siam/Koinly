@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1068] - 2026-09-07
+
+### Fixed
+- Date Filter now keeps all six date-range choices populated around the active row on both Android and desktop instead of leaving empty space above or below when the current selection is near the start or end of the list.
+- Date Filter uses an effectively cyclic wheel with a flatter perspective and a taller viewport, so Today, This Week, This Month, This Year, All Time, and Custom remain visible and readable while scrolling.
+- Preserved centered popup presentation, fixed-item snapping, touch haptics, mouse/touchpad scrolling, keyboard controls, and Cancel/Done confirmation.
+
 ## [1.0.1067] - 2026-09-07
 
 ### Fixed

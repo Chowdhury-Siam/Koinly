@@ -5185,6 +5185,7 @@ Future<String?> showAppleWheelSelectionSheet(
   required String title,
   required List<SelectionOption> options,
   required String? selectedId,
+  bool showAllOptions = false,
 }) {
   if (options.isEmpty) return Future<String?>.value(null);
   final foundIndex = options.indexWhere((option) => option.id == selectedId);
@@ -5194,11 +5195,12 @@ Future<String?> showAppleWheelSelectionSheet(
     return showKoinlyPopup<String>(
       context,
       maxWidth: 590,
-      maxHeight: 560,
+      maxHeight: showAllOptions ? 720 : 560,
       child: _DesktopSelectionWheelPicker(
         title: title,
         options: options,
         initialIndex: initialIndex,
+        showAllOptions: showAllOptions,
       ),
     );
   }
@@ -5206,11 +5208,12 @@ Future<String?> showAppleWheelSelectionSheet(
   return showKoinlyPopup<String>(
     context,
     maxWidth: 560,
-    maxHeight: 540,
+    maxHeight: showAllOptions ? 700 : 540,
     child: _MobileSelectionWheelPicker(
       title: title,
       options: options,
       initialIndex: initialIndex,
+      showAllOptions: showAllOptions,
     ),
   );
 }
@@ -5220,11 +5223,13 @@ class _MobileSelectionWheelPicker extends StatefulWidget {
     required this.title,
     required this.options,
     required this.initialIndex,
+    required this.showAllOptions,
   });
 
   final String title;
   final List<SelectionOption> options;
   final int initialIndex;
+  final bool showAllOptions;
 
   @override
   State<_MobileSelectionWheelPicker> createState() => _MobileSelectionWheelPickerState();
@@ -5232,7 +5237,11 @@ class _MobileSelectionWheelPicker extends StatefulWidget {
 
 class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker> {
   late int _selectedIndex;
+  late int _selectedAbsoluteIndex;
   late final FixedExtentScrollController _controller;
+
+  int get _cycleCount => widget.showAllOptions && widget.options.length > 1 ? 101 : 1;
+  int get _childCount => widget.options.length * _cycleCount;
 
   @override
   void initState() {
@@ -5242,7 +5251,10 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
         : widget.initialIndex >= widget.options.length
             ? widget.options.length - 1
             : widget.initialIndex;
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _selectedAbsoluteIndex = widget.showAllOptions
+        ? (widget.options.length * (_cycleCount ~/ 2)) + _selectedIndex
+        : _selectedIndex;
+    _controller = FixedExtentScrollController(initialItem: _selectedAbsoluteIndex);
   }
 
   @override
@@ -5267,14 +5279,14 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 320,
+            height: widget.showAllOptions ? 444 : 320,
             child: CupertinoPicker.builder(
               scrollController: _controller,
-              itemExtent: 76,
-              diameterRatio: 3.2,
+              itemExtent: widget.showAllOptions ? 70 : 76,
+              diameterRatio: widget.showAllOptions ? 12 : 3.2,
               squeeze: 1.0,
               useMagnifier: true,
-              magnification: 1.045,
+              magnification: widget.showAllOptions ? 1.02 : 1.045,
               selectionOverlay: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -5283,17 +5295,24 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
                   border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
                 ),
               ),
-              childCount: widget.options.length,
+              childCount: _childCount,
               onSelectedItemChanged: (index) {
-                if (_selectedIndex == index) return;
-                setState(() => _selectedIndex = index);
+                final logicalIndex = index % widget.options.length;
+                if (_selectedAbsoluteIndex == index && _selectedIndex == logicalIndex) return;
+                setState(() {
+                  _selectedAbsoluteIndex = index;
+                  _selectedIndex = logicalIndex;
+                });
                 HapticFeedback.selectionClick();
               },
-              itemBuilder: (context, index) => _AdaptiveSelectionWheelRow(
-                option: widget.options[index],
-                selected: index == _selectedIndex,
-                mobile: true,
-              ),
+              itemBuilder: (context, index) {
+                final logicalIndex = index % widget.options.length;
+                return _AdaptiveSelectionWheelRow(
+                  option: widget.options[logicalIndex],
+                  selected: index == _selectedAbsoluteIndex,
+                  mobile: true,
+                );
+              },
             ),
           ),
           const SizedBox(height: 14),
@@ -5326,11 +5345,13 @@ class _DesktopSelectionWheelPicker extends StatefulWidget {
     required this.title,
     required this.options,
     required this.initialIndex,
+    required this.showAllOptions,
   });
 
   final String title;
   final List<SelectionOption> options;
   final int initialIndex;
+  final bool showAllOptions;
 
   @override
   State<_DesktopSelectionWheelPicker> createState() => _DesktopSelectionWheelPickerState();
@@ -5338,8 +5359,12 @@ class _DesktopSelectionWheelPicker extends StatefulWidget {
 
 class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPicker> {
   late int _selectedIndex;
+  late int _selectedAbsoluteIndex;
   late final FixedExtentScrollController _controller;
   late final FocusNode _focusNode;
+
+  int get _cycleCount => widget.showAllOptions && widget.options.length > 1 ? 101 : 1;
+  int get _childCount => widget.options.length * _cycleCount;
 
   @override
   void initState() {
@@ -5349,7 +5374,10 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
         : widget.initialIndex >= widget.options.length
             ? widget.options.length - 1
             : widget.initialIndex;
-    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _selectedAbsoluteIndex = widget.showAllOptions
+        ? (widget.options.length * (_cycleCount ~/ 2)) + _selectedIndex
+        : _selectedIndex;
+    _controller = FixedExtentScrollController(initialItem: _selectedAbsoluteIndex);
     _focusNode = FocusNode(debugLabel: '${widget.title} wheel picker');
   }
 
@@ -5363,9 +5391,13 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
   void _moveTo(int index) {
     var target = index;
     if (target < 0) target = 0;
-    if (target >= widget.options.length) target = widget.options.length - 1;
-    if (target == _selectedIndex) return;
-    setState(() => _selectedIndex = target);
+    if (target >= _childCount) target = _childCount - 1;
+    final logicalIndex = target % widget.options.length;
+    if (target == _selectedAbsoluteIndex) return;
+    setState(() {
+      _selectedAbsoluteIndex = target;
+      _selectedIndex = logicalIndex;
+    });
     _controller.animateToItem(
       target,
       duration: AppMotion.fast,
@@ -5376,11 +5408,11 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      _moveTo(_selectedIndex - 1);
+      _moveTo(_selectedAbsoluteIndex - 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      _moveTo(_selectedIndex + 1);
+      _moveTo(_selectedAbsoluteIndex + 1);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
@@ -5398,11 +5430,13 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final wheelHeight = widget.options.length <= 2
-        ? 210.0
-        : widget.options.length == 3
-            ? 250.0
-            : 300.0;
+    final wheelHeight = widget.showAllOptions
+        ? math.min(500.0, (widget.options.length * 80.0) + 20.0)
+        : widget.options.length <= 2
+            ? 210.0
+            : widget.options.length == 3
+                ? 250.0
+                : 300.0;
 
     return Focus(
       focusNode: _focusNode,
@@ -5477,32 +5511,39 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
                   ListWheelScrollView.useDelegate(
                     controller: _controller,
                     itemExtent: 80,
-                    diameterRatio: 3.0,
-                    perspective: .0015,
+                    diameterRatio: widget.showAllOptions ? 12.0 : 3.0,
+                    perspective: widget.showAllOptions ? .0004 : .0015,
                     useMagnifier: true,
-                    magnification: 1.035,
-                    overAndUnderCenterOpacity: .88,
+                    magnification: widget.showAllOptions ? 1.02 : 1.035,
+                    overAndUnderCenterOpacity: widget.showAllOptions ? .96 : .88,
                     physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
                     onSelectedItemChanged: (index) {
-                      if (_selectedIndex == index) return;
-                      setState(() => _selectedIndex = index);
+                      final logicalIndex = index % widget.options.length;
+                      if (_selectedAbsoluteIndex == index && _selectedIndex == logicalIndex) return;
+                      setState(() {
+                        _selectedAbsoluteIndex = index;
+                        _selectedIndex = logicalIndex;
+                      });
                     },
                     childDelegate: ListWheelChildBuilderDelegate(
-                      childCount: widget.options.length,
-                      builder: (context, index) => Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            _focusNode.requestFocus();
-                            _moveTo(index);
-                          },
-                          child: _AdaptiveSelectionWheelRow(
-                            option: widget.options[index],
-                            selected: index == _selectedIndex,
-                            mobile: false,
+                      childCount: _childCount,
+                      builder: (context, index) {
+                        final logicalIndex = index % widget.options.length;
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              _focusNode.requestFocus();
+                              _moveTo(index);
+                            },
+                            child: _AdaptiveSelectionWheelRow(
+                              option: widget.options[logicalIndex],
+                              selected: index == _selectedAbsoluteIndex,
+                              mobile: false,
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -9169,6 +9210,7 @@ Future<void> showDateRangeSheet(BuildContext context) async {
     title: 'Choose Date Filter',
     selectedId: enumName(state.dateRangeType),
     options: DateRangeType.values.map(optionFromDateRangeType).toList(),
+    showAllOptions: true,
   );
   if (selectedId == null) return;
   final selected = DateRangeType.values.firstWhere(
