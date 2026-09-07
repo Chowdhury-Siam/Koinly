@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.1066] - 2026-09-07
+
+### Added
+- Extended the adaptive Apple-style wheel picker to every shared scrollable selection sheet, including account, category, loan-person/account, date-filter, default account/category, and other selectors that use Koinly's shared selection field.
+- Currency selection now uses a Cupertino wheel in the phone bottom sheet and a desktop fixed-extent wheel with mouse/touchpad scrolling and keyboard navigation while preserving currency search.
+
+### Changed
+- Phone selection sheets now use touch-first bottom sheets with haptic fixed-item scrolling; PC selection sheets use centered dialogs sized for mouse, touchpad, and keyboard input.
+- Ordinary page, transaction, license, and content-list scrolling remains normal platform scrolling rather than being forced into a fixed-item wheel.
+
+## [1.0.1065] - 2026-09-07
+
+### Added
+- Replaced the Theme chooser with a dedicated adaptive Apple-style wheel picker. Phones now use a touch-first Cupertino wheel in a bottom sheet, while desktop uses a centered fixed-extent wheel sized for mouse and keyboard use.
+- Desktop Theme selection now supports mouse-wheel/touchpad scrolling, Up/Down arrow navigation, Enter to confirm, and Escape to cancel.
+
+### Changed
+- Theme selection keeps changes temporary until Done is pressed and opens focused on the currently saved theme on both mobile and desktop.
+
 ## [1.0.1064] - 2026-09-07
 
 ### Fixed

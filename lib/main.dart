@@ -5175,96 +5175,164 @@ class AppleSelectionField extends StatelessWidget {
   }
 }
 
+bool _useDesktopWheelPicker(BuildContext context) {
+  final media = MediaQuery.of(context);
+  return kIsDesktopApp || (kIsWeb && media.size.width >= 720);
+}
+
 Future<String?> showAppleWheelSelectionSheet(
   BuildContext context, {
   required String title,
   required List<SelectionOption> options,
   required String? selectedId,
-}) async {
-  if (options.isEmpty) return null;
+}) {
+  if (options.isEmpty) return Future<String?>.value(null);
   final foundIndex = options.indexWhere((option) => option.id == selectedId);
   final initialIndex = foundIndex < 0 ? 0 : foundIndex;
-  var selectedIndex = initialIndex;
 
-  const rowExtent = 72.0;
-  final listHeight = math.min(288.0, math.max(rowExtent, options.length * rowExtent));
-  final maxScrollExtent = math.max(0.0, (options.length * rowExtent) - listHeight);
-  final initialOffset = math.min(
-    maxScrollExtent,
-    math.max(0.0, (initialIndex - 1) * rowExtent),
+  if (_useDesktopWheelPicker(context)) {
+    return showKoinlyPopup<String>(
+      context,
+      maxWidth: 590,
+      maxHeight: 560,
+      child: _DesktopSelectionWheelPicker(
+        title: title,
+        options: options,
+        initialIndex: initialIndex,
+      ),
+    );
+  }
+
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(.62),
+    builder: (sheetContext) => _MobileSelectionWheelPicker(
+      title: title,
+      options: options,
+      initialIndex: initialIndex,
+    ),
   );
-  final listController = ScrollController(initialScrollOffset: initialOffset);
+}
 
-  final result = await showKoinlyPopup<String>(
-    context,
-    maxWidth: 520,
-    maxHeight: math.min(600.0, 184.0 + listHeight),
-    child: StatefulBuilder(
-      builder: (dialogContext, setModalState) {
-        final safeIndex = selectedIndex < 0
-            ? 0
-            : selectedIndex >= options.length
-                ? options.length - 1
-                : selectedIndex;
-        final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+class _MobileSelectionWheelPicker extends StatefulWidget {
+  const _MobileSelectionWheelPicker({
+    required this.title,
+    required this.options,
+    required this.initialIndex,
+  });
 
-        return Padding(
+  final String title;
+  final List<SelectionOption> options;
+  final int initialIndex;
+
+  @override
+  State<_MobileSelectionWheelPicker> createState() => _MobileSelectionWheelPickerState();
+}
+
+class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker> {
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex < 0
+        ? 0
+        : widget.initialIndex >= widget.options.length
+            ? widget.options.length - 1
+            : widget.initialIndex;
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final height = math.min(
+      455.0,
+      math.max(340.0, media.size.height - media.padding.top - media.padding.bottom - 20),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF07171D) : scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border.all(color: scheme.outline.withOpacity(.18)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(dark ? .38 : .16),
+              blurRadius: 34,
+              offset: const Offset(0, -10),
+            ),
+          ],
+        ),
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 44,
                 height: 5,
-                decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(
+                  color: scheme.onSurfaceVariant.withOpacity(.42),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               const SizedBox(height: 18),
               Text(
-                title,
+                widget.title,
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 12),
-              Container(
-                height: listHeight,
-                decoration: BoxDecoration(
-                  color: innerColor,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: innerBorderColor),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Scrollbar(
-                  controller: listController,
-                  thumbVisibility: kIsDesktopApp && options.length > 4,
-                  child: ListView.builder(
-                    controller: listController,
-                    itemExtent: rowExtent,
-                    padding: EdgeInsets.zero,
-                    physics: optimizedScrollPhysics(dialogContext),
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options[index];
-                      final isSelected = index == safeIndex;
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => setModalState(() => selectedIndex = index),
-                          child: _AppleWheelOptionRow(option: option, selected: isSelected),
-                        ),
-                      );
-                    },
+              const SizedBox(height: 10),
+              Expanded(
+                child: CupertinoPicker.builder(
+                  scrollController: _controller,
+                  itemExtent: 76,
+                  diameterRatio: 1.22,
+                  squeeze: 1.02,
+                  useMagnifier: true,
+                  magnification: 1.05,
+                  selectionOverlay: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+                    ),
+                  ),
+                  childCount: widget.options.length,
+                  onSelectedItemChanged: (index) {
+                    if (_selectedIndex == index) return;
+                    setState(() => _selectedIndex = index);
+                    HapticFeedback.selectionClick();
+                  },
+                  itemBuilder: (context, index) => _AdaptiveSelectionWheelRow(
+                    option: widget.options[index],
+                    selected: index == _selectedIndex,
+                    mobile: true,
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () => Navigator.pop(context),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -5272,7 +5340,7 @@ Future<String?> showAppleWheelSelectionSheet(
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
+                      onPressed: () => Navigator.pop(context, widget.options[_selectedIndex].id),
                       child: const Text('Done'),
                     ),
                   ),
@@ -5280,67 +5348,291 @@ Future<String?> showAppleWheelSelectionSheet(
               ),
             ],
           ),
-        );
-      },
-    ),
-  );
-
-  listController.dispose();
-  return result;
+        ),
+      ),
+    );
+  }
 }
 
-class _AppleWheelOptionRow extends StatelessWidget {
-  const _AppleWheelOptionRow({required this.option, required this.selected});
+class _DesktopSelectionWheelPicker extends StatefulWidget {
+  const _DesktopSelectionWheelPicker({
+    required this.title,
+    required this.options,
+    required this.initialIndex,
+  });
+
+  final String title;
+  final List<SelectionOption> options;
+  final int initialIndex;
+
+  @override
+  State<_DesktopSelectionWheelPicker> createState() => _DesktopSelectionWheelPickerState();
+}
+
+class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPicker> {
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex < 0
+        ? 0
+        : widget.initialIndex >= widget.options.length
+            ? widget.options.length - 1
+            : widget.initialIndex;
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _focusNode = FocusNode(debugLabel: '${widget.title} wheel picker');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _moveTo(int index) {
+    var target = index;
+    if (target < 0) target = 0;
+    if (target >= widget.options.length) target = widget.options.length - 1;
+    if (target == _selectedIndex) return;
+    setState(() => _selectedIndex = target);
+    _controller.animateToItem(
+      target,
+      duration: AppMotion.fast,
+      curve: AppMotion.emphasized,
+    );
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _moveTo(_selectedIndex - 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _moveTo(_selectedIndex + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      Navigator.pop(context, widget.options[_selectedIndex].id);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.pop(context);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final wheelHeight = widget.options.length <= 2
+        ? 210.0
+        : widget.options.length == 3
+            ? 250.0
+            : 300.0;
+
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: kSleekAccent.withOpacity(.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kSleekAccent.withOpacity(.24)),
+                  ),
+                  child: const Icon(Icons.tune_rounded, color: kSleekAccent),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Scroll with the mouse or use the arrow keys',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              height: wheelHeight,
+              decoration: BoxDecoration(
+                color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: scheme.outline.withOpacity(.20)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          height: 80,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: kSleekAccent.withOpacity(dark ? .10 : .075),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  ListWheelScrollView.useDelegate(
+                    controller: _controller,
+                    itemExtent: 80,
+                    diameterRatio: 1.75,
+                    perspective: .0024,
+                    useMagnifier: true,
+                    magnification: 1.035,
+                    overAndUnderCenterOpacity: .58,
+                    physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
+                    onSelectedItemChanged: (index) {
+                      if (_selectedIndex == index) return;
+                      setState(() => _selectedIndex = index);
+                    },
+                    childDelegate: ListWheelChildBuilderDelegate(
+                      childCount: widget.options.length,
+                      builder: (context, index) => Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            _focusNode.requestFocus();
+                            _moveTo(index);
+                          },
+                          child: _AdaptiveSelectionWheelRow(
+                            option: widget.options[index],
+                            selected: index == _selectedIndex,
+                            mobile: false,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.keyboard_rounded, size: 17, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '↑ / ↓ to select  •  Enter to confirm  •  Esc to cancel',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context, widget.options[_selectedIndex].id),
+                    child: const Text('Done'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdaptiveSelectionWheelRow extends StatelessWidget {
+  const _AdaptiveSelectionWheelRow({
+    required this.option,
+    required this.selected,
+    required this.mobile,
+  });
 
   final SelectionOption option;
   final bool selected;
+  final bool mobile;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontSize: mobile ? 16.5 : 17.5,
           fontWeight: FontWeight.w900,
-          color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
+          color: scheme.onSurface.withOpacity(selected ? 1 : .74),
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
+          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .62),
           fontWeight: FontWeight.w700,
         );
 
-    return AnimatedContainer(
+    return AnimatedOpacity(
       duration: AppMotion.fast,
-      curve: AppMotion.emphasized,
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: selected ? kSleekAccent.withOpacity(.10) : Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: selected ? kSleekAccent.withOpacity(.52) : Colors.transparent,
-          width: 1.1,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          iconBubble(context, option.iconName, option.iconColor, size: 42),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
-                const SizedBox(height: 3),
-                Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
-              ],
+      opacity: selected ? 1 : .78,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: mobile ? 18 : 28),
+        child: Row(
+          children: [
+            iconBubble(context, option.iconName, option.iconColor, size: mobile ? 42 : 44),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                  const SizedBox(height: 3),
+                  Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                ],
+              ),
             ),
-          ),
-          if (selected) ...[
-            const SizedBox(width: 10),
-            const Icon(Icons.check_rounded, color: kSleekAccent, size: 22),
+            if (selected) ...[
+              const SizedBox(width: 10),
+              const Icon(Icons.check_rounded, color: kSleekAccent, size: 22),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -13442,18 +13734,439 @@ class _ProviderChoiceCard extends StatelessWidget {
 
 Future<void> showThemeDialog(BuildContext context) async {
   final state = context.read<AppController>();
-  final selectedId = await showAppleWheelSelectionSheet(
+  final selected = await showAdaptiveThemePicker(
     context,
-    title: 'Choose Theme',
-    selectedId: enumName(state.themePreference),
-    options: ThemePreference.values.map(optionFromThemePreference).toList(),
+    current: state.themePreference,
   );
-  if (selectedId == null) return;
-  final selected = ThemePreference.values.firstWhere(
-    (theme) => enumName(theme) == selectedId,
-    orElse: () => state.themePreference,
-  );
+  if (selected == null || selected == state.themePreference) return;
   await state.saveTheme(selected);
+}
+
+Future<ThemePreference?> showAdaptiveThemePicker(
+  BuildContext context, {
+  required ThemePreference current,
+}) {
+  final useDesktopPicker = _useDesktopWheelPicker(context);
+
+  if (useDesktopPicker) {
+    return showKoinlyPopup<ThemePreference>(
+      context,
+      maxWidth: 590,
+      maxHeight: 540,
+      child: _DesktopThemeWheelPicker(current: current),
+    );
+  }
+
+  return showModalBottomSheet<ThemePreference>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(.62),
+    builder: (sheetContext) => _MobileThemeWheelPicker(current: current),
+  );
+}
+
+class _MobileThemeWheelPicker extends StatefulWidget {
+  const _MobileThemeWheelPicker({required this.current});
+
+  final ThemePreference current;
+
+  @override
+  State<_MobileThemeWheelPicker> createState() => _MobileThemeWheelPickerState();
+}
+
+class _MobileThemeWheelPickerState extends State<_MobileThemeWheelPicker> {
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = ThemePreference.values.indexOf(widget.current);
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final height = math.min(
+      445.0,
+      math.max(330.0, media.size.height - media.padding.top - media.padding.bottom - 20),
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF07171D) : scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border.all(color: scheme.outline.withOpacity(.18)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(dark ? .38 : .16),
+              blurRadius: 34,
+              offset: const Offset(0, -10),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: scheme.onSurfaceVariant.withOpacity(.42),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Choose Theme',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: CupertinoPicker.builder(
+                  scrollController: _controller,
+                  itemExtent: 78,
+                  diameterRatio: 1.22,
+                  squeeze: 1.02,
+                  useMagnifier: true,
+                  magnification: 1.055,
+                  selectionOverlay: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+                    ),
+                  ),
+                  childCount: ThemePreference.values.length,
+                  onSelectedItemChanged: (index) {
+                    if (_selectedIndex == index) return;
+                    setState(() => _selectedIndex = index);
+                    HapticFeedback.selectionClick();
+                  },
+                  itemBuilder: (context, index) {
+                    final theme = ThemePreference.values[index];
+                    return _ThemeWheelOptionRow(
+                      option: optionFromThemePreference(theme),
+                      selected: index == _selectedIndex,
+                      mobile: true,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(context, ThemePreference.values[_selectedIndex]),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DesktopThemeWheelPicker extends StatefulWidget {
+  const _DesktopThemeWheelPicker({required this.current});
+
+  final ThemePreference current;
+
+  @override
+  State<_DesktopThemeWheelPicker> createState() => _DesktopThemeWheelPickerState();
+}
+
+class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = ThemePreference.values.indexOf(widget.current);
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _focusNode = FocusNode(debugLabel: 'Theme wheel picker');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _moveTo(int index) {
+    var target = index;
+    if (target < 0) target = 0;
+    if (target >= ThemePreference.values.length) target = ThemePreference.values.length - 1;
+    if (target == _selectedIndex) return;
+    setState(() => _selectedIndex = target);
+    _controller.animateToItem(
+      target,
+      duration: AppMotion.fast,
+      curve: AppMotion.emphasized,
+    );
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _moveTo(_selectedIndex - 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _moveTo(_selectedIndex + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      Navigator.pop(context, ThemePreference.values[_selectedIndex]);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.pop(context);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: _handleKey,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: kSleekAccent.withOpacity(.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kSleekAccent.withOpacity(.24)),
+                  ),
+                  child: const Icon(Icons.palette_rounded, color: kSleekAccent),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Choose Theme',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Scroll with the mouse or use the arrow keys',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              height: 300,
+              decoration: BoxDecoration(
+                color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: scheme.outline.withOpacity(.20)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          height: 82,
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: kSleekAccent.withOpacity(dark ? .10 : .075),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  ListWheelScrollView.useDelegate(
+                    controller: _controller,
+                    itemExtent: 82,
+                    diameterRatio: 1.75,
+                    perspective: .0024,
+                    useMagnifier: true,
+                    magnification: 1.035,
+                    overAndUnderCenterOpacity: .58,
+                    physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
+                    onSelectedItemChanged: (index) {
+                      if (_selectedIndex == index) return;
+                      setState(() => _selectedIndex = index);
+                    },
+                    childDelegate: ListWheelChildBuilderDelegate(
+                      childCount: ThemePreference.values.length,
+                      builder: (context, index) {
+                        final theme = ThemePreference.values[index];
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              _focusNode.requestFocus();
+                              _moveTo(index);
+                            },
+                            child: _ThemeWheelOptionRow(
+                              option: optionFromThemePreference(theme),
+                              selected: index == _selectedIndex,
+                              mobile: false,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.keyboard_rounded, size: 17, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '↑ / ↓ to select  •  Enter to confirm  •  Esc to cancel',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(context, ThemePreference.values[_selectedIndex]),
+                    child: const Text('Done'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeWheelOptionRow extends StatelessWidget {
+  const _ThemeWheelOptionRow({
+    required this.option,
+    required this.selected,
+    required this.mobile,
+  });
+
+  final SelectionOption option;
+  final bool selected;
+  final bool mobile;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontSize: mobile ? 17 : 18,
+          fontWeight: FontWeight.w900,
+          color: scheme.onSurface.withOpacity(selected ? 1 : .74),
+        );
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .62),
+          fontWeight: FontWeight.w700,
+        );
+
+    return AnimatedOpacity(
+      duration: AppMotion.fast,
+      opacity: selected ? 1 : .78,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: mobile ? 18 : 28),
+        child: Row(
+          children: [
+            iconBubble(context, option.iconName, option.iconColor, size: mobile ? 44 : 46),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
+                  const SizedBox(height: 3),
+                  Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                ],
+              ),
+            ),
+            if (selected) ...[
+              const SizedBox(width: 10),
+              const Icon(Icons.check_rounded, color: kSleekAccent, size: 22),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 SelectionOption optionFromThemePreference(ThemePreference theme) {
@@ -13877,137 +14590,203 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
   required List<List<String>> countries,
   required String selectedCode,
   required String selectedSymbol,
-}) async {
-  var search = '';
+}) {
+  if (countries.isEmpty) return Future<List<String>?>.value(null);
 
-  List<List<String>> filteredCountries() {
-    final query = search.trim().toLowerCase();
-    final filtered = query.isEmpty
-        ? countries.toList()
-        : countries.where((c) => c.join(' ').toLowerCase().contains(query)).toList();
-    filtered.sort((a, b) => a[0].compareTo(b[0]));
-    return filtered;
+  if (_useDesktopWheelPicker(context)) {
+    return showKoinlyPopup<List<String>>(
+      context,
+      maxWidth: 620,
+      maxHeight: 670,
+      child: _DesktopCurrencyWheelPicker(
+        countries: countries,
+        selectedCode: selectedCode,
+        selectedSymbol: selectedSymbol,
+      ),
+    );
   }
 
-  final initialCountries = filteredCountries();
-  var selectedIndex = initialCountries.indexWhere((c) => c[2] == selectedCode && c[1] == selectedSymbol);
-  if (selectedIndex < 0) selectedIndex = initialCountries.indexWhere((c) => c[2] == selectedCode);
-  if (selectedIndex < 0) selectedIndex = 0;
-
-  const rowExtent = 72.0;
-  final initialListHeight = math.min(288.0, math.max(rowExtent, initialCountries.length * rowExtent));
-  final initialMaxScrollExtent = math.max(0.0, (initialCountries.length * rowExtent) - initialListHeight);
-  final listController = ScrollController(
-    initialScrollOffset: math.min(
-      initialMaxScrollExtent,
-      math.max(0.0, (selectedIndex - 1) * rowExtent),
+  return showModalBottomSheet<List<String>>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: Colors.black.withOpacity(.62),
+    builder: (sheetContext) => _MobileCurrencyWheelPicker(
+      countries: countries,
+      selectedCode: selectedCode,
+      selectedSymbol: selectedSymbol,
     ),
   );
+}
 
-  final result = await showKoinlyPopup<List<String>>(
-    context,
-    maxWidth: 560,
-    maxHeight: 660,
-    child: StatefulBuilder(
-      builder: (dialogContext, setModalState) {
-        final filtered = filteredCountries();
-        if (filtered.isNotEmpty && selectedIndex >= filtered.length) selectedIndex = 0;
-        final safeIndex = filtered.isEmpty
+List<List<String>> _filteredCurrencyCountries(List<List<String>> countries, String search) {
+  final query = search.trim().toLowerCase();
+  final filtered = query.isEmpty
+      ? countries.toList()
+      : countries.where((country) => country.join(' ').toLowerCase().contains(query)).toList();
+  filtered.sort((a, b) => a[0].compareTo(b[0]));
+  return filtered;
+}
+
+int _initialCurrencyIndex(List<List<String>> countries, String selectedCode, String selectedSymbol) {
+  var index = countries.indexWhere((country) => country[2] == selectedCode && country[1] == selectedSymbol);
+  if (index < 0) index = countries.indexWhere((country) => country[2] == selectedCode);
+  return index < 0 ? 0 : index;
+}
+
+class _MobileCurrencyWheelPicker extends StatefulWidget {
+  const _MobileCurrencyWheelPicker({
+    required this.countries,
+    required this.selectedCode,
+    required this.selectedSymbol,
+  });
+
+  final List<List<String>> countries;
+  final String selectedCode;
+  final String selectedSymbol;
+
+  @override
+  State<_MobileCurrencyWheelPicker> createState() => _MobileCurrencyWheelPickerState();
+}
+
+class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> {
+  String _search = '';
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+
+  List<List<String>> get _visible => _filteredCurrencyCountries(widget.countries, _search);
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = _filteredCurrencyCountries(widget.countries, '');
+    _selectedIndex = _initialCurrencyIndex(initial, widget.selectedCode, widget.selectedSymbol);
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _updateSearch(String value) {
+    setState(() {
+      _search = value;
+      _selectedIndex = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_controller.hasClients) _controller.jumpToItem(0);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final visible = _visible;
+    final safeIndex = visible.isEmpty
+        ? 0
+        : _selectedIndex < 0
             ? 0
-            : selectedIndex < 0
-                ? 0
-                : selectedIndex >= filtered.length
-                    ? filtered.length - 1
-                    : selectedIndex;
-        final selected = filtered.isEmpty ? null : filtered[safeIndex];
-        final listHeight = filtered.isEmpty
-            ? 96.0
-            : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
-        final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+            : _selectedIndex >= visible.length
+                ? visible.length - 1
+                : _selectedIndex;
+    final selected = visible.isEmpty ? null : visible[safeIndex];
+    final height = math.min(
+      560.0,
+      math.max(430.0, media.size.height - media.padding.top - media.padding.bottom - 16),
+    );
 
-        return SingleChildScrollView(
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF07171D) : scheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border.all(color: scheme.outline.withOpacity(.18)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(dark ? .38 : .16),
+              blurRadius: 34,
+              offset: const Offset(0, -10),
+            ),
+          ],
+        ),
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 44,
                 height: 5,
-                decoration: BoxDecoration(color: handleColor, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(
+                  color: scheme.onSurfaceVariant.withOpacity(.42),
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               const SizedBox(height: 18),
               Text(
                 'Choose currency',
                 textAlign: TextAlign.center,
-                style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
               TextField(
-                autofocus: false,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search_rounded),
                   hintText: 'Search countries or currency code',
                 ),
-                onChanged: (value) {
-                  setModalState(() {
-                    search = value;
-                    selectedIndex = 0;
-                  });
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (listController.hasClients) listController.jumpTo(0);
-                  });
-                },
+                onChanged: _updateSearch,
               ),
-              const SizedBox(height: 12),
-              AnimatedContainer(
-                duration: AppMotion.fast,
-                curve: AppMotion.emphasized,
-                height: listHeight,
-                decoration: BoxDecoration(
-                  color: innerColor,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: innerBorderColor),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: filtered.isEmpty
+              const SizedBox(height: 10),
+              Expanded(
+                child: visible.isEmpty
                     ? Center(
                         child: Text(
                           'No currency found',
-                          style: Theme.of(dialogContext).textTheme.bodyLarge?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: kSleekMuted,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                       )
-                    : Scrollbar(
-                        controller: listController,
-                        thumbVisibility: kIsDesktopApp && filtered.length > 4,
-                        child: ListView.builder(
-                          controller: listController,
-                          itemExtent: rowExtent,
-                          padding: EdgeInsets.zero,
-                          physics: optimizedScrollPhysics(dialogContext),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final c = filtered[index];
-                            final isSelected = index == safeIndex;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => setModalState(() => selectedIndex = index),
-                                child: _CurrencyWheelRow(country: c, selected: isSelected),
-                              ),
-                            );
-                          },
+                    : CupertinoPicker.builder(
+                        scrollController: _controller,
+                        itemExtent: 76,
+                        diameterRatio: 1.22,
+                        squeeze: 1.02,
+                        useMagnifier: true,
+                        magnification: 1.05,
+                        selectionOverlay: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+                          ),
+                        ),
+                        childCount: visible.length,
+                        onSelectedItemChanged: (index) {
+                          if (_selectedIndex == index) return;
+                          setState(() => _selectedIndex = index);
+                          HapticFeedback.selectionClick();
+                        },
+                        itemBuilder: (context, index) => _CurrencyWheelRow(
+                          country: visible[index],
+                          selected: index == safeIndex,
                         ),
                       ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => Navigator.pop(dialogContext),
+                      onPressed: () => Navigator.pop(context),
                       child: const Text('Cancel'),
                     ),
                   ),
@@ -14015,7 +14794,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: selected == null ? null : () => Navigator.pop(dialogContext, selected),
+                      onPressed: selected == null ? null : () => Navigator.pop(context, selected),
                       child: const Text('Done'),
                     ),
                   ),
@@ -14023,13 +14802,272 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               ),
             ],
           ),
-        );
-      },
-    ),
-  );
+        ),
+      ),
+    );
+  }
+}
 
-  listController.dispose();
-  return result;
+class _DesktopCurrencyWheelPicker extends StatefulWidget {
+  const _DesktopCurrencyWheelPicker({
+    required this.countries,
+    required this.selectedCode,
+    required this.selectedSymbol,
+  });
+
+  final List<List<String>> countries;
+  final String selectedCode;
+  final String selectedSymbol;
+
+  @override
+  State<_DesktopCurrencyWheelPicker> createState() => _DesktopCurrencyWheelPickerState();
+}
+
+class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker> {
+  String _search = '';
+  late int _selectedIndex;
+  late final FixedExtentScrollController _controller;
+  late final FocusNode _wheelFocusNode;
+
+  List<List<String>> get _visible => _filteredCurrencyCountries(widget.countries, _search);
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = _filteredCurrencyCountries(widget.countries, '');
+    _selectedIndex = _initialCurrencyIndex(initial, widget.selectedCode, widget.selectedSymbol);
+    _controller = FixedExtentScrollController(initialItem: _selectedIndex);
+    _wheelFocusNode = FocusNode(debugLabel: 'Currency wheel picker');
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _wheelFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _updateSearch(String value) {
+    setState(() {
+      _search = value;
+      _selectedIndex = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_controller.hasClients) _controller.jumpToItem(0);
+    });
+  }
+
+  void _moveTo(int index) {
+    final visible = _visible;
+    if (visible.isEmpty) return;
+    var target = index;
+    if (target < 0) target = 0;
+    if (target >= visible.length) target = visible.length - 1;
+    if (target == _selectedIndex) return;
+    setState(() => _selectedIndex = target);
+    _controller.animateToItem(target, duration: AppMotion.fast, curve: AppMotion.emphasized);
+  }
+
+  KeyEventResult _handleWheelKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      _moveTo(_selectedIndex - 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _moveTo(_selectedIndex + 1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      final visible = _visible;
+      if (visible.isNotEmpty) {
+        final index = _selectedIndex < visible.length ? _selectedIndex : visible.length - 1;
+        Navigator.pop(context, visible[index]);
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      Navigator.pop(context);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final visible = _visible;
+    final safeIndex = visible.isEmpty
+        ? 0
+        : _selectedIndex < 0
+            ? 0
+            : _selectedIndex >= visible.length
+                ? visible.length - 1
+                : _selectedIndex;
+    final selected = visible.isEmpty ? null : visible[safeIndex];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: kSleekAccent.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kSleekAccent.withOpacity(.24)),
+                ),
+                child: const Icon(Icons.currency_exchange_rounded, color: kSleekAccent),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Choose currency',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Search, scroll with the mouse, or use the arrow keys',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search_rounded),
+              hintText: 'Search countries or currency code',
+            ),
+            onChanged: _updateSearch,
+          ),
+          const SizedBox(height: 14),
+          Focus(
+            focusNode: _wheelFocusNode,
+            autofocus: true,
+            onKeyEvent: _handleWheelKey,
+            child: Container(
+              height: 300,
+              decoration: BoxDecoration(
+                color: dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: scheme.outline.withOpacity(.20)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: visible.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No currency found',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: kSleekMuted,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    )
+                  : Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Container(
+                                height: 80,
+                                margin: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: kSleekAccent.withOpacity(dark ? .10 : .075),
+                                  borderRadius: BorderRadius.circular(22),
+                                  border: Border.all(color: kSleekAccent.withOpacity(.55), width: 1.25),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        ListWheelScrollView.useDelegate(
+                          controller: _controller,
+                          itemExtent: 80,
+                          diameterRatio: 1.75,
+                          perspective: .0024,
+                          useMagnifier: true,
+                          magnification: 1.035,
+                          overAndUnderCenterOpacity: .58,
+                          physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
+                          onSelectedItemChanged: (index) {
+                            if (_selectedIndex == index) return;
+                            setState(() => _selectedIndex = index);
+                          },
+                          childDelegate: ListWheelChildBuilderDelegate(
+                            childCount: visible.length,
+                            builder: (context, index) => Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  _wheelFocusNode.requestFocus();
+                                  _moveTo(index);
+                                },
+                                child: _CurrencyWheelRow(
+                                  country: visible[index],
+                                  selected: index == safeIndex,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(Icons.keyboard_rounded, size: 17, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '↑ / ↓ to select  •  Enter to confirm  •  Esc to cancel',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: selected == null ? null : () => Navigator.pop(context, selected),
+                  child: const Text('Done'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CurrencyWheelRow extends StatelessWidget {
