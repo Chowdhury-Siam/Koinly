@@ -1,52 +1,5 @@
 # Changelog
 
-## [1.0.1069] - 2026-09-08
-
-### Fixed
-- Replaced the cylindrical/cyclic picker implementation across Koinly with stable bounded selection lists so visible options no longer disappear, duplicate, warp, fade into slivers, or leave large blank wheel gaps while scrolling.
-- Date Filter now renders Today, This Week, This Month, This Year, All Time, and Custom exactly once in a stable six-row selector on both Android and Windows.
-- Applied the same stable selector behavior to Theme, Currency, account/category, transfer, loan, default-account/category, and every other picker that uses Koinly's shared selection component.
-- Removed overscroll blank-space behavior from picker lists and kept the selected option highlighted in place.
-
-### Changed
-- Short pickers show every option at once; longer pickers use ordinary bounded scrolling with no cylindrical perspective. Desktop keeps mouse/touchpad scrolling, click selection, Up/Down navigation, Enter confirmation, and Escape cancellation. Android keeps touch scrolling, tap selection, haptic selection feedback, and centered popup presentation.
-
-## [1.0.1068] - 2026-09-07
-
-### Fixed
-- Date Filter now keeps all six date-range choices populated around the active row on both Android and desktop instead of leaving empty space above or below when the current selection is near the start or end of the list.
-- Date Filter uses an effectively cyclic wheel with a flatter perspective and a taller viewport, so Today, This Week, This Month, This Year, All Time, and Custom remain visible and readable while scrolling.
-- Preserved centered popup presentation, fixed-item snapping, touch haptics, mouse/touchpad scrolling, keyboard controls, and Cancel/Done confirmation.
-
-## [1.0.1067] - 2026-09-07
-
-### Fixed
-- Wheel pickers now keep the neighboring options above and below the selected row clearly visible instead of heavily foreshortening/fading them.
-- Increased off-center option contrast and flattened wheel perspective on phone and desktop so surrounding choices remain readable while scrolling.
-
-### Changed
-- Phone wheel selectors now open as centered Koinly popups instead of bottom sheets. This applies to the shared account/category/date-filter selectors as well as Theme and Currency.
-- Preserved the adaptive desktop wheel behavior, mouse/touchpad scrolling, keyboard controls, haptics, and Cancel/Done confirmation flow.
-
-## [1.0.1066] - 2026-09-07
-
-### Added
-- Extended the adaptive Apple-style wheel picker to every shared scrollable selection sheet, including account, category, loan-person/account, date-filter, default account/category, and other selectors that use Koinly's shared selection field.
-- Currency selection now uses a Cupertino wheel in the phone bottom sheet and a desktop fixed-extent wheel with mouse/touchpad scrolling and keyboard navigation while preserving currency search.
-
-### Changed
-- Phone selection sheets now use touch-first bottom sheets with haptic fixed-item scrolling; PC selection sheets use centered dialogs sized for mouse, touchpad, and keyboard input.
-- Ordinary page, transaction, license, and content-list scrolling remains normal platform scrolling rather than being forced into a fixed-item wheel.
-
-## [1.0.1065] - 2026-09-07
-
-### Added
-- Replaced the Theme chooser with a dedicated adaptive Apple-style wheel picker. Phones now use a touch-first Cupertino wheel in a bottom sheet, while desktop uses a centered fixed-extent wheel sized for mouse and keyboard use.
-- Desktop Theme selection now supports mouse-wheel/touchpad scrolling, Up/Down arrow navigation, Enter to confirm, and Escape to cancel.
-
-### Changed
-- Theme selection keeps changes temporary until Done is pressed and opens focused on the currently saved theme on both mobile and desktop.
-
 ## [1.0.1064] - 2026-09-07
 
 ### Fixed
