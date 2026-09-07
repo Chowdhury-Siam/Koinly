@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1067] - 2026-09-07
+
+### Fixed
+- Wheel pickers now keep the neighboring options above and below the selected row clearly visible instead of heavily foreshortening/fading them.
+- Increased off-center option contrast and flattened wheel perspective on phone and desktop so surrounding choices remain readable while scrolling.
+
+### Changed
+- Phone wheel selectors now open as centered Koinly popups instead of bottom sheets. This applies to the shared account/category/date-filter selectors as well as Theme and Currency.
+- Preserved the adaptive desktop wheel behavior, mouse/touchpad scrolling, keyboard controls, haptics, and Cancel/Done confirmation flow.
+
 ## [1.0.1066] - 2026-09-07
 
 ### Added

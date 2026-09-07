@@ -5203,13 +5203,11 @@ Future<String?> showAppleWheelSelectionSheet(
     );
   }
 
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withOpacity(.62),
-    builder: (sheetContext) => _MobileSelectionWheelPicker(
+  return showKoinlyPopup<String>(
+    context,
+    maxWidth: 560,
+    maxHeight: 540,
+    child: _MobileSelectionWheelPicker(
       title: title,
       options: options,
       initialIndex: initialIndex,
@@ -5255,100 +5253,69 @@ class _MobileSelectionWheelPickerState extends State<_MobileSelectionWheelPicker
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final height = math.min(
-      455.0,
-      math.max(340.0, media.size.height - media.padding.top - media.padding.bottom - 20),
-    );
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: dark ? const Color(0xFF07171D) : scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: scheme.outline.withOpacity(.18)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(dark ? .38 : .16),
-              blurRadius: 34,
-              offset: const Offset(0, -10),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: Column(
-            children: [
-              Container(
-                width: 44,
-                height: 5,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 320,
+            child: CupertinoPicker.builder(
+              scrollController: _controller,
+              itemExtent: 76,
+              diameterRatio: 3.2,
+              squeeze: 1.0,
+              useMagnifier: true,
+              magnification: 1.045,
+              selectionOverlay: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: scheme.onSurfaceVariant.withOpacity(.42),
-                  borderRadius: BorderRadius.circular(999),
+                  color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
                 ),
               ),
-              const SizedBox(height: 18),
-              Text(
-                widget.title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+              childCount: widget.options.length,
+              onSelectedItemChanged: (index) {
+                if (_selectedIndex == index) return;
+                setState(() => _selectedIndex = index);
+                HapticFeedback.selectionClick();
+              },
+              itemBuilder: (context, index) => _AdaptiveSelectionWheelRow(
+                option: widget.options[index],
+                selected: index == _selectedIndex,
+                mobile: true,
               ),
-              const SizedBox(height: 10),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
               Expanded(
-                child: CupertinoPicker.builder(
-                  scrollController: _controller,
-                  itemExtent: 76,
-                  diameterRatio: 1.22,
-                  squeeze: 1.02,
-                  useMagnifier: true,
-                  magnification: 1.05,
-                  selectionOverlay: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
-                    ),
-                  ),
-                  childCount: widget.options.length,
-                  onSelectedItemChanged: (index) {
-                    if (_selectedIndex == index) return;
-                    setState(() => _selectedIndex = index);
-                    HapticFeedback.selectionClick();
-                  },
-                  itemBuilder: (context, index) => _AdaptiveSelectionWheelRow(
-                    option: widget.options[index],
-                    selected: index == _selectedIndex,
-                    mobile: true,
-                  ),
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(context, widget.options[_selectedIndex].id),
-                      child: const Text('Done'),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context, widget.options[_selectedIndex].id),
+                  child: const Text('Done'),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -5510,11 +5477,11 @@ class _DesktopSelectionWheelPickerState extends State<_DesktopSelectionWheelPick
                   ListWheelScrollView.useDelegate(
                     controller: _controller,
                     itemExtent: 80,
-                    diameterRatio: 1.75,
-                    perspective: .0024,
+                    diameterRatio: 3.0,
+                    perspective: .0015,
                     useMagnifier: true,
                     magnification: 1.035,
-                    overAndUnderCenterOpacity: .58,
+                    overAndUnderCenterOpacity: .88,
                     physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
                     onSelectedItemChanged: (index) {
                       if (_selectedIndex == index) return;
@@ -5600,16 +5567,16 @@ class _AdaptiveSelectionWheelRow extends StatelessWidget {
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
           fontSize: mobile ? 16.5 : 17.5,
           fontWeight: FontWeight.w900,
-          color: scheme.onSurface.withOpacity(selected ? 1 : .74),
+          color: scheme.onSurface.withOpacity(selected ? 1 : .90),
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .62),
+          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .78),
           fontWeight: FontWeight.w700,
         );
 
     return AnimatedOpacity(
       duration: AppMotion.fast,
-      opacity: selected ? 1 : .78,
+      opacity: selected ? 1 : .94,
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: mobile ? 18 : 28),
         child: Row(
@@ -13757,13 +13724,11 @@ Future<ThemePreference?> showAdaptiveThemePicker(
     );
   }
 
-  return showModalBottomSheet<ThemePreference>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withOpacity(.62),
-    builder: (sheetContext) => _MobileThemeWheelPicker(current: current),
+  return showKoinlyPopup<ThemePreference>(
+    context,
+    maxWidth: 560,
+    maxHeight: 520,
+    child: _MobileThemeWheelPicker(current: current),
   );
 }
 
@@ -13795,103 +13760,72 @@ class _MobileThemeWheelPickerState extends State<_MobileThemeWheelPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final height = math.min(
-      445.0,
-      math.max(330.0, media.size.height - media.padding.top - media.padding.bottom - 20),
-    );
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: dark ? const Color(0xFF07171D) : scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: scheme.outline.withOpacity(.18)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(dark ? .38 : .16),
-              blurRadius: 34,
-              offset: const Offset(0, -10),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: Column(
-            children: [
-              Container(
-                width: 44,
-                height: 5,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Choose Theme',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 300,
+            child: CupertinoPicker.builder(
+              scrollController: _controller,
+              itemExtent: 78,
+              diameterRatio: 3.2,
+              squeeze: 1.0,
+              useMagnifier: true,
+              magnification: 1.045,
+              selectionOverlay: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: scheme.onSurfaceVariant.withOpacity(.42),
-                  borderRadius: BorderRadius.circular(999),
+                  color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
                 ),
               ),
-              const SizedBox(height: 18),
-              Text(
-                'Choose Theme',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 10),
+              childCount: ThemePreference.values.length,
+              onSelectedItemChanged: (index) {
+                if (_selectedIndex == index) return;
+                setState(() => _selectedIndex = index);
+                HapticFeedback.selectionClick();
+              },
+              itemBuilder: (context, index) {
+                final theme = ThemePreference.values[index];
+                return _ThemeWheelOptionRow(
+                  option: optionFromThemePreference(theme),
+                  selected: index == _selectedIndex,
+                  mobile: true,
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
               Expanded(
-                child: CupertinoPicker.builder(
-                  scrollController: _controller,
-                  itemExtent: 78,
-                  diameterRatio: 1.22,
-                  squeeze: 1.02,
-                  useMagnifier: true,
-                  magnification: 1.055,
-                  selectionOverlay: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
-                    ),
-                  ),
-                  childCount: ThemePreference.values.length,
-                  onSelectedItemChanged: (index) {
-                    if (_selectedIndex == index) return;
-                    setState(() => _selectedIndex = index);
-                    HapticFeedback.selectionClick();
-                  },
-                  itemBuilder: (context, index) {
-                    final theme = ThemePreference.values[index];
-                    return _ThemeWheelOptionRow(
-                      option: optionFromThemePreference(theme),
-                      selected: index == _selectedIndex,
-                      mobile: true,
-                    );
-                  },
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      onPressed: () => Navigator.pop(context, ThemePreference.values[_selectedIndex]),
-                      child: const Text('Done'),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context, ThemePreference.values[_selectedIndex]),
+                  child: const Text('Done'),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -14038,11 +13972,11 @@ class _DesktopThemeWheelPickerState extends State<_DesktopThemeWheelPicker> {
                   ListWheelScrollView.useDelegate(
                     controller: _controller,
                     itemExtent: 82,
-                    diameterRatio: 1.75,
-                    perspective: .0024,
+                    diameterRatio: 3.0,
+                    perspective: .0015,
                     useMagnifier: true,
                     magnification: 1.035,
-                    overAndUnderCenterOpacity: .58,
+                    overAndUnderCenterOpacity: .88,
                     physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
                     onSelectedItemChanged: (index) {
                       if (_selectedIndex == index) return;
@@ -14131,16 +14065,16 @@ class _ThemeWheelOptionRow extends StatelessWidget {
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
           fontSize: mobile ? 17 : 18,
           fontWeight: FontWeight.w900,
-          color: scheme.onSurface.withOpacity(selected ? 1 : .74),
+          color: scheme.onSurface.withOpacity(selected ? 1 : .90),
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .62),
+          color: scheme.onSurfaceVariant.withOpacity(selected ? .92 : .78),
           fontWeight: FontWeight.w700,
         );
 
     return AnimatedOpacity(
       duration: AppMotion.fast,
-      opacity: selected ? 1 : .78,
+      opacity: selected ? 1 : .94,
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: mobile ? 18 : 28),
         child: Row(
@@ -14606,13 +14540,11 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
     );
   }
 
-  return showModalBottomSheet<List<String>>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: Colors.black.withOpacity(.62),
-    builder: (sheetContext) => _MobileCurrencyWheelPicker(
+  return showKoinlyPopup<List<String>>(
+    context,
+    maxWidth: 580,
+    maxHeight: 650,
+    child: _MobileCurrencyWheelPicker(
       countries: countries,
       selectedCode: selectedCode,
       selectedSymbol: selectedSymbol,
@@ -14683,8 +14615,6 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final visible = _visible;
     final safeIndex = visible.isEmpty
@@ -14695,114 +14625,85 @@ class _MobileCurrencyWheelPickerState extends State<_MobileCurrencyWheelPicker> 
                 ? visible.length - 1
                 : _selectedIndex;
     final selected = visible.isEmpty ? null : visible[safeIndex];
-    final height = math.min(
-      560.0,
-      math.max(430.0, media.size.height - media.padding.top - media.padding.bottom - 16),
-    );
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        height: height,
-        decoration: BoxDecoration(
-          color: dark ? const Color(0xFF07171D) : scheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          border: Border.all(color: scheme.outline.withOpacity(.18)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(dark ? .38 : .16),
-              blurRadius: 34,
-              offset: const Offset(0, -10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Choose currency',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search_rounded),
+              hintText: 'Search countries or currency code',
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-          child: Column(
-            children: [
-              Container(
-                width: 44,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: scheme.onSurfaceVariant.withOpacity(.42),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Choose currency',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search_rounded),
-                  hintText: 'Search countries or currency code',
-                ),
-                onChanged: _updateSearch,
-              ),
-              const SizedBox(height: 10),
-              Expanded(
-                child: visible.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No currency found',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: kSleekMuted,
-                                fontWeight: FontWeight.w700,
-                              ),
-                        ),
-                      )
-                    : CupertinoPicker.builder(
-                        scrollController: _controller,
-                        itemExtent: 76,
-                        diameterRatio: 1.22,
-                        squeeze: 1.02,
-                        useMagnifier: true,
-                        magnification: 1.05,
-                        selectionOverlay: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: kSleekAccent.withOpacity(dark ? .10 : .08),
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
+            onChanged: _updateSearch,
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 340,
+            child: visible.isEmpty
+                ? Center(
+                    child: Text(
+                      'No currency found',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: kSleekMuted,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ),
-                        childCount: visible.length,
-                        onSelectedItemChanged: (index) {
-                          if (_selectedIndex == index) return;
-                          setState(() => _selectedIndex = index);
-                          HapticFeedback.selectionClick();
-                        },
-                        itemBuilder: (context, index) => _CurrencyWheelRow(
-                          country: visible[index],
-                          selected: index == safeIndex,
-                        ),
+                    ),
+                  )
+                : CupertinoPicker.builder(
+                    scrollController: _controller,
+                    itemExtent: 76,
+                    diameterRatio: 3.2,
+                    squeeze: 1.0,
+                    useMagnifier: true,
+                    magnification: 1.045,
+                    selectionOverlay: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: kSleekAccent.withOpacity(dark ? .10 : .08),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: kSleekAccent.withOpacity(.62), width: 1.35),
                       ),
+                    ),
+                    childCount: visible.length,
+                    onSelectedItemChanged: (index) {
+                      if (_selectedIndex == index) return;
+                      setState(() => _selectedIndex = index);
+                      HapticFeedback.selectionClick();
+                    },
+                    itemBuilder: (context, index) => _CurrencyWheelRow(
+                      country: visible[index],
+                      selected: index == safeIndex,
+                    ),
+                  ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton(
-                      onPressed: selected == null ? null : () => Navigator.pop(context, selected),
-                      child: const Text('Done'),
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: selected == null ? null : () => Navigator.pop(context, selected),
+                  child: const Text('Done'),
+                ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -14998,11 +14899,11 @@ class _DesktopCurrencyWheelPickerState extends State<_DesktopCurrencyWheelPicker
                         ListWheelScrollView.useDelegate(
                           controller: _controller,
                           itemExtent: 80,
-                          diameterRatio: 1.75,
-                          perspective: .0024,
+                          diameterRatio: 3.0,
+                          perspective: .0015,
                           useMagnifier: true,
                           magnification: 1.035,
-                          overAndUnderCenterOpacity: .58,
+                          overAndUnderCenterOpacity: .88,
                           physics: const FixedExtentScrollPhysics(parent: ClampingScrollPhysics()),
                           onSelectedItemChanged: (index) {
                             if (_selectedIndex == index) return;
@@ -15108,7 +15009,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.76),
+                        color: selected ? scheme.onSurface : scheme.onSurface.withOpacity(.90),
                       ),
                 ),
                 const SizedBox(height: 3),
@@ -15117,7 +15018,7 @@ class _CurrencyWheelRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: selected ? kSleekMuted : kSleekMuted.withOpacity(.72),
+                        color: selected ? kSleekMuted : kSleekMuted.withOpacity(.86),
                         fontWeight: FontWeight.w700,
                       ),
                 ),
