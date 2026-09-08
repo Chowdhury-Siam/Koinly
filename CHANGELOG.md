@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1066] - 2026-09-09
+
+### Added
+- First-run **Use offline** now opens a **Restore backup / Start new** choice instead of immediately entering the new-profile setup flow.
+- Creating a sync account during onboarding now opens the same setup choice automatically. Restoring a backup makes the restored local dataset authoritative for the newly created sync account.
+- If the setup chooser is dismissed after account creation, onboarding shows **Continue setup** so the user can return to the Restore/Start New decision without creating another account.
+
+### Changed
+- Restoring a backup during first-run setup completes onboarding immediately because the backup already contains the user's finance data and preferences. **Start new** continues through Currency and Accounts as before.
+- The first-run restore option clearly warns that the current local finance data on the device will be replaced.
+- New sync-account registration during onboarding now waits for the Restore/Start New decision before seeding cloud data, so temporary starter data is not uploaded when the user intends to restore a backup.
+
+### Fixed
+- Switching from **Create account** to **Login** inside onboarding now restores the existing cloud copy and completes setup instead of returning to first-run local setup.
+
 ## [1.0.1065] - 2026-09-09
 
 ### Added

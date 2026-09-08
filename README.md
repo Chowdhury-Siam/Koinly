@@ -72,6 +72,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Local-first SQLite storage
 - No account required for local-only use
 - Encrypted `.koinlybackup` backup and restore
+- First-run Restore-or-Start-New choice for offline setup and newly created sync accounts
 - Automatic safety backups before destructive restore operations
 - Configurable local automatic backups with daily/weekly/monthly schedules, retention limits, and a selectable destination folder
 - Automatic category deduplication during restore and sync, with transaction and budget references preserved
@@ -389,7 +390,9 @@ A ready self-hosted backend returns fields equivalent to:
 4. Press **Validate and use Worker**.
 5. On the first device, select **Create account** and enter an email and
    password.
-6. On additional devices, select **Login** and use the same owner account.
+6. Choose **Restore backup** to seed the new account from an existing local
+   `.koinlybackup`, or **Start new** to continue through Currency and Accounts.
+7. On additional devices, select **Login** and use the same owner account.
 
 No registration key is required. For safety, the self-hosted Worker accepts
 only its first account registration. After the owner exists, public

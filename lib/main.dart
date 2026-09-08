@@ -1378,6 +1378,7 @@ class AppController extends ChangeNotifier {
   bool cloudSyncBusy = false;
   bool cloudSyncPending = false;
   bool authoritativeCloudUploadPending = false;
+  bool newSyncAccountAwaitingSetupChoice = false;
   String? cloudSyncError;
   String? cloudSyncErrorCode;
   DateTime? cloudSyncLastAt;
@@ -1462,7 +1463,7 @@ class AppController extends ChangeNotifier {
     try {
       await FirebaseAnalytics.instance.logAppOpen();
     } catch (_) {}
-    if (_hasConfiguredSyncTarget()) {
+    if (_hasConfiguredSyncTarget() && !newSyncAccountAwaitingSetupChoice) {
       _schedulePendingSyncRetry(immediate: true);
       _startCloudAutoPull();
     }
@@ -1572,6 +1573,7 @@ class AppController extends ChangeNotifier {
     cloudSyncLastAt = lastSyncRaw.isEmpty ? null : DateTime.tryParse(lastSyncRaw);
     cloudSyncPending = await prefs.getBool('cloudSyncPending', false);
     authoritativeCloudUploadPending = await prefs.getBool('authoritativeCloudUploadPending', false);
+    newSyncAccountAwaitingSetupChoice = await prefs.getBool('newSyncAccountAwaitingSetupChoice', false);
     syncStatus = cloudSyncEnabled ? cloudSyncStatusText : 'Offline';
     pendingAndroidUpdatePath = await prefs.getString('pendingAndroidUpdatePath', '');
     pendingAndroidUpdateVersion = await prefs.getString('pendingAndroidUpdateVersion', '');
@@ -2002,6 +2004,7 @@ class AppController extends ChangeNotifier {
       ..writeln('- Backend build config present: ${CloudSyncService.configuredApiBaseUrl.isNotEmpty}')
       ..writeln('- Signed in: $cloudSyncEnabled')
       ..writeln('- Account: ${_maskedSyncEmail()}')
+      ..writeln('- New account setup choice pending: $newSyncAccountAwaitingSetupChoice')
       ..writeln('- Status: $syncStatus')
       ..writeln('- Pending upload operations: ${report.pendingSyncOperations}')
       ..writeln('- Open sync conflicts: ${report.openSyncConflicts}')
@@ -2074,6 +2077,7 @@ class AppController extends ChangeNotifier {
       'cloudSyncEnabled',
       'cloudSyncPending',
       'authoritativeCloudUploadPending',
+      'newSyncAccountAwaitingSetupChoice',
       'cloudSyncLastAt',
       'cloudSyncApiBaseUrl',
       'useCustomCloudSync',
@@ -2115,6 +2119,7 @@ class AppController extends ChangeNotifier {
 
   String get cloudSyncStatusText {
     if (cloudSyncBusy) return syncStatus.trim().isEmpty ? 'Online sync • Syncing...' : syncStatus;
+    if (newSyncAccountAwaitingSetupChoice) return 'Account created • Setup choice required';
     if (authoritativeCloudUploadPending) return 'Restore upload pending';
     if (cloudSyncPending) return 'Sync pending • Waiting for internet';
     if (cloudSyncErrorCode == 'SYNC_APPROVAL_REQUIRED') return 'Online sync • Admin approval required';
@@ -2790,8 +2795,19 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> registerSyncAccount({required String email, required String password, required String registrationKey}) async {
-    await _authenticateSyncAccount(register: true, email: email, password: password, registrationKey: registrationKey);
+  Future<void> registerSyncAccount({
+    required String email,
+    required String password,
+    required String registrationKey,
+    bool deferInitialDataSync = false,
+  }) async {
+    await _authenticateSyncAccount(
+      register: true,
+      email: email,
+      password: password,
+      registrationKey: registrationKey,
+      deferInitialDataSync: deferInitialDataSync,
+    );
   }
 
   Future<void> loginSyncAccount({required String email, required String password, bool preferCloudData = true}) async {
@@ -2804,6 +2820,7 @@ class AppController extends ChangeNotifier {
     required String password,
     String registrationKey = '',
     bool preferCloudData = true,
+    bool deferInitialDataSync = false,
   }) async {
     syncAuthBusy = true;
     cloudSyncError = null;
@@ -2826,9 +2843,18 @@ class AppController extends ChangeNotifier {
           : await api.login(email: email, password: password, deviceId: syncDeviceId, deviceName: _deviceName(), platform: _platformName());
       await _saveSyncSession(session);
       await database.writeSyncState('serverCursor', '0');
+      if (!register || !deferInitialDataSync) {
+        newSyncAccountAwaitingSetupChoice = false;
+        await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+      }
       final shouldUploadAuthoritativeData = authoritativeCloudUploadPending && (register || !preferCloudData);
       if (shouldUploadAuthoritativeData) {
         await uploadAuthoritativeCloudData(silent: true);
+      } else if (register && deferInitialDataSync) {
+        newSyncAccountAwaitingSetupChoice = true;
+        await prefs.setBool('newSyncAccountAwaitingSetupChoice', true);
+        await _setCloudSyncPending(false);
+        syncStatus = 'Account created • Choose setup';
       } else if (register) {
         await _repairDuplicateCategories(queueSyncChanges: false);
         await database.enqueueAllForAdoption(await exportPreferences());
@@ -2840,7 +2866,9 @@ class AppController extends ChangeNotifier {
         }
         await performMultiDeviceSync(silent: !preferCloudData, pushLocalChanges: false);
       }
-      _startCloudAutoPull();
+      if (!(register && deferInitialDataSync)) {
+        _startCloudAutoPull();
+      }
     } catch (error) {
       cloudSyncError = _cleanSyncError(error);
       syncStatus = 'Sync error';
@@ -2865,9 +2893,11 @@ class AppController extends ChangeNotifier {
     syncRefreshToken = '';
     syncAccountEmail = '';
     cloudSyncEnabled = false;
+    newSyncAccountAwaitingSetupChoice = false;
     syncStatus = 'Offline';
     await prefs.setString('syncAccountEmail', '');
     await prefs.setBool('cloudSyncEnabled', false);
+    await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
     _stopCloudAutoPull();
     syncAuthBusy = false;
     notifyListeners();
@@ -3056,6 +3086,32 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> resolveNewSyncAccountWithLocalSetup() async {
+    if (!newSyncAccountAwaitingSetupChoice) {
+      if (_hasConfiguredSyncTarget()) _startCloudAutoPull();
+      return;
+    }
+
+    newSyncAccountAwaitingSetupChoice = false;
+    await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+    await _repairDuplicateCategories(queueSyncChanges: false);
+    await database.enqueueAllForAdoption(await exportPreferences());
+    await _setCloudSyncPending(true);
+    syncStatus = 'New setup ready • Sync pending';
+    notifyListeners();
+    _startCloudAutoPull();
+    _schedulePendingSyncRetry(immediate: true);
+  }
+
+  Future<void> resolveNewSyncAccountWithRestoredData() async {
+    if (newSyncAccountAwaitingSetupChoice) {
+      newSyncAccountAwaitingSetupChoice = false;
+      await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+    }
+    await markRestoredDataForCloudUpload();
+    if (_hasConfiguredSyncTarget()) _startCloudAutoPull();
+  }
+
   Future<void> uploadAuthoritativeCloudData({bool silent = false}) async {
     if (!_hasConfiguredSyncTarget()) {
       if (!silent) {
@@ -3211,6 +3267,7 @@ class AppController extends ChangeNotifier {
 
   void queueCloudSync() {
     if (!_hasConfiguredSyncTarget()) return;
+    if (newSyncAccountAwaitingSetupChoice) return;
     _startCloudAutoPull();
     unawaited(_setCloudSyncPending(true));
     _schedulePendingSyncRetry();
@@ -3398,6 +3455,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> completeOnboarding() async {
+    if (newSyncAccountAwaitingSetupChoice && _hasConfiguredSyncTarget()) {
+      await resolveNewSyncAccountWithLocalSetup();
+    }
     onboardingCompleted = true;
     if (kIsDesktopApp) {
       desktopSetupVersionCompleted = kRequiredDesktopSetupVersion;
@@ -6102,6 +6162,154 @@ class _KoinlyPopupFrame extends StatelessWidget {
 // Onboarding
 // -----------------------------------------------------------------------------
 
+enum InitialSetupChoice { restoreBackup, startNew }
+
+Future<InitialSetupChoice?> showInitialSetupChoice(
+  BuildContext context, {
+  required bool syncAccountCreated,
+}) {
+  return showKoinlyPopup<InitialSetupChoice>(
+    context,
+    maxWidth: 560,
+    maxHeight: 620,
+    child: _InitialSetupChoicePopup(syncAccountCreated: syncAccountCreated),
+  );
+}
+
+class _InitialSetupChoicePopup extends StatelessWidget {
+  const _InitialSetupChoicePopup({required this.syncAccountCreated});
+
+  final bool syncAccountCreated;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurface.withOpacity(.66);
+
+    Widget choice({
+      required IconData icon,
+      required String title,
+      required String subtitle,
+      required InitialSetupChoice value,
+      required bool primary,
+    }) {
+      return Semantics(
+        button: true,
+        label: '$title. $subtitle',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => Navigator.pop(context, value),
+          child: Ink(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: primary
+                  ? theme.colorScheme.primary.withOpacity(theme.brightness == Brightness.dark ? .14 : .08)
+                  : theme.colorScheme.surfaceContainerHighest.withOpacity(theme.brightness == Brightness.dark ? .46 : .72),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: primary
+                    ? theme.colorScheme.primary.withOpacity(.55)
+                    : theme.colorScheme.outlineVariant.withOpacity(.72),
+                width: primary ? 1.4 : 1,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: primary
+                        ? theme.colorScheme.primary.withOpacity(.16)
+                        : theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(17),
+                  ),
+                  child: Icon(icon, color: primary ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 5),
+                      Text(subtitle, style: theme.textTheme.bodyMedium?.copyWith(color: muted, fontWeight: FontWeight.w600, height: 1.28)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 11),
+                  child: Icon(Icons.chevron_right_rounded, color: muted),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Set up this device',
+                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            syncAccountCreated
+                ? 'Your sync account is ready. Restore an existing Koinly backup or start with a clean setup on this device.'
+                : 'Restore an existing Koinly backup or start with a clean local setup.',
+            style: theme.textTheme.bodyMedium?.copyWith(color: muted, height: 1.35, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 20),
+          choice(
+            icon: Icons.restore_rounded,
+            title: 'Restore backup',
+            subtitle: syncAccountCreated
+                ? 'Choose a .koinlybackup file. Its data will replace this device and become the source for your new sync account.'
+                : 'Choose a .koinlybackup file and restore your accounts, categories, transactions, budgets, loans, and preferences.',
+            value: InitialSetupChoice.restoreBackup,
+            primary: true,
+          ),
+          const SizedBox(height: 12),
+          choice(
+            icon: Icons.add_circle_outline_rounded,
+            title: 'Start new',
+            subtitle: syncAccountCreated
+                ? 'Continue with currency and account setup. New data will sync to the account you just created.'
+                : 'Continue with currency and account setup and create a new local finance profile.',
+            value: InitialSetupChoice.startNew,
+            primary: false,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Restoring a backup replaces the current local finance data on this device.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -6112,6 +6320,59 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final controller = PageController();
   int index = 0;
+  bool choosingInitialSetup = false;
+
+  Future<bool> _restoreInitialBackup({required bool uploadToSyncAccount}) async {
+    final state = context.read<AppController>();
+    try {
+      final restored = await BackupService.restoreBackup(
+        state,
+        safetyReason: 'Before first-run backup restore',
+      );
+      if (!restored) return false;
+
+      if (uploadToSyncAccount && state.cloudSyncEnabled) {
+        await state.resolveNewSyncAccountWithRestoredData();
+      }
+      await state.completeOnboarding();
+      if (mounted) {
+        showSnack(
+          context,
+          uploadToSyncAccount && state.cloudSyncEnabled
+              ? 'Backup restored. Restored data is now the source for this sync account.'
+              : 'Backup restored. Setup is complete.',
+        );
+      }
+      return true;
+    } on FormatException catch (error) {
+      if (mounted) showSnack(context, error.message);
+    } catch (_) {
+      if (mounted) showSnack(context, 'Could not restore this backup. Please choose a valid Koinly backup file.');
+    }
+    return false;
+  }
+
+  Future<void> _chooseInitialSetup({required bool syncAccountCreated}) async {
+    if (choosingInitialSetup) return;
+    setState(() => choosingInitialSetup = true);
+    try {
+      final choice = await showInitialSetupChoice(context, syncAccountCreated: syncAccountCreated);
+      if (!mounted || choice == null) return;
+
+      if (choice == InitialSetupChoice.startNew) {
+        if (syncAccountCreated) {
+          await context.read<AppController>().resolveNewSyncAccountWithLocalSetup();
+          if (!mounted) return;
+        }
+        await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
+        return;
+      }
+
+      await _restoreInitialBackup(uploadToSyncAccount: syncAccountCreated);
+    } finally {
+      if (mounted) setState(() => choosingInitialSetup = false);
+    }
+  }
 
   Future<void> _openAccountSync({required bool createAccount}) async {
     final createdAccount = await Navigator.push<bool>(
@@ -6127,15 +6388,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
     if (!mounted || createdAccount != true) return;
 
-    // A newly registered sync account must continue through the local setup
-    // pages. This also covers users who entered through Login and then switched
-    // to "Create account instead" inside the auth screen.
-    await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
+    // Registration does not assume whether this device should start clean or
+    // restore an existing local backup. Ask immediately after account creation.
+    // This also covers users who entered through Login and then switched to
+    // "Create account instead" inside the auth screen.
+    await _chooseInitialSetup(syncAccountCreated: true);
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final signedInSetupPending = !state.onboardingCompleted && state.cloudSyncEnabled && state.syncAccountEmail.trim().isNotEmpty;
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
@@ -6159,21 +6422,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           spacing: 12,
                           runSpacing: 12,
                           children: [
-                            FilledButton.icon(
-                              onPressed: () => _openAccountSync(createAccount: false),
-                              icon: const Icon(Icons.login_rounded),
-                              label: const Text('Login'),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: () => _openAccountSync(createAccount: true),
-                              icon: const Icon(Icons.person_add_alt_rounded),
-                              label: const Text('Create account'),
-                            ),
-                            TextButton.icon(
-                              onPressed: () => controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
-                              icon: const Icon(Icons.wifi_off_rounded),
-                              label: const Text('Use offline'),
-                            ),
+                            if (signedInSetupPending)
+                              FilledButton.icon(
+                                onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: true),
+                                icon: const Icon(Icons.arrow_forward_rounded),
+                                label: const Text('Continue setup'),
+                              )
+                            else ...[
+                              FilledButton.icon(
+                                onPressed: () => _openAccountSync(createAccount: false),
+                                icon: const Icon(Icons.login_rounded),
+                                label: const Text('Login'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => _openAccountSync(createAccount: true),
+                                icon: const Icon(Icons.person_add_alt_rounded),
+                                label: const Text('Create account'),
+                              ),
+                              TextButton.icon(
+                                onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: false),
+                                icon: const Icon(Icons.wifi_off_rounded),
+                                label: const Text('Use offline'),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -6225,14 +6496,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               ),
                             ),
                           FilledButton(
-                            onPressed: () async {
+                            onPressed: choosingInitialSetup
+                                ? null
+                                : () async {
+                              if (index == 0 && signedInSetupPending) {
+                                await _chooseInitialSetup(syncAccountCreated: true);
+                                return;
+                              }
                               if (index < 3) {
                                 await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
                               } else {
                                 await state.completeOnboarding();
                               }
                             },
-                            child: Text(index < 3 ? 'Next' : 'Start'),
+                            child: Text(index == 0 && signedInSetupPending ? 'Continue' : index < 3 ? 'Next' : 'Start'),
                           ),
                         ],
                       ),
@@ -12449,6 +12726,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
 
   Future<void> _login({required bool register}) async {
     final state = context.read<AppController>();
+    final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
     if (!_isSelectedEndpointActive(state)) {
       showSnack(
         context,
@@ -12471,24 +12749,36 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
         email: _emailController.text,
         password: _passwordController.text,
         registrationKey: _useCustomCloudSync ? '' : _registrationKeyController.text,
+        deferInitialDataSync: onboardingAuthFlow,
       );
     } else {
-      await state.loginSyncAccount(email: _emailController.text, password: _passwordController.text, preferCloudData: widget.preferCloudDataOnAuth);
+      await state.loginSyncAccount(
+        email: _emailController.text,
+        password: _passwordController.text,
+        preferCloudData: onboardingAuthFlow ? true : widget.preferCloudDataOnAuth,
+      );
     }
     if (mounted && state.cloudSyncError == null) {
       _passwordController.clear();
       _registrationKeyController.clear();
-      showSnack(context, register ? 'Account created. Sync started.' : 'Signed in. Cloud data loaded.');
-      final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
+      showSnack(
+        context,
+        register
+            ? onboardingAuthFlow
+                ? 'Account created. Choose Restore backup or Start new.'
+                : 'Account created. Sync started.'
+            : 'Signed in. Cloud data loaded.',
+      );
       if (register && onboardingAuthFlow) {
         // Registration is only the first onboarding step. Never mark setup as
         // complete here, even when the user opened Login first and then changed
-        // to registration. Return a result so onboarding advances to Currency
-        // and then Accounts, where accounts can be added, edited, or removed.
+        // to registration. Return a result so onboarding can ask whether this
+        // device should restore a local backup or start a new profile.
         if (mounted) Navigator.pop(context, true);
-      } else if (!register && widget.completeOnAuth) {
+      } else if (!register && onboardingAuthFlow) {
         // Existing-account login intentionally restores the cloud copy and can
-        // finish setup immediately.
+        // finish setup immediately, even if the user first opened Create
+        // account and then switched to Login inside this screen.
         await state.completeOnboarding();
         if (mounted) Navigator.pop(context, false);
       } else if (widget.returnOnAuth) {
