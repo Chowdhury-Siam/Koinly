@@ -36,6 +36,7 @@ void main() {
     await pumpSettingsScreen(tester, const AdvancedSettingsScreen());
 
     expect(find.text('Backup'), findsOneWidget);
+    expect(find.text('Automatic local backup'), findsOneWidget);
     expect(find.text('Load backup'), findsOneWidget);
   });
 }

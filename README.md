@@ -61,7 +61,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Optional start-to-end date ranges for a transaction, with its amount counted once
 - Custom income and expense categories
 - Monthly budgets with progress tracking
-- Lending and borrowing records with contacts, repayments, due dates, and APR-based interest
+- Lending and borrowing records with contacts, timestamped repayments, start/due date and time, and APR-based interest
 - Optional account movements for loan activity without counting them as income or expense
 - Cash-flow trends, category breakdowns, and financial summaries
 - Search, date filters, and account/category filters
@@ -73,6 +73,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - No account required for local-only use
 - Encrypted `.koinlybackup` backup and restore
 - Automatic safety backups before destructive restore operations
+- Configurable local automatic backups with daily/weekly/monthly schedules, retention limits, and a selectable destination folder
 - Automatic category deduplication during restore and sync, with transaction and budget references preserved
 - Profile media is copied to private app storage and is not uploaded with finance sync data
 - Android Photos and videos access is requested only for choosing profile media

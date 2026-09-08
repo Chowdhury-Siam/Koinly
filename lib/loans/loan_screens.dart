@@ -16,7 +16,8 @@ String _loanDueLabel(Loan loan, LoanComputation computation) {
       .difference(DateTime.utc(DateTime.now().year, DateTime.now().month, DateTime.now().day))
       .inDays;
   final days = rawDays < 0 ? 0 : rawDays;
-  return days == 0 ? 'Due today' : 'Due in $days day${days == 1 ? '' : 's'}';
+  final dueTime = DateFormat('h:mm a').format(loan.dueDate!);
+  return days == 0 ? 'Due today · $dueTime' : 'Due in $days day${days == 1 ? '' : 's'} · $dueTime';
 }
 
 class LoansScreen extends StatefulWidget {
@@ -290,7 +291,7 @@ class LoanDetailScreen extends StatelessWidget {
     final remaining = loanNonNegative(computation.outstanding);
     return PageScaffold(
       title: contact?.name ?? 'Loan details',
-      subtitle: '${loan.isLent ? 'Lent' : 'Borrowed'} on ${DateFormat('MMM d, yyyy').format(loan.startDate)}',
+      subtitle: '${loan.isLent ? 'Lent' : 'Borrowed'} on ${DateFormat('MMM d, yyyy • h:mm a').format(loan.startDate)}',
       actions: [
         IconButton(
           tooltip: 'Share statement',
@@ -352,7 +353,7 @@ class LoanDetailScreen extends StatelessWidget {
               children: [
                 Expanded(child: MiniMetric('Monthly estimate', computation.emiAmount == null ? '—' : state.format(computation.emiAmount!), Icons.calculate_rounded)),
                 const SizedBox(width: 10),
-                Expanded(child: MiniMetric('Due date', loan.dueDate == null ? 'Not set' : DateFormat('MMM d, yyyy').format(loan.dueDate!), Icons.event_rounded)),
+                Expanded(child: MiniMetric('Due date', loan.dueDate == null ? 'Not set' : DateFormat('MMM d, yyyy • h:mm a').format(loan.dueDate!), Icons.event_rounded)),
               ],
             ),
           ],
@@ -374,7 +375,7 @@ class LoanDetailScreen extends StatelessWidget {
               leading: iconBubble(context, 'receipt', '#A6E3A1', size: 44),
               title: Text(state.format(payment.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
               subtitle: Text(
-                '${DateFormat('MMM d, yyyy').format(payment.paidOn)} · ${state.format(payment.interestComponent)} interest + ${state.format(payment.principalComponent)} principal',
+                '${DateFormat('MMM d, yyyy • h:mm a').format(payment.paidOn)} · ${state.format(payment.interestComponent)} interest + ${state.format(payment.principalComponent)} principal',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

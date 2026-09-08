@@ -138,8 +138,8 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
         interestType: interestType,
         interestRate: annualRate,
         interestPeriod: interestPeriod,
-        startDate: DateTime(startDate.year, startDate.month, startDate.day),
-        dueDate: dueDate == null ? null : DateTime(dueDate!.year, dueDate!.month, dueDate!.day),
+        startDate: DateTime(startDate.year, startDate.month, startDate.day, startDate.hour, startDate.minute),
+        dueDate: dueDate == null ? null : DateTime(dueDate!.year, dueDate!.month, dueDate!.day, dueDate!.hour, dueDate!.minute),
         installmentCount: installmentCount,
         interestAccrualStop: old?.interestAccrualStop ?? LoanAccrualStop.settled,
         note: note.text.trim(),
@@ -223,10 +223,35 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
           OutlinedButton.icon(
             onPressed: () async {
               final selected = await pickDate(context, startDate);
-              if (selected != null && mounted) setState(() => startDate = selected);
+              if (selected != null && mounted) {
+                setState(() => startDate = DateTime(
+                      selected.year,
+                      selected.month,
+                      selected.day,
+                      startDate.hour,
+                      startDate.minute,
+                    ));
+              }
             },
             icon: const Icon(Icons.event_rounded),
             label: Text('Start · ${DateFormat('MMM d, yyyy').format(startDate)}'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final selected = await pickTime(context, TimeOfDay.fromDateTime(startDate));
+              if (selected != null && mounted) {
+                setState(() => startDate = DateTime(
+                      startDate.year,
+                      startDate.month,
+                      startDate.day,
+                      selected.hour,
+                      selected.minute,
+                    ));
+              }
+            },
+            icon: const Icon(Icons.schedule_rounded),
+            label: Text('Time · ${DateFormat('h:mm a').format(startDate)}'),
           ),
           const SectionHeader('Interest'),
           SleekPillSelector<LoanInterestType>(
@@ -289,15 +314,43 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
             onChanged: (enabled) => setState(() => dueDate = enabled ? startDate.add(const Duration(days: 30)) : null),
             title: const Text('Set a due date', style: TextStyle(fontWeight: FontWeight.w800)),
           ),
-          if (dueDate != null)
+          if (dueDate != null) ...[
             OutlinedButton.icon(
               onPressed: () async {
-                final selected = await pickDate(context, dueDate!);
-                if (selected != null && mounted) setState(() => dueDate = selected);
+                final current = dueDate!;
+                final selected = await pickDate(context, current);
+                if (selected != null && mounted) {
+                  setState(() => dueDate = DateTime(
+                        selected.year,
+                        selected.month,
+                        selected.day,
+                        current.hour,
+                        current.minute,
+                      ));
+                }
               },
               icon: const Icon(Icons.event_available_rounded),
               label: Text('Due · ${DateFormat('MMM d, yyyy').format(dueDate!)}'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final current = dueDate!;
+                final selected = await pickTime(context, TimeOfDay.fromDateTime(current));
+                if (selected != null && mounted) {
+                  setState(() => dueDate = DateTime(
+                        current.year,
+                        current.month,
+                        current.day,
+                        selected.hour,
+                        selected.minute,
+                      ));
+                }
+              },
+              icon: const Icon(Icons.schedule_rounded),
+              label: Text('Due time · ${DateFormat('h:mm a').format(dueDate!)}'),
+            ),
+          ],
           if (!editing) ...[
             const SectionHeader('Account movement'),
             SwitchListTile(
@@ -478,10 +531,35 @@ class _LoanPaymentSheetState extends State<_LoanPaymentSheet> {
           OutlinedButton.icon(
             onPressed: () async {
               final selected = await pickDate(context, paidOn);
-              if (selected != null && mounted) setState(() => paidOn = selected);
+              if (selected != null && mounted) {
+                setState(() => paidOn = DateTime(
+                      selected.year,
+                      selected.month,
+                      selected.day,
+                      paidOn.hour,
+                      paidOn.minute,
+                    ));
+              }
             },
             icon: const Icon(Icons.event_rounded),
             label: Text(DateFormat('MMM d, yyyy').format(paidOn)),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final selected = await pickTime(context, TimeOfDay.fromDateTime(paidOn));
+              if (selected != null && mounted) {
+                setState(() => paidOn = DateTime(
+                      paidOn.year,
+                      paidOn.month,
+                      paidOn.day,
+                      selected.hour,
+                      selected.minute,
+                    ));
+              }
+            },
+            icon: const Icon(Icons.schedule_rounded),
+            label: Text('Time · ${DateFormat('h:mm a').format(paidOn)}'),
           ),
           const SizedBox(height: 8),
           SwitchListTile(

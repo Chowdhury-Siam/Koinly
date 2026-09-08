@@ -971,8 +971,11 @@ class KoinlyDatabase {
   }
 }
 
+enum AutoBackupFrequency { daily, weekly, monthly }
+
 class BackupService {
   static const String safetyBackupPrefix = 'koinly_safety_';
+  static const String automaticBackupPrefix = 'koinly_auto_';
   static const int maxSafetyBackups = 3;
 
   static String _crypt(String source) {
@@ -995,6 +998,10 @@ class BackupService {
 
   static String safetyBackupFileName() {
     return '${safetyBackupPrefix}${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.koinlybackup';
+  }
+
+  static String automaticBackupFileName() {
+    return '${automaticBackupPrefix}${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.koinlybackup';
   }
 
   static Future<Directory> backupStorageDirectory() async {
@@ -1051,6 +1058,64 @@ class BackupService {
       } catch (_) {
         // A stale safety backup should never block a real backup/restore flow.
       }
+    }
+  }
+
+  static Future<Directory> automaticBackupDirectory(String configuredPath) async {
+    final normalized = configuredPath.trim();
+    if (normalized.isEmpty) return backupStorageDirectory();
+    final directory = Directory(normalized);
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
+    }
+    return directory;
+  }
+
+  static Future<File> createAutomaticBackup(
+    AppController state, {
+    required String directoryPath,
+    required int keepCount,
+  }) async {
+    final directory = await automaticBackupDirectory(directoryPath);
+    final normalized = normalizeCategoryDatabasePayload(await state.database.exportAll());
+    final payload = {
+      'version': 7,
+      'backup_type': 'automatic',
+      'created_at': DateTime.now().toIso8601String(),
+      'database': normalized.database,
+      'preferences': remapCategoryPreferences(await state.exportPreferences(), normalized.plan),
+    };
+    final file = File(p.join(directory.path, automaticBackupFileName()));
+    await file.writeAsString(_crypt(jsonEncode(payload)), flush: true);
+    await pruneAutomaticBackups(directory, keepCount);
+    return file;
+  }
+
+  static Future<void> pruneAutomaticBackups(Directory directory, int keepCount) async {
+    final safeKeepCount = keepCount.clamp(1, 100).toInt();
+    final files = await directory
+        .list()
+        .where((entity) =>
+            entity is File &&
+            p.basename(entity.path).startsWith(automaticBackupPrefix) &&
+            entity.path.toLowerCase().endsWith('.koinlybackup'))
+        .cast<File>()
+        .toList();
+    files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+    for (final stale in files.skip(safeKeepCount)) {
+      try {
+        await stale.delete();
+      } catch (_) {
+        // Retention cleanup should not invalidate a backup that was just written.
+      }
+    }
+  }
+
+  static Future<String?> pickAutomaticBackupDirectory() async {
+    try {
+      return await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose automatic backup folder');
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1345,6 +1410,19 @@ class AppController extends ChangeNotifier {
   String pendingWindowsUpdateVersion = '';
   String lastSafetyBackupPath = '';
   DateTime? lastSafetyBackupAt;
+  bool autoBackupEnabled = false;
+  AutoBackupFrequency autoBackupFrequency = AutoBackupFrequency.daily;
+  int autoBackupHour = 2;
+  int autoBackupMinute = 0;
+  int autoBackupWeekday = DateTime.sunday;
+  int autoBackupMonthDay = 1;
+  int autoBackupKeepCount = 5;
+  String autoBackupDirectoryPath = '';
+  String lastAutoBackupPath = '';
+  DateTime? lastAutoBackupAt;
+  String? autoBackupError;
+  bool _autoBackupInFlight = false;
+  Timer? _autoBackupTimer;
   DataHealthReport? dataHealthReport;
   bool dataHealthBusy = false;
   String? _shownUpdateDialogVersionThisSession;
@@ -1388,6 +1466,7 @@ class AppController extends ChangeNotifier {
       _schedulePendingSyncRetry(immediate: true);
       _startCloudAutoPull();
     }
+    unawaited(runAutomaticBackupIfDue());
   }
 
   Future<void> _loadPreferences() async {
@@ -1519,6 +1598,18 @@ class AppController extends ChangeNotifier {
       await prefs.setString('lastSafetyBackupPath', '');
       await prefs.setString('lastSafetyBackupAt', '');
     }
+    autoBackupEnabled = await prefs.getBool('autoBackupEnabled', false);
+    autoBackupFrequency = await prefs.getEnum('autoBackupFrequency', AutoBackupFrequency.values, AutoBackupFrequency.daily);
+    autoBackupHour = (await prefs.getInt('autoBackupHour', 2)).clamp(0, 23).toInt();
+    autoBackupMinute = (await prefs.getInt('autoBackupMinute', 0)).clamp(0, 59).toInt();
+    autoBackupWeekday = (await prefs.getInt('autoBackupWeekday', DateTime.sunday)).clamp(DateTime.monday, DateTime.sunday).toInt();
+    autoBackupMonthDay = (await prefs.getInt('autoBackupMonthDay', 1)).clamp(1, 28).toInt();
+    autoBackupKeepCount = (await prefs.getInt('autoBackupKeepCount', 5)).clamp(1, 100).toInt();
+    autoBackupDirectoryPath = await prefs.getString('autoBackupDirectoryPath', '');
+    lastAutoBackupPath = await prefs.getString('lastAutoBackupPath', '');
+    final autoBackupAtRaw = await prefs.getString('lastAutoBackupAt', '');
+    lastAutoBackupAt = autoBackupAtRaw.isEmpty ? null : DateTime.tryParse(autoBackupAtRaw);
+    autoBackupError = null;
   }
 
   String get lastSafetyBackupLabel {
@@ -1554,6 +1645,159 @@ class AppController extends ChangeNotifier {
     await BackupService.restoreBackupFile(this, File(lastSafetyBackupPath));
     await markRestoredDataForCloudUpload();
     return true;
+  }
+
+  TimeOfDay get autoBackupTime => TimeOfDay(hour: autoBackupHour, minute: autoBackupMinute);
+
+  String get autoBackupFrequencyLabel => switch (autoBackupFrequency) {
+        AutoBackupFrequency.daily => 'Daily',
+        AutoBackupFrequency.weekly => 'Weekly',
+        AutoBackupFrequency.monthly => 'Monthly',
+      };
+
+  String get autoBackupLocationLabel {
+    if (autoBackupDirectoryPath.trim().isEmpty) return 'App storage';
+    final normalized = p.normalize(autoBackupDirectoryPath.trim());
+    final name = p.basename(normalized);
+    return name.isEmpty ? normalized : name;
+  }
+
+  String get automaticBackupSettingsSummary {
+    if (!autoBackupEnabled) return 'Off';
+    final when = DateFormat('h:mm a').format(DateTime(2000, 1, 1, autoBackupHour, autoBackupMinute));
+    return '$autoBackupFrequencyLabel at $when • keep $autoBackupKeepCount • $autoBackupLocationLabel';
+  }
+
+  String get lastAutoBackupLabel {
+    if (lastAutoBackupAt == null) return 'No automatic backup yet';
+    return 'Last saved ${DateFormat('MMM d, yyyy • h:mm a').format(lastAutoBackupAt!.toLocal())}';
+  }
+
+  String get nextAutoBackupLabel {
+    if (!autoBackupEnabled) return 'Automatic backup is off';
+    if (automaticBackupDue) return 'Backup due now';
+    final next = _nextAutoBackupSlot(DateTime.now());
+    return 'Next ${DateFormat('MMM d, yyyy • h:mm a').format(next)}';
+  }
+
+  DateTime _mostRecentAutoBackupSlot(DateTime now) {
+    DateTime atTime(DateTime day) => DateTime(day.year, day.month, day.day, autoBackupHour, autoBackupMinute);
+    switch (autoBackupFrequency) {
+      case AutoBackupFrequency.daily:
+        var target = atTime(now);
+        if (target.isAfter(now)) target = target.subtract(const Duration(days: 1));
+        return target;
+      case AutoBackupFrequency.weekly:
+        final daysBack = (now.weekday - autoBackupWeekday + 7) % 7;
+        var day = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysBack));
+        var target = atTime(day);
+        if (target.isAfter(now)) {
+          day = day.subtract(const Duration(days: 7));
+          target = atTime(day);
+        }
+        return target;
+      case AutoBackupFrequency.monthly:
+        var target = DateTime(now.year, now.month, autoBackupMonthDay, autoBackupHour, autoBackupMinute);
+        if (target.isAfter(now)) {
+          target = DateTime(now.year, now.month - 1, autoBackupMonthDay, autoBackupHour, autoBackupMinute);
+        }
+        return target;
+    }
+  }
+
+  DateTime _nextAutoBackupSlot(DateTime now) {
+    final latest = _mostRecentAutoBackupSlot(now);
+    return switch (autoBackupFrequency) {
+      AutoBackupFrequency.daily => latest.add(const Duration(days: 1)),
+      AutoBackupFrequency.weekly => latest.add(const Duration(days: 7)),
+      AutoBackupFrequency.monthly => DateTime(latest.year, latest.month + 1, autoBackupMonthDay, autoBackupHour, autoBackupMinute),
+    };
+  }
+
+  bool get automaticBackupDue {
+    if (!autoBackupEnabled) return false;
+    final latestSlot = _mostRecentAutoBackupSlot(DateTime.now());
+    return lastAutoBackupAt == null || lastAutoBackupAt!.isBefore(latestSlot);
+  }
+
+  void _scheduleAutomaticBackupTimer() {
+    _autoBackupTimer?.cancel();
+    _autoBackupTimer = null;
+    if (!autoBackupEnabled || loading) return;
+    final now = DateTime.now();
+    final next = _nextAutoBackupSlot(now);
+    var delay = next.difference(now);
+    if (delay.isNegative) delay = const Duration(seconds: 1);
+    _autoBackupTimer = Timer(delay + const Duration(seconds: 1), () {
+      unawaited(runAutomaticBackupIfDue());
+    });
+  }
+
+  Future<File?> runAutomaticBackupIfDue({bool force = false}) async {
+    if ((!autoBackupEnabled && !force) || _autoBackupInFlight || loading) return null;
+    if (!force && !automaticBackupDue) {
+      _scheduleAutomaticBackupTimer();
+      return null;
+    }
+    _autoBackupInFlight = true;
+    try {
+      final file = await BackupService.createAutomaticBackup(
+        this,
+        directoryPath: autoBackupDirectoryPath,
+        keepCount: autoBackupKeepCount,
+      );
+      lastAutoBackupPath = file.path;
+      lastAutoBackupAt = DateTime.now();
+      autoBackupError = null;
+      await prefs.setString('lastAutoBackupPath', lastAutoBackupPath);
+      await prefs.setString('lastAutoBackupAt', lastAutoBackupAt!.toIso8601String());
+      notifyListeners();
+      return file;
+    } catch (error) {
+      autoBackupError = error.toString().replaceFirst('FileSystemException: ', '').trim();
+      notifyListeners();
+      return null;
+    } finally {
+      _autoBackupInFlight = false;
+      _scheduleAutomaticBackupTimer();
+    }
+  }
+
+  Future<void> setAutomaticBackupSettings({
+    required bool enabled,
+    required AutoBackupFrequency frequency,
+    required TimeOfDay time,
+    required int weekday,
+    required int monthDay,
+    required int keepCount,
+    required String directoryPath,
+  }) async {
+    final normalizedDirectory = directoryPath.trim();
+    final shouldSeedBackup = enabled && (!autoBackupEnabled || normalizedDirectory != autoBackupDirectoryPath.trim());
+    autoBackupEnabled = enabled;
+    autoBackupFrequency = frequency;
+    autoBackupHour = time.hour.clamp(0, 23).toInt();
+    autoBackupMinute = time.minute.clamp(0, 59).toInt();
+    autoBackupWeekday = weekday.clamp(DateTime.monday, DateTime.sunday).toInt();
+    autoBackupMonthDay = monthDay.clamp(1, 28).toInt();
+    autoBackupKeepCount = keepCount.clamp(1, 100).toInt();
+    autoBackupDirectoryPath = normalizedDirectory;
+    autoBackupError = null;
+    await prefs.setBool('autoBackupEnabled', autoBackupEnabled);
+    await prefs.setEnum('autoBackupFrequency', autoBackupFrequency);
+    await prefs.setInt('autoBackupHour', autoBackupHour);
+    await prefs.setInt('autoBackupMinute', autoBackupMinute);
+    await prefs.setInt('autoBackupWeekday', autoBackupWeekday);
+    await prefs.setInt('autoBackupMonthDay', autoBackupMonthDay);
+    await prefs.setInt('autoBackupKeepCount', autoBackupKeepCount);
+    await prefs.setString('autoBackupDirectoryPath', autoBackupDirectoryPath);
+    notifyListeners();
+    if (autoBackupEnabled) {
+      await runAutomaticBackupIfDue(force: shouldSeedBackup);
+    } else {
+      _autoBackupTimer?.cancel();
+      _autoBackupTimer = null;
+    }
   }
 
   Future<DataHealthReport> checkDataHealth() async {
@@ -2991,6 +3235,7 @@ class AppController extends ChangeNotifier {
     _cloudSyncDebounce?.cancel();
     _cloudSyncRetryTimer?.cancel();
     _cloudSyncAutoPullTimer?.cancel();
+    _autoBackupTimer?.cancel();
     _updateDownloadClient?.close();
     updateService.close();
     super.dispose();
@@ -4211,6 +4456,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       unawaited(controller.resumePendingAndroidInstallIfAllowed());
       unawaited(controller.syncCloudChangesIfIdle(force: true));
       unawaited(controller.refreshLoanReminders());
+      unawaited(controller.runAutomaticBackupIfDue());
       _scheduleAutomaticUpdateCheck();
     }
   }
@@ -14167,6 +14413,280 @@ class _ReminderSheetState extends State<ReminderSheet> {
   }
 }
 
+void showAutomaticBackupSheet(BuildContext context) {
+  showKoinlyPopup<void>(
+    context,
+    maxWidth: 560,
+    maxHeight: 760,
+    barrierDismissible: false,
+    child: const _AutomaticBackupSheet(),
+  );
+}
+
+class _AutomaticBackupSheet extends StatefulWidget {
+  const _AutomaticBackupSheet();
+
+  @override
+  State<_AutomaticBackupSheet> createState() => _AutomaticBackupSheetState();
+}
+
+class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
+  late bool enabled;
+  late AutoBackupFrequency frequency;
+  late TimeOfDay time;
+  late int weekday;
+  late int monthDay;
+  late int keepCount;
+  late String directoryPath;
+  bool saving = false;
+
+  static const _weekdayLabels = <int, String>{
+    DateTime.monday: 'Monday',
+    DateTime.tuesday: 'Tuesday',
+    DateTime.wednesday: 'Wednesday',
+    DateTime.thursday: 'Thursday',
+    DateTime.friday: 'Friday',
+    DateTime.saturday: 'Saturday',
+    DateTime.sunday: 'Sunday',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    enabled = state.autoBackupEnabled;
+    frequency = state.autoBackupFrequency;
+    time = state.autoBackupTime;
+    weekday = state.autoBackupWeekday;
+    monthDay = state.autoBackupMonthDay;
+    keepCount = state.autoBackupKeepCount;
+    directoryPath = state.autoBackupDirectoryPath;
+  }
+
+  Future<void> _chooseDirectory() async {
+    final selected = await BackupService.pickAutomaticBackupDirectory();
+    if (selected != null && selected.trim().isNotEmpty && mounted) {
+      setState(() => directoryPath = selected.trim());
+    }
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    setState(() => saving = true);
+    final state = context.read<AppController>();
+    await state.setAutomaticBackupSettings(
+      enabled: enabled,
+      frequency: frequency,
+      time: time,
+      weekday: weekday,
+      monthDay: monthDay,
+      keepCount: keepCount,
+      directoryPath: directoryPath,
+    );
+    if (!mounted) return;
+    if (enabled && state.autoBackupError != null && state.autoBackupError!.isNotEmpty) {
+      setState(() => saving = false);
+      showSnack(context, 'Automatic backup could not write to the selected location.');
+      return;
+    }
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final locationText = directoryPath.trim().isEmpty ? 'Koinly app storage' : directoryPath.trim();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Automatic local backup',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(onPressed: saving ? null : () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: enabled,
+            onChanged: saving ? null : (value) => setState(() => enabled = value),
+            title: const Text('Back up automatically', style: TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: const Text('Creates encrypted .koinlybackup files on this device.'),
+          ),
+          const SectionHeader('When to back up'),
+          SleekPillSelector<AutoBackupFrequency>(
+            options: const [
+              SleekPillOption(value: AutoBackupFrequency.daily, label: 'Daily'),
+              SleekPillOption(value: AutoBackupFrequency.weekly, label: 'Weekly'),
+              SleekPillOption(value: AutoBackupFrequency.monthly, label: 'Monthly'),
+            ],
+            selected: frequency,
+            onChanged: (value) {
+              if (!saving) setState(() => frequency = value);
+            },
+          ),
+          const SizedBox(height: 10),
+          if (frequency == AutoBackupFrequency.weekly)
+            DropdownButtonFormField<int>(
+              value: weekday,
+              decoration: const InputDecoration(labelText: 'Backup day'),
+              items: _weekdayLabels.entries
+                  .map((entry) => DropdownMenuItem<int>(value: entry.key, child: Text(entry.value)))
+                  .toList(),
+              onChanged: saving
+                  ? null
+                  : (value) {
+                      if (value != null) setState(() => weekday = value);
+                    },
+            ),
+          if (frequency == AutoBackupFrequency.monthly)
+            DropdownButtonFormField<int>(
+              value: monthDay,
+              decoration: const InputDecoration(labelText: 'Day of month'),
+              items: List<DropdownMenuItem<int>>.generate(
+                28,
+                (index) => DropdownMenuItem<int>(value: index + 1, child: Text('Day ${index + 1}')),
+              ),
+              onChanged: saving
+                  ? null
+                  : (value) {
+                      if (value != null) setState(() => monthDay = value);
+                    },
+            ),
+          if (frequency != AutoBackupFrequency.daily) const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: saving
+                ? null
+                : () async {
+                    final selected = await pickTime(context, time);
+                    if (selected != null && mounted) setState(() => time = selected);
+                  },
+            icon: const Icon(Icons.schedule_rounded),
+            label: Text('Time · ${time.format(context)}'),
+          ),
+          const SectionHeader('How many to keep'),
+          ExpressiveCard(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text('Automatic backups to keep', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                    Text('$keepCount', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900)),
+                  ],
+                ),
+                Slider(
+                  value: keepCount.toDouble(),
+                  min: 1,
+                  max: 100,
+                  divisions: 99,
+                  label: '$keepCount',
+                  onChanged: saving ? null : (value) => setState(() => keepCount = value.round()),
+                ),
+                Text(
+                  'Older automatic backups are deleted after a new one is saved. Manual and safety backups are never pruned by this setting.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          const SectionHeader('Where to back up'),
+          ExpressiveCard(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.folder_rounded, color: kSleekAccent),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        locationText,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: saving ? null : _chooseDirectory,
+                        icon: const Icon(Icons.drive_folder_upload_rounded),
+                        label: const Text('Choose folder'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: saving ? null : () => setState(() => directoryPath = ''),
+                        child: const Text('App storage'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            state.lastAutoBackupLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
+          ),
+          if (state.autoBackupEnabled) ...[
+            const SizedBox(height: 3),
+            Text(
+              state.nextAutoBackupLabel,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+          ],
+          if (state.autoBackupError != null && state.autoBackupError!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Last automatic backup failed: ${state.autoBackupError}',
+              style: const TextStyle(color: kSleekExpense, fontWeight: FontWeight.w800),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            'If Koinly is closed at the scheduled time, the missed backup is created the next time the app opens or resumes.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(child: OutlinedButton(onPressed: saving ? null : () => Navigator.pop(context), child: const Text('Cancel'))),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: saving ? null : _save,
+                  child: Text(saving ? 'Saving...' : 'Save backup settings'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class AdvancedSettingsScreen extends StatelessWidget {
   const AdvancedSettingsScreen({super.key});
 
@@ -14183,6 +14703,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
           SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
           SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
+          SettingsTile(icon: Icons.history_toggle_off_rounded, title: 'Automatic local backup', subtitle: state.automaticBackupSettingsSummary, color: '#7FE7D4', onTap: () => showAutomaticBackupSheet(context)),
           SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and overwrite this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(
             icon: Icons.fact_check_rounded,

@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1065] - 2026-09-09
+
+### Added
+- Loan start dates, due dates, and repayment records now include an editable time as well as a date. Existing loan records remain compatible and continue to load normally.
+- Added **Advanced settings > Automatic local backup** with daily, weekly, or monthly scheduling, a selectable backup time, configurable retention count, and a selectable local backup folder.
+- Automatic backups use separate `koinly_auto_*.koinlybackup` files, prune only older automatic backups, and never delete manual or safety backups.
+- Missed scheduled backups are created when Koinly next opens or resumes, and the settings screen shows the last/next automatic backup state.
+
+### Changed
+- Loan detail and payment history now display the recorded time alongside the date.
+
 ## [1.0.1064] - 2026-09-07
 
 ### Fixed
