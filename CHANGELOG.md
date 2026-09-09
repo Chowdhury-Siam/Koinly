@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.1069] - 2026-09-09
+
+### Added
+- Added a **Plan** floating action button on the Transaction tab for purchase planning.
+- Added a dedicated Plan page where users can create and edit items with an expected price and expense category.
+- Planned items can be purchased directly: Koinly opens a centered account chooser, creates an expense transaction with the current date/time, deducts the selected account, and removes the completed planned item.
+- Planned purchases are included in local backups, merge restores, category deduplication, and multi-device sync.
+
+### Changed
+- Planned purchase records participate in the same non-destructive merge and conflict-resolution pipeline as the rest of the finance database.
+- Category deduplication now remaps planned-item category references as well as transaction and budget references.
+
 ## [1.0.1068] - 2026-09-09
 
 ### Changed

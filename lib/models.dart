@@ -257,6 +257,59 @@ class Category {
       );
 }
 
+
+class PlannedPurchase {
+  PlannedPurchase({
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.categoryId,
+    required this.createdOn,
+    required this.updatedOn,
+  });
+
+  final String id;
+  final String name;
+  final double amount;
+  final String categoryId;
+  final DateTime createdOn;
+  final DateTime updatedOn;
+
+  PlannedPurchase copyWith({
+    String? id,
+    String? name,
+    double? amount,
+    String? categoryId,
+    DateTime? createdOn,
+    DateTime? updatedOn,
+  }) => PlannedPurchase(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        amount: amount ?? this.amount,
+        categoryId: categoryId ?? this.categoryId,
+        createdOn: createdOn ?? this.createdOn,
+        updatedOn: updatedOn ?? this.updatedOn,
+      );
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'name': name,
+        'amount': amount,
+        'category_id': categoryId,
+        'created_on': dateToDb(createdOn),
+        'updated_on': dateToDb(updatedOn),
+      };
+
+  static PlannedPurchase fromMap(Map<String, Object?> map) => PlannedPurchase(
+        id: map['id'] as String,
+        name: map['name'] as String? ?? '',
+        amount: (map['amount'] as num? ?? 0).toDouble(),
+        categoryId: map['category_id'] as String? ?? '',
+        createdOn: dateFromDb(map['created_on']),
+        updatedOn: dateFromDb(map['updated_on']),
+      );
+}
+
 class MoneyTransaction {
   MoneyTransaction({
     required this.id,

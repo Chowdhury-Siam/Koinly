@@ -105,17 +105,20 @@ class CategoryDatabaseMergeResult {
   const CategoryDatabaseMergeResult({
     required this.plan,
     required this.updatedTransactionIds,
+    required this.updatedPlannedPurchaseIds,
     required this.updatedBudgetReferences,
   });
 
   static const empty = CategoryDatabaseMergeResult(
     plan: CategoryMergePlan.empty,
     updatedTransactionIds: <String>{},
+    updatedPlannedPurchaseIds: <String>{},
     updatedBudgetReferences: <BudgetCategoryReferenceMerge>[],
   );
 
   final CategoryMergePlan plan;
   final Set<String> updatedTransactionIds;
+  final Set<String> updatedPlannedPurchaseIds;
   final List<BudgetCategoryReferenceMerge> updatedBudgetReferences;
 
   bool get hasChanges => plan.hasChanges;
@@ -130,7 +133,7 @@ class KoinlyDatabase {
     final path = p.join(dir, 'koinly_flutter.db');
     _db = await sql.openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seed(database);
@@ -169,6 +172,16 @@ class KoinlyDatabase {
         type TEXT NOT NULL,
         icon_name TEXT NOT NULL,
         icon_color TEXT NOT NULL,
+        created_on INTEGER NOT NULL,
+        updated_on INTEGER NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS planned_purchases(
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category_id TEXT NOT NULL,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
       )
@@ -599,6 +612,7 @@ class KoinlyDatabase {
     if (!plan.hasChanges) return CategoryDatabaseMergeResult.empty;
 
     final updatedTransactionIds = <String>{};
+    final updatedPlannedPurchaseIds = <String>{};
     final updatedBudgetReferences = <BudgetCategoryReferenceMerge>[];
     final budgetReferenceKeys = <String>{};
     await database.transaction((txn) async {
@@ -617,6 +631,10 @@ class KoinlyDatabase {
         final transactionRows = await txn.query('transactions', columns: ['id'], where: 'category_id = ?', whereArgs: [duplicateId]);
         updatedTransactionIds.addAll(transactionRows.map((row) => row['id']?.toString() ?? '').where((id) => id.isNotEmpty));
         await txn.update('transactions', {'category_id': canonicalId}, where: 'category_id = ?', whereArgs: [duplicateId]);
+
+        final plannedRows = await txn.query('planned_purchases', columns: ['id'], where: 'category_id = ?', whereArgs: [duplicateId]);
+        updatedPlannedPurchaseIds.addAll(plannedRows.map((row) => row['id']?.toString() ?? '').where((id) => id.isNotEmpty));
+        await txn.update('planned_purchases', {'category_id': canonicalId, 'updated_on': now}, where: 'category_id = ?', whereArgs: [duplicateId]);
 
         final budgetRows = await txn.query('budget_categories', columns: ['budget_id'], where: 'category_id = ?', whereArgs: [duplicateId]);
         for (final row in budgetRows) {
@@ -644,8 +662,67 @@ class KoinlyDatabase {
     return CategoryDatabaseMergeResult(
       plan: plan,
       updatedTransactionIds: Set.unmodifiable(updatedTransactionIds),
+      updatedPlannedPurchaseIds: Set.unmodifiable(updatedPlannedPurchaseIds),
       updatedBudgetReferences: List.unmodifiable(updatedBudgetReferences),
     );
+  }
+
+  Future<List<PlannedPurchase>> plannedPurchases() async {
+    final maps = await (await db).query(
+      'planned_purchases',
+      orderBy: 'updated_on DESC, created_on DESC',
+    );
+    return maps.map(PlannedPurchase.fromMap).toList();
+  }
+
+  Future<void> upsertPlannedPurchase(PlannedPurchase item) async {
+    await (await db).insert(
+      'planned_purchases',
+      item.toMap(),
+      conflictAlgorithm: sql.ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deletePlannedPurchase(String id) async {
+    await (await db).delete('planned_purchases', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<MoneyTransaction> purchasePlannedItem(
+    PlannedPurchase item,
+    String accountId,
+  ) async {
+    final database = await db;
+    final now = DateTime.now();
+    final transaction = MoneyTransaction(
+      id: _uuid.v4(),
+      type: MoneyTransactionType.expense,
+      amount: item.amount,
+      title: item.name,
+      notes: '',
+      categoryId: item.categoryId,
+      fromAccountId: accountId,
+      linkedEntityType: 'purchase_plan',
+      linkedEntityId: item.id,
+      createdOn: now,
+      updatedOn: now,
+    );
+
+    await database.transaction((txn) async {
+      final accountRows = await txn.query('accounts', columns: ['id'], where: 'id = ?', whereArgs: [accountId], limit: 1);
+      if (accountRows.isEmpty) throw StateError('Selected account no longer exists.');
+      final categoryRows = await txn.query('categories', columns: ['id', 'type'], where: 'id = ?', whereArgs: [item.categoryId], limit: 1);
+      if (categoryRows.isEmpty || categoryRows.first['type'] != enumName(CategoryType.expense)) {
+        throw StateError('Selected expense category no longer exists.');
+      }
+      final planRows = await txn.query('planned_purchases', columns: ['id'], where: 'id = ?', whereArgs: [item.id], limit: 1);
+      if (planRows.isEmpty) throw StateError('This planned item no longer exists.');
+
+      await txn.insert('transactions', transaction.toMap(), conflictAlgorithm: sql.ConflictAlgorithm.abort);
+      await _applyTransaction(txn, transaction, 1);
+      await txn.delete('planned_purchases', where: 'id = ?', whereArgs: [item.id]);
+    });
+
+    return transaction;
   }
 
   Future<List<MoneyTransaction>> transactions() async {
@@ -765,7 +842,7 @@ class KoinlyDatabase {
 
   Future<Map<String, dynamic>> exportAll() async {
     final database = await db;
-    final tables = ['accounts', 'categories', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
+    final tables = ['accounts', 'categories', 'planned_purchases', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
     final data = <String, dynamic>{};
     for (final table in tables) {
       data[table] = await database.query(table);
@@ -776,7 +853,7 @@ class KoinlyDatabase {
   Future<CategoryMergePlan> importAll(Map<String, dynamic> data) async {
     final database = await db;
     final normalized = normalizeCategoryDatabasePayload(data);
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'planned_purchases', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -801,7 +878,7 @@ class KoinlyDatabase {
 
   Future<bool> hasLocalUserActivity() async {
     final database = await db;
-    for (final table in ['transactions', 'budgets', 'loans']) {
+    for (final table in ['planned_purchases', 'transactions', 'budgets', 'loans']) {
       final rows = await database.query(table, columns: ['COUNT(*) AS count']);
       if ((rows.first['count'] as num? ?? 0).toInt() > 0) return true;
     }
@@ -810,7 +887,7 @@ class KoinlyDatabase {
 
   Future<void> clearFinanceDataForRemoteLogin() async {
     final database = await db;
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'planned_purchases', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -824,6 +901,7 @@ class KoinlyDatabase {
   static const syncTables = [
     'accounts',
     'categories',
+    'planned_purchases',
     'transactions',
     'budgets',
     'budget_accounts',
@@ -1550,6 +1628,7 @@ class AppController extends ChangeNotifier {
 
   List<Account> accounts = [];
   List<Category> categories = [];
+  List<PlannedPurchase> plannedPurchases = [];
   List<MoneyTransaction> transactions = [];
   List<Budget> budgets = [];
   LoanRepository? _loanRepository;
@@ -3766,6 +3845,10 @@ class AppController extends ChangeNotifier {
       for (final transactionId in transactionIds) {
         await database.enqueueTableRow('transactions', transactionId);
       }
+      final plannedPurchaseIds = result.updatedPlannedPurchaseIds.toList()..sort();
+      for (final plannedPurchaseId in plannedPurchaseIds) {
+        await database.enqueueTableRow('planned_purchases', plannedPurchaseId);
+      }
       final budgetReferences = result.updatedBudgetReferences.toList()
         ..sort((first, second) {
           final byBudget = first.budgetId.compareTo(second.budgetId);
@@ -3818,6 +3901,7 @@ class AppController extends ChangeNotifier {
     }
     accounts = await database.accounts();
     categories = await database.categories();
+    plannedPurchases = await database.plannedPurchases();
     transactions = await database.transactions();
     budgets = await database.budgets();
     loanContacts = await loanRepository.contacts(includeArchived: true);
@@ -4272,6 +4356,26 @@ class AppController extends ChangeNotifier {
   Future<void> deleteCategory(String id) async {
     await database.enqueueDelete('categories', id);
     await database.deleteCategory(id);
+    await reload(queueSync: true);
+  }
+
+  Future<void> savePlannedPurchase(PlannedPurchase item) async {
+    await database.upsertPlannedPurchase(item);
+    await database.enqueueTableRow('planned_purchases', item.id);
+    await reload(queueSync: true);
+  }
+
+  Future<void> deletePlannedPurchase(String id) async {
+    await database.enqueueDelete('planned_purchases', id);
+    await database.deletePlannedPurchase(id);
+    await reload(queueSync: true);
+  }
+
+  Future<void> purchasePlannedItem(PlannedPurchase item, String accountId) async {
+    final transaction = await database.purchasePlannedItem(item, accountId);
+    await database.enqueueTableRow('transactions', transaction.id);
+    await database.enqueueDelete('planned_purchases', item.id);
+    await database.enqueueRowsForTable('accounts');
     await reload(queueSync: true);
   }
 
@@ -5061,6 +5165,20 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             label: const Text('Add'),
           )
         : null;
+    final Widget? planButton = tabIndex == kTransactionTabIndex
+        ? SizedBox(
+            width: 128,
+            child: FloatingActionButton.extended(
+              heroTag: 'transactionPlanFab',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PurchasePlanScreen()),
+              ),
+              icon: const Icon(Icons.event_note_rounded),
+              label: const Text('Plan'),
+            ),
+          )
+        : null;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -5093,6 +5211,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                         child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
+                    if (planButton != null)
+                      Positioned(
+                        left: useDesktopNavigation
+                            ? 34
+                            : math.max(20.0, constraints.maxWidth * .247 - 64.0),
+                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
+                        child: planButton,
+                      ),
                     if (actionButton != null)
                       Positioned(
                         right: useDesktopNavigation ? 34 : 28,
@@ -9501,6 +9627,415 @@ class _CategoryEditorState extends State<CategoryEditor> {
             ]),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+// Purchase plan
+// -----------------------------------------------------------------------------
+
+class PurchasePlanScreen extends StatelessWidget {
+  const PurchasePlanScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final items = state.plannedPurchases;
+    return PageScaffold(
+      title: 'Plan',
+      subtitle: '${items.length} ${items.length == 1 ? 'item' : 'items'} to buy later',
+      actions: [
+        IconButton(
+          tooltip: 'Add planned item',
+          onPressed: () => showPlannedPurchaseEditor(context),
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
+      child: ResponsiveListContent(
+        itemCount: items.length,
+        empty: EmptyCard(
+          icon: Icons.event_note_rounded,
+          title: 'Nothing planned yet',
+          body: 'Add something you want to buy later, including its expected price and expense category.',
+          action: () => showPlannedPurchaseEditor(context),
+          actionLabel: 'Add item',
+        ),
+        itemBuilder: (context, index) => PlannedPurchaseTile(item: items[index]),
+      ),
+    );
+  }
+}
+
+class PlannedPurchaseTile extends StatelessWidget {
+  const PlannedPurchaseTile({super.key, required this.item});
+
+  final PlannedPurchase item;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final category = state.categoryOf(item.categoryId);
+    final categoryName = category?.name ?? 'Missing category';
+    final iconName = category?.iconName ?? 'category';
+    final iconColor = category?.iconColor ?? '#78D8E8';
+
+    return ExpressiveCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          iconBubble(context, iconName, iconColor),
+          const SizedBox(width: 14),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: () => showPlannedPurchaseEditor(context, item: item),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$categoryName • ${state.format(item.amount)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          IconButton(
+            tooltip: 'Edit item',
+            onPressed: () => showPlannedPurchaseEditor(context, item: item),
+            icon: const Icon(Icons.edit_rounded),
+          ),
+          const SizedBox(width: 4),
+          FilledButton(
+            onPressed: () => showPurchasePlannedItemDialog(context, item),
+            child: const Text('Buy'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> showPlannedPurchaseEditor(
+  BuildContext context, {
+  PlannedPurchase? item,
+}) async {
+  await showKoinlyPopup<void>(
+    context,
+    maxWidth: 560,
+    maxHeight: 600,
+    child: PlannedPurchaseEditor(item: item),
+  );
+}
+
+class PlannedPurchaseEditor extends StatefulWidget {
+  const PlannedPurchaseEditor({super.key, this.item});
+
+  final PlannedPurchase? item;
+
+  @override
+  State<PlannedPurchaseEditor> createState() => _PlannedPurchaseEditorState();
+}
+
+class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
+  final name = TextEditingController();
+  final amount = TextEditingController();
+  String? categoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    final item = widget.item;
+    if (item != null) {
+      name.text = item.name;
+      amount.text = item.amount.toStringAsFixed(2);
+      categoryId = item.categoryId;
+    } else {
+      amount.text = '';
+      categoryId = state.defaultExpenseCategoryId ??
+          state.categories.where((category) => category.type == CategoryType.expense).firstOrNull?.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    amount.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final expenseCategories = state.categories.where((category) => category.type == CategoryType.expense).toList();
+    final selectedCategory = expenseCategories.where((category) => category.id == categoryId).firstOrNull;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.item == null ? 'Add planned item' : 'Edit planned item',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: name,
+              textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.sentences,
+              maxLength: 100,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.shopping_bag_outlined),
+                labelText: 'Item name',
+                hintText: 'Example: Headphones',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textInputAction: TextInputAction.next,
+              inputFormatters: [
+                TextInputFormatter.withFunction((oldValue, newValue) {
+                  final value = newValue.text;
+                  if (value.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(value)) return newValue;
+                  return oldValue;
+                }),
+              ],
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.payments_outlined),
+                labelText: 'Expected price',
+              ),
+            ),
+            const SizedBox(height: 12),
+            AppleSelectionField(
+              label: 'Category',
+              option: selectedCategory == null ? null : optionFromCategory(selectedCategory),
+              emptyText: expenseCategories.isEmpty ? 'No expense categories available' : 'Choose expense category',
+              onTap: expenseCategories.isEmpty
+                  ? () => showSnack(context, 'Add an expense category first.')
+                  : () async {
+                      final selected = await showAppleWheelSelectionSheet(
+                        context,
+                        title: 'Choose Category',
+                        selectedId: categoryId,
+                        options: expenseCategories.map(optionFromCategory).toList(),
+                      );
+                      if (selected != null && mounted) setState(() => categoryId = selected);
+                    },
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                if (widget.item != null)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await state.deletePlannedPurchase(widget.item!.id);
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                if (widget.item != null) const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: () async {
+                      final itemName = name.text.trim();
+                      final price = double.tryParse(amount.text.trim()) ?? 0;
+                      if (itemName.isEmpty) return showSnack(context, 'Enter an item name.');
+                      if (price <= 0) return showSnack(context, 'Enter a valid price.');
+                      if (categoryId == null || !expenseCategories.any((category) => category.id == categoryId)) {
+                        return showSnack(context, 'Choose an expense category.');
+                      }
+                      final now = DateTime.now();
+                      final planned = PlannedPurchase(
+                        id: widget.item?.id ?? _uuid.v4(),
+                        name: itemName,
+                        amount: price,
+                        categoryId: categoryId!,
+                        createdOn: widget.item?.createdOn ?? now,
+                        updatedOn: now,
+                      );
+                      await state.savePlannedPurchase(planned);
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> showPurchasePlannedItemDialog(
+  BuildContext context,
+  PlannedPurchase item,
+) async {
+  final state = context.read<AppController>();
+  final accountOptions = state.accounts;
+  if (accountOptions.isEmpty) {
+    showSnack(context, 'Add an account before purchasing a planned item.');
+    return;
+  }
+  final category = state.categoryOf(item.categoryId);
+  if (category == null || category.type != CategoryType.expense) {
+    showSnack(context, 'Choose a valid expense category for this item first.');
+    await showPlannedPurchaseEditor(context, item: item);
+    return;
+  }
+
+  await showKoinlyPopup<void>(
+    context,
+    maxWidth: 520,
+    maxHeight: 500,
+    child: PurchasePlannedItemDialog(item: item),
+  );
+}
+
+class PurchasePlannedItemDialog extends StatefulWidget {
+  const PurchasePlannedItemDialog({super.key, required this.item});
+
+  final PlannedPurchase item;
+
+  @override
+  State<PurchasePlannedItemDialog> createState() => _PurchasePlannedItemDialogState();
+}
+
+class _PurchasePlannedItemDialogState extends State<PurchasePlannedItemDialog> {
+  String? accountId;
+  bool purchasing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    final options = state.accounts;
+    accountId = state.defaultAccountId != null && options.any((account) => account.id == state.defaultAccountId)
+        ? state.defaultAccountId
+        : options.firstOrNull?.id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final accounts = state.accounts;
+    final selectedAccount = accounts.where((account) => account.id == accountId).firstOrNull;
+    final category = state.categoryOf(widget.item.categoryId);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Buy ${widget.item.name}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${category?.name ?? 'Expense'} • ${state.format(widget.item.amount)}',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 18),
+          AppleSelectionField(
+            label: 'Spend from',
+            option: selectedAccount == null ? null : optionFromAccount(selectedAccount, state),
+            emptyText: 'Choose account',
+            onTap: purchasing
+                ? () {}
+                : () async {
+                    final selected = await showAppleWheelSelectionSheet(
+                      context,
+                      title: 'Choose Account',
+                      selectedId: accountId,
+                      options: accounts.map((account) => optionFromAccount(account, state)).toList(),
+                    );
+                    if (selected != null && mounted) setState(() => accountId = selected);
+                  },
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: purchasing ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: purchasing
+                      ? null
+                      : () async {
+                          final selectedId = accountId;
+                          if (selectedId == null || !accounts.any((account) => account.id == selectedId)) {
+                            return showSnack(context, 'Choose an account.');
+                          }
+                          setState(() => purchasing = true);
+                          try {
+                            await state.purchasePlannedItem(widget.item, selectedId);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              showSnack(context, '${widget.item.name} added to transactions.');
+                            }
+                          } on StateError catch (error) {
+                            if (mounted) {
+                              setState(() => purchasing = false);
+                              showSnack(context, error.message);
+                            }
+                          } catch (_) {
+                            if (mounted) {
+                              setState(() => purchasing = false);
+                              showSnack(context, 'Could not complete the purchase.');
+                            }
+                          }
+                        },
+                  child: Text(purchasing ? 'Purchasing…' : 'Purchase'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
