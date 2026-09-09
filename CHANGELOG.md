@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1068] - 2026-09-09
+
+### Changed
+- Starter Cash/Card/Bank Account placeholders are now created only after the user explicitly chooses **Start new**. Fresh **Login** and **Restore backup** flows no longer begin with preloaded accounts.
+- Backup restore and cloud-login import paths remove only untouched built-in starter-account fingerprints before merging, preventing duplicate placeholder Cash/Card/Bank Account rows while preserving used or customized accounts.
+- Automatic-backup retention no longer uses a numeric **How many to keep** slider. The new **Delete older automatic backups** switch defaults on; when enabled, only the newest automatic backup is kept, and when disabled, automatic backup history is retained.
+- Automatic local backup now requires an explicit folder. The **App storage** destination option has been removed.
+- Choosing an automatic-backup location creates and uses a dedicated `Koinly/Backup` subfolder. Android keeps the parent folder grant through Storage Access Framework so scheduled backups continue after restarts.
+- Removed **Restore last safety backup** from Advanced settings. Safety backups remain internal protection for risky data operations.
+
+### Fixed
+- Restoring a backup during first-run offline setup no longer leaves Koinly's preloaded starter accounts beside the restored accounts.
+- Existing-account login now discards untouched preloaded starter placeholders before and after the cloud merge, and pushes tombstones so old cloud placeholders cannot return.
+- Upgrading an existing installation that already has the old duplicate-starter bug now detects a redundant untouched starter fingerprint and cleans the remaining built-in placeholders while preserving used or customized accounts.
+
 ## [1.0.1067] - 2026-09-09
 
 ### Added

@@ -129,7 +129,16 @@ class MainActivity: FlutterFragmentActivity() {
                 pending.error("folder_not_writable", "The selected folder is not writable.", null)
                 return
             }
-            pending.success(mapOf("uri" to treeUri.toString(), "label" to backupDirectoryLabel(treeUri)))
+            // The picker grants access to a parent location. Koinly owns a
+            // predictable Koinly/Backup child below it so users never need to
+            // create or manage the destination folder manually.
+            ensureKoinlyBackupDirectory(treeUri)
+            pending.success(
+                mapOf(
+                    "uri" to treeUri.toString(),
+                    "label" to resolvedBackupDirectoryLabel(treeUri),
+                ),
+            )
         } catch (error: Exception) {
             pending.error("folder_permission_failed", error.message ?: "Could not keep access to the selected folder.", null)
         }
@@ -277,8 +286,8 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
-    private fun childDocumentsUri(treeUri: Uri): Uri {
-        val documentId = DocumentsContract.getTreeDocumentId(treeUri)
+    private fun childDocumentsUri(treeUri: Uri, parentDocumentUri: Uri): Uri {
+        val documentId = DocumentsContract.getDocumentId(parentDocumentUri)
         return DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
     }
 
@@ -287,33 +296,99 @@ class MainActivity: FlutterFragmentActivity() {
         return DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
     }
 
-    private fun findBackupDocument(treeUri: Uri, fileName: String): Uri? {
-        val childrenUri = childDocumentsUri(treeUri)
+    private fun findChildDocument(
+        treeUri: Uri,
+        parentDocumentUri: Uri,
+        displayName: String,
+        directoryOnly: Boolean = false,
+    ): Uri? {
+        val childrenUri = childDocumentsUri(treeUri, parentDocumentUri)
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
         )
         contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
             val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
             val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+            val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
             while (cursor.moveToNext()) {
                 if (nameIndex < 0 || idIndex < 0) continue
-                if (cursor.getString(nameIndex) == fileName) {
-                    return DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idIndex))
+                if (cursor.getString(nameIndex) != displayName) continue
+                if (directoryOnly && (mimeIndex < 0 || cursor.getString(mimeIndex) != DocumentsContract.Document.MIME_TYPE_DIR)) {
+                    continue
                 }
+                return DocumentsContract.buildDocumentUriUsingTree(treeUri, cursor.getString(idIndex))
             }
         }
         return null
+    }
+
+    private fun ensureChildDirectory(treeUri: Uri, parentDocumentUri: Uri, name: String): Uri {
+        return findChildDocument(treeUri, parentDocumentUri, name, directoryOnly = true)
+            ?: DocumentsContract.createDocument(
+                contentResolver,
+                parentDocumentUri,
+                DocumentsContract.Document.MIME_TYPE_DIR,
+                name,
+            )
+            ?: throw IllegalStateException("Android could not create the $name backup folder.")
+    }
+
+    private fun selectedTreeSegments(treeUri: Uri): List<String> {
+        return try {
+            val treeId = DocumentsContract.getTreeDocumentId(treeUri)
+            val relative = treeId.split(":", limit = 2).getOrNull(1).orEmpty().trim('/')
+            if (relative.isBlank()) emptyList() else relative.split('/').filter { it.isNotBlank() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun selectedTreeIsKoinlyBackup(treeUri: Uri): Boolean {
+        val segments = selectedTreeSegments(treeUri)
+        return segments.size >= 2 &&
+            segments[segments.lastIndex - 1].equals("Koinly", ignoreCase = true) &&
+            segments.last().equals("Backup", ignoreCase = true)
+    }
+
+    private fun selectedTreeIsKoinlyFolder(treeUri: Uri): Boolean {
+        val segments = selectedTreeSegments(treeUri)
+        return segments.isNotEmpty() && segments.last().equals("Koinly", ignoreCase = true)
+    }
+
+    private fun ensureKoinlyBackupDirectory(treeUri: Uri): Uri {
+        val selected = parentDocumentUri(treeUri)
+        if (selectedTreeIsKoinlyBackup(treeUri)) return selected
+        if (selectedTreeIsKoinlyFolder(treeUri)) {
+            return ensureChildDirectory(treeUri, selected, "Backup")
+        }
+        val koinly = ensureChildDirectory(treeUri, selected, "Koinly")
+        return ensureChildDirectory(treeUri, koinly, "Backup")
+    }
+
+    private fun resolvedBackupDirectoryLabel(treeUri: Uri): String {
+        val selectedLabel = backupDirectoryLabel(treeUri)
+        return when {
+            selectedTreeIsKoinlyBackup(treeUri) -> selectedLabel
+            selectedTreeIsKoinlyFolder(treeUri) -> "$selectedLabel/Backup"
+            else -> "$selectedLabel/Koinly/Backup"
+        }
+    }
+
+    private fun findBackupDocument(treeUri: Uri, backupDirectoryUri: Uri, fileName: String): Uri? {
+        return findChildDocument(treeUri, backupDirectoryUri, fileName)
     }
 
     private fun writeBackupFile(treeUri: Uri, fileName: String, bytes: ByteArray) {
         if (!canWriteBackupDirectory(treeUri)) {
             throw SecurityException("Koinly no longer has write access to this folder. Choose it again in backup settings.")
         }
-        val documentUri = findBackupDocument(treeUri, fileName)
+        val backupDirectoryUri = ensureKoinlyBackupDirectory(treeUri)
+        val documentUri = findBackupDocument(treeUri, backupDirectoryUri, fileName)
             ?: DocumentsContract.createDocument(
                 contentResolver,
-                parentDocumentUri(treeUri),
+                backupDirectoryUri,
                 "application/octet-stream",
                 fileName,
             )
@@ -333,7 +408,8 @@ class MainActivity: FlutterFragmentActivity() {
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_LAST_MODIFIED,
         )
-        contentResolver.query(childDocumentsUri(treeUri), projection, null, null, null)?.use { cursor ->
+        val backupDirectoryUri = ensureKoinlyBackupDirectory(treeUri)
+        contentResolver.query(childDocumentsUri(treeUri, backupDirectoryUri), projection, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
             val modifiedIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
             while (cursor.moveToNext()) {
@@ -348,7 +424,8 @@ class MainActivity: FlutterFragmentActivity() {
 
     private fun deleteBackupFile(treeUri: Uri, fileName: String) {
         if (!canWriteBackupDirectory(treeUri)) return
-        val documentUri = findBackupDocument(treeUri, fileName) ?: return
+        val backupDirectoryUri = ensureKoinlyBackupDirectory(treeUri)
+        val documentUri = findBackupDocument(treeUri, backupDirectoryUri, fileName) ?: return
         DocumentsContract.deleteDocument(contentResolver, documentUri)
     }
 

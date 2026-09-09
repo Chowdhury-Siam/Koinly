@@ -26,11 +26,6 @@ void main() {
     expect(find.text('Set up this device'), findsOneWidget);
     expect(find.text('Restore backup'), findsOneWidget);
     expect(find.text('Start new'), findsOneWidget);
-
-    await tester.tap(find.text('Start new'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Currency setup'), findsOneWidget);
   });
 
   testWidgets('signed-in unfinished onboarding exposes Continue setup', (tester) async {

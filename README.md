@@ -72,9 +72,9 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Local-first SQLite storage
 - No account required for local-only use
 - Encrypted `.koinlybackup` backup and restore
-- First-run Restore-or-Start-New choice for offline setup and newly created sync accounts
+- First-run Restore-or-Start-New choice for offline setup and newly created sync accounts; starter accounts are created only for Start New
 - Automatic safety backups before destructive restore operations
-- Configurable local automatic backups with daily/weekly/monthly schedules, retention limits, and a selectable destination folder
+- Configurable local automatic backups with daily/weekly/monthly schedules, a dedicated `Koinly/Backup` destination, and an optional delete-older-backups policy
 - Automatic category deduplication during restore and sync, with transaction and budget references preserved
 - Profile media is copied to private app storage and is not uploaded with finance sync data
 - Android Photos and videos access is requested only for choosing profile media
@@ -615,7 +615,7 @@ reference.
 Cloud sync is not a substitute for an independent backup. Keep copies of
 important `.koinlybackup` files somewhere controlled by the user. Loading a backup merges its finance data with the active device dataset. Local-only rows are retained, matching IDs are reconciled, and duplicate categories such as `Food` are collapsed with their references remapped.
 
-On Android, custom automatic-backup destinations are selected through the system folder picker (Storage Access Framework). Koinly stores the persistent folder grant rather than a raw `/storage/...` path, which is required by Android scoped storage. Upgrading from an older raw-path setting requires choosing the folder once again.
+On Android, automatic-backup destinations are selected through the system folder picker (Storage Access Framework). The selected location is treated as a parent: Koinly creates and writes inside a dedicated `Koinly/Backup` subfolder and stores the persistent parent-folder grant rather than a raw `/storage/...` path. The **Delete older automatic backups** switch is on by default, which keeps only the latest automatic backup; turning it off keeps automatic backup history. Upgrading from an older raw-path setting requires choosing the folder once again.
 
 ## Testing
 

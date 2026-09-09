@@ -347,17 +347,13 @@ class KoinlyDatabase {
   }
 
   Future<void> _seed(sql.Database database) async {
-    final count = sql.Sqflite.firstIntValue(await database.rawQuery('SELECT COUNT(*) FROM accounts')) ?? 0;
-    if (count > 0) return;
+    // Starter accounts are intentionally NOT inserted when the database is
+    // created. They are created only after the user explicitly chooses
+    // "Start new" during onboarding. This prevents Login/Restore flows from
+    // ever inheriting placeholder Cash/Card/Bank Account rows.
+    final categoryCount = sql.Sqflite.firstIntValue(await database.rawQuery('SELECT COUNT(*) FROM categories')) ?? 0;
+    if (categoryCount > 0) return;
     final now = DateTime.now();
-    final accounts = [
-      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#78D8E8', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
-      Account(id: _uuid.v4(), name: 'Card', type: AccountType.credit, iconName: 'credit_card', iconColor: '#89A7FF', amount: 0, creditLimit: 0, sequence: 1, createdOn: now, updatedOn: now),
-      Account(id: _uuid.v4(), name: 'Bank Account', type: AccountType.regular, iconName: 'bank', iconColor: '#A6E3A1', amount: 0, creditLimit: 0, sequence: 2, createdOn: now, updatedOn: now),
-    ];
-    for (final account in accounts) {
-      await database.insert('accounts', account.toMap());
-    }
 
     final expense = [
       ['Clothing', 'apparel', '#F5A3A3'],
@@ -385,6 +381,118 @@ class KoinlyDatabase {
   Future<List<Account>> accounts() async {
     final maps = await (await db).query('accounts', orderBy: 'sequence ASC, created_on ASC');
     return maps.map(Account.fromMap).toList();
+  }
+
+  Future<List<String>> ensureStarterAccountsForNewSetup() async {
+    final database = await db;
+    final existing = await database.query('accounts', columns: ['id']);
+    if (existing.isNotEmpty) return const <String>[];
+
+    final now = DateTime.now();
+    final starterAccounts = [
+      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#78D8E8', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
+      Account(id: _uuid.v4(), name: 'Card', type: AccountType.credit, iconName: 'credit_card', iconColor: '#89A7FF', amount: 0, creditLimit: 0, sequence: 1, createdOn: now, updatedOn: now),
+      Account(id: _uuid.v4(), name: 'Bank Account', type: AccountType.regular, iconName: 'bank', iconColor: '#A6E3A1', amount: 0, creditLimit: 0, sequence: 2, createdOn: now, updatedOn: now),
+    ];
+    for (final account in starterAccounts) {
+      await database.insert('accounts', account.toMap());
+    }
+    return starterAccounts.map((account) => account.id).toList(growable: false);
+  }
+
+  Future<List<String>> deletePreloadedStarterAccountsForImport() async {
+    final database = await db;
+    final rows = await database.query('accounts');
+    final deletedIds = <String>[];
+
+    bool isPreloadedFingerprint(Account account) {
+      if (account.amount != 0 || account.creditLimit != 0) return false;
+      return (account.name == 'Cash' &&
+              account.type == AccountType.regular &&
+              account.iconName == 'wallet' &&
+              account.iconColor.toUpperCase() == '#78D8E8') ||
+          (account.name == 'Card' &&
+              account.type == AccountType.credit &&
+              account.iconName == 'credit_card' &&
+              account.iconColor.toUpperCase() == '#89A7FF') ||
+          (account.name == 'Bank Account' &&
+              account.type == AccountType.regular &&
+              account.iconName == 'bank' &&
+              account.iconColor.toUpperCase() == '#A6E3A1');
+    }
+
+    await database.transaction((txn) async {
+      for (final row in rows) {
+        final account = Account.fromMap(row);
+        if (!isPreloadedFingerprint(account)) continue;
+        final transactionReferences = sql.Sqflite.firstIntValue(await txn.rawQuery(
+              '''
+              SELECT COUNT(*) FROM transactions
+              WHERE from_account_id = ? OR to_account_id = ?
+              ''',
+              [account.id, account.id],
+            )) ??
+            0;
+        final budgetReferences = sql.Sqflite.firstIntValue(await txn.rawQuery(
+              'SELECT COUNT(*) FROM budget_accounts WHERE account_id = ?',
+              [account.id],
+            )) ??
+            0;
+        if (transactionReferences == 0 && budgetReferences == 0) {
+          await txn.delete('accounts', where: 'id = ?', whereArgs: [account.id]);
+          deletedIds.add(account.id);
+        }
+      }
+    });
+    return deletedIds;
+  }
+
+  Future<bool> hasRedundantPreloadedStarterAccountEvidence() async {
+    final database = await db;
+    final rows = await database.query('accounts');
+    if (rows.length < 2) return false;
+    final parsed = rows.map(Account.fromMap).toList(growable: false);
+    final nameCounts = <String, int>{};
+    for (final account in parsed) {
+      final key = account.name.trim().toLowerCase();
+      nameCounts[key] = (nameCounts[key] ?? 0) + 1;
+    }
+
+    bool isPreloadedFingerprint(Account account) {
+      if (account.amount != 0 || account.creditLimit != 0) return false;
+      return (account.name == 'Cash' &&
+              account.type == AccountType.regular &&
+              account.iconName == 'wallet' &&
+              account.iconColor.toUpperCase() == '#78D8E8') ||
+          (account.name == 'Card' &&
+              account.type == AccountType.credit &&
+              account.iconName == 'credit_card' &&
+              account.iconColor.toUpperCase() == '#89A7FF') ||
+          (account.name == 'Bank Account' &&
+              account.type == AccountType.regular &&
+              account.iconName == 'bank' &&
+              account.iconColor.toUpperCase() == '#A6E3A1');
+    }
+
+    for (final account in parsed) {
+      if (!isPreloadedFingerprint(account)) continue;
+      if ((nameCounts[account.name.trim().toLowerCase()] ?? 0) < 2) continue;
+      final transactionReferences = sql.Sqflite.firstIntValue(await database.rawQuery(
+            '''
+            SELECT COUNT(*) FROM transactions
+            WHERE from_account_id = ? OR to_account_id = ?
+            ''',
+            [account.id, account.id],
+          )) ??
+          0;
+      final budgetReferences = sql.Sqflite.firstIntValue(await database.rawQuery(
+            'SELECT COUNT(*) FROM budget_accounts WHERE account_id = ?',
+            [account.id],
+          )) ??
+          0;
+      if (transactionReferences == 0 && budgetReferences == 0) return true;
+    }
+    return false;
   }
 
   Future<void> upsertAccount(Account account) async => (await db).insert('accounts', account.toMap(), conflictAlgorithm: sql.ConflictAlgorithm.replace);
@@ -1118,7 +1226,9 @@ class BackupService {
 
   static Future<Directory> automaticBackupDirectory(String configuredPath) async {
     final normalized = configuredPath.trim();
-    if (normalized.isEmpty) return backupStorageDirectory();
+    if (normalized.isEmpty) {
+      throw StateError('Choose a backup folder before enabling automatic backup.');
+    }
     final directory = Directory(normalized);
     if (!await directory.exists()) {
       await directory.create(recursive: true);
@@ -1131,7 +1241,7 @@ class BackupService {
     required String directoryPath,
     required String directoryUri,
     required String directoryLabel,
-    required int keepCount,
+    required bool deleteOlderBackups,
   }) async {
     final normalized = normalizeCategoryDatabasePayload(await state.database.exportAll());
     final payload = {
@@ -1154,7 +1264,9 @@ class BackupService {
         name: fileName,
         bytes: encryptedBytes,
       );
-      await pruneAndroidAutomaticBackups(directoryUri.trim(), keepCount);
+      if (deleteOlderBackups) {
+        await pruneAndroidAutomaticBackups(directoryUri.trim());
+      }
       final label = directoryLabel.trim().isEmpty ? 'Selected Android folder' : directoryLabel.trim();
       return '$label/$fileName';
     }
@@ -1162,16 +1274,20 @@ class BackupService {
     if (Platform.isAndroid && directoryPath.trim().isNotEmpty) {
       throw StateError('Android folder permission is missing. Choose the backup folder again so Koinly can save through Android folder access.');
     }
+    if (directoryPath.trim().isEmpty) {
+      throw StateError('Choose a backup folder before enabling automatic backup.');
+    }
 
     final directory = await automaticBackupDirectory(directoryPath);
     final file = File(p.join(directory.path, fileName));
     await file.writeAsBytes(encryptedBytes, flush: true);
-    await pruneAutomaticBackups(directory, keepCount);
+    if (deleteOlderBackups) {
+      await pruneAutomaticBackups(directory);
+    }
     return file.path;
   }
 
-  static Future<void> pruneAutomaticBackups(Directory directory, int keepCount) async {
-    final safeKeepCount = keepCount.clamp(1, 100).toInt();
+  static Future<void> pruneAutomaticBackups(Directory directory) async {
     final files = await directory
         .list()
         .where((entity) =>
@@ -1181,7 +1297,7 @@ class BackupService {
         .cast<File>()
         .toList();
     files.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
-    for (final stale in files.skip(safeKeepCount)) {
+    for (final stale in files.skip(1)) {
       try {
         await stale.delete();
       } catch (_) {
@@ -1190,13 +1306,12 @@ class BackupService {
     }
   }
 
-  static Future<void> pruneAndroidAutomaticBackups(String directoryUri, int keepCount) async {
-    final safeKeepCount = keepCount.clamp(1, 100).toInt();
+  static Future<void> pruneAndroidAutomaticBackups(String directoryUri) async {
     final files = (await AndroidSafBackupStore.listFiles(directoryUri))
         .where((entry) => entry.name.startsWith(automaticBackupPrefix) && entry.name.toLowerCase().endsWith('.koinlybackup'))
         .toList()
       ..sort((a, b) => b.lastModified.compareTo(a.lastModified));
-    for (final stale in files.skip(safeKeepCount)) {
+    for (final stale in files.skip(1)) {
       try {
         await AndroidSafBackupStore.deleteFile(uri: directoryUri, name: stale.name);
       } catch (_) {
@@ -1212,9 +1327,19 @@ class BackupService {
         if (selected == null) return null;
         return AutomaticBackupDirectorySelection(path: '', uri: selected.uri, label: selected.label);
       }
-      final path = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose automatic backup folder');
+      final path = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose where Koinly/Backup should be created');
       if (path == null || path.trim().isEmpty) return null;
-      return AutomaticBackupDirectorySelection(path: path.trim(), uri: '', label: path.trim());
+      final selected = p.normalize(path.trim());
+      final selectedName = p.basename(selected).toLowerCase();
+      final parentName = p.basename(p.dirname(selected)).toLowerCase();
+      final alreadyBackupFolder = selectedName == 'backup' && parentName == 'koinly';
+      final backupPath = alreadyBackupFolder
+          ? selected
+          : selectedName == 'koinly'
+              ? p.join(selected, 'Backup')
+              : p.join(selected, 'Koinly', 'Backup');
+      await Directory(backupPath).create(recursive: true);
+      return AutomaticBackupDirectorySelection(path: backupPath, uri: '', label: backupPath);
     } catch (_) {
       return null;
     }
@@ -1233,12 +1358,23 @@ class BackupService {
     if (incomingDatabase.isEmpty) {
       throw const FormatException('This backup does not contain finance data.');
     }
+
+    // A restore is an import/merge flow, not a "Start new" flow. Remove only
+    // untouched built-in account placeholders before folding in the backup so
+    // a restored Cash account does not sit beside Koinly's preloaded Cash.
+    await state.discardPreloadedStarterAccountsForImport();
+
     final currentPreferences = await state.exportPreferences();
     final incomingPreferences = (payload['preferences'] as Map? ?? {}).cast<String, dynamic>();
     final plan = await state.database.mergeAll(incomingDatabase);
     final mergedPreferences = mergeFinancePreferences(currentPreferences, incomingPreferences, plan);
     await state.importPreferences(mergedPreferences);
     await state.reload(queueSync: false);
+    // Old backups can themselves contain never-used starter placeholders from
+    // versions that seeded accounts before onboarding. Remove those after the
+    // merge as well, while preserving any starter account that has balance,
+    // credit, transaction, budget, or customization evidence.
+    await state.discardPreloadedStarterAccountsForImport();
   }
 
   static Future<File?> pickBackupFile() async {
@@ -1524,7 +1660,7 @@ class AppController extends ChangeNotifier {
   int autoBackupMinute = 0;
   int autoBackupWeekday = DateTime.sunday;
   int autoBackupMonthDay = 1;
-  int autoBackupKeepCount = 5;
+  bool autoBackupDeleteOlder = true;
   String autoBackupDirectoryPath = '';
   String autoBackupDirectoryUri = '';
   String autoBackupDirectoryLabel = '';
@@ -1567,6 +1703,14 @@ class AppController extends ChangeNotifier {
     await database.db;
     await _loadPreferences();
     await reload();
+    // v1.0.1065-1067 could merge a restored account set on top of the old
+    // built-in starter rows. A duplicate starter fingerprint is strong legacy
+    // evidence of that bug, so clean all still-untouched built-in placeholders
+    // once on upgrade while leaving used/customized accounts intact.
+    if (await database.hasRedundantPreloadedStarterAccountEvidence()) {
+      await discardPreloadedStarterAccountsForImport();
+      await reload(queueSync: false);
+    }
     loading = false;
     notifyListeners();
     try {
@@ -1715,10 +1859,22 @@ class AppController extends ChangeNotifier {
     autoBackupMinute = (await prefs.getInt('autoBackupMinute', 0)).clamp(0, 59).toInt();
     autoBackupWeekday = (await prefs.getInt('autoBackupWeekday', DateTime.sunday)).clamp(DateTime.monday, DateTime.sunday).toInt();
     autoBackupMonthDay = (await prefs.getInt('autoBackupMonthDay', 1)).clamp(1, 28).toInt();
-    autoBackupKeepCount = (await prefs.getInt('autoBackupKeepCount', 5)).clamp(1, 100).toInt();
+    autoBackupDeleteOlder = await prefs.getBool('autoBackupDeleteOlder', true);
     autoBackupDirectoryPath = await prefs.getString('autoBackupDirectoryPath', '');
     autoBackupDirectoryUri = await prefs.getString('autoBackupDirectoryUri', '');
     autoBackupDirectoryLabel = await prefs.getString('autoBackupDirectoryLabel', '');
+    if (Platform.isAndroid &&
+        autoBackupDirectoryUri.trim().isNotEmpty &&
+        autoBackupDirectoryLabel.trim().isNotEmpty) {
+      final normalizedBackupLabel = autoBackupDirectoryLabel.replaceAll('\\', '/').toLowerCase();
+      if (normalizedBackupLabel == 'koinly/backup' || normalizedBackupLabel.endsWith('/koinly/backup')) {
+        // Already points at the dedicated destination.
+      } else if (normalizedBackupLabel == 'koinly' || normalizedBackupLabel.endsWith('/koinly')) {
+        autoBackupDirectoryLabel = '${autoBackupDirectoryLabel.trim()}/Backup';
+      } else {
+        autoBackupDirectoryLabel = '${autoBackupDirectoryLabel.trim()}/Koinly/Backup';
+      }
+    }
     lastAutoBackupPath = await prefs.getString('lastAutoBackupPath', '');
     final autoBackupAtRaw = await prefs.getString('lastAutoBackupAt', '');
     lastAutoBackupAt = autoBackupAtRaw.isEmpty ? null : DateTime.tryParse(autoBackupAtRaw);
@@ -1776,18 +1932,20 @@ class AppController extends ChangeNotifier {
 
   String get autoBackupLocationLabel {
     if (Platform.isAndroid && autoBackupDirectoryUri.trim().isNotEmpty) {
-      return autoBackupDirectoryLabel.trim().isEmpty ? 'Android folder' : autoBackupDirectoryLabel.trim();
+      return autoBackupDirectoryLabel.trim().isEmpty ? 'Koinly/Backup' : autoBackupDirectoryLabel.trim();
     }
-    if (autoBackupDirectoryPath.trim().isEmpty) return 'App storage';
+    if (autoBackupDirectoryPath.trim().isEmpty) return 'Choose folder';
     final normalized = p.normalize(autoBackupDirectoryPath.trim());
+    final parent = p.basename(p.dirname(normalized));
     final name = p.basename(normalized);
-    return name.isEmpty ? normalized : name;
+    return parent.isEmpty ? name : '$parent/$name';
   }
 
   String get automaticBackupSettingsSummary {
     if (!autoBackupEnabled) return 'Off';
     final when = DateFormat('h:mm a').format(DateTime(2000, 1, 1, autoBackupHour, autoBackupMinute));
-    return '$autoBackupFrequencyLabel at $when • keep $autoBackupKeepCount • $autoBackupLocationLabel';
+    final history = autoBackupDeleteOlder ? 'latest only' : 'keep history';
+    return '$autoBackupFrequencyLabel at $when • $history • $autoBackupLocationLabel';
   }
 
   String get lastAutoBackupLabel {
@@ -1868,7 +2026,7 @@ class AppController extends ChangeNotifier {
         directoryPath: autoBackupDirectoryPath,
         directoryUri: autoBackupDirectoryUri,
         directoryLabel: autoBackupDirectoryLabel,
-        keepCount: autoBackupKeepCount,
+        deleteOlderBackups: autoBackupDeleteOlder,
       );
       lastAutoBackupPath = location;
       lastAutoBackupAt = DateTime.now();
@@ -1897,7 +2055,7 @@ class AppController extends ChangeNotifier {
     required TimeOfDay time,
     required int weekday,
     required int monthDay,
-    required int keepCount,
+    required bool deleteOlderBackups,
     required String directoryPath,
     required String directoryUri,
     required String directoryLabel,
@@ -1915,7 +2073,7 @@ class AppController extends ChangeNotifier {
     autoBackupMinute = time.minute.clamp(0, 59).toInt();
     autoBackupWeekday = weekday.clamp(DateTime.monday, DateTime.sunday).toInt();
     autoBackupMonthDay = monthDay.clamp(1, 28).toInt();
-    autoBackupKeepCount = keepCount.clamp(1, 100).toInt();
+    autoBackupDeleteOlder = deleteOlderBackups;
     autoBackupDirectoryPath = normalizedDirectory;
     autoBackupDirectoryUri = normalizedUri;
     autoBackupDirectoryLabel = normalizedLabel;
@@ -1926,7 +2084,7 @@ class AppController extends ChangeNotifier {
     await prefs.setInt('autoBackupMinute', autoBackupMinute);
     await prefs.setInt('autoBackupWeekday', autoBackupWeekday);
     await prefs.setInt('autoBackupMonthDay', autoBackupMonthDay);
-    await prefs.setInt('autoBackupKeepCount', autoBackupKeepCount);
+    await prefs.setBool('autoBackupDeleteOlder', autoBackupDeleteOlder);
     await prefs.setString('autoBackupDirectoryPath', autoBackupDirectoryPath);
     await prefs.setString('autoBackupDirectoryUri', autoBackupDirectoryUri);
     await prefs.setString('autoBackupDirectoryLabel', autoBackupDirectoryLabel);
@@ -3070,16 +3228,21 @@ class AppController extends ChangeNotifier {
         await database.enqueueAllForAdoption(await exportPreferences());
         await performMultiDeviceSync(silent: true);
       } else {
-        // Existing-account login merges the cloud copy into any meaningful
-        // local data instead of erasing the device first.
-        if (await database.hasOnlyUntouchedStarterAccounts()) {
-          await database.deleteUntouchedStarterAccounts();
-        }
+        // Existing-account login is an import/merge flow. Preloaded account
+        // placeholders belong only to explicit Start New setup, so discard
+        // untouched built-ins before cloud data is merged into this device.
+        await discardPreloadedStarterAccountsForImport();
         await performMultiDeviceSync(
           silent: !preferCloudData,
           pushLocalChanges: true,
           pullFullCloudCopy: true,
         );
+        final removedCloudStarterPlaceholders = await discardPreloadedStarterAccountsForImport();
+        if (removedCloudStarterPlaceholders) {
+          // Push the placeholder tombstones immediately so they cannot return
+          // on this device or another device during the next cloud pull.
+          await performMultiDeviceSync(silent: true, pushLocalChanges: true);
+        }
       }
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();
@@ -3691,6 +3854,35 @@ class AppController extends ChangeNotifier {
       CategoryType.expense: categories.where((c) => c.type == CategoryType.expense).map((c) => c.id).toSet(),
     };
 
+  }
+
+  Future<void> prepareStartNewSetup() async {
+    starterAccountsSkipped = false;
+    await prefs.setBool('starterAccountsSkipped', false);
+    await database.ensureStarterAccountsForNewSetup();
+    await reload(queueSync: false);
+  }
+
+  Future<bool> discardPreloadedStarterAccountsForImport() async {
+    final deletedIds = await database.deletePreloadedStarterAccountsForImport();
+    if (deletedIds.isEmpty) return false;
+
+    // If these placeholders were ever synchronized, carry their tombstones
+    // into the active merge so a subsequent cloud pull cannot resurrect them.
+    if (_hasConfiguredSyncTarget()) {
+      for (final accountId in deletedIds) {
+        await database.enqueueDelete('accounts', accountId);
+      }
+    }
+
+    if (defaultAccountId != null && deletedIds.contains(defaultAccountId)) {
+      defaultAccountId = null;
+      await prefs.setString('defaultAccountId', '');
+    }
+    accounts = await database.accounts();
+    _rebuildLookupCaches();
+    notifyListeners();
+    return true;
   }
 
   Future<void> skipStarterAccounts() async {
@@ -6626,8 +6818,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (!mounted || choice == null) return;
 
       if (choice == InitialSetupChoice.startNew) {
+        final state = context.read<AppController>();
+        await state.prepareStartNewSetup();
+        if (!mounted) return;
         if (syncAccountCreated) {
-          await context.read<AppController>().resolveNewSyncAccountWithLocalSetup();
+          await state.resolveNewSyncAccountWithLocalSetup();
           if (!mounted) return;
         }
         await controller.animateToPage(1, duration: AppMotion.medium, curve: Curves.easeOutCubic);
@@ -6765,8 +6960,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             onPressed: choosingInitialSetup
                                 ? null
                                 : () async {
-                              if (index == 0 && signedInSetupPending) {
-                                await _chooseInitialSetup(syncAccountCreated: true);
+                              if (index == 0) {
+                                await _chooseInitialSetup(syncAccountCreated: signedInSetupPending);
                                 return;
                               }
                               if (index < 3) {
@@ -14990,7 +15185,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   late TimeOfDay time;
   late int weekday;
   late int monthDay;
-  late int keepCount;
+  late bool deleteOlderBackups;
   late String directoryPath;
   late String directoryUri;
   late String directoryLabel;
@@ -15015,7 +15210,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
     time = state.autoBackupTime;
     weekday = state.autoBackupWeekday;
     monthDay = state.autoBackupMonthDay;
-    keepCount = state.autoBackupKeepCount;
+    deleteOlderBackups = state.autoBackupDeleteOlder;
     directoryPath = state.autoBackupDirectoryPath;
     directoryUri = state.autoBackupDirectoryUri;
     directoryLabel = state.autoBackupDirectoryLabel;
@@ -15034,6 +15229,10 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
 
   Future<void> _save() async {
     if (saving) return;
+    if (enabled && directoryPath.trim().isEmpty && directoryUri.trim().isEmpty) {
+      showSnack(context, 'Choose a backup folder first.');
+      return;
+    }
     setState(() => saving = true);
     final state = context.read<AppController>();
     await state.setAutomaticBackupSettings(
@@ -15042,7 +15241,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
       time: time,
       weekday: weekday,
       monthDay: monthDay,
-      keepCount: keepCount,
+      deleteOlderBackups: deleteOlderBackups,
       directoryPath: directoryPath,
       directoryUri: directoryUri,
       directoryLabel: directoryLabel,
@@ -15060,8 +15259,8 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final locationText = directoryUri.trim().isNotEmpty
-        ? (directoryLabel.trim().isEmpty ? 'Selected Android folder' : directoryLabel.trim())
-        : (directoryPath.trim().isEmpty ? 'Koinly app storage' : directoryPath.trim());
+        ? (directoryLabel.trim().isEmpty ? 'Koinly/Backup' : directoryLabel.trim())
+        : (directoryPath.trim().isEmpty ? 'No backup folder selected' : directoryPath.trim());
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
       child: Column(
@@ -15137,33 +15336,16 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
             icon: const Icon(Icons.schedule_rounded),
             label: Text('Time · ${time.format(context)}'),
           ),
-          const SectionHeader('How many to keep'),
+          const SectionHeader('Backup history'),
           ExpressiveCard(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text('Automatic backups to keep', style: TextStyle(fontWeight: FontWeight.w900)),
-                    ),
-                    Text('$keepCount', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900)),
-                  ],
-                ),
-                Slider(
-                  value: keepCount.toDouble(),
-                  min: 1,
-                  max: 100,
-                  divisions: 99,
-                  label: '$keepCount',
-                  onChanged: saving ? null : (value) => setState(() => keepCount = value.round()),
-                ),
-                Text(
-                  'Older automatic backups are deleted after a new one is saved. Manual and safety backups are never pruned by this setting.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: SwitchListTile(
+              value: deleteOlderBackups,
+              onChanged: saving ? null : (value) => setState(() => deleteOlderBackups = value),
+              title: const Text('Delete older automatic backups', style: TextStyle(fontWeight: FontWeight.w900)),
+              subtitle: const Text(
+                'When on, Koinly deletes previous automatic backups after a new one is saved, so only the latest automatic backup remains. Turn it off to keep backup history.',
+              ),
             ),
           ),
           const SectionHeader('Where to back up'),
@@ -15188,37 +15370,18 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: saving ? null : _chooseDirectory,
-                        icon: const Icon(Icons.drive_folder_upload_rounded),
-                        label: const Text('Choose folder'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: saving
-                            ? null
-                            : () => setState(() {
-                                  directoryPath = '';
-                                  directoryUri = '';
-                                  directoryLabel = '';
-                                }),
-                        child: const Text('App storage'),
-                      ),
-                    ),
-                  ],
+                OutlinedButton.icon(
+                  onPressed: saving ? null : _chooseDirectory,
+                  icon: const Icon(Icons.drive_folder_upload_rounded),
+                  label: const Text('Choose folder'),
                 ),
-                if (Platform.isAndroid) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    'Android folder backups use the system folder picker and a persistent folder grant, so scheduled backups keep working after the app restarts.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                  ),
-                ],
+                const SizedBox(height: 10),
+                Text(
+                  Platform.isAndroid
+                      ? 'Choose a parent location once. Koinly creates and uses Koinly/Backup there, with persistent Android folder access for scheduled backups.'
+                      : 'Choose a parent location. Koinly creates and uses a Koinly/Backup folder there.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                ),
               ],
             ),
           ),
@@ -15290,13 +15453,6 @@ class AdvancedSettingsScreen extends StatelessWidget {
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
             color: '#00D7E8',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
-          ),
-          SettingsTile(
-            icon: Icons.health_and_safety_rounded,
-            title: 'Restore last safety backup',
-            subtitle: state.lastSafetyBackupLabel,
-            color: '#78D8E8',
-            onTap: state.hasLastSafetyBackup ? () => runRestoreLastSafetyBackupFlow(context, state) : null,
           ),
         ]),
       ),
