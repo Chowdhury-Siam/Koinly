@@ -1,0 +1,18 @@
+# Self-hosted Koinly Sync Worker configuration.
+# The user deployment workflow overrides this fallback with CLOUDFLARE_NAME_U.
+name = "koinly-sync-worker"
+main = "src/index.ts"
+compatibility_date = "2026-08-21"
+workers_dev = true
+
+[vars]
+ACCESS_TOKEN_TTL_SECONDS = "900"
+REFRESH_TOKEN_TTL_SECONDS = "2592000"
+MAX_SYNC_BATCH_SIZE = "100"
+MAX_SYNC_REPLACE_SIZE = "25000"
+REGISTRATION_KEY_TTL_SECONDS = "2592000"
+
+# Every five minutes the Worker checks whether the signed-in owner's optional
+# Telegram .koinlybackup schedule is due. Disabled settings perform no upload.
+[triggers]
+crons = ["*/5 * * * *"]

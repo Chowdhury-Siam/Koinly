@@ -3280,6 +3280,64 @@ class AppController extends ChangeNotifier {
     await performMultiDeviceSync(pushLocalChanges: true, pullFullCloudCopy: true);
   }
 
+  Future<T> _withSelfHostedSyncToken<T>(Future<T> Function(KoinlySyncApi api, String accessToken) action) async {
+    if (!useCustomCloudSync) {
+      throw StateError('Telegram cloud backups are available only for a self-hosted Sync Worker.');
+    }
+    if (!cloudSyncEnabled || syncAccessToken.isEmpty || syncRefreshToken.isEmpty) {
+      throw StateError('Sign in to the self-hosted Sync Worker first.');
+    }
+    final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
+    try {
+      return await action(api, syncAccessToken);
+    } catch (error) {
+      final text = _cleanSyncError(error).toLowerCase();
+      if (!text.contains('expired') && !text.contains('access token')) rethrow;
+      await _refreshSyncSession();
+      return action(api, syncAccessToken);
+    }
+  }
+
+  Future<TelegramBackupSettings> loadSelfHostedTelegramBackupSettings() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.telegramBackupSettings(accessToken: accessToken));
+  }
+
+  Future<TelegramBackupSettings> saveSelfHostedTelegramBackupSettings({
+    required bool enabled,
+    required String botToken,
+    required String chatId,
+    required TelegramBackupFrequency frequency,
+    required int hour,
+    required int minute,
+    required int weekday,
+    required int monthDay,
+  }) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.saveTelegramBackupSettings(
+          accessToken: accessToken,
+          enabled: enabled,
+          botToken: botToken,
+          chatId: chatId,
+          frequency: frequency,
+          hour: hour,
+          minute: minute,
+          weekday: weekday,
+          monthDay: monthDay,
+          timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+        ));
+  }
+
+  Future<void> testSelfHostedTelegramBackup({String botToken = '', String chatId = ''}) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.testTelegramBackup(
+          accessToken: accessToken,
+          botToken: botToken,
+          chatId: chatId,
+        ));
+  }
+
+  Future<Map<String, dynamic>> sendSelfHostedTelegramBackupNow() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.sendTelegramBackupNow(accessToken: accessToken));
+  }
+
   Future<void> configureAccountSyncEndpoint({required bool useCustom, required String customApiBaseUrl}) async {
     final nextApiBaseUrl = useCustom
         ? CloudSyncService.validateApiBaseUrl(customApiBaseUrl)
@@ -13542,6 +13600,26 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     return PageScaffold(
       title: 'Account & sync',
       subtitle: signedIn ? state.syncAccountEmail : 'Multi-device online sync',
+      actions: [
+        if (_useCustomCloudSync)
+          IconButton.filledTonal(
+            tooltip: 'Telegram backup',
+            onPressed: busy
+                ? null
+                : () {
+                    if (!backendConfigured) {
+                      showSnack(context, 'Validate and use the self-hosted Worker first.');
+                      return;
+                    }
+                    if (!signedIn) {
+                      showSnack(context, 'Sign in to the self-hosted Worker before configuring Telegram backups.');
+                      return;
+                    }
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
+                  },
+            icon: const Icon(Icons.smart_toy_rounded),
+          ),
+      ],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
@@ -13734,6 +13812,385 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   ),
                 ],
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SelfHostedTelegramBackupScreen extends StatefulWidget {
+  const SelfHostedTelegramBackupScreen({super.key});
+
+  @override
+  State<SelfHostedTelegramBackupScreen> createState() => _SelfHostedTelegramBackupScreenState();
+}
+
+class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBackupScreen> {
+  final _botTokenController = TextEditingController();
+  final _chatIdController = TextEditingController();
+  TelegramBackupSettings _settings = const TelegramBackupSettings.defaults();
+  bool _loading = true;
+  bool _busy = false;
+  bool _obscureToken = true;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _botTokenController.dispose();
+    _chatIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final settings = await context.read<AppController>().loadSelfHostedTelegramBackupSettings();
+      if (!mounted) return;
+      setState(() {
+        _settings = settings;
+        _chatIdController.text = settings.chatId;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      final message = error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', '');
+      final normalized = message.toLowerCase();
+      showSnack(
+        context,
+        normalized.contains('not found') || normalized.contains('404')
+            ? 'This self-hosted Worker is older than the Telegram-backup feature. Redeploy it from the latest Koinly workflow, then try again.'
+            : message,
+      );
+    }
+  }
+
+  Future<void> _save() async {
+    final chatId = _chatIdController.text.trim();
+    if (_settings.enabled && chatId.isEmpty) {
+      showSnack(context, 'Enter the Telegram group or channel Chat ID.');
+      return;
+    }
+    if (_settings.enabled && !_settings.tokenConfigured && _botTokenController.text.trim().isEmpty) {
+      showSnack(context, 'Enter a Telegram bot token before enabling backups.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final settings = await context.read<AppController>().saveSelfHostedTelegramBackupSettings(
+            enabled: _settings.enabled,
+            botToken: _botTokenController.text,
+            chatId: chatId,
+            frequency: _settings.frequency,
+            hour: _settings.hour,
+            minute: _settings.minute,
+            weekday: _settings.weekday,
+            monthDay: _settings.monthDay,
+          );
+      if (!mounted) return;
+      _botTokenController.clear();
+      setState(() {
+        _settings = settings;
+        _chatIdController.text = settings.chatId;
+      });
+      showSnack(context, settings.enabled ? 'Telegram backup schedule saved.' : 'Telegram automatic backups are off.');
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _test() async {
+    final chatId = _chatIdController.text.trim();
+    if (chatId.isEmpty && _settings.chatId.isEmpty) {
+      showSnack(context, 'Enter the Telegram group or channel Chat ID first.');
+      return;
+    }
+    if (!_settings.tokenConfigured && _botTokenController.text.trim().isEmpty) {
+      showSnack(context, 'Enter the Telegram bot token first.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await context.read<AppController>().testSelfHostedTelegramBackup(
+            botToken: _botTokenController.text,
+            chatId: chatId,
+          );
+      if (mounted) showSnack(context, 'Telegram bot connected successfully. Check the target chat.');
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _sendNow() async {
+    if (!_settings.tokenConfigured || _settings.chatId.trim().isEmpty) {
+      showSnack(context, 'Save the Telegram bot and destination first.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await context.read<AppController>().sendSelfHostedTelegramBackupNow();
+      if (!mounted) return;
+      showSnack(context, 'Cloud backup uploaded to Telegram.');
+      await _load();
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _settings.hour, minute: _settings.minute),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _settings = TelegramBackupSettings(
+          enabled: _settings.enabled,
+          tokenConfigured: _settings.tokenConfigured,
+          chatId: _settings.chatId,
+          frequency: _settings.frequency,
+          hour: picked.hour,
+          minute: picked.minute,
+          weekday: _settings.weekday,
+          monthDay: _settings.monthDay,
+          timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+          nextDueAt: _settings.nextDueAt,
+          lastSentAt: _settings.lastSentAt,
+          lastError: _settings.lastError,
+        ));
+  }
+
+  TelegramBackupSettings _copySettings({
+    bool? enabled,
+    TelegramBackupFrequency? frequency,
+    int? weekday,
+    int? monthDay,
+  }) {
+    return TelegramBackupSettings(
+      enabled: enabled ?? _settings.enabled,
+      tokenConfigured: _settings.tokenConfigured,
+      chatId: _settings.chatId,
+      frequency: frequency ?? _settings.frequency,
+      hour: _settings.hour,
+      minute: _settings.minute,
+      weekday: weekday ?? _settings.weekday,
+      monthDay: monthDay ?? _settings.monthDay,
+      timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+      nextDueAt: _settings.nextDueAt,
+      lastSentAt: _settings.lastSentAt,
+      lastError: _settings.lastError,
+    );
+  }
+
+  String _weekdayLabel(int weekday) => const {
+        DateTime.monday: 'Monday',
+        DateTime.tuesday: 'Tuesday',
+        DateTime.wednesday: 'Wednesday',
+        DateTime.thursday: 'Thursday',
+        DateTime.friday: 'Friday',
+        DateTime.saturday: 'Saturday',
+        DateTime.sunday: 'Sunday',
+      }[weekday] ?? 'Sunday';
+
+  String _offsetLabel() {
+    final offset = DateTime.now().timeZoneOffset;
+    final totalMinutes = offset.inMinutes;
+    final sign = totalMinutes >= 0 ? '+' : '-';
+    final absolute = totalMinutes.abs();
+    final hours = absolute ~/ 60;
+    final minutes = absolute % 60;
+    return 'UTC$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+  }
+
+  String _formatServerTime(DateTime? value) {
+    if (value == null) return 'Not yet';
+    return DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const PageScaffold(
+        title: 'Telegram backup',
+        subtitle: 'Self-hosted Sync Worker',
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final time = TimeOfDay(hour: _settings.hour, minute: _settings.minute).format(context);
+    return PageScaffold(
+      title: 'Telegram backup',
+      subtitle: 'Self-hosted Sync Worker only',
+      child: ResponsiveContent(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _settings.enabled,
+                    onChanged: _busy ? null : (value) => setState(() => _settings = _copySettings(enabled: value)),
+                    title: const Text('Automatic Telegram backup', style: TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: const Text('The self-hosted Worker creates a .koinlybackup from the cloud copy and uploads it to your Telegram group or channel.'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Telegram bot', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _botTokenController,
+                    enabled: !_busy,
+                    obscureText: _obscureToken,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: InputDecoration(
+                      labelText: _settings.tokenConfigured ? 'Bot token (saved)' : 'Bot token',
+                      hintText: _settings.tokenConfigured ? 'Leave blank to keep the current token' : '123456789:AA...',
+                      prefixIcon: const Icon(Icons.smart_toy_rounded),
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() => _obscureToken = !_obscureToken),
+                        icon: Icon(_obscureToken ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _chatIdController,
+                    enabled: !_busy,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Group or channel Chat ID',
+                      hintText: '-1001234567890 or @channelname',
+                      prefixIcon: Icon(Icons.forum_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Add the bot to the target group/channel. For a channel, make the bot an administrator with permission to post messages. The bot token is encrypted by your Worker before it is stored in Turso.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.35),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _test,
+                    icon: const Icon(Icons.verified_rounded),
+                    label: const Text('Test bot and destination'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('When to upload', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 12),
+                  SegmentedButton<TelegramBackupFrequency>(
+                    segments: const [
+                      ButtonSegment(value: TelegramBackupFrequency.daily, label: Text('Daily')),
+                      ButtonSegment(value: TelegramBackupFrequency.weekly, label: Text('Weekly')),
+                      ButtonSegment(value: TelegramBackupFrequency.monthly, label: Text('Monthly')),
+                    ],
+                    selected: {_settings.frequency},
+                    onSelectionChanged: _busy ? null : (value) => setState(() => _settings = _copySettings(frequency: value.first)),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickTime,
+                    icon: const Icon(Icons.schedule_rounded),
+                    label: Text('Time · $time'),
+                  ),
+                  if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _settings.weekday,
+                      decoration: const InputDecoration(labelText: 'Day of week', prefixIcon: Icon(Icons.calendar_view_week_rounded)),
+                      items: List.generate(7, (index) {
+                        final weekday = index + 1;
+                        return DropdownMenuItem(value: weekday, child: Text(_weekdayLabel(weekday)));
+                      }),
+                      onChanged: _busy
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setState(() => _settings = _copySettings(weekday: value));
+                            },
+                    ),
+                  ],
+                  if (_settings.frequency == TelegramBackupFrequency.monthly) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _settings.monthDay,
+                      decoration: const InputDecoration(labelText: 'Day of month', prefixIcon: Icon(Icons.calendar_month_rounded)),
+                      items: List.generate(31, (index) => DropdownMenuItem(value: index + 1, child: Text('Day ${index + 1}'))),
+                      onChanged: _busy
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setState(() => _settings = _copySettings(monthDay: value));
+                            },
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  Text(
+                    'Schedule uses this device timezone (${_offsetLabel()}). The Worker checks due schedules every 5 minutes, so delivery can occur a few minutes after the selected time.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('Last uploaded: ${_formatServerTime(_settings.lastSentAt)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text('Next scheduled: ${_settings.enabled ? _formatServerTime(_settings.nextDueAt) : 'Automatic upload is off'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  if ((_settings.lastError ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(_settings.lastError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
+                  ],
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy || !_settings.tokenConfigured || _settings.chatId.trim().isEmpty ? null : _sendNow,
+                    icon: const Icon(Icons.send_rounded),
+                    label: const Text('Upload backup now'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: _busy ? null : _save,
+              icon: _busy
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.save_rounded),
+              label: const Text('Save Telegram backup settings'),
+            ),
           ],
         ),
       ),

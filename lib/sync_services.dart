@@ -258,6 +258,62 @@ class KoinlySyncApi {
     return _get('/v1/sync/status', accessToken: accessToken);
   }
 
+  Future<TelegramBackupSettings> telegramBackupSettings({required String accessToken}) async {
+    final data = await _get('/v1/telegram-backup/settings', accessToken: accessToken);
+    return TelegramBackupSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<TelegramBackupSettings> saveTelegramBackupSettings({
+    required String accessToken,
+    required bool enabled,
+    required String botToken,
+    required String chatId,
+    required TelegramBackupFrequency frequency,
+    required int hour,
+    required int minute,
+    required int weekday,
+    required int monthDay,
+    required int timezoneOffsetMinutes,
+  }) async {
+    final data = await _post(
+      '/v1/telegram-backup/settings',
+      {
+        'enabled': enabled,
+        'botToken': botToken.trim(),
+        'chatId': chatId.trim(),
+        'frequency': frequency.name,
+        'hour': hour,
+        'minute': minute,
+        'weekday': weekday,
+        'monthDay': monthDay,
+        'timezoneOffsetMinutes': timezoneOffsetMinutes,
+      },
+      accessToken: accessToken,
+    );
+    return TelegramBackupSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<void> testTelegramBackup({
+    required String accessToken,
+    String botToken = '',
+    String chatId = '',
+  }) async {
+    await _post(
+      '/v1/telegram-backup/test',
+      {'botToken': botToken.trim(), 'chatId': chatId.trim()},
+      accessToken: accessToken,
+    );
+  }
+
+  Future<Map<String, dynamic>> sendTelegramBackupNow({required String accessToken}) {
+    return _post(
+      '/v1/telegram-backup/send-now',
+      const {},
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 45),
+    );
+  }
+
   Future<Map<String, dynamic>> _get(String path, {String? accessToken, Map<String, String>? query}) async {
     try {
       final response = await http

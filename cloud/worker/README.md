@@ -30,8 +30,10 @@ JWT_SECRET_U
 ```
 
 `JWT_SECRET_U` must contain at least 32 characters. Self-hosted deployments do
-not require `REGISTRATION_ADMIN_SECRET`, `REGISTRATION_KEY_CHAT_ID`, or
-`TELEGRAM_BOT_TOKEN`; those are reserved for the managed default service.
+not require the managed-service `REGISTRATION_ADMIN_SECRET`,
+`REGISTRATION_KEY_CHAT_ID`, or `TELEGRAM_BOT_TOKEN` GitHub secrets. A user's
+optional backup-bot token is configured later from the authenticated Koinly app
+and encrypted by the Worker before being stored in Turso.
 
 The workflow applies `schema.sql`, uploads the Turso and JWT values as
 Cloudflare Worker secrets, deploys using `CLOUDFLARE_NAME_U`, and verifies the
@@ -82,7 +84,7 @@ npm run schema:apply
 wrangler secret put TURSO_DATABASE_URL
 wrangler secret put TURSO_AUTH_TOKEN
 wrangler secret put JWT_SECRET
-npx wrangler deploy --name my-koinly-sync
+npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
 ```
 
 `schema.sql` is idempotent, so applying it again does not erase existing sync
@@ -149,3 +151,33 @@ CLI. A Worker URL or same-account Worker proxy can create a request loop that
 Cloudflare blocks before the health endpoint can return JSON. The deployment
 workflow uses Wrangler's exact reported target and prints the HTTP response to
 make this failure clear.
+
+## Optional self-hosted Telegram `.koinlybackup`
+
+The **user self-hosted** deployment includes `wrangler.self-hosted.toml`, which
+adds a Cron Trigger every five minutes. After signing in to that Worker, the
+Koinly app can configure an optional Telegram backup from the bot icon on
+**Account & sync**.
+
+No additional GitHub secret is required for this feature. The owner supplies the
+Telegram bot token from the authenticated app screen. The Worker encrypts that
+token with AES-GCM using key material derived from `JWT_SECRET` before storing it
+in `telegram_backup_settings` in Turso. The API never returns the plaintext
+saved token.
+
+Available authenticated endpoints on a first-owner/self-hosted Worker:
+
+- `GET /v1/telegram-backup/settings`
+- `POST /v1/telegram-backup/settings`
+- `POST /v1/telegram-backup/test`
+- `POST /v1/telegram-backup/send-now`
+
+Scheduled and manual deliveries rebuild a `.koinlybackup` from the current
+non-deleted `sync_entities` rows plus the synced preferences entity and upload it
+with Telegram `sendDocument`. Daily, weekly, and monthly schedules use the UTC
+offset captured from the configuring device. The Cron Trigger checks every five
+minutes, so scheduled delivery is best-effort within that interval.
+
+The managed/default invite-key Worker intentionally rejects these endpoints and
+is deployed with the normal `wrangler.toml`, so it does not receive the user
+Telegram-backup Cron Trigger.

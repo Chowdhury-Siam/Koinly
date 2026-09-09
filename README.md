@@ -560,7 +560,7 @@ secrets before deploying:
 npx wrangler secret put TURSO_DATABASE_URL
 npx wrangler secret put TURSO_AUTH_TOKEN
 npx wrangler secret put JWT_SECRET
-npx wrangler deploy --name my-koinly-sync
+npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
 ```
 
 GitHub Actions is the recommended deployment path because it also applies the
@@ -789,3 +789,26 @@ Koinly is available under the [Apache License 2.0](LICENSE).
 This project is a personal finance tool, not financial, accounting, tax, or
 investment advice. Users remain responsible for reviewing exported and
 synchronized data.
+
+### Optional Telegram backups for a self-hosted Sync Worker
+
+Self-hosted sync owners can have the Worker upload a portable `.koinlybackup`
+file to a Telegram group or channel without keeping the phone open.
+
+1. Deploy/update the **User Self-Hosted Sync Worker** workflow so the latest
+   Turso schema and the self-hosted Cron Trigger are installed.
+2. In Koinly open **Settings > Account & sync**, select and validate
+   **Self-hosted**, then sign in.
+3. Tap the **bot icon** in the upper-right corner.
+4. Enter a Telegram Bot API token and a numeric group/channel Chat ID such as
+   `-100...`, or an `@channelname` for a public channel.
+5. Use **Test bot and destination**. For channels, the bot must be an
+   administrator that can post messages.
+6. Choose Daily, Weekly, or Monthly, select the time (and day when relevant),
+   enable **Automatic Telegram backup**, and save.
+
+The self-hosted Worker checks due schedules every five minutes and generates the
+backup from the authenticated owner's current cloud sync state. The bot token is
+never added to Koinly finance backups or normal sync entities; it is encrypted
+inside the self-hosted Worker before being stored in Turso. The managed/default
+Koinly Sync Worker does not expose this feature.

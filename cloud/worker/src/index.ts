@@ -40,6 +40,7 @@ const requiredTables = [
   'processed_operations',
   'rate_limits',
   'registration_keys',
+  'telegram_backup_settings',
 ];
 
 export default {
@@ -72,6 +73,10 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/sync/replace') return await replaceAll(request, env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/sync/pull') return await pull(url, env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/sync/status') return await status(db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/telegram-backup/settings') return await telegramBackupSettings(env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/settings') return await saveTelegramBackupSettings(request, env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/test') return await testTelegramBackup(request, env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/send-now') return await sendTelegramBackupNow(env, db, auth);
 
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
@@ -89,7 +94,563 @@ export default {
       db?.close();
     }
   },
+
+  async scheduled(_controller: ScheduledController, env: Env, _context: ExecutionContext): Promise<void> {
+    // The managed/default Worker intentionally never runs user Telegram backup
+    // jobs. This scheduler is used only by the self-hosted first-owner Worker.
+    if (registrationMode(env) !== 'first-user') return;
+    validateWorkerConfig(env);
+    const db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
+    try {
+      await runDueTelegramBackups(env, db);
+    } catch (error) {
+      console.error('Scheduled Telegram backup run failed', databaseErrorMessage(error));
+    } finally {
+      db.close();
+    }
+  },
 };
+
+type TelegramBackupFrequency = 'daily' | 'weekly' | 'monthly';
+
+type TelegramBackupSettings = {
+  userId: string;
+  enabled: boolean;
+  tokenConfigured: boolean;
+  encryptedToken: string;
+  tokenIv: string;
+  chatId: string;
+  frequency: TelegramBackupFrequency;
+  hour: number;
+  minute: number;
+  weekday: number;
+  monthDay: number;
+  timezoneOffsetMinutes: number;
+  nextDueAt: number | null;
+  lastSentAt: number | null;
+  lastAttemptAt: number | null;
+  lastError: string | null;
+};
+
+const telegramBackupEntityTables = [
+  'accounts',
+  'categories',
+  'planned_purchases',
+  'transactions',
+  'budgets',
+  'budget_accounts',
+  'budget_categories',
+  'loan_contacts',
+  'loans',
+  'loan_payments',
+] as const;
+
+// The mobile app currently uses this compatibility key for .koinlybackup files.
+// Keep the Worker encoder byte-for-byte compatible so a Telegram backup can be
+// restored directly by Koinly without a conversion step.
+const koinlyBackupCompatibilityKey = 'YOUR_SECRET_PASSWORD';
+
+function requireSelfHostedTelegramBackup(env: Env): void {
+  if (registrationMode(env) !== 'first-user') {
+    throw new HttpError(403, 'Telegram cloud backup is available only on a self-hosted Sync Worker.');
+  }
+}
+
+async function telegramBackupSettings(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  requireSelfHostedTelegramBackup(env);
+  const settings = await readTelegramBackupSettings(db, auth.userId);
+  return privateJson({ ok: true, settings: publicTelegramBackupSettings(settings) });
+}
+
+async function saveTelegramBackupSettings(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  requireSelfHostedTelegramBackup(env);
+  const body = await readJson(request);
+  const existing = await readTelegramBackupSettings(db, auth.userId);
+  const enabled = body.enabled === true;
+  const botToken = String(body.botToken ?? '').trim();
+  const chatId = normalizeTelegramChatId(body.chatId ?? existing.chatId);
+  const frequency = normalizeTelegramBackupFrequency(body.frequency ?? existing.frequency);
+  const hour = integerInRange(body.hour, existing.hour, 0, 23, 'hour');
+  const minute = integerInRange(body.minute, existing.minute, 0, 59, 'minute');
+  const weekday = integerInRange(body.weekday, existing.weekday, 1, 7, 'weekday');
+  const monthDay = integerInRange(body.monthDay, existing.monthDay, 1, 31, 'monthDay');
+  const timezoneOffsetMinutes = integerInRange(
+    body.timezoneOffsetMinutes,
+    existing.timezoneOffsetMinutes,
+    -840,
+    840,
+    'timezoneOffsetMinutes',
+  );
+
+  let encryptedToken = existing.encryptedToken;
+  let tokenIv = existing.tokenIv;
+  if (botToken) {
+    validateTelegramBotToken(botToken);
+    const encrypted = await encryptTelegramBotToken(env.JWT_SECRET, botToken);
+    encryptedToken = encrypted.ciphertext;
+    tokenIv = encrypted.iv;
+  }
+
+  if (enabled && !encryptedToken) throw new HttpError(400, 'Enter a Telegram bot token before enabling backups.');
+  if (enabled && !chatId) throw new HttpError(400, 'Enter a Telegram group or channel Chat ID before enabling backups.');
+
+  const nextDueAt = enabled
+    ? nextTelegramBackupDueAt({ frequency, hour, minute, weekday, monthDay, timezoneOffsetMinutes }, Date.now())
+    : null;
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO telegram_backup_settings(
+            user_id, enabled, bot_token_encrypted, bot_token_iv, chat_id, frequency,
+            hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+            last_sent_at, last_attempt_at, last_error, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            enabled = excluded.enabled,
+            bot_token_encrypted = excluded.bot_token_encrypted,
+            bot_token_iv = excluded.bot_token_iv,
+            chat_id = excluded.chat_id,
+            frequency = excluded.frequency,
+            hour = excluded.hour,
+            minute = excluded.minute,
+            weekday = excluded.weekday,
+            month_day = excluded.month_day,
+            timezone_offset_minutes = excluded.timezone_offset_minutes,
+            next_due_at = excluded.next_due_at,
+            last_error = NULL,
+            updated_at = excluded.updated_at`,
+    args: [
+      auth.userId,
+      enabled ? 1 : 0,
+      encryptedToken || null,
+      tokenIv || null,
+      chatId,
+      frequency,
+      hour,
+      minute,
+      weekday,
+      monthDay,
+      timezoneOffsetMinutes,
+      nextDueAt,
+      existing.lastSentAt,
+      existing.lastAttemptAt,
+      null,
+      now,
+    ],
+  });
+  const saved = await readTelegramBackupSettings(db, auth.userId);
+  return privateJson({ ok: true, settings: publicTelegramBackupSettings(saved) });
+}
+
+async function testTelegramBackup(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  requireSelfHostedTelegramBackup(env);
+  const body = await readJson(request);
+  const settings = await readTelegramBackupSettings(db, auth.userId);
+  const suppliedToken = String(body.botToken ?? '').trim();
+  const token = suppliedToken || (settings.encryptedToken
+    ? await decryptTelegramBotToken(env.JWT_SECRET, settings.encryptedToken, settings.tokenIv)
+    : '');
+  const suppliedChatId = String(body.chatId ?? '').trim();
+  const chatId = normalizeTelegramChatId(suppliedChatId || settings.chatId);
+  if (!token) throw new HttpError(400, 'Enter or save a Telegram bot token first.');
+  validateTelegramBotToken(token);
+  if (!chatId) throw new HttpError(400, 'Enter a Telegram group or channel Chat ID first.');
+
+  await telegramApiJson(token, 'getMe', {});
+  await telegramApiJson(token, 'sendMessage', {
+    chat_id: chatId,
+    text: 'Koinly self-hosted Telegram backup is connected.',
+    disable_web_page_preview: true,
+  });
+  return privateJson({ ok: true });
+}
+
+async function sendTelegramBackupNow(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  requireSelfHostedTelegramBackup(env);
+  const settings = await readTelegramBackupSettings(db, auth.userId);
+  if (!settings.encryptedToken || !settings.chatId) {
+    throw new HttpError(400, 'Save the Telegram bot token and destination first.');
+  }
+  const result = await deliverTelegramBackupForUser(env, db, auth.userId, settings, false);
+  return privateJson({ ok: true, ...result, settings: publicTelegramBackupSettings(await readTelegramBackupSettings(db, auth.userId)) });
+}
+
+async function runDueTelegramBackups(env: Env, db: Client): Promise<void> {
+  const now = Date.now();
+  const rows = (await db.execute({
+    sql: `SELECT user_id, enabled, bot_token_encrypted, bot_token_iv, chat_id, frequency,
+                 hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+                 last_sent_at, last_attempt_at, last_error
+          FROM telegram_backup_settings
+          WHERE enabled = 1 AND next_due_at IS NOT NULL AND next_due_at <= ?
+          ORDER BY next_due_at
+          LIMIT 20`,
+    args: [now],
+  })).rows;
+
+  for (const row of rows) {
+    const settings = telegramBackupSettingsFromRow(row);
+    if (!settings.encryptedToken || !settings.chatId || settings.nextDueAt == null) continue;
+    const claimedDueAt = settings.nextDueAt;
+    const nextDueAt = nextTelegramBackupDueAt(settings, now + 60_000);
+    const claimed = await db.execute({
+      sql: `UPDATE telegram_backup_settings
+            SET next_due_at = ?, last_attempt_at = ?, updated_at = ?
+            WHERE user_id = ? AND enabled = 1 AND next_due_at = ?`,
+      args: [nextDueAt, now, now, settings.userId, claimedDueAt],
+    });
+    if (claimed.rowsAffected !== 1) continue;
+
+    settings.nextDueAt = nextDueAt;
+    settings.lastAttemptAt = now;
+    try {
+      await deliverTelegramBackupForUser(env, db, settings.userId, settings, true);
+    } catch (error) {
+      console.error('Telegram backup delivery failed', {
+        userId: settings.userId,
+        error: safeTelegramError(error),
+      });
+    }
+  }
+}
+
+async function deliverTelegramBackupForUser(
+  env: Env,
+  db: Client,
+  userId: string,
+  settings: TelegramBackupSettings,
+  scheduled: boolean,
+): Promise<{ fileName: string; sentAt: number }> {
+  const attemptedAt = Date.now();
+  if (!scheduled) {
+    await db.execute({
+      sql: 'UPDATE telegram_backup_settings SET last_attempt_at = ?, last_error = NULL, updated_at = ? WHERE user_id = ?',
+      args: [attemptedAt, attemptedAt, userId],
+    });
+  }
+
+  try {
+    const token = await decryptTelegramBotToken(env.JWT_SECRET, settings.encryptedToken, settings.tokenIv);
+    const { fileName, contents } = await buildTelegramBackupFile(db, userId);
+    await sendTelegramBackupDocument(token, settings.chatId, fileName, contents);
+    const sentAt = Date.now();
+    await db.execute({
+      sql: `UPDATE telegram_backup_settings
+            SET last_sent_at = ?, last_attempt_at = ?, last_error = NULL, updated_at = ?
+            WHERE user_id = ?`,
+      args: [sentAt, attemptedAt, sentAt, userId],
+    });
+    return { fileName, sentAt };
+  } catch (error) {
+    const message = safeTelegramError(error);
+    await db.execute({
+      sql: `UPDATE telegram_backup_settings
+            SET last_attempt_at = ?, last_error = ?, updated_at = ?
+            WHERE user_id = ?`,
+      args: [attemptedAt, message, Date.now(), userId],
+    });
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, message);
+  }
+}
+
+async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fileName: string; contents: string }> {
+  const database: Record<string, Array<Record<string, unknown>>> = {};
+  for (const table of telegramBackupEntityTables) database[table] = [];
+  let preferences: Record<string, unknown> = {};
+
+  const rows = (await db.execute({
+    sql: `SELECT entity_type, payload_json
+          FROM sync_entities
+          WHERE user_id = ? AND deleted_at IS NULL
+          ORDER BY entity_type, entity_id`,
+    args: [userId],
+  })).rows;
+  for (const row of rows) {
+    const entityType = String(row.entity_type ?? '');
+    if (!row.payload_json) continue;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(String(row.payload_json));
+    } catch {
+      continue;
+    }
+    if (entityType === 'preferences') {
+      if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        preferences = payload as Record<string, unknown>;
+      }
+      continue;
+    }
+    if (!telegramBackupEntityTables.includes(entityType as typeof telegramBackupEntityTables[number])) continue;
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      database[entityType].push(payload as Record<string, unknown>);
+    }
+  }
+
+  const createdAt = new Date();
+  const payload = {
+    version: 7,
+    backup_type: 'telegram-cloud',
+    created_at: createdAt.toISOString(),
+    database,
+    preferences,
+  };
+  const fileName = `koinly_telegram_${compactUtcTimestamp(createdAt)}.koinlybackup`;
+  return { fileName, contents: encodeKoinlyBackup(payload) };
+}
+
+async function sendTelegramBackupDocument(token: string, chatId: string, fileName: string, contents: string): Promise<void> {
+  if (contents.length > 45 * 1024 * 1024) {
+    throw new HttpError(413, 'The generated Telegram backup is too large to upload safely. Download a local backup instead.');
+  }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const form = new FormData();
+      form.set('chat_id', chatId);
+      form.set('caption', `Koinly cloud backup\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`);
+      form.set('document', new Blob([contents], { type: 'application/octet-stream' }), fileName);
+      const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+        method: 'POST',
+        body: form,
+      });
+      if (response.ok) return;
+      const text = await response.text();
+      throw new Error(telegramApiFailure(response.status, text));
+    } catch (error) {
+      if (attempt >= 3) throw error;
+      await delay(attempt * 1200);
+    }
+  }
+}
+
+async function telegramApiJson(token: string, method: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) throw new HttpError(502, telegramApiFailure(response.status, text));
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { ok: true };
+  }
+}
+
+function telegramApiFailure(status: number, body: string): string {
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    const description = cleanText(parsed.description, 180);
+    if (description) return `Telegram rejected the request: ${description}`;
+  } catch {}
+  return `Telegram API returned HTTP ${status}.`;
+}
+
+async function readTelegramBackupSettings(db: Client, userId: string): Promise<TelegramBackupSettings> {
+  const row = (await db.execute({
+    sql: `SELECT user_id, enabled, bot_token_encrypted, bot_token_iv, chat_id, frequency,
+                 hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+                 last_sent_at, last_attempt_at, last_error
+          FROM telegram_backup_settings WHERE user_id = ?`,
+    args: [userId],
+  })).rows[0];
+  if (!row) {
+    return {
+      userId,
+      enabled: false,
+      tokenConfigured: false,
+      encryptedToken: '',
+      tokenIv: '',
+      chatId: '',
+      frequency: 'daily',
+      hour: 2,
+      minute: 0,
+      weekday: 7,
+      monthDay: 1,
+      timezoneOffsetMinutes: 0,
+      nextDueAt: null,
+      lastSentAt: null,
+      lastAttemptAt: null,
+      lastError: null,
+    };
+  }
+  return telegramBackupSettingsFromRow(row);
+}
+
+function telegramBackupSettingsFromRow(row: Record<string, unknown>): TelegramBackupSettings {
+  return {
+    userId: String(row.user_id ?? ''),
+    enabled: Number(row.enabled ?? 0) === 1,
+    tokenConfigured: Boolean(row.bot_token_encrypted),
+    encryptedToken: String(row.bot_token_encrypted ?? ''),
+    tokenIv: String(row.bot_token_iv ?? ''),
+    chatId: String(row.chat_id ?? ''),
+    frequency: normalizeTelegramBackupFrequency(row.frequency),
+    hour: integerInRange(row.hour, 2, 0, 23, 'hour'),
+    minute: integerInRange(row.minute, 0, 0, 59, 'minute'),
+    weekday: integerInRange(row.weekday, 7, 1, 7, 'weekday'),
+    monthDay: integerInRange(row.month_day, 1, 1, 31, 'monthDay'),
+    timezoneOffsetMinutes: integerInRange(row.timezone_offset_minutes, 0, -840, 840, 'timezoneOffsetMinutes'),
+    nextDueAt: nullableInteger(row.next_due_at),
+    lastSentAt: nullableInteger(row.last_sent_at),
+    lastAttemptAt: nullableInteger(row.last_attempt_at),
+    lastError: row.last_error == null ? null : String(row.last_error),
+  };
+}
+
+function publicTelegramBackupSettings(settings: TelegramBackupSettings): Record<string, unknown> {
+  return {
+    enabled: settings.enabled,
+    tokenConfigured: settings.tokenConfigured,
+    chatId: settings.chatId,
+    frequency: settings.frequency,
+    hour: settings.hour,
+    minute: settings.minute,
+    weekday: settings.weekday,
+    monthDay: settings.monthDay,
+    timezoneOffsetMinutes: settings.timezoneOffsetMinutes,
+    nextDueAt: settings.nextDueAt,
+    lastSentAt: settings.lastSentAt,
+    lastError: settings.lastError,
+  };
+}
+
+function normalizeTelegramBackupFrequency(value: unknown): TelegramBackupFrequency {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'daily' || normalized === 'weekly' || normalized === 'monthly') return normalized;
+  throw new HttpError(400, 'Backup frequency must be daily, weekly, or monthly.');
+}
+
+function normalizeTelegramChatId(value: unknown): string {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) return '';
+  if (/^-?\d{5,24}$/.test(normalized)) return normalized;
+  if (/^@[A-Za-z0-9_]{5,32}$/.test(normalized)) return normalized;
+  throw new HttpError(400, 'Telegram Chat ID must be a numeric group/channel ID or an @channel username.');
+}
+
+function validateTelegramBotToken(token: string): void {
+  if (!/^\d{5,15}:[A-Za-z0-9_-]{20,}$/.test(token)) {
+    throw new HttpError(400, 'Telegram bot token format is invalid.');
+  }
+}
+
+function integerInRange(value: unknown, fallback: number, min: number, max: number, label: string): number {
+  if (value == null || value === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new HttpError(400, `${label} must be between ${min} and ${max}.`);
+  }
+  return parsed;
+}
+
+function nullableInteger(value: unknown): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
+}
+
+export function nextTelegramBackupDueAt(
+  settings: Pick<TelegramBackupSettings, 'frequency' | 'hour' | 'minute' | 'weekday' | 'monthDay' | 'timezoneOffsetMinutes'>,
+  afterMs: number,
+): number {
+  const offsetMs = settings.timezoneOffsetMinutes * 60_000;
+  const localNow = new Date(afterMs + offsetMs);
+  const year = localNow.getUTCFullYear();
+  const month = localNow.getUTCMonth();
+  const day = localNow.getUTCDate();
+  const toUtc = (y: number, m: number, d: number) => Date.UTC(y, m, d, settings.hour, settings.minute) - offsetMs;
+
+  if (settings.frequency === 'daily') {
+    let candidate = toUtc(year, month, day);
+    if (candidate <= afterMs) candidate = toUtc(year, month, day + 1);
+    return candidate;
+  }
+
+  if (settings.frequency === 'weekly') {
+    const jsDay = localNow.getUTCDay();
+    const currentWeekday = jsDay === 0 ? 7 : jsDay;
+    let daysAhead = (settings.weekday - currentWeekday + 7) % 7;
+    let candidate = toUtc(year, month, day + daysAhead);
+    if (candidate <= afterMs) {
+      daysAhead += 7;
+      candidate = toUtc(year, month, day + daysAhead);
+    }
+    return candidate;
+  }
+
+  const monthlyCandidate = (candidateYear: number, candidateMonth: number): number => {
+    const lastDay = new Date(Date.UTC(candidateYear, candidateMonth + 1, 0)).getUTCDate();
+    return toUtc(candidateYear, candidateMonth, Math.min(settings.monthDay, lastDay));
+  };
+  let candidate = monthlyCandidate(year, month);
+  if (candidate <= afterMs) {
+    const nextMonthDate = new Date(Date.UTC(year, month + 1, 1));
+    candidate = monthlyCandidate(nextMonthDate.getUTCFullYear(), nextMonthDate.getUTCMonth());
+  }
+  return candidate;
+}
+
+async function encryptTelegramBotToken(secret: string, plaintext: string): Promise<{ ciphertext: string; iv: string }> {
+  const key = await telegramBackupEncryptionKey(secret, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  return { ciphertext: b64urlBytes(encrypted), iv: b64urlBytes(iv) };
+}
+
+async function decryptTelegramBotToken(secret: string, ciphertext: string, encodedIv: string): Promise<string> {
+  try {
+    const key = await telegramBackupEncryptionKey(secret, ['decrypt']);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: bytesFromB64Url(encodedIv) },
+      key,
+      bytesFromB64Url(ciphertext),
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch {
+    throw new HttpError(503, 'The saved Telegram bot token cannot be decrypted. Re-enter the token and save again.');
+  }
+}
+
+async function telegramBackupEncryptionKey(secret: string, usages: KeyUsage[]): Promise<CryptoKey> {
+  const material = await crypto.subtle.digest('SHA-256', enc.encode(`koinly-telegram-backup-token:${secret}`));
+  return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, usages);
+}
+
+function encodeKoinlyBackup(payload: unknown): string {
+  const source = enc.encode(JSON.stringify(payload));
+  const key = enc.encode(koinlyBackupCompatibilityKey);
+  const encrypted = new Uint8Array(source.length);
+  for (let index = 0; index < source.length; index += 1) {
+    encrypted[index] = source[index] ^ key[index % key.length];
+  }
+  return bytesToBase64(encrypted);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const chunks: string[] = [];
+  const chunkSize = 0x8000;
+  for (let start = 0; start < bytes.length; start += chunkSize) {
+    const chunk = bytes.subarray(start, Math.min(start + chunkSize, bytes.length));
+    chunks.push(String.fromCharCode(...Array.from(chunk)));
+  }
+  return btoa(chunks.join(''));
+}
+
+function compactUtcTimestamp(value: Date): string {
+  const pad = (input: number) => input.toString().padStart(2, '0');
+  return `${value.getUTCFullYear()}${pad(value.getUTCMonth() + 1)}${pad(value.getUTCDate())}_${pad(value.getUTCHours())}${pad(value.getUTCMinutes())}${pad(value.getUTCSeconds())}`;
+}
+
+function safeTelegramError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message
+    .replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot[redacted]')
+    .replace(/\d{5,15}:[A-Za-z0-9_-]{20,}/g, '[redacted bot token]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 220);
+}
+
 
 function rootResponse(env: Env): Response {
   const mode = registrationMode(env);
@@ -109,6 +670,7 @@ function rootResponse(env: Env): Response {
       replace: 'POST /v1/sync/replace',
       pull: 'GET /v1/sync/pull?cursor=0&limit=100',
       status: 'GET /v1/sync/status',
+      ...(mode === 'first-user' ? { telegramBackup: '/v1/telegram-backup/*' } : {}),
       ...(mode === 'invite-key' ? { registrationKeyAdmin: 'Protected /v1/admin/registration-key/* endpoints' } : {}),
     },
   });
@@ -122,6 +684,7 @@ async function healthResponse(env: Env): Promise<Response> {
       service: 'koinly-sync',
       configured: false,
       registrationMode: registrationMode(env),
+      telegramBackupAvailable: registrationMode(env) === 'first-user',
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -138,6 +701,7 @@ async function healthResponse(env: Env): Promise<Response> {
       service: 'koinly-sync',
       configured: true,
       registrationMode: registrationMode(env),
+      telegramBackupAvailable: registrationMode(env) === 'first-user',
       databaseReachable: true,
       schemaReady,
       missingTables,
@@ -148,6 +712,7 @@ async function healthResponse(env: Env): Promise<Response> {
       service: 'koinly-sync',
       configured: true,
       registrationMode: registrationMode(env),
+      telegramBackupAvailable: registrationMode(env) === 'first-user',
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,

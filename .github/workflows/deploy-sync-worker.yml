@@ -88,7 +88,7 @@ jobs:
             printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
           } > .worker-secrets
           export WRANGLER_OUTPUT_FILE_PATH="$deploy_output"
-          npx wrangler deploy --name "$CLOUDFLARE_NAME" --secrets-file .worker-secrets
+          npx wrangler deploy --config wrangler.self-hosted.toml --name "$CLOUDFLARE_NAME" --secrets-file .worker-secrets
 
           if [ ! -s "$deploy_output" ]; then
             echo "::error::Wrangler deployed the Worker but did not create its structured deployment report."
@@ -143,8 +143,8 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user"' "$health_file" >/dev/null; then
-            echo "::error::The user Worker is not healthy or first-user registration is not enabled (HTTP $http_status). Use a separate Worker name from the owner/default service."
+          if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true' "$health_file" >/dev/null; then
+            echo "::error::The user Worker is not healthy, is missing the Telegram-backup schema/capability, or first-user registration is not enabled (HTTP $http_status). Use a separate Worker name from the owner/default service."
             jq -c . "$health_file"
             exit 1
           fi

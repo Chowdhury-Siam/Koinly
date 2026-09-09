@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1071] - 2026-09-09
+
+### Added
+- Optional Telegram `.koinlybackup` delivery for the **self-hosted Sync Worker**. A bot button now appears in the Account & sync app bar only while Self-hosted is selected and the device is signed in.
+- Self-hosted owners can configure a Telegram bot token, group/channel Chat ID, daily/weekly/monthly schedule, exact local time, weekly day or monthly date, test delivery, and **Upload backup now** from Koinly.
+- The self-hosted Worker encrypts the saved bot token with an AES-GCM key derived from its `JWT_SECRET`, stores only the encrypted token in Turso, creates a cloud-state `.koinlybackup`, and uploads it directly to Telegram.
+- A dedicated self-hosted Wrangler config adds a five-minute Cron Trigger. The managed/default owner Worker does not receive this trigger and the Telegram-backup API rejects managed invite-key deployments.
+
+### Changed
+- Self-hosted deployment applies the Telegram backup settings table automatically; no extra GitHub/Cloudflare secret is required for the user's backup bot because its token is configured from the authenticated app screen.
+
 ## [1.0.1070] - 2026-09-09
 
 ### Added
