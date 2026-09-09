@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1075] - 2026-09-10
+
+### Changed
+
+- Moved the cash-flow **Net** value into the upper-right of the Cash flow trend header beside the date-range control, keeping the requested value visible without duplicating the metric below.
+- Account and category selection sheets now include **Add account** / **Add category** actions. A newly created entry is returned to the originating form and selected immediately.
+- Category creation launched from an expense/income picker is locked to the required category type, preventing a newly created incompatible category from being selected accidentally.
+- Empty account/category pickers can now open and create their first item instead of failing early.
+
 ## [1.0.1074] - 2026-09-10
 
 ### Changed

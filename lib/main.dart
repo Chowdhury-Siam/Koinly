@@ -6186,37 +6186,48 @@ class AppleSelectionField extends StatelessWidget {
   }
 }
 
+const String _selectionAddActionResult = '__koinly_add_selection_option__';
+
 Future<String?> showAppleWheelSelectionSheet(
   BuildContext context, {
   required String title,
   required List<SelectionOption> options,
   required String? selectedId,
+  String? addActionLabel,
+  Future<String?> Function()? onAdd,
 }) async {
-  if (options.isEmpty) return null;
+  if (options.isEmpty && onAdd == null) return null;
   final foundIndex = options.indexWhere((option) => option.id == selectedId);
-  final initialIndex = foundIndex < 0 ? 0 : foundIndex;
+  final initialIndex = options.isEmpty ? -1 : (foundIndex < 0 ? 0 : foundIndex);
   var selectedIndex = initialIndex;
 
   const rowExtent = 72.0;
-  final listHeight = math.min(288.0, math.max(rowExtent, options.length * rowExtent));
+  final listHeight = options.isEmpty
+      ? rowExtent
+      : math.min(288.0, math.max(rowExtent, options.length * rowExtent));
   final maxScrollExtent = math.max(0.0, (options.length * rowExtent) - listHeight);
-  final initialOffset = math.min(
-    maxScrollExtent,
-    math.max(0.0, (initialIndex - 1) * rowExtent),
-  );
+  final initialOffset = options.isEmpty
+      ? 0.0
+      : math.min(
+          maxScrollExtent,
+          math.max(0.0, (initialIndex - 1) * rowExtent),
+        );
   final listController = ScrollController(initialScrollOffset: initialOffset);
+  final hasAddAction = onAdd != null && addActionLabel != null && addActionLabel.trim().isNotEmpty;
 
   final result = await showKoinlyPopup<String>(
     context,
     maxWidth: 520,
-    maxHeight: math.min(600.0, 184.0 + listHeight),
+    maxHeight: math.min(680.0, (hasAddAction ? 250.0 : 184.0) + listHeight),
     child: StatefulBuilder(
       builder: (dialogContext, setModalState) {
-        final safeIndex = selectedIndex < 0
-            ? 0
-            : selectedIndex >= options.length
-                ? options.length - 1
-                : selectedIndex;
+        final safeIndex = options.isEmpty
+            ? -1
+            : selectedIndex < 0
+                ? 0
+                : selectedIndex >= options.length
+                    ? options.length - 1
+                    : selectedIndex;
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
         final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
         final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
@@ -6247,29 +6258,54 @@ Future<String?> showAppleWheelSelectionSheet(
                   border: Border.all(color: innerBorderColor),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Scrollbar(
-                  controller: listController,
-                  thumbVisibility: kIsDesktopApp && options.length > 4,
-                  child: ListView.builder(
-                    controller: listController,
-                    itemExtent: rowExtent,
-                    padding: EdgeInsets.zero,
-                    physics: optimizedScrollPhysics(dialogContext),
-                    itemCount: options.length,
-                    itemBuilder: (context, index) {
-                      final option = options[index];
-                      final isSelected = index == safeIndex;
-                      return Material(
-                        color: Colors.transparent,
-                        child: MotionInkWell(
-                          onTap: () => setModalState(() => selectedIndex = index),
-                          child: _AppleWheelOptionRow(option: option, selected: isSelected),
+                child: options.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Text(
+                            'Nothing here yet. Add one to continue.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
                         ),
-                      );
-                    },
+                      )
+                    : Scrollbar(
+                        controller: listController,
+                        thumbVisibility: kIsDesktopApp && options.length > 4,
+                        child: ListView.builder(
+                          controller: listController,
+                          itemExtent: rowExtent,
+                          padding: EdgeInsets.zero,
+                          physics: optimizedScrollPhysics(dialogContext),
+                          itemCount: options.length,
+                          itemBuilder: (context, index) {
+                            final option = options[index];
+                            final isSelected = index == safeIndex;
+                            return Material(
+                              color: Colors.transparent,
+                              child: MotionInkWell(
+                                onTap: () => setModalState(() => selectedIndex = index),
+                                child: _AppleWheelOptionRow(option: option, selected: isSelected),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+              if (hasAddAction) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(dialogContext, _selectionAddActionResult),
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text(addActionLabel!),
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -6283,7 +6319,7 @@ Future<String?> showAppleWheelSelectionSheet(
                   Expanded(
                     flex: 2,
                     child: FilledButton(
-                      onPressed: () => Navigator.pop(dialogContext, options[safeIndex].id),
+                      onPressed: safeIndex < 0 ? null : () => Navigator.pop(dialogContext, options[safeIndex].id),
                       child: const Text('Done'),
                     ),
                   ),
@@ -6297,6 +6333,9 @@ Future<String?> showAppleWheelSelectionSheet(
   );
 
   listController.dispose();
+  if (result == _selectionAddActionResult && onAdd != null) {
+    return onAdd();
+  }
   return result;
 }
 
@@ -8509,13 +8548,13 @@ class _AccountReorderScreenState extends State<AccountReorderScreen> {
   }
 }
 
-Future<void> showAccountEditor(
+Future<String?> showAccountEditor(
   BuildContext context, {
   Account? account,
   AccountType initialType = AccountType.regular,
   List<AccountType>? allowedTypes,
-}) async {
-  await showKoinlyPopup<void>(
+}) {
+  return showKoinlyPopup<String>(
     context,
     maxWidth: 560,
     maxHeight: 720,
@@ -8642,7 +8681,7 @@ class _AccountEditorState extends State<AccountEditor> {
                         updatedOn: now,
                       );
                       await state.saveAccount(a);
-                      if (context.mounted) Navigator.pop(context);
+                      if (context.mounted) Navigator.pop(context, a.id);
                     },
                     child: const Text('Save'),
                   ),
@@ -9751,19 +9790,25 @@ class CategoryTile extends StatelessWidget {
   }
 }
 
-Future<void> showCategoryEditor(BuildContext context, {Category? category, CategoryType? initialType}) async {
-  await showKoinlyPopup<void>(
+Future<String?> showCategoryEditor(
+  BuildContext context, {
+  Category? category,
+  CategoryType? initialType,
+  CategoryType? fixedType,
+}) {
+  return showKoinlyPopup<String>(
     context,
     maxWidth: 560,
     maxHeight: 720,
-    child: CategoryEditor(category: category, initialType: initialType),
+    child: CategoryEditor(category: category, initialType: initialType, fixedType: fixedType),
   );
 }
 
 class CategoryEditor extends StatefulWidget {
-  const CategoryEditor({super.key, this.category, this.initialType});
+  const CategoryEditor({super.key, this.category, this.initialType, this.fixedType});
   final Category? category;
   final CategoryType? initialType;
+  final CategoryType? fixedType;
 
   @override
   State<CategoryEditor> createState() => _CategoryEditorState();
@@ -9781,11 +9826,11 @@ class _CategoryEditorState extends State<CategoryEditor> {
     final c = widget.category;
     if (c != null) {
       name.text = c.name;
-      type = c.type;
+      type = widget.fixedType ?? c.type;
       icon = c.iconName;
       color = c.iconColor;
     } else {
-      type = widget.initialType ?? CategoryType.expense;
+      type = widget.fixedType ?? widget.initialType ?? CategoryType.expense;
     }
   }
 
@@ -9803,14 +9848,32 @@ class _CategoryEditorState extends State<CategoryEditor> {
             const SizedBox(height: 18),
             TextField(controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
-            SleekPillSelector<CategoryType>(
-              options: const [
-                SleekPillOption(value: CategoryType.expense, label: 'Expense', icon: Icons.north_east_rounded),
-                SleekPillOption(value: CategoryType.income, label: 'Income', icon: Icons.south_west_rounded),
-              ],
-              selected: type,
-              onChanged: (v) => setState(() => type = v),
-            ),
+            if (widget.fixedType == null)
+              SleekPillSelector<CategoryType>(
+                options: const [
+                  SleekPillOption(value: CategoryType.expense, label: 'Expense', icon: Icons.north_east_rounded),
+                  SleekPillOption(value: CategoryType.income, label: 'Income', icon: Icons.south_west_rounded),
+                ],
+                selected: type,
+                onChanged: (v) => setState(() => type = v),
+              )
+            else
+              ExpressiveCard(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      type == CategoryType.income ? Icons.south_west_rounded : Icons.north_east_rounded,
+                      color: type == CategoryType.income ? kSleekIncome : kSleekExpense,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      type == CategoryType.income ? 'Income category' : 'Expense category',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
             const SizedBox(height: 18),
@@ -9823,7 +9886,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
                 final category = Category(id: widget.category?.id ?? _uuid.v4(), name: name.text.trim(), type: type, iconName: icon, iconColor: color, createdOn: widget.category?.createdOn ?? now, updatedOn: now);
                 try {
                   await state.saveCategory(category);
-                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context, category.id);
                 } on StateError catch (error) {
                   if (context.mounted) showSnack(context, error.message);
                 }
@@ -10075,17 +10138,21 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
               label: 'Category',
               option: selectedCategory == null ? null : optionFromCategory(selectedCategory),
               emptyText: expenseCategories.isEmpty ? 'No expense categories available' : 'Choose expense category',
-              onTap: expenseCategories.isEmpty
-                  ? () => showSnack(context, 'Add an expense category first.')
-                  : () async {
-                      final selected = await showAppleWheelSelectionSheet(
-                        context,
-                        title: 'Choose Category',
-                        selectedId: categoryId,
-                        options: expenseCategories.map(optionFromCategory).toList(),
-                      );
-                      if (selected != null && mounted) setState(() => categoryId = selected);
-                    },
+              onTap: () async {
+                final selected = await showAppleWheelSelectionSheet(
+                  context,
+                  title: 'Choose Category',
+                  selectedId: categoryId,
+                  options: expenseCategories.map(optionFromCategory).toList(),
+                  addActionLabel: 'Add category',
+                  onAdd: () => showCategoryEditor(
+                    context,
+                    initialType: CategoryType.expense,
+                    fixedType: CategoryType.expense,
+                  ),
+                );
+                if (selected != null && mounted) setState(() => categoryId = selected);
+              },
             ),
             const SizedBox(height: 18),
             Row(
@@ -10224,6 +10291,8 @@ class _PurchasePlannedItemDialogState extends State<PurchasePlannedItemDialog> {
                       title: 'Choose Account',
                       selectedId: accountId,
                       options: accounts.map((account) => optionFromAccount(account, state)).toList(),
+                      addActionLabel: 'Add account',
+                      onAdd: () => showAccountEditor(context, allowedTypes: AccountType.values),
                     );
                     if (selected != null && mounted) setState(() => accountId = selected);
                   },
@@ -10587,11 +10656,18 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 emptyText: 'Choose category',
                 onTap: () async {
                   _dismissAmountFocus();
+                  final categoryType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
                   final selected = await showAppleWheelSelectionSheet(
                     context,
                     title: 'Choose Category',
                     selectedId: categoryId,
                     options: relevantCategories.map(optionFromCategory).toList(),
+                    addActionLabel: 'Add category',
+                    onAdd: () => showCategoryEditor(
+                      context,
+                      initialType: categoryType,
+                      fixedType: categoryType,
+                    ),
                   );
                   if (selected != null) setState(() => categoryId = selected);
                 },
@@ -10610,6 +10686,13 @@ class _TransactionEditorState extends State<TransactionEditor> {
                   title: type == MoneyTransactionType.transfer ? 'Choose From Account' : 'Choose Account',
                   selectedId: fromAccountId,
                   options: (type == MoneyTransactionType.transfer ? transferFromOptions : accountOptions).map((a) => optionFromAccount(a, state)).toList(),
+                  addActionLabel: 'Add account',
+                  onAdd: () => showAccountEditor(
+                    context,
+                    allowedTypes: type == MoneyTransactionType.transfer
+                        ? AccountType.values
+                        : const [AccountType.regular, AccountType.credit],
+                  ),
                 );
                 if (selected != null) {
                   setState(() {
@@ -10632,6 +10715,8 @@ class _TransactionEditorState extends State<TransactionEditor> {
                     title: 'Choose To Account',
                     selectedId: toAccountId,
                     options: transferToOptions.map((a) => optionFromAccount(a, state)).toList(),
+                    addActionLabel: 'Add account',
+                    onAdd: () => showAccountEditor(context, allowedTypes: AccountType.values),
                   );
                   if (selected != null) {
                     setState(() {
@@ -12159,6 +12244,43 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                   ],
                 ),
               ),
+              Tooltip(
+                message: 'Net cash flow',
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 116),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: (net >= 0 ? kSleekIncome : kSleekExpense).withOpacity(dark ? .10 : .08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: (net >= 0 ? kSleekIncome : kSleekExpense).withOpacity(.22),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Net',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      Text(
+                        state.format(net),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: net >= 0 ? kSleekIncome : kSleekExpense,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
               IconButton.filledTonal(
                 onPressed: () => showDateRangeSheet(context),
                 tooltip: 'Change date range',
@@ -12182,12 +12304,6 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                 value: state.format(totalExpense),
                 icon: Icons.north_east_rounded,
                 color: kSleekExpense,
-              ),
-              _TrendMetricPill(
-                label: 'Net',
-                value: state.format(net),
-                icon: net >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                color: net >= 0 ? kSleekIncome : kSleekExpense,
               ),
             ],
           ),
@@ -16961,6 +17077,8 @@ Future<void> showDefaultSelection(BuildContext context, String mode) async {
       title: 'Choose Default Account',
       selectedId: state.defaultAccountId,
       options: state.accounts.map((account) => optionFromAccount(account, state)).toList(),
+      addActionLabel: 'Add account',
+      onAdd: () => showAccountEditor(context, allowedTypes: AccountType.values),
     );
     if (selected != null) await state.saveDefaults(accountId: selected);
     return;
@@ -16976,6 +17094,12 @@ Future<void> showDefaultSelection(BuildContext context, String mode) async {
     title: isIncome ? 'Choose Default Income Category' : 'Choose Default Expense Category',
     selectedId: isIncome ? state.defaultIncomeCategoryId : state.defaultExpenseCategoryId,
     options: categories.map(optionFromCategory).toList(),
+    addActionLabel: 'Add category',
+    onAdd: () => showCategoryEditor(
+      context,
+      initialType: isIncome ? CategoryType.income : CategoryType.expense,
+      fixedType: isIncome ? CategoryType.income : CategoryType.expense,
+    ),
   );
 
   if (selected != null) {
