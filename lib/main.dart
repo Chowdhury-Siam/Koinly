@@ -1466,12 +1466,37 @@ class BackupService {
     return source.copy(target.path);
   }
 
+  static const List<String> _backupFinanceTables = <String>[
+    'accounts',
+    'categories',
+    'planned_purchases',
+    'transactions',
+    'budgets',
+    'budget_accounts',
+    'budget_categories',
+    'loan_contacts',
+    'loans',
+    'loan_payments',
+  ];
+
+  static int financeRecordCount(Map<String, dynamic> database) {
+    var count = 0;
+    for (final table in _backupFinanceTables) {
+      final rows = database[table];
+      if (rows is List) count += rows.whereType<Map>().length;
+    }
+    return count;
+  }
+
   static Future<void> restoreBackupFile(AppController state, File file) async {
     final encrypted = await file.readAsString();
     final payload = jsonDecode(_decrypt(encrypted)) as Map<String, dynamic>;
     final incomingDatabase = (payload['database'] as Map? ?? const {}).cast<String, dynamic>();
-    if (incomingDatabase.isEmpty) {
-      throw const FormatException('This backup does not contain finance data.');
+    final incomingRecordCount = financeRecordCount(incomingDatabase);
+    if (incomingRecordCount == 0) {
+      throw const FormatException(
+        'This backup contains no finance records. If it came from Telegram, sync/upload your local data to the self-hosted Worker and create a new backup.',
+      );
     }
 
     // A restore is an import/merge flow, not a "Start new" flow. Remove only
@@ -3271,7 +3296,33 @@ class AppController extends ChangeNotifier {
       // into normal merge sync. Never call the server replace-all endpoint.
       await _prepareRestoredDataForMergeSync();
     }
-    await performMultiDeviceSync(silent: silent);
+    if (force) {
+      // A manual "Upload local changes" / Telegram-backup preparation must
+      // reconcile the complete local snapshot, not only rows that happened to
+      // enter the outbox after this account was linked. This is especially
+      // important when a user signs in to a new self-hosted Worker while the
+      // device already contains finance data.
+      await _repairDuplicateCategories(queueSyncChanges: false);
+      await database.enqueueAllForAdoption(await exportPreferences());
+      await _setCloudSyncPending(true);
+    }
+    await performMultiDeviceSync(silent: silent, pullFullCloudCopy: force);
+    if (force) {
+      // Conflict rebasing can create a second generation of outbox rows. A
+      // forced reconciliation is used before manual cloud upload and Telegram
+      // backup, so finish those rebased operations now instead of relying on a
+      // later background retry.
+      var settlePass = 0;
+      while (settlePass < 4 && await database.pendingSyncOperationCount() > 0) {
+        settlePass += 1;
+        await performMultiDeviceSync(silent: silent, pushLocalChanges: true, pullFullCloudCopy: true);
+      }
+      if (await database.pendingSyncOperationCount() > 0 && !silent) {
+        cloudSyncError ??= 'Some local data is still waiting to sync. Try Upload local changes again before creating a Telegram backup.';
+        syncStatus = 'Sync pending';
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> syncFromCloud() async {
@@ -3334,7 +3385,15 @@ class AppController extends ChangeNotifier {
         ));
   }
 
-  Future<Map<String, dynamic>> sendSelfHostedTelegramBackupNow() {
+  Future<Map<String, dynamic>> sendSelfHostedTelegramBackupNow() async {
+    // Make the cloud snapshot complete before asking the Worker to package it.
+    // Without this reconciliation, data that existed before the device signed
+    // in to this self-hosted account could be absent from sync_entities even
+    // though the UI correctly showed the local database as synced.
+    await syncToCloud(force: true, silent: false);
+    if (cloudSyncError != null) {
+      throw StateError('Could not sync local data before creating the Telegram backup: $cloudSyncError');
+    }
     return _withSelfHostedSyncToken((api, accessToken) => api.sendTelegramBackupNow(accessToken: accessToken));
   }
 
@@ -3428,20 +3487,25 @@ class AppController extends ChangeNotifier {
         await database.enqueueAllForAdoption(await exportPreferences());
         await performMultiDeviceSync(silent: true);
       } else {
-        // Existing-account login is an import/merge flow. Preloaded account
-        // placeholders belong only to explicit Start New setup, so discard
-        // untouched built-ins before cloud data is merged into this device.
+        // Existing-account login is a two-phase merge. Pull the complete cloud
+        // state first so this account's server versions are known, then adopt
+        // the merged local snapshot back to cloud. This prevents data that was
+        // already on the device before login from being omitted from a new
+        // self-hosted Worker simply because it had no outbox operation.
         await discardPreloadedStarterAccountsForImport();
         await performMultiDeviceSync(
           silent: !preferCloudData,
-          pushLocalChanges: true,
+          pushLocalChanges: false,
           pullFullCloudCopy: true,
         );
         final removedCloudStarterPlaceholders = await discardPreloadedStarterAccountsForImport();
-        if (removedCloudStarterPlaceholders) {
+        if (cloudSyncError == null) {
+          await syncToCloud(force: true, silent: true);
+        }
+        if (removedCloudStarterPlaceholders && cloudSyncError == null) {
           // Push the placeholder tombstones immediately so they cannot return
           // on this device or another device during the next cloud pull.
-          await performMultiDeviceSync(silent: true, pushLocalChanges: true);
+          await performMultiDeviceSync(silent: true, pushLocalChanges: true, pullFullCloudCopy: true);
         }
       }
       if (!(register && deferInitialDataSync)) {
@@ -3476,6 +3540,12 @@ class AppController extends ChangeNotifier {
     await prefs.setString('syncAccountEmail', '');
     await prefs.setBool('cloudSyncEnabled', false);
     await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+    // Entity versions/cursors belong to one authenticated backend/account.
+    // Never carry them into another self-hosted/default account; finance rows
+    // stay local and will be merged/adopted again after the next login.
+    await database.resetLocalSyncTracking();
+    await database.writeSyncState('serverCursor', '0');
+    await _setCloudSyncPending(false);
     _stopCloudAutoPull();
     syncAuthBusy = false;
     notifyListeners();
@@ -3787,7 +3857,12 @@ class AppController extends ChangeNotifier {
       final currentRow = await database.syncEntityRow(entityType, entityId);
       final localTimestamp = _mergeRowTimestamp(payload);
       final remoteTimestamp = currentRow == null ? -1 : _mergeRowTimestamp(currentRow);
-      final shouldKeepLocal = currentRow == null || localTimestamp > remoteTimestamp;
+      // serverVersion == 0 means the selected backend/account does not have
+      // this entity at all. That is common after switching from Default to a
+      // fresh Self-hosted Worker while local version metadata still referred to
+      // the previous backend. Rebase to version 0 and upload the local row even
+      // when its timestamp matches the row already present in the local DB.
+      final shouldKeepLocal = serverVersion == 0 || currentRow == null || localTimestamp > remoteTimestamp;
       if (!shouldKeepLocal) continue;
 
       await database.upsertSyncEntityRow(entityType, payload);
@@ -13576,7 +13651,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       showSnack(context, 'Sync is already running. Please wait a moment.');
       return;
     }
-    await state.syncToCloud();
+    await state.syncToCloud(force: true);
     if (!mounted) return;
     const successMessage = 'Local and cloud changes merged successfully.';
     showSnack(context, state.cloudSyncError == null ? successMessage : state.cloudSyncError!);
@@ -13882,7 +13957,14 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     }
     setState(() => _busy = true);
     try {
-      final settings = await context.read<AppController>().saveSelfHostedTelegramBackupSettings(
+      final state = context.read<AppController>();
+      if (_settings.enabled) {
+        await state.syncToCloud(force: true, silent: false);
+        if (state.cloudSyncError != null) {
+          throw StateError('Could not sync local data before enabling Telegram backups: ${state.cloudSyncError}');
+        }
+      }
+      final settings = await state.saveSelfHostedTelegramBackupSettings(
             enabled: _settings.enabled,
             botToken: _botTokenController.text,
             chatId: chatId,

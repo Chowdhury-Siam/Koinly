@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.1072] - 2026-09-09
+
+### Fixed
+- Fixed self-hosted Telegram backups that could decrypt successfully but contain zero finance rows. The Worker now refuses to send an empty `.koinlybackup` and returns a clear recovery message instead of producing a file that later appears to restore successfully.
+- Telegram backup generation now reconstructs current cloud state from sync history when `sync_entities` is unexpectedly empty but recoverable `sync_changes` still exist.
+- Backup restore now validates the actual supported finance-row count rather than treating a database object containing only empty arrays as valid data.
+- **Upload local changes** now reconciles the complete local snapshot, so records that existed before signing in to a self-hosted Worker are uploaded instead of being missed because they were never in the sync outbox.
+- **Upload backup now** and enabling automatic Telegram backup first force a full local/cloud reconciliation, ensuring the Worker packages the latest complete device data.
+- Forced reconciliation now completes rebased conflict operations in the same action instead of waiting for a later background retry.
+- A stale local entity version from another backend now rebases to server version `0` when the new Worker has no matching entity, allowing the local row to be inserted instead of silently disappearing from cloud backups.
+- Signing out resets account-specific sync versions, cursor, conflicts, and outbox tracking without deleting finance data, preventing state from the Default Worker from contaminating a Self-hosted Worker (or another account).
+- Existing-account login now pulls/merges the cloud first and then adopts the complete merged local snapshot back to that account, so local-only records become part of future Worker backups automatically.
+
+### Changed
+- Telegram-generated backups include per-table `record_counts` and a total `finance_record_count` diagnostic field while remaining compatible with the existing `.koinlybackup` restore format.
+
 ## [1.0.1071] - 2026-09-09
 
 ### Added

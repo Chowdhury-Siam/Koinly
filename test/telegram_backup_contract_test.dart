@@ -29,6 +29,14 @@ void main() {
     expect(worker, contains("registrationMode(env) !== 'first-user'"));
     expect(worker, contains('sendDocument'));
     expect(worker, contains('telegram_backup_settings'));
+    expect(worker, contains('telegramBackupFinanceRecordCount(database) === 0'));
+    expect(worker, contains('finance_record_count'));
+    expect(worker, contains('FROM sync_changes, last_reset'));
+    expect(app, contains('await state.syncToCloud(force: true);'));
+    expect(app, contains('while (settlePass < 4 && await database.pendingSyncOperationCount() > 0)'));
+    expect(app, contains('serverVersion == 0 || currentRow == null'));
+    expect(app, contains("await database.writeSyncState('serverCursor', '0');"));
+    expect(app, contains('This backup contains no finance records.'));
     expect(schema, contains('CREATE TABLE IF NOT EXISTS telegram_backup_settings'));
     expect(selfHostedWrangler, contains('crons = ["*/5 * * * *"]'));
     expect(workflow, contains('--config wrangler.self-hosted.toml'));

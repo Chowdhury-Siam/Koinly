@@ -358,15 +358,87 @@ async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fi
   for (const table of telegramBackupEntityTables) database[table] = [];
   let preferences: Record<string, unknown> = {};
 
-  const rows = (await db.execute({
-    sql: `SELECT entity_type, payload_json
+  // sync_entities is the canonical current cloud state. Read it first.
+  const entityRows = (await db.execute({
+    sql: `SELECT entity_type, entity_id, payload_json
           FROM sync_entities
           WHERE user_id = ? AND deleted_at IS NULL
           ORDER BY entity_type, entity_id`,
     args: [userId],
   })).rows;
+  applyTelegramBackupRows(entityRows, database, value => { preferences = value; });
+
+  // Older/incomplete deployments can have a valid sync history while
+  // sync_entities is unexpectedly empty (for example after an interrupted
+  // legacy replace). Reconstruct the latest active state from sync_changes so
+  // Telegram never silently emits an empty backup when recoverable cloud data
+  // exists. The most recent __reset__ is respected.
+  if (telegramBackupFinanceRecordCount(database) === 0) {
+    const historyRows = (await db.execute({
+      sql: `WITH last_reset AS (
+              SELECT COALESCE(MAX(sequence), 0) AS reset_sequence
+              FROM sync_changes
+              WHERE user_id = ? AND entity_type = '__reset__'
+            ),
+            ranked AS (
+              SELECT entity_type, entity_id, operation, payload_json, sequence,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY entity_type, entity_id
+                       ORDER BY sequence DESC
+                     ) AS rn
+              FROM sync_changes, last_reset
+              WHERE user_id = ?
+                AND sequence > last_reset.reset_sequence
+                AND entity_type <> '__reset__'
+            )
+            SELECT entity_type, entity_id, payload_json
+            FROM ranked
+            WHERE rn = 1 AND operation = 'upsert'
+            ORDER BY entity_type, entity_id`,
+      args: [userId, userId],
+    })).rows;
+    applyTelegramBackupRows(historyRows, database, value => { preferences = value; });
+  }
+
+  const financeRecordCount = telegramBackupFinanceRecordCount(database);
+  if (financeRecordCount === 0) {
+    throw new HttpError(
+      409,
+      'The cloud copy contains no finance records, so an empty Telegram backup was not sent. Open Koinly on a device with your data, use Upload local changes once, then create the backup again.',
+    );
+  }
+
+  const createdAt = new Date();
+  const recordCounts = Object.fromEntries(
+    telegramBackupEntityTables.map(table => [table, database[table].length]),
+  );
+  const payload = {
+    version: 7,
+    backup_type: 'telegram-cloud',
+    created_at: createdAt.toISOString(),
+    database,
+    preferences,
+    record_counts: recordCounts,
+    finance_record_count: financeRecordCount,
+  };
+  const fileName = `koinly_telegram_${compactUtcTimestamp(createdAt)}.koinlybackup`;
+  return { fileName, contents: encodeKoinlyBackup(payload) };
+}
+
+function applyTelegramBackupRows(
+  rows: Array<Record<string, unknown>>,
+  database: Record<string, Array<Record<string, unknown>>>,
+  setPreferences: (value: Record<string, unknown>) => void,
+): void {
+  // Deduplicate by the same stable entity identity used by sync. This also
+  // makes the history-recovery path safe if it is ever combined with canonical
+  // rows in a future migration.
+  const rowIndexes = new Map<string, Map<string, number>>();
+  for (const table of telegramBackupEntityTables) rowIndexes.set(table, new Map());
+
   for (const row of rows) {
     const entityType = String(row.entity_type ?? '');
+    const entityId = String(row.entity_id ?? '');
     if (!row.payload_json) continue;
     let payload: unknown;
     try {
@@ -376,26 +448,42 @@ async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fi
     }
     if (entityType === 'preferences') {
       if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-        preferences = payload as Record<string, unknown>;
+        setPreferences(payload as Record<string, unknown>);
       }
       continue;
     }
     if (!telegramBackupEntityTables.includes(entityType as typeof telegramBackupEntityTables[number])) continue;
-    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-      database[entityType].push(payload as Record<string, unknown>);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) continue;
+
+    const target = database[entityType];
+    const indexes = rowIndexes.get(entityType)!;
+    const stableId = entityId || telegramBackupRowIdentity(entityType, payload as Record<string, unknown>);
+    if (!stableId) {
+      target.push(payload as Record<string, unknown>);
+      continue;
+    }
+    const existingIndex = indexes.get(stableId);
+    if (existingIndex == null) {
+      indexes.set(stableId, target.length);
+      target.push(payload as Record<string, unknown>);
+    } else {
+      target[existingIndex] = payload as Record<string, unknown>;
     }
   }
+}
 
-  const createdAt = new Date();
-  const payload = {
-    version: 7,
-    backup_type: 'telegram-cloud',
-    created_at: createdAt.toISOString(),
-    database,
-    preferences,
-  };
-  const fileName = `koinly_telegram_${compactUtcTimestamp(createdAt)}.koinlybackup`;
-  return { fileName, contents: encodeKoinlyBackup(payload) };
+function telegramBackupRowIdentity(entityType: string, payload: Record<string, unknown>): string {
+  if (entityType === 'budget_accounts') {
+    return `${String(payload.budget_id ?? '')}\u0000${String(payload.account_id ?? '')}`;
+  }
+  if (entityType === 'budget_categories') {
+    return `${String(payload.budget_id ?? '')}\u0000${String(payload.category_id ?? '')}`;
+  }
+  return String(payload.id ?? '');
+}
+
+function telegramBackupFinanceRecordCount(database: Record<string, Array<Record<string, unknown>>>): number {
+  return telegramBackupEntityTables.reduce((total, table) => total + (database[table]?.length ?? 0), 0);
 }
 
 async function sendTelegramBackupDocument(token: string, chatId: string, fileName: string, contents: string): Promise<void> {

@@ -174,9 +174,15 @@ Available authenticated endpoints on a first-owner/self-hosted Worker:
 
 Scheduled and manual deliveries rebuild a `.koinlybackup` from the current
 non-deleted `sync_entities` rows plus the synced preferences entity and upload it
-with Telegram `sendDocument`. Daily, weekly, and monthly schedules use the UTC
-offset captured from the configuring device. The Cron Trigger checks every five
-minutes, so scheduled delivery is best-effort within that interval.
+with Telegram `sendDocument`. If canonical entities are unexpectedly empty, the
+Worker attempts to reconstruct the latest active snapshot from `sync_changes`
+after the most recent reset marker. It refuses to upload an empty finance backup
+and records a clear delivery error instead. Current app builds also perform a full
+local/cloud reconciliation before enabling the schedule or using **Upload backup
+now**, which hydrates a newly linked self-hosted account with pre-existing local
+data. Daily, weekly, and monthly schedules use the UTC offset captured from the
+configuring device. The Cron Trigger checks every five minutes, so scheduled
+delivery is best-effort within that interval.
 
 The managed/default invite-key Worker intentionally rejects these endpoints and
 is deployed with the normal `wrangler.toml`, so it does not receive the user

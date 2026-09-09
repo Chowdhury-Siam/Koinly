@@ -808,7 +808,12 @@ file to a Telegram group or channel without keeping the phone open.
    enable **Automatic Telegram backup**, and save.
 
 The self-hosted Worker checks due schedules every five minutes and generates the
-backup from the authenticated owner's current cloud sync state. The bot token is
-never added to Koinly finance backups or normal sync entities; it is encrypted
-inside the self-hosted Worker before being stored in Turso. The managed/default
-Koinly Sync Worker does not expose this feature.
+backup from the authenticated owner's current cloud sync state. When the user
+presses **Upload backup now** or enables the schedule, Koinly first reconciles the
+complete local snapshot with the self-hosted Worker so records that existed before
+sign-in are not omitted. The Worker refuses to send a `.koinlybackup` containing
+zero finance rows; if necessary it can reconstruct the latest active state from
+sync history before packaging the file. The bot token is never added to Koinly
+finance backups or normal sync entities; it is encrypted inside the self-hosted
+Worker before being stored in Turso. The managed/default Koinly Sync Worker does
+not expose this feature.
