@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.1074] - 2026-09-10
+
+### Changed
+
+- Transaction date selection now starts in single-date mode. **Use range** explicitly enables Start/End selection, while existing ranged transactions reopen in range mode.
+- Reworked the transaction date picker into a bounded, scrollable body with sticky actions so the calendar and controls remain usable on short Android screens.
+- Added the same opt-in range workflow to transaction time selection. A transaction can now span a same-day time range or combine a date range with independent start/end times.
+- Transaction history labels display a saved time range when the start and end times differ.
+- New transactions no longer contain a literal `0` in the Amount field. Zero is now a visual placeholder that disappears as soon as Amount receives focus.
+- Opening Category, Account, From account, To account, Date, or Time explicitly dismisses Amount focus and the numeric keyboard first.
+
+### Fixed
+
+- Fixed the transaction date-range dialog being effectively unscrollable when its calendar exceeded the available popup height.
+- Same-day time ranges are now persisted through the existing transaction `end_on` field instead of being discarded merely because both endpoints use the same date.
+
 ## [1.0.1073] - 2026-09-09
 
 ### Changed

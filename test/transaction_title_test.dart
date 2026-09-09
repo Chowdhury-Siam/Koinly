@@ -44,6 +44,16 @@ void main() {
     expect(restored.copyWith(endOn: DateTime.utc(2026, 9, 5, 12, 30)).endOn, DateTime.utc(2026, 9, 5, 12, 30));
   });
 
+  test('same-day time ranges survive map round trips without becoming multi-day records', () {
+    final end = DateTime.utc(2026, 8, 28, 14, 45);
+    final original = titledTransaction(endOn: end);
+    final restored = MoneyTransaction.fromMap(original.toMap());
+
+    expect(restored.endOn, end);
+    expect(restored.spansMultipleDays, isFalse);
+    expect(transactionDateTimeLabel(restored), contains('12:30 PM → 2:45 PM'));
+  });
+
   test('older transaction rows without an end date remain single-date records', () {
     final map = titledTransaction().toMap()..remove('end_on');
     final restored = MoneyTransaction.fromMap(map);

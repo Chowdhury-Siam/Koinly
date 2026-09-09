@@ -6365,32 +6365,52 @@ Future<DateTime?> pickDate(BuildContext context, DateTime initial) => showDatePi
       lastDate: DateTime(2100),
     );
 
-Future<DateTimeRange?> pickDateRange(BuildContext context, DateTime start, DateTime end) {
+class TransactionDateSelection {
+  const TransactionDateSelection({
+    required this.start,
+    required this.end,
+    required this.useRange,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final bool useRange;
+}
+
+Future<TransactionDateSelection?> pickTransactionDateSelection(
+  BuildContext context,
+  DateTime start,
+  DateTime end, {
+  required bool useRange,
+}) {
   final startDate = DateTime(start.year, start.month, start.day);
   final requestedEnd = DateTime(end.year, end.month, end.day);
   final endDate = requestedEnd.isBefore(startDate) ? startDate : requestedEnd;
-  return showKoinlyPopup<DateTimeRange>(
+  return showKoinlyPopup<TransactionDateSelection>(
     context,
     maxWidth: 470,
-    maxHeight: 640,
+    maxHeight: 700,
     child: _CenteredDateRangePicker(
-      initialRange: DateTimeRange(start: startDate, end: endDate),
+      initialRange: DateTimeRange(start: startDate, end: useRange ? endDate : startDate),
+      initialUseRange: useRange,
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
     ),
   );
 }
 
-enum _DateRangeEndpoint { start, end }
+enum _RangeEndpoint { start, end }
 
 class _CenteredDateRangePicker extends StatefulWidget {
   const _CenteredDateRangePicker({
     required this.initialRange,
+    required this.initialUseRange,
     required this.firstDate,
     required this.lastDate,
   });
 
   final DateTimeRange initialRange;
+  final bool initialUseRange;
   final DateTime firstDate;
   final DateTime lastDate;
 
@@ -6399,31 +6419,58 @@ class _CenteredDateRangePicker extends StatefulWidget {
 }
 
 class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
+  final ScrollController _scrollController = ScrollController();
   late DateTime _start;
   late DateTime _end;
-  _DateRangeEndpoint _activeEndpoint = _DateRangeEndpoint.start;
+  late bool _useRange;
+  _RangeEndpoint _activeEndpoint = _RangeEndpoint.start;
 
   @override
   void initState() {
     super.initState();
     _start = widget.initialRange.start;
     _end = widget.initialRange.end;
+    _useRange = widget.initialUseRange;
+    if (!_useRange) _end = _start;
   }
 
-  DateTime get _activeDate => _activeEndpoint == _DateRangeEndpoint.start ? _start : _end;
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
-  void _selectEndpoint(_DateRangeEndpoint endpoint) {
-    if (_activeEndpoint == endpoint) return;
+  DateTime get _activeDate => _activeEndpoint == _RangeEndpoint.start ? _start : _end;
+
+  void _setRangeMode(bool value) {
+    if (_useRange == value) return;
+    setState(() {
+      _useRange = value;
+      _activeEndpoint = _RangeEndpoint.start;
+      if (_useRange && _end.isBefore(_start)) {
+        _end = _start;
+      }
+    });
+  }
+
+  void _selectEndpoint(_RangeEndpoint endpoint) {
+    if (!_useRange || _activeEndpoint == endpoint) return;
     setState(() => _activeEndpoint = endpoint);
   }
 
   void _onDateChanged(DateTime value) {
     final date = DateTime(value.year, value.month, value.day);
     setState(() {
-      if (_activeEndpoint == _DateRangeEndpoint.start) {
+      if (!_useRange) {
+        _start = date;
+        _activeEndpoint = _RangeEndpoint.start;
+        return;
+      }
+
+      if (_activeEndpoint == _RangeEndpoint.start) {
         _start = date;
         if (_end.isBefore(_start)) _end = _start;
-        _activeEndpoint = _DateRangeEndpoint.end;
+        _activeEndpoint = _RangeEndpoint.end;
       } else {
         _end = date;
         if (_end.isBefore(_start)) _start = _end;
@@ -6431,24 +6478,37 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
     });
   }
 
+  void _apply() {
+    Navigator.pop(
+      context,
+      TransactionDateSelection(
+        start: _start,
+        end: _useRange ? _end : _start,
+        useRange: _useRange,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final formatter = DateFormat('MMM d, yyyy');
+    final summary = _useRange
+        ? '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}'
+        : formatter.format(_start);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+          child: Row(
             children: [
               const SizedBox(width: 44),
               Expanded(
                 child: Text(
-                  'Select transaction date range',
+                  _useRange ? 'Select transaction date range' : 'Select transaction date',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
@@ -6460,52 +6520,90 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            '${DateFormat('MMM d').format(_start)} – ${DateFormat('MMM d').format(_end)}',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _DateRangeEndpointButton(
-                  label: 'Start',
-                  value: formatter.format(_start),
-                  selected: _activeEndpoint == _DateRangeEndpoint.start,
-                  onTap: () => _selectEndpoint(_DateRangeEndpoint.start),
-                ),
+        ),
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    summary,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 16),
+                  SleekPillSelector<bool>(
+                    options: const [
+                      SleekPillOption(value: false, label: 'Single date', icon: Icons.calendar_today_rounded),
+                      SleekPillOption(value: true, label: 'Use range', icon: Icons.date_range_rounded),
+                    ],
+                    selected: _useRange,
+                    onChanged: _setRangeMode,
+                  ),
+                  const SizedBox(height: 14),
+                  if (_useRange)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _RangeEndpointButton(
+                            label: 'Start',
+                            value: formatter.format(_start),
+                            selected: _activeEndpoint == _RangeEndpoint.start,
+                            onTap: () => _selectEndpoint(_RangeEndpoint.start),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _RangeEndpointButton(
+                            label: 'End',
+                            value: formatter.format(_end),
+                            selected: _activeEndpoint == _RangeEndpoint.end,
+                            onTap: () => _selectEndpoint(_RangeEndpoint.end),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    _RangeEndpointButton(
+                      label: 'Date',
+                      value: formatter.format(_start),
+                      selected: true,
+                      onTap: () {},
+                    ),
+                  const SizedBox(height: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withOpacity(.34),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: scheme.outline.withOpacity(.18)),
+                    ),
+                    child: CalendarDatePicker(
+                      key: ValueKey('${_useRange ? _activeEndpoint.name : 'single'}-${_activeDate.millisecondsSinceEpoch}'),
+                      initialDate: _activeDate,
+                      firstDate: widget.firstDate,
+                      lastDate: widget.lastDate,
+                      currentDate: DateTime.now(),
+                      onDateChanged: _onDateChanged,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DateRangeEndpointButton(
-                  label: 'End',
-                  value: formatter.format(_end),
-                  selected: _activeEndpoint == _DateRangeEndpoint.end,
-                  onTap: () => _selectEndpoint(_DateRangeEndpoint.end),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withOpacity(.34),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: scheme.outline.withOpacity(.18)),
-            ),
-            child: CalendarDatePicker(
-              key: ValueKey('${_activeEndpoint.name}-${_activeDate.millisecondsSinceEpoch}'),
-              initialDate: _activeDate,
-              firstDate: widget.firstDate,
-              lastDate: widget.lastDate,
-              currentDate: DateTime.now(),
-              onDateChanged: _onDateChanged,
             ),
           ),
-          const SizedBox(height: 14),
-          Row(
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.dark ? kSleekSurface : scheme.surface,
+            border: Border(top: BorderSide(color: scheme.outline.withOpacity(.12))),
+          ),
+          child: Row(
             children: [
               Expanded(
                 child: OutlinedButton(
@@ -6516,20 +6614,273 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.pop(context, DateTimeRange(start: _start, end: _end)),
-                  child: const Text('Use range'),
+                  onPressed: _apply,
+                  child: Text(_useRange ? 'Use range' : 'Use date'),
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _DateRangeEndpointButton extends StatelessWidget {
-  const _DateRangeEndpointButton({
+class TransactionTimeSelection {
+  const TransactionTimeSelection({
+    required this.start,
+    required this.end,
+    required this.useRange,
+  });
+
+  final TimeOfDay start;
+  final TimeOfDay end;
+  final bool useRange;
+}
+
+Future<TransactionTimeSelection?> pickTransactionTimeSelection(
+  BuildContext context,
+  TimeOfDay start,
+  TimeOfDay end, {
+  required bool useRange,
+  required bool datesSpanMultipleDays,
+}) {
+  return showKoinlyPopup<TransactionTimeSelection>(
+    context,
+    maxWidth: 470,
+    maxHeight: 560,
+    child: _CenteredTimeRangePicker(
+      initialStart: start,
+      initialEnd: useRange ? end : start,
+      initialUseRange: useRange,
+      datesSpanMultipleDays: datesSpanMultipleDays,
+    ),
+  );
+}
+
+class _CenteredTimeRangePicker extends StatefulWidget {
+  const _CenteredTimeRangePicker({
+    required this.initialStart,
+    required this.initialEnd,
+    required this.initialUseRange,
+    required this.datesSpanMultipleDays,
+  });
+
+  final TimeOfDay initialStart;
+  final TimeOfDay initialEnd;
+  final bool initialUseRange;
+  final bool datesSpanMultipleDays;
+
+  @override
+  State<_CenteredTimeRangePicker> createState() => _CenteredTimeRangePickerState();
+}
+
+class _CenteredTimeRangePickerState extends State<_CenteredTimeRangePicker> {
+  final ScrollController _scrollController = ScrollController();
+  late TimeOfDay _start;
+  late TimeOfDay _end;
+  late bool _useRange;
+  _RangeEndpoint _activeEndpoint = _RangeEndpoint.start;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.initialStart;
+    _end = widget.initialEnd;
+    _useRange = widget.initialUseRange;
+    if (!_useRange) _end = _start;
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  int _minutes(TimeOfDay value) => value.hour * 60 + value.minute;
+
+  void _setRangeMode(bool value) {
+    if (_useRange == value) return;
+    setState(() {
+      _useRange = value;
+      _activeEndpoint = _RangeEndpoint.start;
+      if (_useRange && !widget.datesSpanMultipleDays && _minutes(_end) <= _minutes(_start)) {
+        final proposed = math.min(_minutes(_start) + 60, (24 * 60) - 1);
+        _end = TimeOfDay(hour: proposed ~/ 60, minute: proposed % 60);
+      }
+    });
+  }
+
+  Future<void> _pickEndpoint(_RangeEndpoint endpoint) async {
+    if (_activeEndpoint != endpoint) setState(() => _activeEndpoint = endpoint);
+    final initial = endpoint == _RangeEndpoint.start ? _start : _end;
+    final selected = await showTimePicker(context: context, initialTime: initial);
+    if (!mounted || selected == null) return;
+    setState(() {
+      if (endpoint == _RangeEndpoint.start) {
+        _start = selected;
+        if (_useRange) {
+          _activeEndpoint = _RangeEndpoint.end;
+        }
+      } else {
+        _end = selected;
+      }
+    });
+  }
+
+  void _apply() {
+    if (_useRange && !widget.datesSpanMultipleDays && _minutes(_end) <= _minutes(_start)) {
+      showSnack(context, 'End time must be after start time for a single-day transaction');
+      return;
+    }
+    Navigator.pop(
+      context,
+      TransactionTimeSelection(
+        start: _start,
+        end: _useRange ? _end : _start,
+        useRange: _useRange,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final localizations = MaterialLocalizations.of(context);
+    String format(TimeOfDay value) => localizations.formatTimeOfDay(value);
+    final summary = _useRange ? '${format(_start)} – ${format(_end)}' : format(_start);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 4),
+          child: Row(
+            children: [
+              const SizedBox(width: 44),
+              Expanded(
+                child: Text(
+                  _useRange ? 'Select transaction time range' : 'Select transaction time',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    summary,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 16),
+                  SleekPillSelector<bool>(
+                    options: const [
+                      SleekPillOption(value: false, label: 'Single time', icon: Icons.schedule_rounded),
+                      SleekPillOption(value: true, label: 'Use range', icon: Icons.timelapse_rounded),
+                    ],
+                    selected: _useRange,
+                    onChanged: _setRangeMode,
+                  ),
+                  const SizedBox(height: 16),
+                  if (_useRange)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _RangeEndpointButton(
+                            label: 'Start',
+                            value: format(_start),
+                            selected: _activeEndpoint == _RangeEndpoint.start,
+                            onTap: () => _pickEndpoint(_RangeEndpoint.start),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _RangeEndpointButton(
+                            label: 'End',
+                            value: format(_end),
+                            selected: _activeEndpoint == _RangeEndpoint.end,
+                            onTap: () => _pickEndpoint(_RangeEndpoint.end),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    _RangeEndpointButton(
+                      label: 'Time',
+                      value: format(_start),
+                      selected: true,
+                      onTap: () => _pickEndpoint(_RangeEndpoint.start),
+                    ),
+                  const SizedBox(height: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => _pickEndpoint(_activeEndpoint),
+                    icon: const Icon(Icons.schedule_rounded),
+                    label: Text(_useRange
+                        ? 'Change ${_activeEndpoint == _RangeEndpoint.start ? 'start' : 'end'} time'
+                        : 'Change time'),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _useRange
+                        ? 'Tap Start or End to edit either time. The transaction remains one record and its amount is counted once.'
+                        : 'Use range only when this transaction should cover a start and end time.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.dark ? kSleekSurface : scheme.surface,
+            border: Border(top: BorderSide(color: scheme.outline.withOpacity(.12))),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: _apply,
+                  child: Text(_useRange ? 'Use range' : 'Use time'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RangeEndpointButton extends StatelessWidget {
+  const _RangeEndpointButton({
     required this.label,
     required this.value,
     required this.selected,
@@ -10040,8 +10391,19 @@ String transactionDateSpanLabel(DateTime start, DateTime end) {
   return '${DateFormat('MMM d, yyyy').format(start)} → ${DateFormat('MMM d, yyyy').format(end)}';
 }
 
-String transactionDateTimeLabel(MoneyTransaction transaction) =>
-    '${transactionDateSpanLabel(transaction.createdOn, transaction.effectiveEndOn)} • ${DateFormat('h:mm a').format(transaction.createdOn)}';
+String transactionTimeSpanLabel(DateTime start, DateTime end, {bool forceRange = false}) {
+  final startLabel = DateFormat('h:mm a').format(start);
+  final sameMinute = start.hour == end.hour && start.minute == end.minute;
+  if (!forceRange && sameMinute) return startLabel;
+  return '$startLabel → ${DateFormat('h:mm a').format(end)}';
+}
+
+String transactionDateTimeLabel(MoneyTransaction transaction) {
+  final end = transaction.effectiveEndOn;
+  final hasTimeRange = transaction.endOn != null &&
+      (transaction.createdOn.hour != end.hour || transaction.createdOn.minute != end.minute);
+  return '${transactionDateSpanLabel(transaction.createdOn, end)} • ${transactionTimeSpanLabel(transaction.createdOn, end, forceRange: hasTimeRange)}';
+}
 
 Future<void> showTransactionEditor(BuildContext context, {MoneyTransaction? transaction, Category? lockedCategory}) async {
   await showKoinlyPopup<void>(
@@ -10064,17 +10426,22 @@ class TransactionEditor extends StatefulWidget {
 class _TransactionEditorState extends State<TransactionEditor> {
   final title = TextEditingController();
   final notes = TextEditingController();
-  final amount = TextEditingController(text: '0');
+  final amount = TextEditingController();
+  final amountFocus = FocusNode();
   MoneyTransactionType type = MoneyTransactionType.expense;
   String? categoryId;
   String? fromAccountId;
   String? toAccountId;
   DateTime selectedDate = DateTime.now();
   DateTime selectedEndDate = DateTime.now();
+  bool dateRangeEnabled = false;
+  bool timeRangeEnabled = false;
+  bool _amountHasFocus = false;
 
   @override
   void initState() {
     super.initState();
+    amountFocus.addListener(_handleAmountFocusChanged);
     final state = context.read<AppController>();
     final tx = widget.transaction;
     if (tx != null) {
@@ -10087,15 +10454,34 @@ class _TransactionEditorState extends State<TransactionEditor> {
       toAccountId = tx.toAccountId;
       selectedDate = tx.createdOn;
       selectedEndDate = tx.effectiveEndOn;
+      dateRangeEnabled = tx.endOn != null && !isSameCalendarDay(tx.createdOn, tx.effectiveEndOn);
+      timeRangeEnabled = tx.endOn != null &&
+          (tx.createdOn.hour != tx.effectiveEndOn.hour || tx.createdOn.minute != tx.effectiveEndOn.minute);
     } else {
+      selectedEndDate = selectedDate;
       type = widget.lockedCategory?.type == CategoryType.income ? MoneyTransactionType.income : MoneyTransactionType.expense;
       categoryId = widget.lockedCategory?.id ?? (type == MoneyTransactionType.income ? state.defaultIncomeCategoryId : state.defaultExpenseCategoryId);
       fromAccountId = state.defaultAccountId ?? state.operatingAccounts.firstOrNull?.id;
     }
   }
 
+  void _handleAmountFocusChanged() {
+    if (!mounted || _amountHasFocus == amountFocus.hasFocus) return;
+    setState(() => _amountHasFocus = amountFocus.hasFocus);
+  }
+
+  void _dismissAmountFocus() {
+    amountFocus.unfocus();
+    FocusScope.of(context).unfocus();
+  }
+
+  DateTime _withDateAndTime(DateTime date, TimeOfDay time) =>
+      DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
   @override
   void dispose() {
+    amountFocus.removeListener(_handleAmountFocusChanged);
+    amountFocus.dispose();
     title.dispose();
     notes.dispose();
     amount.dispose();
@@ -10105,6 +10491,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
+    final scheme = Theme.of(context).colorScheme;
     final regularAccountOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
     final transferFromOptions = state.accounts.where((a) => a.id != toAccountId).toList();
     final transferToOptions = state.accounts.where((a) => a.id != fromAccountId).toList();
@@ -10129,25 +10516,28 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
               ],
               selected: type,
-              onChanged: (v) => setState(() {
-                type = v;
-                if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
-                  final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
-                  final newCategories = state.categories.where((c) => c.type == targetType).toList();
-                  categoryId = type == MoneyTransactionType.income
-                      ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
-                      : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
-                  final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
-                  if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
-                    fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
+              onChanged: (v) {
+                _dismissAmountFocus();
+                setState(() {
+                  type = v;
+                  if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
+                    final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
+                    final newCategories = state.categories.where((c) => c.type == targetType).toList();
+                    categoryId = type == MoneyTransactionType.income
+                        ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
+                        : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
+                    final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
+                    if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
+                      fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
+                    }
+                    toAccountId = null;
+                  } else {
+                    categoryId = '';
+                    fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
+                    if (toAccountId == fromAccountId) toAccountId = null;
                   }
-                  toAccountId = null;
-                } else {
-                  categoryId = '';
-                  fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
-                  if (toAccountId == fromAccountId) toAccountId = null;
-                }
-              }),
+                });
+              },
             ),
             const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer) ...[
@@ -10167,6 +10557,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
             ],
             TextField(
               controller: amount,
+              focusNode: amountFocus,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textInputAction: TextInputAction.next,
               textAlign: TextAlign.end,
@@ -10178,7 +10569,15 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 }),
               ],
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900),
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.calculate_rounded), labelText: 'Amount'),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.calculate_rounded),
+                labelText: 'Amount',
+                hintText: _amountHasFocus ? null : '0',
+                hintStyle: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      color: scheme.onSurfaceVariant.withOpacity(.72),
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
             ),
             const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
@@ -10187,6 +10586,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
                 emptyText: 'Choose category',
                 onTap: () async {
+                  _dismissAmountFocus();
                   final selected = await showAppleWheelSelectionSheet(
                     context,
                     title: 'Choose Category',
@@ -10204,6 +10604,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               option: fromAccount == null ? null : optionFromAccount(fromAccount, state),
               emptyText: 'Choose account',
               onTap: () async {
+                _dismissAmountFocus();
                 final selected = await showAppleWheelSelectionSheet(
                   context,
                   title: type == MoneyTransactionType.transfer ? 'Choose From Account' : 'Choose Account',
@@ -10225,6 +10626,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 option: toAccount == null ? null : optionFromAccount(toAccount, state),
                 emptyText: 'Choose destination account',
                 onTap: () async {
+                  _dismissAmountFocus();
                   final selected = await showAppleWheelSelectionSheet(
                     context,
                     title: 'Choose To Account',
@@ -10243,28 +10645,64 @@ class _TransactionEditorState extends State<TransactionEditor> {
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () async {
-                final range = await pickDateRange(context, selectedDate, selectedEndDate);
-                if (range == null) return;
+                _dismissAmountFocus();
+                final selection = await pickTransactionDateSelection(
+                  context,
+                  selectedDate,
+                  selectedEndDate,
+                  useRange: dateRangeEnabled,
+                );
+                if (!mounted || selection == null) return;
+                final startTime = TimeOfDay.fromDateTime(selectedDate);
+                final endTime = TimeOfDay.fromDateTime(selectedEndDate);
+                var resetTimeRange = false;
+                final newStart = _withDateAndTime(selection.start, startTime);
+                var newEnd = _withDateAndTime(
+                  selection.useRange ? selection.end : selection.start,
+                  timeRangeEnabled ? endTime : startTime,
+                );
+                if (!selection.useRange && timeRangeEnabled && !newEnd.isAfter(newStart)) {
+                  resetTimeRange = true;
+                  newEnd = newStart;
+                }
                 setState(() {
-                  selectedDate = DateTime(range.start.year, range.start.month, range.start.day, selectedDate.hour, selectedDate.minute);
-                  selectedEndDate = DateTime(range.end.year, range.end.month, range.end.day, selectedDate.hour, selectedDate.minute);
+                  dateRangeEnabled = selection.useRange;
+                  if (resetTimeRange) timeRangeEnabled = false;
+                  selectedDate = newStart;
+                  selectedEndDate = newEnd;
                 });
+                if (resetTimeRange && mounted) {
+                  showSnack(context, 'Time range was reset because its end time was not after the selected date');
+                }
               },
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(transactionDateSpanLabel(selectedDate, selectedEndDate)),
+              icon: Icon(dateRangeEnabled ? Icons.date_range_rounded : Icons.calendar_today_rounded),
+              label: Text(dateRangeEnabled
+                  ? transactionDateSpanLabel(selectedDate, selectedEndDate)
+                  : DateFormat('MMM d, yyyy').format(selectedDate)),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () async {
-                final time = await pickTime(context, TimeOfDay.fromDateTime(selectedDate));
-                if (time == null) return;
+                _dismissAmountFocus();
+                final selection = await pickTransactionTimeSelection(
+                  context,
+                  TimeOfDay.fromDateTime(selectedDate),
+                  TimeOfDay.fromDateTime(selectedEndDate),
+                  useRange: timeRangeEnabled,
+                  datesSpanMultipleDays: dateRangeEnabled && !isSameCalendarDay(selectedDate, selectedEndDate),
+                );
+                if (!mounted || selection == null) return;
+                final start = _withDateAndTime(selectedDate, selection.start);
+                final endDate = dateRangeEnabled ? selectedEndDate : selectedDate;
+                final end = _withDateAndTime(endDate, selection.useRange ? selection.end : selection.start);
                 setState(() {
-                  selectedDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day, time.hour, time.minute);
-                  selectedEndDate = DateTime(selectedEndDate.year, selectedEndDate.month, selectedEndDate.day, time.hour, time.minute);
+                  timeRangeEnabled = selection.useRange;
+                  selectedDate = start;
+                  selectedEndDate = dateRangeEnabled || selection.useRange ? end : start;
                 });
               },
-              icon: const Icon(Icons.schedule_rounded),
-              label: Text(DateFormat('h:mm a').format(selectedDate)),
+              icon: Icon(timeRangeEnabled ? Icons.timelapse_rounded : Icons.schedule_rounded),
+              label: Text(transactionTimeSpanLabel(selectedDate, selectedEndDate, forceRange: timeRangeEnabled)),
             ),
             const SizedBox(height: 12),
             TextField(controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
@@ -10273,6 +10711,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
               if (widget.transaction != null) const SizedBox(width: 12),
               Expanded(flex: 2, child: FilledButton(onPressed: () async {
+                _dismissAmountFocus();
                 final value = double.tryParse(amount.text) ?? 0;
                 if (value <= 0) return showSnack(context, 'Enter a valid amount');
                 final transactionTitle = title.text.trim();
@@ -10280,6 +10719,9 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 if (fromAccountId == null) return showSnack(context, 'Select an account');
                 if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
                 if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
+                final rangeRequested = dateRangeEnabled || timeRangeEnabled;
+                if (rangeRequested && selectedEndDate.isBefore(selectedDate)) return showSnack(context, 'The end of the range must be after the start');
+                final hasEffectiveRange = rangeRequested && selectedEndDate.isAfter(selectedDate);
                 final tx = MoneyTransaction(
                   id: widget.transaction?.id ?? _uuid.v4(),
                   type: type,
@@ -10294,7 +10736,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                   linkedEntityType: widget.transaction?.linkedEntityType,
                   linkedEntityId: widget.transaction?.linkedEntityId,
                   createdOn: selectedDate,
-                  endOn: isSameCalendarDay(selectedDate, selectedEndDate) ? null : selectedEndDate,
+                  endOn: hasEffectiveRange ? selectedEndDate : null,
                   updatedOn: DateTime.now(),
                 );
                 if (widget.transaction == null) {

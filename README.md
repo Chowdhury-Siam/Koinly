@@ -58,7 +58,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Multiple cash, bank, card, savings, and custom accounts
 - Income, expense, and transfer transactions
 - Required titles for income and expense transactions, shown throughout transaction history
-- Optional start-to-end date ranges for a transaction, with its amount counted once
+- Opt-in start/end date and time ranges for a transaction, with single date/time selected by default and the amount counted once
 - Custom income and expense categories
 - Monthly budgets with progress tracking
 - Lending and borrowing records with contacts, timestamped repayments, start/due date and time, and APR-based interest
