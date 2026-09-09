@@ -322,6 +322,7 @@ class KoinlyDatabase {
       )
     ''');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_sync_outbox_created ON sync_outbox(created_at)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_sync_outbox_entity ON sync_outbox(entity_type, entity_id)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_sync_conflicts_open ON sync_conflicts(resolved_at, created_at)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loans_contact ON loans(contact_id)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loans_status_due ON loans(status, due_date)');
@@ -1063,15 +1064,51 @@ class KoinlyDatabase {
     required int serverVersion,
     required String details,
   }) async {
-    await (await db).insert('sync_conflicts', {
-      'id': _uuid.v4(),
+    final database = await db;
+    final existing = await database.query(
+      'sync_conflicts',
+      columns: ['id'],
+      where: 'entity_type = ? AND entity_id = ? AND resolved_at IS NULL',
+      whereArgs: [entityType, entityId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    final values = <String, Object?>{
       'entity_type': entityType,
       'entity_id': entityId,
       'local_operation_id': localOperationId,
       'server_version': serverVersion,
       'details': details,
       'created_at': DateTime.now().millisecondsSinceEpoch,
-    });
+      'resolved_at': null,
+    };
+    if (existing.isNotEmpty) {
+      await database.update('sync_conflicts', values, where: 'id = ?', whereArgs: [existing.first['id']]);
+      return;
+    }
+    await database.insert('sync_conflicts', {'id': _uuid.v4(), ...values});
+  }
+
+  /// A conflict is settled once the merge/rebase pass has completed and there
+  /// is no longer an outstanding local operation for that same entity. Keeping
+  /// the historical row is useful for diagnostics, but it must no longer count
+  /// as an open conflict after both sides have converged.
+  Future<int> resolveSettledSyncConflicts({int? settledThrough}) async {
+    final database = await db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cutoff = settledThrough ?? now;
+    return database.rawUpdate('''
+      UPDATE sync_conflicts
+      SET resolved_at = ?
+      WHERE resolved_at IS NULL
+        AND created_at <= ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM sync_outbox
+          WHERE sync_outbox.entity_type = sync_conflicts.entity_type
+            AND sync_outbox.entity_id = sync_conflicts.entity_id
+        )
+    ''', [now, cutoff]);
   }
 
   Future<bool> applyRemoteChanges(List<Map<String, dynamic>> changes, Future<void> Function(Map<String, dynamic>) applyPreferences) async {
@@ -1636,16 +1673,14 @@ class AppController extends ChangeNotifier {
   List<Loan> loans = [];
   List<LoanPayment> loanPayments = [];
   String profileDisplayName = '';
-  String profileBio = '';
   String profileMediaPath = '';
   String profileMediaOriginalName = '';
   ProfileMediaKind? profileMediaKind;
   int profileMediaSizeBytes = 0;
   bool profileMediaPermissionPrompted = false;
-  SavingsSuggestionProfile savingsSuggestionProfile = SavingsSuggestionProfile.empty;
-  List<String> savedSavingsIdeas = [];
-  List<String> plannedSavingsIdeas = [];
-  List<String> seenSavingsSuggestionKeys = [];
+  double profileMediaScale = 1.0;
+  double profileMediaAlignmentX = 0.0;
+  double profileMediaAlignmentY = 0.0;
   List<String> dismissedFinancialHealthSummaryKeys = [];
   Map<String, Account> _accountsById = {};
   Map<String, Category> _categoriesById = {};
@@ -1813,11 +1848,16 @@ class AppController extends ChangeNotifier {
     useSeparators = await prefs.getBool('useSeparators', true);
     amountsHidden = await prefs.getBool('amountsHidden', false);
     profileDisplayName = await prefs.getString('profileDisplayName', '');
-    profileBio = await prefs.getString('profileBio', '');
     profileMediaPath = await prefs.getString('profileMediaPath', '');
     profileMediaOriginalName = await prefs.getString('profileMediaOriginalName', '');
     profileMediaSizeBytes = await prefs.getInt('profileMediaSizeBytes', 0);
     profileMediaPermissionPrompted = await prefs.getBool('profileMediaPermissionPrompted', false);
+    profileMediaScale = double.tryParse(await prefs.getString('profileMediaScale', '1.0')) ?? 1.0;
+    profileMediaAlignmentX = double.tryParse(await prefs.getString('profileMediaAlignmentX', '0.0')) ?? 0.0;
+    profileMediaAlignmentY = double.tryParse(await prefs.getString('profileMediaAlignmentY', '0.0')) ?? 0.0;
+    profileMediaScale = profileMediaScale.clamp(1.0, 3.0).toDouble();
+    profileMediaAlignmentX = profileMediaAlignmentX.clamp(-1.0, 1.0).toDouble();
+    profileMediaAlignmentY = profileMediaAlignmentY.clamp(-1.0, 1.0).toDouble();
     final profileMediaKindName = await prefs.getString('profileMediaKind', '');
     profileMediaKind = profileMediaKindName.isEmpty
         ? null
@@ -1827,16 +1867,30 @@ class AppController extends ChangeNotifier {
       profileMediaOriginalName = '';
       profileMediaSizeBytes = 0;
       profileMediaKind = null;
+      profileMediaScale = 1.0;
+      profileMediaAlignmentX = 0.0;
+      profileMediaAlignmentY = 0.0;
       final sharedPreferences = await prefs.prefs;
       await sharedPreferences.remove('profileMediaPath');
       await sharedPreferences.remove('profileMediaOriginalName');
       await sharedPreferences.remove('profileMediaSizeBytes');
       await sharedPreferences.remove('profileMediaKind');
+      await sharedPreferences.remove('profileMediaScale');
+      await sharedPreferences.remove('profileMediaAlignmentX');
+      await sharedPreferences.remove('profileMediaAlignmentY');
     }
-    savingsSuggestionProfile = SavingsSuggestionProfile.fromJsonString(await prefs.getString('savingsSuggestionProfile', ''));
-    savedSavingsIdeas = await prefs.getStringList('savedSavingsIdeas');
-    plannedSavingsIdeas = await prefs.getStringList('plannedSavingsIdeas');
-    seenSavingsSuggestionKeys = await prefs.getStringList('seenSavingsSuggestionKeys');
+    // Removed profile/savings fields are explicitly purged so old backups or
+    // cloud preference payloads cannot bring the retired feature back.
+    final legacyProfilePrefs = await prefs.prefs;
+    for (final key in const [
+      'profileBio',
+      'savingsSuggestionProfile',
+      'savedSavingsIdeas',
+      'plannedSavingsIdeas',
+      'seenSavingsSuggestionKeys',
+    ]) {
+      await legacyProfilePrefs.remove(key);
+    }
     dismissedFinancialHealthSummaryKeys = await prefs.getStringList('dismissedFinancialHealthSummaryKeys');
     dateRangeType = await prefs.getEnum('dateRangeType', DateRangeType.values, DateRangeType.thisMonth);
     final startRaw = await prefs.getString('customStart', '');
@@ -2218,6 +2272,14 @@ class AppController extends ChangeNotifier {
       final severelyOverdueLoans = loans.where((loan) => computationFor(loan.id).daysOverdue > 30).length;
 
       final pendingSyncOperations = await database.pendingSyncOperationCount();
+      // Older builds left resolved conflict rows open. A conflict older than the
+      // last completed sync is safe to close when that entity has no remaining
+      // outbox work; conflicts created after the last successful sync stay open.
+      if (cloudSyncLastAt != null) {
+        await database.resolveSettledSyncConflicts(
+          settledThrough: cloudSyncLastAt!.millisecondsSinceEpoch,
+        );
+      }
       final openSyncConflicts = await database.openSyncConflictCount();
       final skippedStarterPlaceholdersVisible = starterAccountsSkipped && await database.hasOnlyUntouchedStarterAccounts();
 
@@ -2414,11 +2476,6 @@ class AppController extends ChangeNotifier {
         'useSeparators': useSeparators,
         'amountsHidden': amountsHidden,
         'profileDisplayName': profileDisplayName,
-        'profileBio': profileBio,
-        'savingsSuggestionProfile': savingsSuggestionProfile.toJson(),
-        'savedSavingsIdeas': savedSavingsIdeas,
-        'plannedSavingsIdeas': plannedSavingsIdeas,
-        'seenSavingsSuggestionKeys': seenSavingsSuggestionKeys,
         'dismissedFinancialHealthSummaryKeys': dismissedFinancialHealthSummaryKeys,
         'dateRangeType': enumName(dateRangeType),
         'customStart': customStart?.toIso8601String() ?? '',
@@ -2465,14 +2522,20 @@ class AppController extends ChangeNotifier {
       'profileMediaKind',
       'profileMediaSizeBytes',
       'profileMediaPermissionPrompted',
+      'profileMediaScale',
+      'profileMediaAlignmentX',
+      'profileMediaAlignmentY',
+      // Retired preferences are ignored if they arrive from an older backup or
+      // another device running a pre-1.0.1070 build.
+      'profileBio',
+      'savingsSuggestionProfile',
+      'savedSavingsIdeas',
+      'plannedSavingsIdeas',
+      'seenSavingsSuggestionKeys',
     };
     for (final entry in data.entries) {
       if (deviceLocalKeys.contains(entry.key)) continue;
       final value = entry.value;
-      if (entry.key == 'savingsSuggestionProfile' && value is Map) {
-        await sp.setString(entry.key, jsonEncode(value.cast<String, dynamic>()));
-        continue;
-      }
       if (value is bool) await sp.setBool(entry.key, value);
       if (value is int) await sp.setInt(entry.key, value);
       if (value is String) await sp.setString(entry.key, value);
@@ -3533,6 +3596,12 @@ class AppController extends ChangeNotifier {
 
       cloudSyncLastAt = DateTime.now();
       await prefs.setString('cloudSyncLastAt', cloudSyncLastAt!.toIso8601String());
+      // Conflicts are automatically closed once their entity has no pending
+      // local operation. This also clears stale conflict rows left behind by
+      // older builds after a successful merge.
+      await database.resolveSettledSyncConflicts(
+        settledThrough: cloudSyncLastAt!.millisecondsSinceEpoch,
+      );
       final pendingCount = await database.pendingSyncOperationCount();
       final stillPending = needsMergeCleanupUpload || pendingCount > 0;
       await _setCloudSyncPending(stillPending);
@@ -4039,12 +4108,9 @@ class AppController extends ChangeNotifier {
 
   Future<void> saveUserProfile({
     required String displayName,
-    required String bio,
   }) async {
     profileDisplayName = displayName.trim();
-    profileBio = bio.trim();
     await prefs.setString('profileDisplayName', profileDisplayName);
-    await prefs.setString('profileBio', profileBio);
     notifyListeners();
     await queuePreferenceSync();
   }
@@ -4067,6 +4133,27 @@ class AppController extends ChangeNotifier {
     await prefs.setString('profileMediaOriginalName', profileMediaOriginalName);
     await prefs.setString('profileMediaKind', profileMediaKind!.name);
     await prefs.setInt('profileMediaSizeBytes', profileMediaSizeBytes);
+    profileMediaScale = 1.0;
+    profileMediaAlignmentX = 0.0;
+    profileMediaAlignmentY = 0.0;
+    await prefs.setString('profileMediaScale', '1.0');
+    await prefs.setString('profileMediaAlignmentX', '0.0');
+    await prefs.setString('profileMediaAlignmentY', '0.0');
+    notifyListeners();
+  }
+
+  Future<void> saveProfileMediaFraming({
+    required double scale,
+    required double alignmentX,
+    required double alignmentY,
+  }) async {
+    if (!hasProfileMedia) return;
+    profileMediaScale = scale.clamp(1.0, 3.0).toDouble();
+    profileMediaAlignmentX = alignmentX.clamp(-1.0, 1.0).toDouble();
+    profileMediaAlignmentY = alignmentY.clamp(-1.0, 1.0).toDouble();
+    await prefs.setString('profileMediaScale', profileMediaScale.toStringAsFixed(4));
+    await prefs.setString('profileMediaAlignmentX', profileMediaAlignmentX.toStringAsFixed(4));
+    await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
     notifyListeners();
   }
 
@@ -4076,11 +4163,17 @@ class AppController extends ChangeNotifier {
     profileMediaOriginalName = '';
     profileMediaKind = null;
     profileMediaSizeBytes = 0;
+    profileMediaScale = 1.0;
+    profileMediaAlignmentX = 0.0;
+    profileMediaAlignmentY = 0.0;
     final sharedPreferences = await prefs.prefs;
     await sharedPreferences.remove('profileMediaPath');
     await sharedPreferences.remove('profileMediaOriginalName');
     await sharedPreferences.remove('profileMediaKind');
     await sharedPreferences.remove('profileMediaSizeBytes');
+    await sharedPreferences.remove('profileMediaScale');
+    await sharedPreferences.remove('profileMediaAlignmentX');
+    await sharedPreferences.remove('profileMediaAlignmentY');
     notifyListeners();
     try {
       await WidgetsBinding.instance.endOfFrame;
@@ -4097,29 +4190,6 @@ class AppController extends ChangeNotifier {
     await prefs.setBool('profileMediaPermissionPrompted', true);
   }
 
-  List<SavingsPurchaseSuggestion> savingsPurchaseSuggestions() => buildSavingsPurchaseSuggestions(this);
-
-  List<SavingsPurchaseSuggestion> unseenSavingsPurchaseSuggestionsForToday() {
-    final today = savingsSuggestionDayKey();
-    final visibleKeys = seenSavingsSuggestionKeys.where((key) => key.startsWith('$today::')).toSet();
-    return savingsPurchaseSuggestions().where((suggestion) => !visibleKeys.contains(savingsSuggestionSeenKey(suggestion.id))).toList();
-  }
-
-  Future<void> markSavingsSuggestionSeenToday(String id) async {
-    final recentKeys = seenSavingsSuggestionKeys.where((key) {
-      final parts = key.split('::');
-      if (parts.length != 2) return false;
-      final date = DateTime.tryParse(parts.first);
-      if (date == null) return false;
-      return DateTime.now().difference(date).inDays <= 14;
-    }).toList();
-    final key = savingsSuggestionSeenKey(id);
-    if (!recentKeys.contains(key)) recentKeys.add(key);
-    seenSavingsSuggestionKeys = recentKeys;
-    await prefs.setStringList('seenSavingsSuggestionKeys', seenSavingsSuggestionKeys);
-    notifyListeners();
-  }
-
   Future<void> dismissFinancialHealthSummary(String key) async {
     if (!dismissedFinancialHealthSummaryKeys.contains(key)) {
       dismissedFinancialHealthSummaryKeys = [...dismissedFinancialHealthSummaryKeys, key];
@@ -4133,31 +4203,6 @@ class AppController extends ChangeNotifier {
     dismissedFinancialHealthSummaryKeys = merged;
     await prefs.setStringList('dismissedFinancialHealthSummaryKeys', dismissedFinancialHealthSummaryKeys);
     notifyListeners();
-  }
-
-  Future<void> saveSavingsSuggestionProfile(SavingsSuggestionProfile profile) async {
-    savingsSuggestionProfile = profile.copyWith(completed: true, updatedOn: DateTime.now());
-    await prefs.setString('savingsSuggestionProfile', jsonEncode(savingsSuggestionProfile.toJson()));
-    notifyListeners();
-    await queuePreferenceSync();
-  }
-
-  Future<void> saveSavingsIdea(String id) async {
-    if (!savedSavingsIdeas.contains(id)) {
-      savedSavingsIdeas = [...savedSavingsIdeas, id];
-      await prefs.setStringList('savedSavingsIdeas', savedSavingsIdeas);
-      notifyListeners();
-      await queuePreferenceSync();
-    }
-  }
-
-  Future<void> markSavingsIdeaPlanned(String id) async {
-    if (!plannedSavingsIdeas.contains(id)) {
-      plannedSavingsIdeas = [...plannedSavingsIdeas, id];
-      await prefs.setStringList('plannedSavingsIdeas', plannedSavingsIdeas);
-      notifyListeners();
-      await queuePreferenceSync();
-    }
   }
 
   DateRange activeRange() {
@@ -4435,84 +4480,6 @@ class AppController extends ChangeNotifier {
   }
 
 
-}
-
-String savingsSuggestionDayKey([DateTime? date]) {
-  final value = date ?? DateTime.now();
-  return DateFormat('yyyy-MM-dd').format(value);
-}
-
-String savingsSuggestionSeenKey(String id, [DateTime? date]) => '${savingsSuggestionDayKey(date)}::$id';
-
-const int kDailySavingsSuggestionLimit = 10;
-
-List<SavingsPurchaseSuggestion> buildSavingsPurchaseSuggestions(AppController state) {
-  final profile = state.savingsSuggestionProfile;
-  final balance = state.savingAccountBalance;
-  String range(double lowFactor, double highFactor, {double min = 300, double max = 50000}) {
-    final low = balance <= 0 ? min : math.max(min, math.min(max, balance * lowFactor));
-    final high = balance <= 0 ? math.max(min * 2, 1000) : math.max(low, math.min(max, balance * highFactor));
-    return '${state.format(low.toDouble())} – ${state.format(high.toDouble())}';
-  }
-
-  final text = [profile.hobby, profile.occupation, profile.savingsGoal, profile.spendingPreference, profile.extraDetails]
-      .join(' ')
-      .toLowerCase();
-  final suggestions = <SavingsPurchaseSuggestion>[];
-
-  void add(String id, String title, String costRange, String reason, String savingsFit, String iconName, String color) {
-    if (suggestions.any((s) => s.id == id)) return;
-    suggestions.add(SavingsPurchaseSuggestion(id: id, title: title, costRange: costRange, reason: reason, savingsFit: savingsFit, iconName: iconName, color: color));
-  }
-
-  if (balance <= 0) {
-    add('start-savings-buffer', 'Start a savings buffer', state.format(500), 'Your savings account is empty, so the safest first idea is building a small buffer before buying anything.', 'A low target helps you start without creating pressure.', 'savings', '#A6E3A1');
-  }
-  if (text.contains('student') || text.contains('study') || text.contains('school') || text.contains('college') || text.contains('university')) {
-    add('student-study-kit', 'Study upgrade kit', range(.08, .18, min: 500, max: 8000), 'Useful for a student profile: notebooks, stationery, flash drive, or a focused study accessory.', 'Keep this below a small part of your savings so the account still grows.', 'book', '#78D8E8');
-    add('course-or-exam', 'Course or exam prep', range(.12, .28, min: 800, max: 15000), 'A skill course or exam prep material can support your education instead of becoming a short-term impulse buy.', 'Best when it helps your current savings goal.', 'school', '#B4A5FF');
-  }
-  if (text.contains('game') || text.contains('gaming') || text.contains('gamer')) {
-    add('gaming-accessory', 'Gaming accessory', range(.10, .22, min: 1000, max: 18000), 'Your profile mentions gaming, so a controller, headset, or mouse can be a relevant planned purchase.', 'Choose this only if it does not reduce your main savings goal too much.', 'sports_esports', '#FBC879');
-    add('gaming-audio', 'Gaming audio upgrade', range(.08, .18, min: 900, max: 12000), 'A headset or speakers can improve long gaming sessions more than random impulse spending.', 'Keep hobby spending within a fixed limit.', 'headphones', '#B4A5FF');
-  }
-  if (text.contains('anime') || text.contains('manga') || text.contains('otaku')) {
-    add('anime-manga-fund', 'Anime or manga fund', range(.06, .18, min: 500, max: 12000), 'A small hobby fund can help you buy manga, merch, or event tickets without touching core savings.', 'Set a fixed cap so the hobby remains controlled.', 'origami_bird', '#FF6BAA');
-    add('manga-box-set', 'Manga box set or volume bundle', range(.10, .24, min: 900, max: 15000), 'If you enjoy manga, a planned volume bundle is usually better than scattered impulse purchases.', 'Choose a title you already planned to collect.', 'manga', '#F472B6');
-    add('anime-collectible', 'Anime collectible or display item', range(.08, .20, min: 800, max: 14000), 'A controlled collectible budget can fit anime fans without draining your savings goal.', 'Only buy if it fits after essentials and your target savings.', 'collectibles', '#FB7185');
-  }
-  if (text.contains('creator') || text.contains('youtube') || text.contains('video') || text.contains('content') || text.contains('stream')) {
-    add('creator-gear', 'Creator gear upgrade', range(.14, .32, min: 1500, max: 25000), 'A mic, tripod, light, or storage upgrade fits a content-creator profile and can improve output quality.', 'Prefer gear that solves a real workflow problem.', 'camera_alt', '#86E3CE');
-    add('creator-audio', 'Microphone or audio accessory', range(.10, .22, min: 1200, max: 16000), 'Clearer audio can be one of the best-value upgrades for content creation.', 'Buy it only if it improves your current setup.', 'mic', '#78D8E8');
-  }
-  if (text.contains('read') || text.contains('book') || text.contains('novel')) {
-    add('reader-stack', 'Book stack', range(.05, .14, min: 400, max: 8000), 'A planned book purchase fits your reading interest while keeping the amount modest.', 'Buy from a wishlist instead of impulse browsing.', 'book', '#FBC879');
-  }
-  if (text.contains('travel') || text.contains('trip')) {
-    add('travel-day-plan', 'Small travel plan', range(.15, .35, min: 1500, max: 30000), 'Your profile suggests travel, so a controlled day-trip fund may fit better than random spending.', 'Keep transport, food, and emergency money inside the estimate.', 'flight', '#78D8E8');
-  }
-  if (text.contains('work') || text.contains('job') || text.contains('office') || text.contains('freelance')) {
-    add('work-productivity', 'Work productivity item', range(.08, .22, min: 800, max: 16000), 'A practical desk, bag, keyboard, or app subscription can support your work routine.', 'Use this only if it improves daily productivity.', 'work', '#A6E3A1');
-  }
-
-  add('safe-buffer', 'Emergency buffer first', balance <= 0 ? state.format(1000) : range(.20, .45, min: 1000, max: 50000), 'Before optional purchases, keeping a reserve protects your savings from sudden needs.', 'This is the safest option if your savings goal is important.', 'health', '#A6E3A1');
-  add('skill-investment', 'Skill investment', balance <= 0 ? state.format(800) : range(.08, .20, min: 800, max: 18000), 'A course, book, or tool that improves your skills can be more useful than a quick purchase.', 'Choose it when it matches your occupation or goal.', 'school', '#B4A5FF');
-  add('wishlist-item', 'Planned wishlist item', balance <= 0 ? state.format(500) : range(.05, .15, min: 500, max: 12000), 'A small planned item can be reasonable if it stays within your savings limit.', 'Avoid buying it if it delays a higher-priority goal.', 'gift', '#FFB5D0');
-  add('audio-upgrade', 'Headphones or earphones', balance <= 0 ? state.format(700) : range(.06, .18, min: 700, max: 10000), 'Audio gear can be a practical upgrade for study, work, or entertainment when chosen carefully.', 'Keep it in a comfortable range that does not hurt your goal.', 'headphones', '#89A7FF');
-  add('digital-subscription', 'Useful subscription or membership', balance <= 0 ? state.format(300) : range(.03, .10, min: 300, max: 5000), 'A single useful subscription can be more valuable than multiple impulse purchases.', 'Only continue it if you actually use it regularly.', 'subscription', '#86E3CE');
-  add('creative-hobby', 'Creative hobby supplies', balance <= 0 ? state.format(400) : range(.05, .14, min: 400, max: 8000), 'Art, journaling, or other hobby supplies can be a controlled way to enjoy your savings.', 'Set a spending ceiling before buying.', 'art', '#FBC879');
-  add('small-tech-upgrade', 'Small tech or desk upgrade', balance <= 0 ? state.format(900) : range(.08, .20, min: 900, max: 18000), 'A keyboard, stand, or small device can improve daily comfort if it solves a real need.', 'Choose practical upgrades over impulse gadgets.', 'keyboard', '#78D8E8');
-  add('essential-replacement', 'Essential replacement fund', balance <= 0 ? state.format(600) : range(.05, .16, min: 600, max: 12000), 'Set aside money for replacing something useful before it becomes urgent.', 'This keeps savings practical instead of only entertainment-focused.', 'tools', '#A6E3A1');
-  add('health-comfort-item', 'Health or comfort item', balance <= 0 ? state.format(500) : range(.04, .14, min: 500, max: 10000), 'A planned health, comfort, or daily-use item can be reasonable when it improves routine life.', 'Keep it below your main savings target.', 'health', '#86E3CE');
-  add('home-organizer', 'Home organizer or storage', balance <= 0 ? state.format(500) : range(.04, .13, min: 500, max: 9000), 'Small home organization purchases can reduce clutter without becoming a large expense.', 'Choose only one useful item and avoid extra add-ons.', 'home', '#FBC879');
-  add('small-gift-plan', 'Small gift plan', balance <= 0 ? state.format(400) : range(.04, .12, min: 400, max: 8000), 'Planning a gift ahead of time prevents last-minute overspending.', 'Use a fixed cap so generosity does not break the budget.', 'gift', '#FFB5D0');
-  add('do-not-buy-yet', 'Wait and compare prices', state.format(0), 'Sometimes the best suggestion is not buying now. Compare prices and wait if the item is not needed.', 'This keeps your savings intact.', 'schedule', '#9AD0F5');
-
-  if (suggestions.length <= kDailySavingsSuggestionLimit) return suggestions;
-  final now = DateTime.now();
-  final daySeed = DateTime(now.year, now.month, now.day).difference(DateTime(now.year, 1, 1)).inDays;
-  final start = daySeed % suggestions.length;
-  return List<SavingsPurchaseSuggestion>.generate(kDailySavingsSuggestionLimit, (i) => suggestions[(start + i) % suggestions.length]);
 }
 
 // -----------------------------------------------------------------------------
@@ -7941,314 +7908,24 @@ class SavingsAccountsContent extends StatefulWidget {
 class _SavingsAccountsContentState extends State<SavingsAccountsContent> {
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        ResponsiveContent(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (widget.accounts.isEmpty)
-                widget.empty
-              else
-                ...widget.accounts.map(
-                  (account) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: AccountTile(account: account, onTap: () => showAccountEditor(context, account: account, allowedTypes: widget.allowedTypes)),
-                  ),
+    return ResponsiveContent(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (widget.accounts.isEmpty)
+            widget.empty
+          else
+            ...widget.accounts.map(
+              (account) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AccountTile(
+                  account: account,
+                  onTap: () => showAccountEditor(context, account: account, allowedTypes: widget.allowedTypes),
                 ),
-              if (widget.accounts.isNotEmpty) const SizedBox(height: 420),
-            ],
-          ),
-        ),
-        if (widget.accounts.isNotEmpty) const Positioned.fill(child: SavingsSuggestionPanel()),
-      ],
-    );
-  }
-}
-
-class SavingsSuggestionPanel extends StatefulWidget {
-  const SavingsSuggestionPanel({super.key});
-
-  @override
-  State<SavingsSuggestionPanel> createState() => _SavingsSuggestionPanelState();
-}
-
-class _SavingsSuggestionPanelState extends State<SavingsSuggestionPanel> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  final math.Random _random = math.Random();
-  Timer? _cycleTimer;
-  String? _poppedId;
-  SavingsPurchaseSuggestion? _visibleSuggestion;
-  bool _bubbleVisible = false;
-  double _horizontalFactor = .5;
-  double _verticalFactor = .5;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..repeat(reverse: true);
-    _scheduleNextAppearance(initial: true);
-  }
-
-  @override
-  void dispose() {
-    _cycleTimer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _scheduleNextAppearance({bool initial = false}) {
-    _cycleTimer?.cancel();
-    final delay = initial ? const Duration(milliseconds: 550) : Duration(milliseconds: 900 + _random.nextInt(1700));
-    _cycleTimer = Timer(delay, _showRandomBubble);
-  }
-
-  void _showRandomBubble() {
-    if (!mounted) return;
-    final suggestions = context.read<AppController>().unseenSavingsPurchaseSuggestionsForToday();
-    if (suggestions.isEmpty) {
-      setState(() {
-        _bubbleVisible = false;
-        _visibleSuggestion = null;
-      });
-      return;
-    }
-
-    final suggestion = suggestions[_random.nextInt(suggestions.length)];
-    setState(() {
-      _visibleSuggestion = suggestion;
-      _bubbleVisible = true;
-      _horizontalFactor = _random.nextDouble();
-      _verticalFactor = _random.nextDouble();
-    });
-
-    _cycleTimer = Timer(Duration(milliseconds: 3200 + _random.nextInt(1900)), () {
-      if (!mounted) return;
-      setState(() => _bubbleVisible = false);
-      _scheduleNextAppearance();
-    });
-  }
-
-  Future<void> _popBubble(SavingsPurchaseSuggestion suggestion) async {
-    _cycleTimer?.cancel();
-    setState(() => _poppedId = suggestion.id);
-    unawaited(HapticFeedback.mediumImpact());
-    unawaited(SystemSound.play(SystemSoundType.click));
-    await Future<void>.delayed(const Duration(milliseconds: 135));
-    if (!mounted) return;
-    await showKoinlyPopup<void>(
-      context,
-      maxWidth: 520,
-      maxHeight: 620,
-      child: SavingsSuggestionDetailDialog(suggestion: suggestion),
-    );
-    if (!mounted) return;
-    await context.read<AppController>().markSavingsSuggestionSeenToday(suggestion.id);
-    if (!mounted) return;
-    setState(() {
-      _poppedId = null;
-      _bubbleVisible = false;
-      _visibleSuggestion = null;
-    });
-    if (context.read<AppController>().unseenSavingsPurchaseSuggestionsForToday().isNotEmpty) {
-      _scheduleNextAppearance();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.read<AppController>();
-    final unseenSuggestions = state.unseenSavingsPurchaseSuggestionsForToday();
-    if (unseenSuggestions.isEmpty) return const SizedBox.shrink();
-
-    final visibleSuggestion = _visibleSuggestion;
-    if (visibleSuggestion == null || !unseenSuggestions.any((suggestion) => suggestion.id == visibleSuggestion.id)) {
-      return const SizedBox.shrink();
-    }
-
-    return RepaintBoundary(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final height = constraints.maxHeight;
-          final bubbleSize = width < 390 ? 66.0 : 74.0;
-          final leftSafe = width < 390 ? 18.0 : 28.0;
-          final rightSafe = width < 390 ? 18.0 : 28.0;
-          final topStart = math.max(165.0, math.min(height * .24, 235.0));
-          final availableWidth = math.max(1.0, width - leftSafe - rightSafe - bubbleSize);
-          final availableHeight = math.max(220.0, height - topStart - 96.0);
-          final wave = math.sin((_controller.value * math.pi * 2) + 1.35);
-          final drift = math.cos((_controller.value * math.pi * 2) + .9);
-          final baseLeft = leftSafe + (availableWidth * _horizontalFactor);
-          final baseTop = topStart + (availableHeight * _verticalFactor);
-          final left = math.min(math.max(leftSafe, baseLeft + (wave * 14)), width - rightSafe - bubbleSize);
-          final top = math.min(math.max(112.0, baseTop + (drift * 12)), height - 105);
-
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Positioned(
-                left: left,
-                top: top,
-                child: IgnorePointer(
-                  ignoring: !_bubbleVisible,
-                  child: AnimatedOpacity(
-                    opacity: _bubbleVisible ? 1 : 0,
-                    duration: AppMotion.fast,
-                    curve: AppMotion.emphasized,
-                    child: AnimatedScale(
-                      scale: _bubbleVisible ? 1 : .78,
-                      duration: AppMotion.fast,
-                      curve: AppMotion.emphasized,
-                      child: _SavingsSuggestionBubble(
-                        suggestion: visibleSuggestion,
-                        selected: _poppedId == visibleSuggestion.id,
-                        onTap: () => _popBubble(visibleSuggestion),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SavingsSuggestionBubble extends StatelessWidget {
-  const _SavingsSuggestionBubble({required this.suggestion, required this.selected, required this.onTap});
-
-  final SavingsPurchaseSuggestion suggestion;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = colorFromHex(suggestion.color, fallback: kSleekAccent);
-    final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-
-    return AnimatedScale(
-      scale: selected ? .82 : 1,
-      duration: AppMotion.fast,
-      curve: AppMotion.emphasized,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          width: 74,
-          height: 74,
-          decoration: BoxDecoration(
-            color: selected ? color.withOpacity(.30) : (dark ? const Color(0xEE10191D) : Colors.white.withOpacity(.96)),
-            shape: BoxShape.circle,
-            border: Border.all(color: selected ? color.withOpacity(.78) : color.withOpacity(.36), width: selected ? 2 : 1.2),
-            boxShadow: [
-              BoxShadow(color: color.withOpacity(selected ? .42 : .26), blurRadius: selected ? 30 : 22, offset: const Offset(0, 10)),
-              BoxShadow(color: Colors.black.withOpacity(dark ? .28 : .10), blurRadius: 18, offset: const Offset(0, 12)),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: color.withOpacity(.16),
-                  border: Border.all(color: scheme.outline.withOpacity(dark ? .10 : .20)),
-                ),
-              ),
-              Text(
-                '?',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: color,
-                      fontWeight: FontWeight.w900,
-                      height: 1,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SavingsSuggestionDetailDialog extends StatelessWidget {
-  const SavingsSuggestionDetailDialog({super.key, required this.suggestion});
-
-  final SavingsPurchaseSuggestion suggestion;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = colorFromHex(suggestion.color, fallback: kSleekAccent);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            iconBubble(context, suggestion.iconName, suggestion.color, size: 58),
-            const SizedBox(height: 14),
-            Text(suggestion.title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-            const SizedBox(height: 12),
-            _SuggestionDetailRow(icon: Icons.price_change_rounded, title: 'Estimated cost', body: suggestion.costRange, color: color),
-            _SuggestionDetailRow(icon: Icons.psychology_rounded, title: 'Why this fits', body: suggestion.reason, color: color),
-            _SuggestionDetailRow(icon: Icons.savings_rounded, title: 'Savings fit', body: suggestion.savingsFit, color: color),
-            const SizedBox(height: 8),
-            Text('This is an optional spending idea, not financial advice. Only buy if it fits your actual needs and savings goal.', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Dismiss'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SuggestionDetailRow extends StatelessWidget {
-  const _SuggestionDetailRow({required this.icon, required this.title, required this.body, required this.color});
-
-  final IconData icon;
-  final String title;
-  final String body;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHigh.withOpacity(.52),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.12)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 3),
-                  Text(body, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
-                ],
               ),
             ),
-          ],
-        ),
+          if (widget.accounts.isNotEmpty) const SizedBox(height: 120),
+        ],
       ),
     );
   }
@@ -9644,10 +9321,43 @@ class PurchasePlanScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final items = state.plannedPurchases;
+    final total = items.fold<double>(0, (sum, item) => sum + item.amount);
     return PageScaffold(
       title: 'Plan',
       subtitle: '${items.length} ${items.length == 1 ? 'item' : 'items'} to buy later',
       actions: [
+        if (items.isNotEmpty)
+          Tooltip(
+            message: 'Total planned price',
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 92, maxWidth: 132),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(.16)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Total',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  Text(
+                    state.format(total),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                ],
+              ),
+            ),
+          ),
         IconButton(
           tooltip: 'Add planned item',
           onPressed: () => showPlannedPurchaseEditor(context),

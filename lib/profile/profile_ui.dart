@@ -172,6 +172,9 @@ class ProfileAvatarButton extends StatelessWidget {
               path: state.hasProfileMedia ? state.profileMediaPath : '',
               kind: state.hasProfileMedia ? state.profileMediaKind : null,
               displayName: state.profileDisplayLabel,
+              scale: state.profileMediaScale,
+              alignmentX: state.profileMediaAlignmentX,
+              alignmentY: state.profileMediaAlignmentY,
               borderRadius: 999,
             ),
           ),
@@ -190,42 +193,19 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late final TextEditingController displayName;
-  late final TextEditingController bio;
-  late final TextEditingController hobby;
-  late final TextEditingController occupation;
-  late final TextEditingController age;
-  late final TextEditingController goal;
-  late final TextEditingController spendingPreference;
-  late final TextEditingController extraDetails;
   bool mediaBusy = false;
   bool profileBusy = false;
-  bool savingsBusy = false;
 
   @override
   void initState() {
     super.initState();
     final state = context.read<AppController>();
-    final savings = state.savingsSuggestionProfile;
     displayName = TextEditingController(text: state.profileDisplayName);
-    bio = TextEditingController(text: state.profileBio);
-    hobby = TextEditingController(text: savings.hobby);
-    occupation = TextEditingController(text: savings.occupation);
-    age = TextEditingController(text: savings.age <= 0 ? '' : '${savings.age}');
-    goal = TextEditingController(text: savings.savingsGoal);
-    spendingPreference = TextEditingController(text: savings.spendingPreference);
-    extraDetails = TextEditingController(text: savings.extraDetails);
   }
 
   @override
   void dispose() {
     displayName.dispose();
-    bio.dispose();
-    hobby.dispose();
-    occupation.dispose();
-    age.dispose();
-    goal.dispose();
-    spendingPreference.dispose();
-    extraDetails.dispose();
     super.dispose();
   }
 
@@ -266,7 +246,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => profileBusy = true);
     await context.read<AppController>().saveUserProfile(
           displayName: displayName.text,
-          bio: bio.text,
         );
     if (mounted) {
       setState(() => profileBusy = false);
@@ -274,52 +253,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _saveSavings() async {
-    if (savingsBusy) return;
-    setState(() => savingsBusy = true);
-    final profile = SavingsSuggestionProfile(
-      completed: true,
-      hobby: hobby.text.trim(),
-      occupation: occupation.text.trim(),
-      age: int.tryParse(age.text.trim()) ?? 0,
-      savingsGoal: goal.text.trim(),
-      spendingPreference: spendingPreference.text.trim(),
-      extraDetails: extraDetails.text.trim(),
-      updatedOn: DateTime.now(),
+  Future<void> _editMediaFraming() async {
+    final state = context.read<AppController>();
+    if (!state.hasProfileMedia || mediaBusy) return;
+    await showKoinlyPopup<void>(
+      context,
+      maxWidth: 620,
+      maxHeight: 760,
+      child: const ProfileMediaFramingEditor(),
     );
-    await context.read<AppController>().saveSavingsSuggestionProfile(profile);
-    if (mounted) {
-      setState(() => savingsBusy = false);
-      showSnack(context, 'Savings Suggestion preferences saved.');
-    }
-  }
-
-  Future<void> _resetSavings() async {
-    final reset = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Reset Savings Suggestion preferences?'),
-        content: const Text('This clears the personal details used to tailor optional savings ideas.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Reset')),
-        ],
-      ),
-    );
-    if (reset != true || !mounted) return;
-    hobby.clear();
-    occupation.clear();
-    age.clear();
-    goal.clear();
-    spendingPreference.clear();
-    extraDetails.clear();
-    await context.read<AppController>().saveSavingsSuggestionProfile(
-          SavingsSuggestionProfile.empty.copyWith(
-            completed: true,
-            updatedOn: DateTime.now(),
-          ),
-        );
-    if (mounted) showSnack(context, 'Savings Suggestion preferences reset.');
   }
 
   void _previewMedia() {
@@ -345,14 +287,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  height: math.min(420.0, MediaQuery.sizeOf(dialogContext).height * .58),
-                  child: ProfileMediaView(
-                    path: state.profileMediaPath,
-                    kind: state.profileMediaKind,
-                    displayName: state.profileDisplayLabel,
-                    fit: BoxFit.contain,
-                    borderRadius: 24,
+                Center(
+                  child: SizedBox(
+                    width: math.min(420.0, MediaQuery.sizeOf(dialogContext).width - 72),
+                    height: math.min(420.0, MediaQuery.sizeOf(dialogContext).width - 72),
+                    child: ProfileMediaView(
+                      path: state.profileMediaPath,
+                      kind: state.profileMediaKind,
+                      displayName: state.profileDisplayLabel,
+                      scale: state.profileMediaScale,
+                      alignmentX: state.profileMediaAlignmentX,
+                      alignmentY: state.profileMediaAlignmentY,
+                      borderRadius: 28,
+                    ),
                   ),
                 ),
               ],
@@ -368,7 +315,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final state = context.watch<AppController>();
     return PageScaffold(
       title: 'Profile',
-      subtitle: 'Personal details, media, and savings preferences',
+      subtitle: 'Personal details and media',
       child: ResponsiveContent(
         mobileMaxWidth: 760,
         desktopMaxWidth: 1180,
@@ -379,37 +326,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               state: state,
               busy: mediaBusy,
               onPick: _pickMedia,
+              onEditFraming: _editMediaFraming,
               onPreview: _previewMedia,
               onRemove: _removeMedia,
             );
             final informationCard = _ProfileInformationCard(
               displayName: displayName,
-              bio: bio,
               email: state.syncAccountEmail,
               busy: profileBusy,
               onSave: _saveProfile,
-            );
-            final savingsCard = _SavingsSuggestionProfileCard(
-              hobby: hobby,
-              occupation: occupation,
-              age: age,
-              goal: goal,
-              spendingPreference: spendingPreference,
-              extraDetails: extraDetails,
-              busy: savingsBusy,
-              onSave: _saveSavings,
-              onReset: _resetSavings,
             );
 
             if (constraints.maxWidth >= 820) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(children: [mediaCard, const SizedBox(height: 14), informationCard]),
-                  ),
+                  Expanded(child: mediaCard),
                   const SizedBox(width: 16),
-                  Expanded(child: savingsCard),
+                  Expanded(child: informationCard),
                 ],
               );
             }
@@ -418,8 +352,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 mediaCard,
                 const SizedBox(height: 14),
                 informationCard,
-                const SizedBox(height: 14),
-                savingsCard,
               ],
             );
           },
@@ -434,6 +366,7 @@ class _ProfileMediaCard extends StatelessWidget {
     required this.state,
     required this.busy,
     required this.onPick,
+    required this.onEditFraming,
     required this.onPreview,
     required this.onRemove,
   });
@@ -441,6 +374,7 @@ class _ProfileMediaCard extends StatelessWidget {
   final AppController state;
   final bool busy;
   final VoidCallback onPick;
+  final VoidCallback onEditFraming;
   final VoidCallback onPreview;
   final VoidCallback onRemove;
 
@@ -475,6 +409,9 @@ class _ProfileMediaCard extends StatelessWidget {
                 path: hasMedia ? state.profileMediaPath : '',
                 kind: hasMedia ? mediaKind : null,
                 displayName: state.profileDisplayLabel,
+                scale: state.profileMediaScale,
+                alignmentX: state.profileMediaAlignmentX,
+                alignmentY: state.profileMediaAlignmentY,
                 borderRadius: 999,
               ),
             ),
@@ -485,8 +422,14 @@ class _ProfileMediaCard extends StatelessWidget {
               'Add a photo, animated GIF, or short video.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            )
+          else
+            Text(
+              'You can reposition and crop the current media without choosing it again.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
             ),
-          SizedBox(height: hasMedia ? 10 : 16),
+          const SizedBox(height: 16),
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -499,6 +442,12 @@ class _ProfileMediaCard extends StatelessWidget {
                     : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
                 label: Text(hasMedia ? 'Replace' : 'Add media'),
               ),
+              if (hasMedia)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : onEditFraming,
+                  icon: const Icon(Icons.crop_rounded),
+                  label: const Text('Reposition & crop'),
+                ),
               if (hasMedia)
                 OutlinedButton.icon(
                   onPressed: busy ? null : onPreview,
@@ -530,14 +479,12 @@ class _ProfileMediaCard extends StatelessWidget {
 class _ProfileInformationCard extends StatelessWidget {
   const _ProfileInformationCard({
     required this.displayName,
-    required this.bio,
     required this.email,
     required this.busy,
     required this.onSave,
   });
 
   final TextEditingController displayName;
-  final TextEditingController bio;
   final String email;
   final bool busy;
   final VoidCallback onSave;
@@ -563,15 +510,6 @@ class _ProfileInformationCard extends StatelessWidget {
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Display name', hintText: 'How should Koinly address you?'),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: bio,
-            maxLength: 160,
-            minLines: 2,
-            maxLines: 4,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Bio', hintText: 'A short note about you'),
-          ),
           if (email.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             ListTile(
@@ -593,84 +531,150 @@ class _ProfileInformationCard extends StatelessWidget {
   }
 }
 
-class _SavingsSuggestionProfileCard extends StatelessWidget {
-  const _SavingsSuggestionProfileCard({
-    required this.hobby,
-    required this.occupation,
-    required this.age,
-    required this.goal,
-    required this.spendingPreference,
-    required this.extraDetails,
-    required this.busy,
-    required this.onSave,
-    required this.onReset,
-  });
+class ProfileMediaFramingEditor extends StatefulWidget {
+  const ProfileMediaFramingEditor({super.key});
 
-  final TextEditingController hobby;
-  final TextEditingController occupation;
-  final TextEditingController age;
-  final TextEditingController goal;
-  final TextEditingController spendingPreference;
-  final TextEditingController extraDetails;
-  final bool busy;
-  final VoidCallback onSave;
-  final VoidCallback onReset;
+  @override
+  State<ProfileMediaFramingEditor> createState() => _ProfileMediaFramingEditorState();
+}
+
+class _ProfileMediaFramingEditorState extends State<ProfileMediaFramingEditor> {
+  late double scale;
+  late double alignmentX;
+  late double alignmentY;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    scale = state.profileMediaScale;
+    alignmentX = state.profileMediaAlignmentX;
+    alignmentY = state.profileMediaAlignmentY;
+  }
+
+  void _reset() {
+    setState(() {
+      scale = 1.0;
+      alignmentX = 0.0;
+      alignmentY = 0.0;
+    });
+  }
+
+  void _move(DragUpdateDetails details) {
+    setState(() {
+      // Alignment is intentionally inverted so the media follows the finger:
+      // dragging right reveals more of the left side of the source.
+      alignmentX = (alignmentX - details.delta.dx / 110).clamp(-1.0, 1.0).toDouble();
+      alignmentY = (alignmentY - details.delta.dy / 110).clamp(-1.0, 1.0).toDouble();
+    });
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    setState(() => saving = true);
+    await context.read<AppController>().saveProfileMediaFraming(
+          scale: scale,
+          alignmentX: alignmentX,
+          alignmentY: alignmentY,
+        );
+    if (mounted) Navigator.pop(context);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.lightbulb_rounded, color: Color(0xFFFFB5D0)),
-              const SizedBox(width: 10),
-              Expanded(child: Text('Savings Suggestion', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Personalize optional purchase ideas. Savings transfers remain internal and do not count as income or expense.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          TextField(controller: hobby, decoration: const InputDecoration(labelText: 'Hobby', hintText: 'Gaming, anime, reading, travel...')),
-          const SizedBox(height: 10),
-          TextField(controller: occupation, decoration: const InputDecoration(labelText: 'Occupation', hintText: 'Student, worker, creator...')),
-          const SizedBox(height: 10),
-          TextField(
-            controller: age,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
-            decoration: const InputDecoration(labelText: 'Age'),
-          ),
-          const SizedBox(height: 10),
-          TextField(controller: goal, decoration: const InputDecoration(labelText: 'Savings goal', hintText: 'Emergency fund, phone, PC, trip...')),
-          const SizedBox(height: 10),
-          TextField(controller: spendingPreference, decoration: const InputDecoration(labelText: 'Spending preference', hintText: 'Careful, balanced, hobby-first...')),
-          const SizedBox(height: 10),
-          TextField(controller: extraDetails, minLines: 2, maxLines: 3, decoration: const InputDecoration(labelText: 'Other details optional')),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton.icon(
-                onPressed: busy ? null : onReset,
-                icon: const Icon(Icons.restart_alt_rounded),
-                label: const Text('Reset'),
+    final state = context.watch<AppController>();
+    if (!state.hasProfileMedia) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Text('Profile media is no longer available.'),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Reposition & crop',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Drag the media to reposition it. Increase zoom to crop tighter.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: _move,
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kSleekAccent.withOpacity(.75), width: 2),
+                  ),
+                  child: ProfileMediaView(
+                    path: state.profileMediaPath,
+                    kind: state.profileMediaKind,
+                    displayName: state.profileDisplayLabel,
+                    scale: scale,
+                    alignmentX: alignmentX,
+                    alignmentY: alignmentY,
+                    borderRadius: 999,
+                  ),
+                ),
               ),
-              FilledButton.icon(
-                onPressed: busy ? null : onSave,
-                icon: const Icon(Icons.save_rounded),
-                label: const Text('Save preferences'),
-              ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                const Icon(Icons.zoom_in_rounded, color: kSleekAccent),
+                const SizedBox(width: 10),
+                const Text('Zoom', style: TextStyle(fontWeight: FontWeight.w800)),
+                const Spacer(),
+                Text('${scale.toStringAsFixed(2)}×', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900)),
+              ],
+            ),
+            Slider(
+              min: 1.0,
+              max: 3.0,
+              divisions: 40,
+              value: scale.clamp(1.0, 3.0).toDouble(),
+              onChanged: (value) => setState(() => scale = value),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: saving ? null : _reset,
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: const Text('Reset'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton.icon(
+                    onPressed: saving ? null : _save,
+                    icon: saving
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.check_rounded),
+                    label: const Text('Save crop'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -683,6 +687,9 @@ class ProfileMediaView extends StatelessWidget {
     required this.kind,
     required this.displayName,
     this.fit = BoxFit.cover,
+    this.scale = 1.0,
+    this.alignmentX = 0.0,
+    this.alignmentY = 0.0,
     this.borderRadius = 0,
   });
 
@@ -690,6 +697,9 @@ class ProfileMediaView extends StatelessWidget {
   final ProfileMediaKind? kind;
   final String displayName;
   final BoxFit fit;
+  final double scale;
+  final double alignmentX;
+  final double alignmentY;
   final double borderRadius;
 
   String get _initials {
@@ -717,31 +727,57 @@ class ProfileMediaView extends StatelessWidget {
     if (!fileExists || kind == null) {
       child = _fallback(context);
     } else if (kind == ProfileMediaKind.video) {
-      child = _ProfileVideoView(key: ValueKey(path), path: path, fit: fit);
+      child = _ProfileVideoView(
+        key: ValueKey(path),
+        path: path,
+        fit: fit,
+        alignment: Alignment(
+          alignmentX.clamp(-1.0, 1.0).toDouble(),
+          alignmentY.clamp(-1.0, 1.0).toDouble(),
+        ),
+      );
     } else {
       child = Image.file(
         File(path),
         fit: fit,
+        alignment: Alignment(
+          alignmentX.clamp(-1.0, 1.0).toDouble(),
+          alignmentY.clamp(-1.0, 1.0).toDouble(),
+        ),
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => _fallback(context),
       );
     }
+    final framed = Transform.scale(
+      scale: scale.clamp(1.0, 3.0).toDouble(),
+      alignment: Alignment(
+        alignmentX.clamp(-1.0, 1.0).toDouble(),
+        alignmentY.clamp(-1.0, 1.0).toDouble(),
+      ),
+      child: child,
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: ColoredBox(
         color: Theme.of(context).colorScheme.surfaceContainerHigh,
-        child: SizedBox.expand(child: child),
+        child: ClipRect(child: SizedBox.expand(child: framed)),
       ),
     );
   }
 }
 
 class _ProfileVideoView extends StatefulWidget {
-  const _ProfileVideoView({super.key, required this.path, required this.fit});
+  const _ProfileVideoView({
+    super.key,
+    required this.path,
+    required this.fit,
+    required this.alignment,
+  });
 
   final String path;
   final BoxFit fit;
+  final Alignment alignment;
 
   @override
   State<_ProfileVideoView> createState() => _ProfileVideoViewState();
@@ -816,6 +852,7 @@ class _ProfileVideoViewState extends State<_ProfileVideoView> {
       child: SizedBox.expand(
         child: FittedBox(
           fit: widget.fit,
+          alignment: widget.alignment,
           clipBehavior: Clip.hardEdge,
           child: SizedBox(
             width: math.max(1.0, size.width).toDouble(),

@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1070] - 2026-09-09
+
+### Added
+- The **Plan** page now shows the combined price of every planned item in the top-right header area.
+- Existing profile media can now be repositioned and zoom-cropped non-destructively, with framing saved locally and reused for the profile avatar and previews.
+
+### Changed
+- Removed the **Savings Suggestion** feature, its profile/preferences UI, suggestion bubbles, recommendation model, and active preference payloads.
+- Removed **Bio** from Profile information; profile information now contains the display name and sync-account details only.
+- Cloud sync now automatically closes conflict records after the merged/rebased entity has no pending outbox operation. Data health also clears legacy stale conflicts that predate the last successful sync, so already-resolved conflicts do not remain permanently open.
+- Repeated server conflicts for the same entity update the existing open conflict record instead of creating duplicate open diagnostics.
+
+### Migration
+- Legacy Savings Suggestion and profile Bio preference keys are purged during preference loading so older local/cloud payloads cannot revive removed UI or behavior.
+
 ## [1.0.1069] - 2026-09-09
 
 ### Added

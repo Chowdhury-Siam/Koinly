@@ -42,4 +42,12 @@ void main() {
     expect(source, contains('hasRedundantPreloadedStarterAccountEvidence'));
     expect(source, contains('Starter accounts are intentionally NOT inserted'));
   });
+
+  test('settled merge conflicts are closed after convergence instead of staying open forever', () {
+    final source = File('lib/main.dart').readAsStringSync();
+    expect(source, contains('resolveSettledSyncConflicts'));
+    expect(source, contains('resolved_at = ?'));
+    expect(source, contains('NOT EXISTS ('));
+    expect(source, contains('sync_outbox.entity_type = sync_conflicts.entity_type'));
+  });
 }

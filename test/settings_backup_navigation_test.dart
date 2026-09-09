@@ -23,13 +23,13 @@ void main() {
     expect(find.text('Advanced settings'), findsOneWidget);
   });
 
-  testWidgets('Profile is the only Savings Suggestion configuration screen', (tester) async {
+  testWidgets('Profile keeps information and editable media framing only', (tester) async {
     await pumpSettingsScreen(tester, const ProfileScreen());
 
     expect(find.text('Profile information'), findsOneWidget);
     expect(find.text('Profile media'), findsOneWidget);
-    expect(find.text('Savings Suggestion'), findsOneWidget);
-    expect(find.text('Save preferences'), findsOneWidget);
+    expect(find.text('Bio'), findsNothing);
+    expect(find.text('Savings Suggestion'), findsNothing);
   });
 
   testWidgets('Advanced settings keeps backup loading available', (tester) async {

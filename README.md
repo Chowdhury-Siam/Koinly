@@ -65,8 +65,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Optional account movements for loan activity without counting them as income or expense
 - Cash-flow trends, category breakdowns, and financial summaries
 - Search, date filters, and account/category filters
-- Savings suggestions and planning tools
-- Purchase planning with editable item name, expected price, expense category, and one-tap conversion into a dated transaction
+- Purchase planning with editable item name, expected price, expense category, a live total planned price, and one-tap conversion into a dated transaction
 
 ### Data and privacy
 
@@ -88,9 +87,8 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Adaptive Material 3 interface
 - Light, dark, and system themes
 - Responsive Android and Windows layouts
-- Customizable profiles with photo, animated GIF, or short-video media previews
+- Customizable profiles with photo, animated GIF, or short-video media previews, including non-destructive repositioning and crop/zoom framing
 - Private profile-media storage with an enforced 1000 KB maximum file size
-- Savings Suggestion preferences grouped with profile information in one screen
 - Android daily reminder notifications
 - GitHub Releases-based update checks
 - Public release manifest checks that avoid GitHub API rate limits
@@ -103,7 +101,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Background outbox for offline edits
 - Multi-device pull when the app opens or resumes
 - Idempotent operation processing
-- Version-based conflict detection
+- Version-based conflict detection with automatic closure after merge/rebase convergence
 - Non-destructive cloud restore and merge-first local upload flows
 - Tenant-isolated Worker queries and transactional Turso writes
 
