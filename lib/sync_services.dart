@@ -250,10 +250,6 @@ class KoinlySyncApi {
     return _post('/v1/sync/push', {'operations': operations}, accessToken: accessToken);
   }
 
-  Future<Map<String, dynamic>> replaceAll({required String accessToken, required List<Map<String, dynamic>> operations}) {
-    return _post('/v1/sync/replace', {'operations': operations}, accessToken: accessToken, timeout: const Duration(minutes: 2));
-  }
-
   Future<Map<String, dynamic>> pull({required String accessToken, required int cursor, int limit = 100}) {
     return _get('/v1/sync/pull', accessToken: accessToken, query: {'cursor': '$cursor', 'limit': '$limit'});
   }

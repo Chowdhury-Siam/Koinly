@@ -103,7 +103,7 @@ selected sync service only through HTTPS requests to a Cloudflare Worker.
 - Multi-device pull when the app opens or resumes
 - Idempotent operation processing
 - Version-based conflict detection
-- Manual cloud restore and authoritative local upload flows
+- Non-destructive cloud restore and merge-first local upload flows
 - Tenant-isolated Worker queries and transactional Turso writes
 
 ## Architecture
@@ -227,8 +227,7 @@ Worker.
 
 Changing between default and self-hosted services signs out the current sync
 session because the two backends contain separate accounts and tokens. The
-switch itself does not delete local finance data. A later cloud restore can
-replace local data, so review the confirmation shown by the app.
+switch itself does not delete local finance data. **Restore cloud copy** is also non-destructive: it merges the cloud dataset with local finance data, preserves local-only records, reconciles matching IDs, and deduplicates equivalent categories.
 
 ## Self-hosted cloud sync
 
@@ -597,9 +596,9 @@ reference.
 - Entity versions detect stale updates instead of silently overwriting them.
 - Worker queries are scoped to the authenticated user.
 - Database mutations use transactions where consistency matters.
-- Cloud restore creates a safety backup before replacing local finance data.
-- Restored local data becomes the cloud source of truth only after explicit
-  confirmation.
+- Cloud restore creates a safety backup before merging remote finance data into the device.
+- **Upload local changes** and **Restore cloud copy** are merge operations: records that exist only on one side are retained, matching IDs are reconciled by modification time, and equivalent categories are deduplicated by type + normalized name.
+- Restored local backup data is queued as ordinary merge upserts; it never triggers a destructive cloud replace-all operation.
 
 ### Credential handling
 
@@ -614,8 +613,9 @@ reference.
 ### Backup guidance
 
 Cloud sync is not a substitute for an independent backup. Keep copies of
-important `.koinlybackup` files somewhere controlled by the user. Loading a
-backup replaces the active local finance dataset after confirmation.
+important `.koinlybackup` files somewhere controlled by the user. Loading a backup merges its finance data with the active device dataset. Local-only rows are retained, matching IDs are reconciled, and duplicate categories such as `Food` are collapsed with their references remapped.
+
+On Android, custom automatic-backup destinations are selected through the system folder picker (Storage Access Framework). Koinly stores the persistent folder grant rather than a raw `/storage/...` path, which is required by Android scoped storage. Upgrading from an older raw-path setting requires choosing the folder once again.
 
 ## Testing
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.1067] - 2026-09-09
+
+### Added
+- Android automatic backup folders now use the system Storage Access Framework and retain a persistent write grant, allowing scheduled backups to save to user-selected internal or SD-card folders after app restarts.
+- Added a shared non-destructive finance merge engine for local backups, cloud restores, legacy snapshot sync, and conflict recovery.
+- Added merge regression tests covering local-only/cloud-only rows, same-ID reconciliation, category deduplication, preference remapping, and Android folder-access contracts.
+
+### Changed
+- **Upload local changes** is now merge-first: cloud-only records are preserved and newer same-ID records are reconciled instead of replacing the cloud dataset.
+- **Restore cloud copy** now performs a two-way merge. Local-only records remain on the device, the full cloud history is folded in, and any resulting local changes are queued back to cloud.
+- Loading a `.koinlybackup` or restoring the last safety backup now merges with the active local database rather than replacing it.
+- Categories are deduplicated semantically by category type plus normalized, case-insensitive name. For example, local `Food` and cloud ` food ` resolve to one category and transaction/budget/preference references are remapped to it.
+- Same-ID entity conflicts use `updated_on` (falling back to `created_on`) to retain the newer row; unrelated IDs are unioned.
+- The older Sync ID/PIN snapshot screen now follows the same merge semantics for both upload and download.
+
+### Fixed
+- Fixed Android `PathAccessException: Operation not permitted` when automatic backup targeted raw `/storage/...` paths under scoped storage.
+- Older raw-path automatic-backup settings are detected and ask the user to choose the folder once through Android's system picker instead of repeatedly attempting an unwritable filesystem path.
+- Upload conflicts are rebased even when the subsequent pull contains no additional rows, preventing a newer local edit from disappearing at a cursor boundary.
+- Removed the Flutter client's destructive replace-all path from restored-data synchronization; legacy pending restore flags are migrated into normal merge upserts.
+
 ## [1.0.1066] - 2026-09-09
 
 ### Added

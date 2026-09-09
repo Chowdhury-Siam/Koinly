@@ -26,10 +26,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
+import 'android_saf_backup_store.dart';
 import 'app_config.dart';
 import 'branding_widgets.dart';
 import 'category_deduplication.dart';
 import 'collection_utils.dart';
+import 'data_merge.dart';
 import 'icon_helpers.dart';
 import 'models.dart';
 import 'loans/loan_computation.dart';
@@ -682,6 +684,13 @@ class KoinlyDatabase {
     return normalized.plan;
   }
 
+  Future<CategoryMergePlan> mergeAll(Map<String, dynamic> incoming) async {
+    final current = await exportAll();
+    final merged = mergeFinanceDatabasePayloads(current, incoming);
+    await importAll(merged.database);
+    return merged.categoryPlan;
+  }
+
   Future<bool> hasLocalUserActivity() async {
     final database = await db;
     for (final table in ['transactions', 'budgets', 'loans']) {
@@ -775,38 +784,6 @@ class KoinlyDatabase {
     await enqueuePreferences(preferences);
   }
 
-  Future<List<Map<String, dynamic>>> fullReplacementOperations(Map<String, dynamic> preferences) async {
-    final database = await db;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final operations = <Map<String, dynamic>>[];
-    for (final table in syncTables) {
-      final rows = await database.query(table);
-      for (final row in rows) {
-        final entityId = _entityIdForRow(table, row);
-        if (entityId.isEmpty) continue;
-        operations.add({
-          'operationId': _uuid.v4(),
-          'entityType': table,
-          'entityId': entityId,
-          'operation': 'upsert',
-          'payload': row,
-          'baseVersion': 0,
-          'clientUpdatedAt': now,
-        });
-      }
-    }
-    operations.add({
-      'operationId': _uuid.v4(),
-      'entityType': 'preferences',
-      'entityId': 'koinly',
-      'operation': 'upsert',
-      'payload': preferences,
-      'baseVersion': 0,
-      'clientUpdatedAt': now,
-    });
-    return operations;
-  }
-
   Future<void> resetLocalSyncTracking() async {
     final database = await db;
     await database.transaction((txn) async {
@@ -837,6 +814,22 @@ class KoinlyDatabase {
 
   Future<List<Map<String, Object?>>> pendingSyncOperations({int limit = 50}) async {
     return (await db).query('sync_outbox', orderBy: 'created_at ASC', limit: limit);
+  }
+
+  Future<Map<String, Object?>?> syncEntityRow(String entityType, String entityId) async {
+    if (!syncTables.contains(entityType) || entityId.isEmpty) return null;
+    final rows = await (await db).query(
+      entityType,
+      where: _whereForEntity(entityType),
+      whereArgs: _whereArgsForEntity(entityType, entityId),
+      limit: 1,
+    );
+    return rows.isEmpty ? null : Map<String, Object?>.from(rows.first);
+  }
+
+  Future<void> upsertSyncEntityRow(String entityType, Map<String, Object?> payload) async {
+    if (!syncTables.contains(entityType)) return;
+    await (await db).insert(entityType, payload, conflictAlgorithm: sql.ConflictAlgorithm.replace);
   }
 
   Future<int> pendingSyncOperationCount() async {
@@ -895,11 +888,13 @@ class KoinlyDatabase {
     });
   }
 
-  Future<void> applyRemoteChanges(List<Map<String, dynamic>> changes, Future<void> Function(Map<String, dynamic>) applyPreferences) async {
-    if (changes.any((change) => change['entityType'] == '__reset__')) {
-      await clearFinanceDataForRemoteLogin();
-    }
+  Future<bool> applyRemoteChanges(List<Map<String, dynamic>> changes, Future<void> Function(Map<String, dynamic>) applyPreferences) async {
+    // __reset__ is a legacy cloud marker from the old replace-all flow. Merge
+    // sync never clears local finance data because an item is absent remotely.
+    // For a matching stable ID, a newer local row is retained and rebased onto
+    // the server version so it can be pushed normally after the merge.
     final database = await db;
+    final preservedLocalRows = <({String entityType, String entityId, Map<String, Object?> payload})>[];
     await database.transaction((txn) async {
       for (final change in changes) {
         final entityType = change['entityType'] as String? ?? '';
@@ -920,7 +915,27 @@ class KoinlyDatabase {
           await txn.delete(entityType, where: _whereForEntity(entityType), whereArgs: _whereArgsForEntity(entityType, entityId));
         } else {
           final payload = (change['payload'] as Map? ?? {}).cast<String, Object?>();
-          await txn.insert(entityType, payload, conflictAlgorithm: sql.ConflictAlgorithm.replace);
+          var keepLocal = false;
+          Map<String, Object?>? localRow;
+          // Join tables do not carry modification timestamps; their composite
+          // IDs already provide set-union semantics, so server upserts are safe.
+          if (entityType != 'budget_accounts' && entityType != 'budget_categories') {
+            final localRows = await txn.query(
+              entityType,
+              where: _whereForEntity(entityType),
+              whereArgs: _whereArgsForEntity(entityType, entityId),
+              limit: 1,
+            );
+            if (localRows.isNotEmpty) {
+              localRow = Map<String, Object?>.from(localRows.first);
+              keepLocal = _syncRowTimestamp(localRow) > _syncRowTimestamp(payload);
+            }
+          }
+          if (keepLocal && localRow != null) {
+            preservedLocalRows.add((entityType: entityType, entityId: entityId, payload: localRow));
+          } else {
+            await txn.insert(entityType, payload, conflictAlgorithm: sql.ConflictAlgorithm.replace);
+          }
         }
         await txn.insert(
           'sync_entity_versions',
@@ -936,6 +951,29 @@ class KoinlyDatabase {
         await saveEntityVersion('preferences', 'koinly', (change['version'] as num? ?? 0).toInt());
       }
     }
+    for (final local in preservedLocalRows) {
+      await enqueueSyncOperation(
+        entityType: local.entityType,
+        entityId: local.entityId,
+        operation: 'upsert',
+        payload: local.payload,
+      );
+    }
+    return preservedLocalRows.isNotEmpty;
+  }
+
+  int _syncRowTimestamp(Map<String, Object?> row) {
+    for (final key in const ['updated_on', 'created_on']) {
+      final value = row[key];
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final parsedInt = int.tryParse(value);
+        if (parsedInt != null) return parsedInt;
+        final parsedDate = DateTime.tryParse(value);
+        if (parsedDate != null) return parsedDate.millisecondsSinceEpoch;
+      }
+    }
+    return 0;
   }
 
   String _whereForEntity(String table) {
@@ -972,6 +1010,23 @@ class KoinlyDatabase {
 }
 
 enum AutoBackupFrequency { daily, weekly, monthly }
+
+class AutomaticBackupDirectorySelection {
+  const AutomaticBackupDirectorySelection({
+    required this.path,
+    required this.uri,
+    required this.label,
+  });
+
+  const AutomaticBackupDirectorySelection.appStorage()
+      : path = '',
+        uri = '',
+        label = 'Koinly app storage';
+
+  final String path;
+  final String uri;
+  final String label;
+}
 
 class BackupService {
   static const String safetyBackupPrefix = 'koinly_safety_';
@@ -1071,12 +1126,13 @@ class BackupService {
     return directory;
   }
 
-  static Future<File> createAutomaticBackup(
+  static Future<String> createAutomaticBackup(
     AppController state, {
     required String directoryPath,
+    required String directoryUri,
+    required String directoryLabel,
     required int keepCount,
   }) async {
-    final directory = await automaticBackupDirectory(directoryPath);
     final normalized = normalizeCategoryDatabasePayload(await state.database.exportAll());
     final payload = {
       'version': 7,
@@ -1085,10 +1141,33 @@ class BackupService {
       'database': normalized.database,
       'preferences': remapCategoryPreferences(await state.exportPreferences(), normalized.plan),
     };
-    final file = File(p.join(directory.path, automaticBackupFileName()));
-    await file.writeAsString(_crypt(jsonEncode(payload)), flush: true);
+    final fileName = automaticBackupFileName();
+    final encryptedBytes = Uint8List.fromList(utf8.encode(_crypt(jsonEncode(payload))));
+
+    if (Platform.isAndroid && directoryUri.trim().isNotEmpty) {
+      final canWrite = await AndroidSafBackupStore.canWrite(directoryUri.trim());
+      if (!canWrite) {
+        throw StateError('Koinly no longer has permission to write to this Android folder. Choose the folder again.');
+      }
+      await AndroidSafBackupStore.writeFile(
+        uri: directoryUri.trim(),
+        name: fileName,
+        bytes: encryptedBytes,
+      );
+      await pruneAndroidAutomaticBackups(directoryUri.trim(), keepCount);
+      final label = directoryLabel.trim().isEmpty ? 'Selected Android folder' : directoryLabel.trim();
+      return '$label/$fileName';
+    }
+
+    if (Platform.isAndroid && directoryPath.trim().isNotEmpty) {
+      throw StateError('Android folder permission is missing. Choose the backup folder again so Koinly can save through Android folder access.');
+    }
+
+    final directory = await automaticBackupDirectory(directoryPath);
+    final file = File(p.join(directory.path, fileName));
+    await file.writeAsBytes(encryptedBytes, flush: true);
     await pruneAutomaticBackups(directory, keepCount);
-    return file;
+    return file.path;
   }
 
   static Future<void> pruneAutomaticBackups(Directory directory, int keepCount) async {
@@ -1111,9 +1190,31 @@ class BackupService {
     }
   }
 
-  static Future<String?> pickAutomaticBackupDirectory() async {
+  static Future<void> pruneAndroidAutomaticBackups(String directoryUri, int keepCount) async {
+    final safeKeepCount = keepCount.clamp(1, 100).toInt();
+    final files = (await AndroidSafBackupStore.listFiles(directoryUri))
+        .where((entry) => entry.name.startsWith(automaticBackupPrefix) && entry.name.toLowerCase().endsWith('.koinlybackup'))
+        .toList()
+      ..sort((a, b) => b.lastModified.compareTo(a.lastModified));
+    for (final stale in files.skip(safeKeepCount)) {
+      try {
+        await AndroidSafBackupStore.deleteFile(uri: directoryUri, name: stale.name);
+      } catch (_) {
+        // Keep the new backup even if an older file could not be pruned.
+      }
+    }
+  }
+
+  static Future<AutomaticBackupDirectorySelection?> pickAutomaticBackupDirectory() async {
     try {
-      return await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose automatic backup folder');
+      if (Platform.isAndroid) {
+        final selected = await AndroidSafBackupStore.pickDirectory();
+        if (selected == null) return null;
+        return AutomaticBackupDirectorySelection(path: '', uri: selected.uri, label: selected.label);
+      }
+      final path = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Choose automatic backup folder');
+      if (path == null || path.trim().isEmpty) return null;
+      return AutomaticBackupDirectorySelection(path: path.trim(), uri: '', label: path.trim());
     } catch (_) {
       return null;
     }
@@ -1128,10 +1229,16 @@ class BackupService {
   static Future<void> restoreBackupFile(AppController state, File file) async {
     final encrypted = await file.readAsString();
     final payload = jsonDecode(_decrypt(encrypted)) as Map<String, dynamic>;
-    final plan = await state.database.importAll((payload['database'] as Map).cast<String, dynamic>());
-    final preferences = (payload['preferences'] as Map? ?? {}).cast<String, dynamic>();
-    await state.importPreferences(remapCategoryPreferences(preferences, plan));
-    await state.reload();
+    final incomingDatabase = (payload['database'] as Map? ?? const {}).cast<String, dynamic>();
+    if (incomingDatabase.isEmpty) {
+      throw const FormatException('This backup does not contain finance data.');
+    }
+    final currentPreferences = await state.exportPreferences();
+    final incomingPreferences = (payload['preferences'] as Map? ?? {}).cast<String, dynamic>();
+    final plan = await state.database.mergeAll(incomingDatabase);
+    final mergedPreferences = mergeFinancePreferences(currentPreferences, incomingPreferences, plan);
+    await state.importPreferences(mergedPreferences);
+    await state.reload(queueSync: false);
   }
 
   static Future<File?> pickBackupFile() async {
@@ -1211,7 +1318,7 @@ Future<void> runRestoreFlow(BuildContext context, AppController state) async {
     if (context.mounted) {
       showSnack(
         context,
-        state.cloudSyncEnabled ? 'Restore complete. Restored data is uploading to cloud sync.' : 'Restore complete. Sign in to sync to upload it to cloud.',
+        state.cloudSyncEnabled ? 'Backup merged with this device and queued for cloud merge.' : 'Backup merged with this device. Sign in to sync the merged data.',
       );
     }
   } catch (_) {
@@ -1232,7 +1339,7 @@ Future<void> runLoadBackupFlow(BuildContext context, AppController state) async 
     if (context.mounted) {
       showSnack(
         context,
-        state.cloudSyncEnabled ? 'Backup loaded. Local data was replaced and is uploading to cloud sync.' : 'Backup loaded. Local data was replaced.',
+        state.cloudSyncEnabled ? 'Backup merged with local data and queued for cloud merge.' : 'Backup merged with local data.',
       );
     }
   } on FormatException catch (e) {
@@ -1256,7 +1363,7 @@ Future<void> runRestoreLastSafetyBackupFlow(BuildContext context, AppController 
     if (context.mounted) {
       showSnack(
         context,
-        state.cloudSyncEnabled ? 'Safety backup restored. It is uploading to cloud sync.' : 'Safety backup restored.',
+        state.cloudSyncEnabled ? 'Safety backup merged with local data and queued for cloud merge.' : 'Safety backup merged with local data.',
       );
     }
   } catch (_) {
@@ -1419,6 +1526,8 @@ class AppController extends ChangeNotifier {
   int autoBackupMonthDay = 1;
   int autoBackupKeepCount = 5;
   String autoBackupDirectoryPath = '';
+  String autoBackupDirectoryUri = '';
+  String autoBackupDirectoryLabel = '';
   String lastAutoBackupPath = '';
   DateTime? lastAutoBackupAt;
   String? autoBackupError;
@@ -1608,10 +1717,18 @@ class AppController extends ChangeNotifier {
     autoBackupMonthDay = (await prefs.getInt('autoBackupMonthDay', 1)).clamp(1, 28).toInt();
     autoBackupKeepCount = (await prefs.getInt('autoBackupKeepCount', 5)).clamp(1, 100).toInt();
     autoBackupDirectoryPath = await prefs.getString('autoBackupDirectoryPath', '');
+    autoBackupDirectoryUri = await prefs.getString('autoBackupDirectoryUri', '');
+    autoBackupDirectoryLabel = await prefs.getString('autoBackupDirectoryLabel', '');
     lastAutoBackupPath = await prefs.getString('lastAutoBackupPath', '');
     final autoBackupAtRaw = await prefs.getString('lastAutoBackupAt', '');
     lastAutoBackupAt = autoBackupAtRaw.isEmpty ? null : DateTime.tryParse(autoBackupAtRaw);
     autoBackupError = null;
+    if (Platform.isAndroid && autoBackupDirectoryUri.trim().isEmpty && autoBackupDirectoryPath.trim().isNotEmpty) {
+      // Raw /storage/... paths are not writable under Android scoped storage.
+      // Keep automatic backup enabled, but require the user to re-select the
+      // folder once through Storage Access Framework so the grant persists.
+      autoBackupError = 'Choose the backup folder again once to grant Android folder access.';
+    }
   }
 
   String get lastSafetyBackupLabel {
@@ -1638,7 +1755,7 @@ class AppController extends ChangeNotifier {
   Future<void> requireSafetyBackup(String reason) async {
     final file = await createSafetyBackup(reason);
     if (file == null) {
-      throw StateError('Could not create a safety backup before overwriting local data.');
+      throw StateError('Could not create a safety backup before changing local data.');
     }
   }
 
@@ -1658,6 +1775,9 @@ class AppController extends ChangeNotifier {
       };
 
   String get autoBackupLocationLabel {
+    if (Platform.isAndroid && autoBackupDirectoryUri.trim().isNotEmpty) {
+      return autoBackupDirectoryLabel.trim().isEmpty ? 'Android folder' : autoBackupDirectoryLabel.trim();
+    }
     if (autoBackupDirectoryPath.trim().isEmpty) return 'App storage';
     final normalized = p.normalize(autoBackupDirectoryPath.trim());
     final name = p.basename(normalized);
@@ -1735,7 +1855,7 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  Future<File?> runAutomaticBackupIfDue({bool force = false}) async {
+  Future<String?> runAutomaticBackupIfDue({bool force = false}) async {
     if ((!autoBackupEnabled && !force) || _autoBackupInFlight || loading) return null;
     if (!force && !automaticBackupDue) {
       _scheduleAutomaticBackupTimer();
@@ -1743,20 +1863,26 @@ class AppController extends ChangeNotifier {
     }
     _autoBackupInFlight = true;
     try {
-      final file = await BackupService.createAutomaticBackup(
+      final location = await BackupService.createAutomaticBackup(
         this,
         directoryPath: autoBackupDirectoryPath,
+        directoryUri: autoBackupDirectoryUri,
+        directoryLabel: autoBackupDirectoryLabel,
         keepCount: autoBackupKeepCount,
       );
-      lastAutoBackupPath = file.path;
+      lastAutoBackupPath = location;
       lastAutoBackupAt = DateTime.now();
       autoBackupError = null;
       await prefs.setString('lastAutoBackupPath', lastAutoBackupPath);
       await prefs.setString('lastAutoBackupAt', lastAutoBackupAt!.toIso8601String());
       notifyListeners();
-      return file;
+      return location;
     } catch (error) {
-      autoBackupError = error.toString().replaceFirst('FileSystemException: ', '').trim();
+      final text = error is PlatformException ? (error.message ?? error.code) : error.toString();
+      autoBackupError = text
+          .replaceFirst('FileSystemException: ', '')
+          .replaceFirst('Bad state: ', '')
+          .trim();
       notifyListeners();
       return null;
     } finally {
@@ -1773,9 +1899,16 @@ class AppController extends ChangeNotifier {
     required int monthDay,
     required int keepCount,
     required String directoryPath,
+    required String directoryUri,
+    required String directoryLabel,
   }) async {
     final normalizedDirectory = directoryPath.trim();
-    final shouldSeedBackup = enabled && (!autoBackupEnabled || normalizedDirectory != autoBackupDirectoryPath.trim());
+    final normalizedUri = directoryUri.trim();
+    final normalizedLabel = directoryLabel.trim();
+    final shouldSeedBackup = enabled &&
+        (!autoBackupEnabled ||
+            normalizedDirectory != autoBackupDirectoryPath.trim() ||
+            normalizedUri != autoBackupDirectoryUri.trim());
     autoBackupEnabled = enabled;
     autoBackupFrequency = frequency;
     autoBackupHour = time.hour.clamp(0, 23).toInt();
@@ -1784,6 +1917,8 @@ class AppController extends ChangeNotifier {
     autoBackupMonthDay = monthDay.clamp(1, 28).toInt();
     autoBackupKeepCount = keepCount.clamp(1, 100).toInt();
     autoBackupDirectoryPath = normalizedDirectory;
+    autoBackupDirectoryUri = normalizedUri;
+    autoBackupDirectoryLabel = normalizedLabel;
     autoBackupError = null;
     await prefs.setBool('autoBackupEnabled', autoBackupEnabled);
     await prefs.setEnum('autoBackupFrequency', autoBackupFrequency);
@@ -1793,6 +1928,8 @@ class AppController extends ChangeNotifier {
     await prefs.setInt('autoBackupMonthDay', autoBackupMonthDay);
     await prefs.setInt('autoBackupKeepCount', autoBackupKeepCount);
     await prefs.setString('autoBackupDirectoryPath', autoBackupDirectoryPath);
+    await prefs.setString('autoBackupDirectoryUri', autoBackupDirectoryUri);
+    await prefs.setString('autoBackupDirectoryLabel', autoBackupDirectoryLabel);
     notifyListeners();
     if (autoBackupEnabled) {
       await runAutomaticBackupIfDue(force: shouldSeedBackup);
@@ -2107,6 +2244,11 @@ class AppController extends ChangeNotifier {
     await _loadPreferences();
   }
 
+  Future<void> mergeRemotePreferences(Map<String, dynamic> incoming) async {
+    final current = await exportPreferences();
+    await importPreferences(mergeFinancePreferences(current, incoming, CategoryMergePlan.empty));
+  }
+
   Future<Map<String, dynamic>> exportCloudPayload() async {
     final normalized = normalizeCategoryDatabasePayload(await database.exportAll());
     return {
@@ -2120,7 +2262,7 @@ class AppController extends ChangeNotifier {
   String get cloudSyncStatusText {
     if (cloudSyncBusy) return syncStatus.trim().isEmpty ? 'Online sync • Syncing...' : syncStatus;
     if (newSyncAccountAwaitingSetupChoice) return 'Account created • Setup choice required';
-    if (authoritativeCloudUploadPending) return 'Restore upload pending';
+    if (authoritativeCloudUploadPending) return 'Restore merge pending';
     if (cloudSyncPending) return 'Sync pending • Waiting for internet';
     if (cloudSyncErrorCode == 'SYNC_APPROVAL_REQUIRED') return 'Online sync • Admin approval required';
     if (cloudSyncError != null && cloudSyncError!.trim().isNotEmpty) return 'Sync error • $cloudSyncError';
@@ -2699,6 +2841,31 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<Map<String, dynamic>> _mergeLegacyCloudPayloads(
+    Map<String, dynamic> currentPayload,
+    Map<String, dynamic> incomingPayload,
+  ) async {
+    final currentDatabase = (currentPayload['database'] as Map? ?? const {}).cast<String, dynamic>();
+    final incomingDatabase = (incomingPayload['database'] as Map? ?? const {}).cast<String, dynamic>();
+    final mergedDatabase = mergeFinanceDatabasePayloads(currentDatabase, incomingDatabase);
+    final currentPreferences = (currentPayload['preferences'] as Map? ?? const {}).cast<String, dynamic>();
+    final incomingPreferences = (incomingPayload['preferences'] as Map? ?? const {}).cast<String, dynamic>();
+    return {
+      'version': CloudSyncService.payloadVersion,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'database': mergedDatabase.database,
+      'preferences': mergeFinancePreferences(currentPreferences, incomingPreferences, mergedDatabase.categoryPlan),
+    };
+  }
+
+  Future<void> _adoptMergedLegacyCloudPayload(Map<String, dynamic> payload) async {
+    final databasePayload = (payload['database'] as Map? ?? const {}).cast<String, dynamic>();
+    final preferencesPayload = (payload['preferences'] as Map? ?? const {}).cast<String, dynamic>();
+    final plan = await database.importAll(databasePayload);
+    await importPreferences(remapCategoryPreferences(preferencesPayload, plan));
+    await reload(queueSync: false);
+  }
+
   Future<void> syncMainOnlineToCloud({bool force = false}) async {
     if (cloudSyncBusy) return;
     if (cloudSyncId.trim().isEmpty || cloudSyncPin.trim().isEmpty) {
@@ -2709,8 +2876,36 @@ class AppController extends ChangeNotifier {
     cloudSyncErrorCode = null;
     notifyListeners();
     try {
-      final payload = await exportCloudPayload();
-      await CloudSyncService.upload(apiBaseUrl: cloudSyncApiBaseUrl, syncId: cloudSyncId, pin: cloudSyncPin, payload: payload);
+      final localPayload = await exportCloudPayload();
+      Map<String, dynamic>? cloudPayload;
+      try {
+        cloudPayload = await CloudSyncService.download(
+          apiBaseUrl: cloudSyncApiBaseUrl,
+          syncId: cloudSyncId,
+          pin: cloudSyncPin,
+        );
+      } on CloudSyncException catch (error) {
+        // A brand-new legacy Sync ID has nothing to merge yet. Any other
+        // failure (wrong PIN, approval, network/backend issue) must still stop
+        // the upload instead of risking an accidental overwrite.
+        if (!error.message.toLowerCase().contains('no cloud data found')) rethrow;
+      }
+
+      var payload = localPayload;
+      if (cloudPayload != null) {
+        await requireSafetyBackup('Before legacy online cloud merge');
+        // Incoming is local here, so local scalar preferences win while all
+        // finance entities from both snapshots are retained and categories are
+        // semantically deduplicated.
+        payload = await _mergeLegacyCloudPayloads(cloudPayload, localPayload);
+        await _adoptMergedLegacyCloudPayload(payload);
+      }
+      await CloudSyncService.upload(
+        apiBaseUrl: cloudSyncApiBaseUrl,
+        syncId: cloudSyncId,
+        pin: cloudSyncPin,
+        payload: payload,
+      );
       cloudSyncLastAt = DateTime.now();
       await prefs.setString('cloudSyncLastAt', cloudSyncLastAt!.toIso8601String());
     } catch (error) {
@@ -2734,12 +2929,25 @@ class AppController extends ChangeNotifier {
     cloudSyncErrorCode = null;
     notifyListeners();
     try {
-      final payload = await CloudSyncService.download(apiBaseUrl: cloudSyncApiBaseUrl, syncId: cloudSyncId, pin: cloudSyncPin);
-      final databasePayload = (payload['database'] as Map? ?? {}).cast<String, dynamic>();
-      final preferencesPayload = (payload['preferences'] as Map? ?? {}).cast<String, dynamic>();
-      await requireSafetyBackup('Before legacy online cloud restore');
-      final plan = await database.importAll(databasePayload);
-      await importPreferences(remapCategoryPreferences(preferencesPayload, plan));
+      final cloudPayload = await CloudSyncService.download(
+        apiBaseUrl: cloudSyncApiBaseUrl,
+        syncId: cloudSyncId,
+        pin: cloudSyncPin,
+      );
+      final localPayload = await exportCloudPayload();
+      await requireSafetyBackup('Before legacy online cloud merge');
+      // Incoming is cloud here, so cloud scalar preferences win, while
+      // local-only finance rows remain present in the merged device copy.
+      final mergedPayload = await _mergeLegacyCloudPayloads(localPayload, cloudPayload);
+      await _adoptMergedLegacyCloudPayload(mergedPayload);
+      // Snapshot sync has no per-entity outbox, so write the merged union back
+      // immediately to make both sides converge without deleting either side.
+      await CloudSyncService.upload(
+        apiBaseUrl: cloudSyncApiBaseUrl,
+        syncId: cloudSyncId,
+        pin: cloudSyncPin,
+        payload: mergedPayload,
+      );
       cloudSyncEnabled = true;
       await prefs.setBool('cloudSyncEnabled', true);
       await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
@@ -2748,7 +2956,6 @@ class AppController extends ChangeNotifier {
       await (await prefs.prefs).remove('cloudSyncPin');
       cloudSyncLastAt = DateTime.now();
       await prefs.setString('cloudSyncLastAt', cloudSyncLastAt!.toIso8601String());
-      await reload(queueSync: false);
     } catch (error) {
       cloudSyncError = _cleanSyncError(error);
       cloudSyncErrorCode = error is CloudSyncException ? error.code : null;
@@ -2760,14 +2967,17 @@ class AppController extends ChangeNotifier {
 
   Future<void> syncToCloud({bool force = false, bool silent = false}) async {
     if (authoritativeCloudUploadPending) {
-      await uploadAuthoritativeCloudData(silent: silent);
-      return;
+      // v1.0.1067 migrates the old destructive "authoritative restore" flag
+      // into normal merge sync. Never call the server replace-all endpoint.
+      await _prepareRestoredDataForMergeSync();
     }
     await performMultiDeviceSync(silent: silent);
   }
 
   Future<void> syncFromCloud() async {
-    await performMultiDeviceSync(pushLocalChanges: false);
+    // A cloud restore is now a two-way merge: local changes are preserved and
+    // uploaded, while the complete cloud history is folded into this device.
+    await performMultiDeviceSync(pushLocalChanges: true, pullFullCloudCopy: true);
   }
 
   Future<void> configureAccountSyncEndpoint({required bool useCustom, required String customApiBaseUrl}) async {
@@ -2847,10 +3057,10 @@ class AppController extends ChangeNotifier {
         newSyncAccountAwaitingSetupChoice = false;
         await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
       }
-      final shouldUploadAuthoritativeData = authoritativeCloudUploadPending && (register || !preferCloudData);
-      if (shouldUploadAuthoritativeData) {
-        await uploadAuthoritativeCloudData(silent: true);
-      } else if (register && deferInitialDataSync) {
+      if (authoritativeCloudUploadPending) {
+        await _prepareRestoredDataForMergeSync();
+      }
+      if (register && deferInitialDataSync) {
         newSyncAccountAwaitingSetupChoice = true;
         await prefs.setBool('newSyncAccountAwaitingSetupChoice', true);
         await _setCloudSyncPending(false);
@@ -2860,11 +3070,16 @@ class AppController extends ChangeNotifier {
         await database.enqueueAllForAdoption(await exportPreferences());
         await performMultiDeviceSync(silent: true);
       } else {
-        if (authoritativeCloudUploadPending) {
-          authoritativeCloudUploadPending = false;
-          await prefs.setBool('authoritativeCloudUploadPending', false);
+        // Existing-account login merges the cloud copy into any meaningful
+        // local data instead of erasing the device first.
+        if (await database.hasOnlyUntouchedStarterAccounts()) {
+          await database.deleteUntouchedStarterAccounts();
         }
-        await performMultiDeviceSync(silent: !preferCloudData, pushLocalChanges: false);
+        await performMultiDeviceSync(
+          silent: !preferCloudData,
+          pushLocalChanges: true,
+          pullFullCloudCopy: true,
+        );
       }
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();
@@ -2923,7 +3138,28 @@ class AppController extends ChangeNotifier {
     await _saveSyncSession(session);
   }
 
-  Future<void> performMultiDeviceSync({bool silent = false, bool pushLocalChanges = true}) async {
+  List<Map<String, dynamic>> _latestRemoteChangePerEntity(List<Map<String, dynamic>> changes) {
+    if (changes.length < 2) return changes;
+    final lastIndexByEntity = <String, int>{};
+    for (var index = 0; index < changes.length; index += 1) {
+      final change = changes[index];
+      final entityType = change['entityType']?.toString() ?? '';
+      final entityId = change['entityId']?.toString() ?? '';
+      if (entityType.isEmpty || entityId.isEmpty) continue;
+      lastIndexByEntity['$entityType\u0000$entityId'] = index;
+    }
+    final latest = <Map<String, dynamic>>[];
+    for (var index = 0; index < changes.length; index += 1) {
+      final change = changes[index];
+      final entityType = change['entityType']?.toString() ?? '';
+      final entityId = change['entityId']?.toString() ?? '';
+      if (entityType.isEmpty || entityId.isEmpty) continue;
+      if (lastIndexByEntity['$entityType\u0000$entityId'] == index) latest.add(change);
+    }
+    return latest;
+  }
+
+  Future<void> performMultiDeviceSync({bool silent = false, bool pushLocalChanges = true, bool pullFullCloudCopy = false}) async {
     if (!_hasConfiguredSyncTarget()) {
       if (!silent) {
         syncStatus = 'Sign in to sync first.';
@@ -2948,6 +3184,7 @@ class AppController extends ChangeNotifier {
     }
     try {
       final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
+      final conflictedLocalOperations = <String, Map<String, dynamic>>{};
       if (pushLocalChanges) {
         if (!silent) {
           syncStatus = 'Uploading local changes...';
@@ -2959,6 +3196,7 @@ class AppController extends ChangeNotifier {
           final pending = await database.pendingSyncOperations(limit: 100);
           if (pending.isEmpty) break;
           final operations = pending.map(_operationFromOutboxRow).toList();
+          final operationsById = {for (final operation in operations) operation['operationId']?.toString() ?? '': operation};
           final response = await api.push(accessToken: syncAccessToken, operations: operations);
           final accepted = (response['accepted'] as List? ?? const []).cast<Map>();
           final acceptedIds = <String>[];
@@ -2975,7 +3213,16 @@ class AppController extends ChangeNotifier {
           final conflictedIds = <String>[];
           for (final conflict in conflicts) {
             final operationId = conflict['operationId']?.toString() ?? '';
-            if (operationId.isNotEmpty) conflictedIds.add(operationId);
+            if (operationId.isNotEmpty) {
+              conflictedIds.add(operationId);
+              final localOperation = operationsById[operationId];
+              if (localOperation != null) {
+                conflictedLocalOperations['${localOperation['entityType']}\u0000${localOperation['entityId']}'] = {
+                  ...localOperation,
+                  'serverVersion': (conflict['serverVersion'] as num? ?? 0).toInt(),
+                };
+              }
+            }
             await database.saveSyncConflict(
               entityType: conflict['entityType']?.toString() ?? '',
               entityId: conflict['entityId']?.toString() ?? '',
@@ -2992,13 +3239,12 @@ class AppController extends ChangeNotifier {
         }
       }
 
-      final replaceLocalData = !pushLocalChanges;
-      var needsStarterCleanupUpload = false;
-      var cursor = replaceLocalData ? 0 : (int.tryParse(await database.readSyncState('serverCursor', '0')) ?? 0);
+      final fullPullForMerge = pullFullCloudCopy || conflictedLocalOperations.isNotEmpty;
+      var cursor = fullPullForMerge ? 0 : (int.tryParse(await database.readSyncState('serverCursor', '0')) ?? 0);
       var hasMore = true;
       final remoteChanges = <Map<String, dynamic>>[];
       if (!silent) {
-        syncStatus = replaceLocalData ? 'Downloading cloud copy...' : 'Checking cloud changes...';
+        syncStatus = fullPullForMerge ? 'Downloading cloud data to merge...' : 'Checking cloud changes...';
         notifyListeners();
       }
       while (hasMore) {
@@ -3008,46 +3254,52 @@ class AppController extends ChangeNotifier {
         cursor = (response['cursor'] as num? ?? cursor).toInt();
         hasMore = response['hasMore'] == true;
       }
-      if (replaceLocalData) {
+
+      // Older app versions could emit a destructive __reset__ marker. For a
+      // merge restore we never clear local data. We only discard obsolete cloud
+      // history before the most recent reset and merge the cloud snapshot that
+      // follows it.
+      final lastResetIndex = remoteChanges.lastIndexWhere((change) => change['entityType'] == '__reset__');
+      if (lastResetIndex >= 0) {
+        remoteChanges.removeRange(0, lastResetIndex + 1);
+      }
+      final mergedRemoteChanges = _latestRemoteChangePerEntity(remoteChanges);
+
+      var preservedNewerLocal = false;
+      if (mergedRemoteChanges.isNotEmpty) {
+        if (pullFullCloudCopy) {
+          if (!silent) {
+            syncStatus = 'Saving safety backup...';
+            notifyListeners();
+          }
+          await requireSafetyBackup('Before cloud data merge');
+        }
         if (!silent) {
-          syncStatus = 'Saving safety backup...';
+          syncStatus = 'Merging cloud data...';
           notifyListeners();
         }
-        await requireSafetyBackup('Before cloud data overwrite');
-        if (!silent) {
-          syncStatus = 'Overwriting local data with cloud copy...';
-          notifyListeners();
-        }
-        await database.clearFinanceDataForRemoteLogin();
+        preservedNewerLocal = await database.applyRemoteChanges(mergedRemoteChanges, mergeRemotePreferences);
       }
-      if (remoteChanges.isNotEmpty) {
-        if (!silent) {
-          syncStatus = 'Applying cloud changes...';
-          notifyListeners();
-        }
-        if (!replaceLocalData && remoteChanges.any((change) => change['entityType'] == '__reset__')) {
-          await requireSafetyBackup('Before cloud reset operation');
-        }
-        await database.applyRemoteChanges(remoteChanges, importPreferences);
-      }
-      if (replaceLocalData) {
-        starterAccountsSkipped = true;
-        await prefs.setBool('starterAccountsSkipped', true);
-        if (await _removeSkippedStarterAccountsIfNeeded(force: true, allowMixedAccounts: true)) {
-          needsStarterCleanupUpload = true;
-        }
-      }
+      // Rebase any upload conflicts even if the server returned no additional
+      // change rows in this pull. This prevents a newer local edit from being
+      // dropped simply because the conflicting server version was already at
+      // the cursor boundary.
+      final rebased = await _reapplyNewerConflictedLocalChanges(conflictedLocalOperations);
+      final repair = await _repairDuplicateCategories(queueSyncChanges: true);
+      final needsMergeCleanupUpload = preservedNewerLocal || rebased || repair.hasChanges;
       await database.writeSyncState('serverCursor', '$cursor');
 
       cloudSyncLastAt = DateTime.now();
       await prefs.setString('cloudSyncLastAt', cloudSyncLastAt!.toIso8601String());
-      await _setCloudSyncPending(needsStarterCleanupUpload);
-      if (needsStarterCleanupUpload) _schedulePendingSyncRetry();
+      final pendingCount = await database.pendingSyncOperationCount();
+      final stillPending = needsMergeCleanupUpload || pendingCount > 0;
+      await _setCloudSyncPending(stillPending);
+      if (stillPending) _schedulePendingSyncRetry(immediate: true);
       cloudSyncError = null;
       cloudSyncErrorCode = null;
-      syncStatus = replaceLocalData ? 'Cloud copy restored' : 'Synced';
-      if (replaceLocalData || remoteChanges.isNotEmpty) {
-        await reload();
+      syncStatus = fullPullForMerge ? 'Cloud data merged' : 'Synced';
+      if (mergedRemoteChanges.isNotEmpty || preservedNewerLocal || rebased || repair.hasChanges) {
+        await reload(queueSync: false);
       }
     } catch (error) {
       final text = _cleanSyncError(error);
@@ -3055,7 +3307,7 @@ class AppController extends ChangeNotifier {
         await _refreshSyncSession();
         _syncInProgress = false;
         cloudSyncBusy = false;
-        await performMultiDeviceSync(silent: silent, pushLocalChanges: pushLocalChanges);
+        await performMultiDeviceSync(silent: silent, pushLocalChanges: pushLocalChanges, pullFullCloudCopy: pullFullCloudCopy);
         return;
       }
       await _setCloudSyncPending(true);
@@ -3074,14 +3326,26 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  Future<void> _prepareRestoredDataForMergeSync() async {
+    if (!authoritativeCloudUploadPending) return;
+    authoritativeCloudUploadPending = false;
+    await prefs.setBool('authoritativeCloudUploadPending', false);
+    await _repairDuplicateCategories(queueSyncChanges: false);
+    await database.enqueueAllForAdoption(await exportPreferences());
+    await _setCloudSyncPending(true);
+  }
+
   Future<void> markRestoredDataForCloudUpload() async {
+    // Keep the legacy preference only long enough to migrate older installs.
+    // Restored data is now queued as ordinary upserts and merged with cloud
+    // entities; the cloud database is never wiped by a local restore.
     authoritativeCloudUploadPending = true;
     await prefs.setBool('authoritativeCloudUploadPending', true);
-    await _setCloudSyncPending(true);
+    await _prepareRestoredDataForMergeSync();
     if (_hasConfiguredSyncTarget()) {
-      await uploadAuthoritativeCloudData();
+      await performMultiDeviceSync(pullFullCloudCopy: true);
     } else {
-      syncStatus = 'Restore complete • Sign in to upload restored data';
+      syncStatus = 'Backup merged locally • Sign in to sync it';
       notifyListeners();
     }
   }
@@ -3112,74 +3376,76 @@ class AppController extends ChangeNotifier {
     if (_hasConfiguredSyncTarget()) _startCloudAutoPull();
   }
 
+  /// Backward-compatible entry point for installs that still have the old
+  /// authoritative-upload flag. It deliberately performs a merge sync and
+  /// never calls the server's destructive replace-all endpoint.
   Future<void> uploadAuthoritativeCloudData({bool silent = false}) async {
+    await _prepareRestoredDataForMergeSync();
     if (!_hasConfiguredSyncTarget()) {
       if (!silent) {
-        syncStatus = 'Restore complete • Sign in to upload restored data';
+        syncStatus = 'Backup merged locally • Sign in to sync it';
         notifyListeners();
       }
       return;
     }
-    if (_syncInProgress || cloudSyncBusy) {
-      if (!silent) {
-        syncStatus = 'Upload already running...';
-        notifyListeners();
+    await performMultiDeviceSync(silent: silent, pullFullCloudCopy: true);
+  }
+
+  Future<bool> _reapplyNewerConflictedLocalChanges(Map<String, Map<String, dynamic>> conflicts) async {
+    var queued = false;
+    for (final candidate in conflicts.values) {
+      final entityType = candidate['entityType']?.toString() ?? '';
+      final entityId = candidate['entityId']?.toString() ?? '';
+      final operation = candidate['operation']?.toString() ?? '';
+      final serverVersion = (candidate['serverVersion'] as num? ?? 0).toInt();
+      if (entityType.isEmpty || entityId.isEmpty || operation != 'upsert') continue;
+
+      final rawPayload = candidate['payload'];
+      if (rawPayload is! Map) continue;
+      final payload = rawPayload.cast<String, Object?>();
+
+      if (entityType == 'preferences') {
+        final current = await exportPreferences();
+        final merged = mergeFinancePreferences(current, payload.cast<String, dynamic>(), CategoryMergePlan.empty);
+        await importPreferences(merged);
+        await database.saveEntityVersion(entityType, entityId, serverVersion);
+        await database.enqueuePreferences(await exportPreferences());
+        queued = true;
+        continue;
       }
-      return;
+      if (!KoinlyDatabase.syncTables.contains(entityType)) continue;
+
+      final currentRow = await database.syncEntityRow(entityType, entityId);
+      final localTimestamp = _mergeRowTimestamp(payload);
+      final remoteTimestamp = currentRow == null ? -1 : _mergeRowTimestamp(currentRow);
+      final shouldKeepLocal = currentRow == null || localTimestamp > remoteTimestamp;
+      if (!shouldKeepLocal) continue;
+
+      await database.upsertSyncEntityRow(entityType, payload);
+      await database.saveEntityVersion(entityType, entityId, serverVersion);
+      await database.enqueueSyncOperation(
+        entityType: entityType,
+        entityId: entityId,
+        operation: 'upsert',
+        payload: payload,
+      );
+      queued = true;
     }
-    _syncInProgress = true;
-    cloudSyncBusy = !silent;
-    if (!silent) {
-      cloudSyncError = null;
-      cloudSyncErrorCode = null;
-      syncStatus = 'Uploading restored data...';
-      notifyListeners();
+    return queued;
+  }
+
+  int _mergeRowTimestamp(Map<String, Object?> row) {
+    for (final key in const ['updated_on', 'created_on']) {
+      final value = row[key];
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final number = int.tryParse(value);
+        if (number != null) return number;
+        final date = DateTime.tryParse(value);
+        if (date != null) return date.millisecondsSinceEpoch;
+      }
     }
-    try {
-      final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
-      await _repairDuplicateCategories(queueSyncChanges: false);
-      final operations = await database.fullReplacementOperations(await exportPreferences());
-      final response = await api.replaceAll(accessToken: syncAccessToken, operations: operations);
-      await database.resetLocalSyncTracking();
-      final accepted = (response['accepted'] as List? ?? const []).cast<Map>();
-      for (final item in accepted) {
-        final entityType = item['entityType']?.toString() ?? '';
-        final entityId = item['entityId']?.toString() ?? '';
-        if (entityType.isEmpty || entityId.isEmpty) continue;
-        await database.saveEntityVersion(entityType, entityId, (item['version'] as num? ?? 0).toInt());
-      }
-      await database.writeSyncState('serverCursor', '${(response['cursor'] as num? ?? 0).toInt()}');
-      authoritativeCloudUploadPending = false;
-      await prefs.setBool('authoritativeCloudUploadPending', false);
-      await _setCloudSyncPending(false);
-      cloudSyncLastAt = DateTime.now();
-      await prefs.setString('cloudSyncLastAt', cloudSyncLastAt!.toIso8601String());
-      cloudSyncError = null;
-      cloudSyncErrorCode = null;
-      syncStatus = 'Synced';
-    } catch (error) {
-      final text = _cleanSyncError(error);
-      if (text.toLowerCase().contains('expired') || text.toLowerCase().contains('access token')) {
-        await _refreshSyncSession();
-        _syncInProgress = false;
-        cloudSyncBusy = false;
-        await uploadAuthoritativeCloudData(silent: silent);
-        return;
-      }
-      authoritativeCloudUploadPending = true;
-      await prefs.setBool('authoritativeCloudUploadPending', true);
-      await _setCloudSyncPending(true);
-      _schedulePendingSyncRetry();
-      if (!silent) {
-        cloudSyncError = text;
-        cloudSyncErrorCode = error is CloudSyncException ? error.code : null;
-      }
-      syncStatus = 'Restore upload pending';
-    } finally {
-      _syncInProgress = false;
-      cloudSyncBusy = false;
-      notifyListeners();
-    }
+    return 0;
   }
 
   Map<String, dynamic> _operationFromOutboxRow(Map<String, Object?> row) {
@@ -3225,7 +3491,7 @@ class AppController extends ChangeNotifier {
   void _schedulePendingSyncRetry({bool immediate = false}) {
     if (!_hasConfiguredSyncTarget()) return;
     if (immediate && cloudSyncPending && !cloudSyncBusy) {
-      unawaited(authoritativeCloudUploadPending ? uploadAuthoritativeCloudData(silent: true) : syncToCloud(silent: true));
+      unawaited(syncToCloud(silent: true));
     }
     _cloudSyncRetryTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
       if (!cloudSyncPending) {
@@ -3234,7 +3500,7 @@ class AppController extends ChangeNotifier {
         return;
       }
       if (!cloudSyncBusy && _hasConfiguredSyncTarget()) {
-        unawaited(authoritativeCloudUploadPending ? uploadAuthoritativeCloudData(silent: true) : syncToCloud(silent: true));
+        unawaited(syncToCloud(silent: true));
       }
     });
   }
@@ -6283,7 +6549,7 @@ class _InitialSetupChoicePopup extends StatelessWidget {
             icon: Icons.restore_rounded,
             title: 'Restore backup',
             subtitle: syncAccountCreated
-                ? 'Choose a .koinlybackup file. Its data will replace this device and become the source for your new sync account.'
+                ? 'Choose a .koinlybackup file. Its finance data will be merged with this device and then merged into your new sync account.'
                 : 'Choose a .koinlybackup file and restore your accounts, categories, transactions, budgets, loans, and preferences.',
             value: InitialSetupChoice.restoreBackup,
             primary: true,
@@ -6300,7 +6566,7 @@ class _InitialSetupChoicePopup extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Restoring a backup replaces the current local finance data on this device.',
+            'Restoring a backup merges accounts, categories, transactions, budgets, loans, and preferences with the data already on this device. Matching category names are deduplicated.',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall?.copyWith(color: muted, fontWeight: FontWeight.w700),
           ),
@@ -6750,7 +7016,7 @@ class HomeDashboardScreen extends StatelessWidget {
                       children: [
                         Text('No accounts yet', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 4),
-                        Text('Add an account, restore a backup, or sign in to replace this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        Text('Add an account, merge a backup, or sign in to merge this device with your cloud data.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
                       ],
                     ),
                   ),
@@ -12791,11 +13057,11 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Restore cloud copy?'),
-        content: const Text('This downloads the cloud data for this account and completely overwrites local accounts, categories, transactions, and budgets on this device.'),
+        title: const Text('Merge cloud copy?'),
+        content: const Text('This downloads the cloud data for this account and merges it with this device. Local-only data is kept, matching entity IDs are reconciled, and duplicate categories such as Food are combined instead of copied twice.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Restore cloud')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Merge cloud')),
         ],
       ),
     );
@@ -12803,7 +13069,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final state = context.read<AppController>();
     await state.syncFromCloud();
     if (!mounted) return;
-    showSnack(context, state.cloudSyncError == null ? 'Cloud data restored to this device.' : state.cloudSyncError!);
+    showSnack(context, state.cloudSyncError == null ? 'Cloud data merged with this device.' : state.cloudSyncError!);
   }
 
   Future<void> _uploadPendingChanges() async {
@@ -12814,9 +13080,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     }
     await state.syncToCloud();
     if (!mounted) return;
-    final successMessage = state.authoritativeCloudUploadPending
-        ? 'Restored data upload is still pending. Try again when your connection is stronger.'
-        : 'Local changes uploaded and cloud changes checked.';
+    const successMessage = 'Local and cloud changes merged successfully.';
     showSnack(context, state.cloudSyncError == null ? successMessage : state.cloudSyncError!);
   }
 
@@ -12833,7 +13097,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final state = context.watch<AppController>();
     final signedIn = state.cloudSyncEnabled && state.syncAccountEmail.isNotEmpty;
     final busy = state.cloudSyncOperationBusy || _endpointBusy;
-    final uploadButtonLabel = state.authoritativeCloudUploadPending ? 'Upload restored data' : 'Upload local changes';
+    const uploadButtonLabel = 'Upload local changes';
     final backendConfigured = _isSelectedEndpointActive(state);
     return PageScaffold(
       title: 'Account & sync',
@@ -12983,7 +13247,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               if (!_registerMode) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Login downloads your cloud copy and completely replaces local finance data on this device.',
+                  'Login merges your cloud copy with finance data already on this device. Local-only records are preserved.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
                 ),
               ],
@@ -13077,7 +13341,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
   }
 
   Future<void> _syncNow() async {
-    // Sync downloads the latest database/cloud data to this device.
+    // Sync merges the latest database/cloud data into this device.
     await _downloadNow();
   }
 
@@ -13088,18 +13352,18 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
     if (!mounted) return;
     _syncIdController.text = state.cloudSyncId;
     _pinController.text = state.cloudSyncPin;
-    await _showSyncResult('Local data uploaded to cloud.');
+    await _showSyncResult('Local and cloud data merged, then uploaded.');
   }
 
   Future<void> _downloadNow() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Sync from Database?'),
-        content: const Text('This downloads/restores the latest database data and replaces the local SQLite data on this device.'),
+        title: const Text('Merge from Database?'),
+        content: const Text('This downloads the latest database data and merges it with this device. Local-only records stay, matching IDs are reconciled, and duplicate categories are combined.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sync')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Merge')),
         ],
       ),
     );
@@ -13108,7 +13372,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
     final state = context.read<AppController>();
     await state.syncMainOnlineFromCloud();
     if (!mounted) return;
-    await _showSyncResult('Database data downloaded to this device.');
+    await _showSyncResult('Database data merged with this device.');
   }
 
   Future<void> _showSyncResult(String successMessage) async {
@@ -13421,7 +13685,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
     final state = context.read<AppController>();
     await state.syncToCloud(force: true);
     if (!mounted) return;
-    await _showSyncResult('Local data uploaded to cloud.');
+    await _showSyncResult('Local and cloud data merged, then uploaded.');
   }
 
   Future<void> _downloadNow() async {
@@ -13430,8 +13694,8 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
       builder: (_) => AlertDialog(
         title: const Text('Sync from Database?'),
         content: Text(_provider == SyncDatabaseProvider.mongoDb
-            ? 'This downloads/restores the latest snapshot from your MongoDB database and replaces this device’s local data.'
-            : 'This downloads/restores the latest snapshot from the selected database/cloud provider and replaces this device’s local data.'),
+            ? 'This downloads the latest snapshot from your MongoDB database and merges it with this device’s local data.'
+            : 'This downloads the latest snapshot from the selected database/cloud provider and merges it with this device’s local data.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sync')),
@@ -13443,7 +13707,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
     final state = context.read<AppController>();
     await state.syncFromCloud();
     if (!mounted) return;
-    await _showSyncResult('Database data downloaded to this device.');
+    await _showSyncResult('Database data merged with this device.');
   }
 
   Future<void> _showSyncResult(String successMessage) async {
@@ -14728,6 +14992,8 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   late int monthDay;
   late int keepCount;
   late String directoryPath;
+  late String directoryUri;
+  late String directoryLabel;
   bool saving = false;
 
   static const _weekdayLabels = <int, String>{
@@ -14751,12 +15017,18 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
     monthDay = state.autoBackupMonthDay;
     keepCount = state.autoBackupKeepCount;
     directoryPath = state.autoBackupDirectoryPath;
+    directoryUri = state.autoBackupDirectoryUri;
+    directoryLabel = state.autoBackupDirectoryLabel;
   }
 
   Future<void> _chooseDirectory() async {
     final selected = await BackupService.pickAutomaticBackupDirectory();
-    if (selected != null && selected.trim().isNotEmpty && mounted) {
-      setState(() => directoryPath = selected.trim());
+    if (selected != null && mounted) {
+      setState(() {
+        directoryPath = selected.path;
+        directoryUri = selected.uri;
+        directoryLabel = selected.label;
+      });
     }
   }
 
@@ -14772,6 +15044,8 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
       monthDay: monthDay,
       keepCount: keepCount,
       directoryPath: directoryPath,
+      directoryUri: directoryUri,
+      directoryLabel: directoryLabel,
     );
     if (!mounted) return;
     if (enabled && state.autoBackupError != null && state.autoBackupError!.isNotEmpty) {
@@ -14785,7 +15059,9 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final locationText = directoryPath.trim().isEmpty ? 'Koinly app storage' : directoryPath.trim();
+    final locationText = directoryUri.trim().isNotEmpty
+        ? (directoryLabel.trim().isEmpty ? 'Selected Android folder' : directoryLabel.trim())
+        : (directoryPath.trim().isEmpty ? 'Koinly app storage' : directoryPath.trim());
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
       child: Column(
@@ -14924,12 +15200,25 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: saving ? null : () => setState(() => directoryPath = ''),
+                        onPressed: saving
+                            ? null
+                            : () => setState(() {
+                                  directoryPath = '';
+                                  directoryUri = '';
+                                  directoryLabel = '';
+                                }),
                         child: const Text('App storage'),
                       ),
                     ),
                   ],
                 ),
+                if (Platform.isAndroid) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Android folder backups use the system folder picker and a persistent folder grant, so scheduled backups keep working after the app restarts.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                  ),
+                ],
               ],
             ),
           ),
@@ -14994,7 +15283,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
           SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
           SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
           SettingsTile(icon: Icons.history_toggle_off_rounded, title: 'Automatic local backup', subtitle: state.automaticBackupSettingsSummary, color: '#7FE7D4', onTap: () => showAutomaticBackupSheet(context)),
-          SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and overwrite this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
+          SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and merge it with this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(
             icon: Icons.fact_check_rounded,
             title: 'Data health',
