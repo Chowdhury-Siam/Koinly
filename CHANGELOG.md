@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1073] - 2026-09-09
+
+### Changed
+
+- Added restrained spring/elastic micro-interactions across tappable cards, selectors, navigation, and the Transaction Add/Plan actions without redesigning the UI.
+- Mobile lists now use a soft elastic edge response while desktop mouse/trackpad scrolling remains clamped and precise.
+- Page and bottom-tab changes now combine a short fade with a subtle scale/slide transition instead of hard swaps.
+- Low-end-friendly rendering still avoids expensive gradients/shadows, but no longer disables all lightweight UI animation; Android/iOS Reduce Motion remains respected.
+- Added light haptic feedback for main tab changes and Transaction Add/Plan actions.
+
 ## [1.0.1072] - 2026-09-09
 
 ### Fixed

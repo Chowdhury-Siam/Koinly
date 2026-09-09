@@ -4641,7 +4641,7 @@ class KoinlyApp extends StatelessWidget {
         return MediaQuery(
           data: media.copyWith(
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
-            disableAnimations: kLowEndFriendlyUi || media.disableAnimations,
+            disableAnimations: media.disableAnimations,
           ),
           child: child ?? const SizedBox.shrink(),
         );
@@ -5258,24 +5258,36 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     }
 
     final Widget? actionButton = tabIndex == kTransactionTabIndex
-        ? FloatingActionButton.extended(
+        ? MotionTouchFeedback(
+            scale: .958,
+            child: FloatingActionButton.extended(
             heroTag: 'transactionAddFab',
-            onPressed: () => showTransactionEditor(context),
+            onPressed: () {
+              AppMotion.actionHaptic(context);
+              showTransactionEditor(context);
+            },
             icon: const Icon(Icons.add_rounded),
-            label: const Text('Add'),
+              label: const Text('Add'),
+            ),
           )
         : null;
     final Widget? planButton = tabIndex == kTransactionTabIndex
         ? SizedBox(
             width: 128,
-            child: FloatingActionButton.extended(
+            child: MotionTouchFeedback(
+              scale: .958,
+              child: FloatingActionButton.extended(
               heroTag: 'transactionPlanFab',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PurchasePlanScreen()),
-              ),
+              onPressed: () {
+                AppMotion.actionHaptic(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PurchasePlanScreen()),
+                );
+              },
               icon: const Icon(Icons.event_note_rounded),
-              label: const Text('Plan'),
+                label: const Text('Plan'),
+              ),
             ),
           )
         : null;
@@ -5286,6 +5298,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         final extendDesktopNavigation = constraints.maxWidth >= 1180;
 
         void selectTab(int index) {
+          if (index == tabIndex) return;
+          AppMotion.selectionHaptic(context);
           state.selectTabIndex(index);
         }
 
@@ -5304,10 +5318,16 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   children: [
                     Positioned.fill(
                       child: AnimatedSwitcher(
-                        duration: AppMotion.fast,
-                        switchInCurve: AppMotion.standard,
+                        duration: AppMotion.medium,
+                        switchInCurve: AppMotion.emphasized,
                         switchOutCurve: AppMotion.emphasizedAccelerate,
-                        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+                        transitionBuilder: (child, animation) {
+                          final scale = Tween<double>(begin: .988, end: 1).animate(animation);
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(scale: scale, child: child),
+                          );
+                        },
                         child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
                       ),
                     ),
@@ -5526,7 +5546,7 @@ class _FloatingDockNavigation extends StatelessWidget {
                       selected: selected,
                       button: true,
                       label: destination.label,
-                      child: InkWell(
+                      child: MotionInkWell(
                         borderRadius: BorderRadius.circular(22),
                         onTap: () => onSelected(index),
                         child: Center(
@@ -5784,11 +5804,12 @@ class ExpressiveCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final reducedMotion = MediaQuery.of(context).disableAnimations;
+    final lightweightEffects = kLowEndFriendlyUi || kIsDesktopApp;
     final baseColor = color ?? (dark ? scheme.surfaceContainer : Colors.white);
     final borderColor = dark ? Colors.white.withOpacity(.085) : scheme.outlineVariant.withOpacity(.74);
     final decoration = BoxDecoration(
       color: baseColor.withOpacity(dark ? .88 : 1),
-      gradient: surfaceTint && !reducedMotion && !kIsDesktopApp
+      gradient: surfaceTint && !reducedMotion && !lightweightEffects
           ? LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -5801,7 +5822,7 @@ class ExpressiveCard extends StatelessWidget {
           : null,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: borderColor, width: 1),
-      boxShadow: (reducedMotion || kIsDesktopApp)
+      boxShadow: (reducedMotion || lightweightEffects)
           ? [
               if (!kIsDesktopApp) BoxShadow(color: Colors.black.withOpacity(dark ? .20 : .035), blurRadius: 10, offset: const Offset(0, 5)),
             ]
@@ -5817,7 +5838,7 @@ class ExpressiveCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius),
       child: Padding(padding: padding, child: child),
     );
-    if (reducedMotion || kIsDesktopApp) {
+    if (reducedMotion) {
       return Container(decoration: decoration, child: cardChild);
     }
     return AnimatedContainer(
@@ -6106,7 +6127,7 @@ class AppleSelectionField extends StatelessWidget {
         Material(
           color: scheme.surfaceContainerHighest.withOpacity(.52),
           borderRadius: BorderRadius.circular(18),
-          child: InkWell(
+          child: MotionInkWell(
             borderRadius: BorderRadius.circular(18),
             onTap: onTap,
             child: Container(
@@ -6240,7 +6261,7 @@ Future<String?> showAppleWheelSelectionSheet(
                       final isSelected = index == safeIndex;
                       return Material(
                         color: Colors.transparent,
-                        child: InkWell(
+                        child: MotionInkWell(
                           onTap: () => setModalState(() => selectedIndex = index),
                           child: _AppleWheelOptionRow(option: option, selected: isSelected),
                         ),
@@ -6526,7 +6547,7 @@ class _DateRangeEndpointButton extends StatelessWidget {
     return Material(
       color: selected ? kSleekAccent.withOpacity(.18) : scheme.surfaceContainerHighest.withOpacity(.45),
       borderRadius: BorderRadius.circular(18),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: Container(
@@ -6772,13 +6793,23 @@ Future<T?> showKoinlyPopup<T>(
       return _KoinlyPopupFrame(maxWidth: maxWidth, maxHeight: maxHeight, child: child);
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: AppMotion.emphasized, reverseCurve: AppMotion.emphasizedAccelerate);
+      if (MediaQuery.of(context).disableAnimations) return child;
+      final fade = CurvedAnimation(
+        parent: animation,
+        curve: AppMotion.standard,
+        reverseCurve: AppMotion.emphasizedAccelerate,
+      );
+      final motion = CurvedAnimation(
+        parent: animation,
+        curve: AppMotion.spring,
+        reverseCurve: AppMotion.emphasizedAccelerate,
+      );
       return FadeTransition(
-        opacity: curved,
+        opacity: fade,
         child: ScaleTransition(
-          scale: Tween<double>(begin: .94, end: 1).animate(curved),
+          scale: Tween<double>(begin: .955, end: 1).animate(motion),
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, .035), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(begin: const Offset(0, .025), end: Offset.zero).animate(motion),
             child: child,
           ),
         ),
@@ -6880,7 +6911,7 @@ class _InitialSetupChoicePopup extends StatelessWidget {
       return Semantics(
         button: true,
         label: '$title. $subtitle',
-        child: InkWell(
+        child: MotionInkWell(
           borderRadius: BorderRadius.circular(24),
           onTap: () => Navigator.pop(context, value),
           child: Ink(
@@ -7551,7 +7582,10 @@ class HomeNavigationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
+    return MotionTouchFeedback(
+      enabled: true,
+      scale: .985,
+      child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: ListTile(
         contentPadding: EdgeInsets.zero,
@@ -7573,6 +7607,7 @@ class HomeNavigationTile extends StatelessWidget {
         ),
         onTap: onTap,
       ),
+    ),
     );
   }
 }
@@ -7599,7 +7634,7 @@ class QuickActionTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: label.replaceAll('\n', ' '),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: AnimatedContainer(
@@ -7806,7 +7841,7 @@ class BalanceHeroCard extends StatelessWidget {
               const SizedBox(width: 6),
               Tooltip(
                 message: amountsHidden ? 'Show amounts' : 'Hide amounts',
-                child: InkWell(
+                child: MotionInkWell(
                   borderRadius: BorderRadius.circular(999),
                   onTap: onToggleAmounts,
                   child: Padding(
@@ -7942,7 +7977,10 @@ class AccountTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
     final balanceColor = account.amount < 0 ? kSleekExpense : Theme.of(context).colorScheme.onSurface;
-    return ExpressiveCard(
+    return MotionTouchFeedback(
+      enabled: onTap != null,
+      scale: .985,
+      child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       radius: 24,
       child: ListTile(
@@ -7969,6 +8007,7 @@ class AccountTile extends StatelessWidget {
         ),
         onTap: onTap,
       ),
+    ),
     );
   }
 }
@@ -8359,7 +8398,7 @@ class _AppearanceButton extends StatelessWidget {
     return Material(
       color: colorScheme.surfaceContainerHighest.withOpacity(.52),
       borderRadius: BorderRadius.circular(24),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(24),
         onTap: onTap,
         child: Container(
@@ -8549,7 +8588,7 @@ class ColorSelectionPage extends StatelessWidget {
             final customCard = Material(
               color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
               borderRadius: BorderRadius.circular(22),
-              child: InkWell(
+              child: MotionInkWell(
                 borderRadius: BorderRadius.circular(22),
                 onTap: () async {
                   final custom = await _showCustomColorOptions(context);
@@ -8665,7 +8704,7 @@ class _CustomColorOptionCard extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.50),
       borderRadius: BorderRadius.circular(22),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Container(
@@ -9248,7 +9287,7 @@ class _ColorChoiceDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colorFromHex(color, fallback: Theme.of(context).colorScheme.primary);
-    return InkWell(
+    return MotionInkWell(
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: AnimatedContainer(
@@ -9298,7 +9337,7 @@ class IconSelectionPage extends StatelessWidget {
             return Material(
               color: selected ? selectedColorValue.withOpacity(.22) : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.48),
               borderRadius: BorderRadius.circular(20),
-              child: InkWell(
+              child: MotionInkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => Navigator.pop(context, icon),
                 child: Container(
@@ -9342,7 +9381,10 @@ class CategoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveCard(
+    return MotionTouchFeedback(
+      enabled: onTap != null,
+      scale: .985,
+      child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       radius: 24,
       child: ListTile(
@@ -9353,6 +9395,7 @@ class CategoryTile extends StatelessWidget {
         trailing: trailing,
         onTap: onTap,
       ),
+    ),
     );
   }
 }
@@ -9533,7 +9576,7 @@ class PlannedPurchaseTile extends StatelessWidget {
           iconBubble(context, iconName, iconColor),
           const SizedBox(width: 14),
           Expanded(
-            child: InkWell(
+            child: MotionInkWell(
               borderRadius: BorderRadius.circular(18),
               onTap: () => showPlannedPurchaseEditor(context, item: item),
               child: Padding(
@@ -9957,7 +10000,10 @@ class TransactionTile extends StatelessWidget {
       transactionDateTimeLabel(tx),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-    return ExpressiveCard(
+    return MotionTouchFeedback(
+      enabled: true,
+      scale: .985,
+      child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       radius: 24,
       child: ListTile(
@@ -9978,6 +10024,7 @@ class TransactionTile extends StatelessWidget {
         ),
         onTap: () => showTransactionEditor(context, transaction: tx),
       ),
+    ),
     );
   }
 }
@@ -10897,7 +10944,7 @@ class FinancialHealthPeriodCard extends StatelessWidget {
           Material(
             color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.48),
             borderRadius: BorderRadius.circular(18),
-            child: InkWell(
+            child: MotionInkWell(
               borderRadius: BorderRadius.circular(18),
               onTap: onPickDate,
               child: Padding(
@@ -11945,7 +11992,7 @@ class _ManageCategoriesButton extends StatelessWidget {
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.52),
       borderRadius: BorderRadius.circular(22),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: () => Navigator.push(
           context,
@@ -12376,7 +12423,7 @@ class CategoryBreakdownCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Material(
                 color: Colors.transparent,
-                child: InkWell(
+                child: MotionInkWell(
                   borderRadius: BorderRadius.circular(18),
                   onTap: interactive && slice.category != null
                       ? () => Navigator.push(
@@ -12713,7 +12760,7 @@ class BudgetProgressTile extends StatelessWidget {
     final ratio = progress.ratio;
     final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
     return ExpressiveCard(
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(28),
         onTap: onTap,
         child: Column(
@@ -12883,9 +12930,12 @@ class SettingsTile extends StatelessWidget {
     final hasSubtitle = subtitle != null && subtitle!.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: ExpressiveCard(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
-        child: ListTile(
+      child: MotionTouchFeedback(
+        enabled: onTap != null,
+        scale: .987,
+        child: ExpressiveCard(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
+          child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Container(
             width: 48,
@@ -12905,7 +12955,8 @@ class SettingsTile extends StatelessWidget {
                 )
               : null,
           trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          onTap: onTap,
+            onTap: onTap,
+          ),
         ),
       ),
     );
@@ -13477,7 +13528,7 @@ class _LinkedSegmentsText extends StatelessWidget {
     return Wrap(
       children: segments.map((segment) {
         if (segment.url == null) return Text(segment.text, style: style);
-        return InkWell(
+        return MotionInkWell(
           onTap: () => launchUrl(Uri.parse(segment.url!), mode: LaunchMode.externalApplication),
           child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
         );
@@ -14405,7 +14456,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
       actions: [
         Material(
           color: Colors.transparent,
-          child: InkWell(
+          child: MotionInkWell(
             borderRadius: BorderRadius.circular(18),
             onTap: _openAdvancedSettings,
             child: Container(
@@ -14493,7 +14544,7 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
           children: [
             ExpressiveCard(
               padding: const EdgeInsets.all(18),
-              child: InkWell(
+              child: MotionInkWell(
                 borderRadius: BorderRadius.circular(22),
                 onTap: () => Navigator.push(
                   context,
@@ -15184,7 +15235,7 @@ class _ProviderChoiceCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: AnimatedContainer(
@@ -15604,7 +15655,7 @@ class CurrencyCustomizationButton extends StatelessWidget {
     return Material(
       color: scheme.surfaceContainerHighest.withOpacity(.52),
       borderRadius: BorderRadius.circular(22),
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Container(
@@ -15772,7 +15823,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                             final isSelected = index == safeIndex;
                             return Material(
                               color: Colors.transparent,
-                              child: InkWell(
+                              child: MotionInkWell(
                                 onTap: () => setModalState(() => selectedIndex = index),
                                 child: _CurrencyWheelRow(country: c, selected: isSelected),
                               ),
@@ -16567,7 +16618,7 @@ class _AboutLinkButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: link.label,
-      child: InkWell(
+      child: MotionInkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: () => launchUrl(Uri.parse(link.url), mode: LaunchMode.externalApplication),
         child: SizedBox(

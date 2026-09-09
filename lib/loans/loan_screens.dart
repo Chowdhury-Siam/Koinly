@@ -231,7 +231,9 @@ class _LoanTile extends StatelessWidget {
     return Semantics(
       button: true,
       label: '${contact?.name ?? 'Unknown person'}, ${loan.isLent ? 'lent' : 'borrowed'} ${state.format(loan.principal)}, ${state.format(loanNonNegative(computation.outstanding))} outstanding, $dueLabel',
-      child: ExpressiveCard(
+      child: MotionTouchFeedback(
+        scale: .985,
+        child: ExpressiveCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
@@ -263,7 +265,8 @@ class _LoanTile extends StatelessWidget {
               Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ],
           ),
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoanDetailScreen(loanId: loan.id))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoanDetailScreen(loanId: loan.id))),
+          ),
         ),
       ),
     );
