@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1087] - 2026-09-11
+
+### Fixed
+
+- Fixed `flutter pub get` failing after the Awesome Snackbar Content integration. `awesome_snackbar_content` 0.1.8 uses Flutter localizations, which on the current Flutter 3.47.x toolchain requires `intl ^0.20.3`; Koinly now uses the same compatible Intl constraint instead of the older `^0.19.0`.
+- Kept `awesome_snackbar_content` 0.1.8 rather than downgrading it, preserving the current desktop/mobile fixes and semantic snackbar styling.
+- Bumped application metadata to `1.0.1087+131`.
+
 ## [1.0.1086] - 2026-09-11
 
 ### Added

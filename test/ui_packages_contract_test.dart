@@ -13,6 +13,7 @@ void main() {
     expect(pubspec, contains('timelines_plus: ^2.0.1'));
     expect(pubspec, contains('flutter_spinkit: ^5.2.2'));
     expect(pubspec, contains('awesome_snackbar_content: ^0.1.8'));
+    expect(pubspec, contains('intl: ^0.20.3'));
     expect(pubspec, contains('flutter_slidable: ^4.0.3'));
     expect(pubspec, contains('- assets/lottie/'));
 
