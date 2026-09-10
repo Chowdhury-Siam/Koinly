@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/koinly_launch_background" />
+    <item
+        android:width="236dp"
+        android:height="236dp"
+        android:gravity="center">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/koinly_splash_icon" />
+    </item>
+</layer-list>

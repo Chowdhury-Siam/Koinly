@@ -19,4 +19,12 @@ void main() {
     expect(worker, isNot(contains("'invite-key'")));
     expect(File('.github/workflows/deploy-owner-sync-worker.yml').existsSync(), isFalse);
   });
+
+  test('preference reload cannot erase a current self-hosted session', () {
+    final app = File('lib/main.dart').readAsStringSync();
+
+    expect(app, contains("final hadLegacyCustomSyncFlag = syncPrefs.containsKey('useCustomCloudSync');"));
+    expect(app, contains('if (hadLegacyCustomSyncFlag && !legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty))'));
+    expect(app, isNot(contains('if (!legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty))')));
+  });
 }

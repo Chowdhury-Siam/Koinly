@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.1079] - 2026-09-11
+
+### Added
+
+- Added an **Automatic update pop-ups** toggle on the Updates screen. Turning it off keeps manual update checks available while suppressing automatic update-detail pop-ups.
+
+### Fixed
+
+- Fixed self-hosted sign-in dropping back to the login form immediately after cloud data finished loading. Preference reloads now preserve current self-hosted access/refresh tokens and only run legacy token cleanup when the legacy sync-mode marker actually exists.
+- Fixed GitHub release changelog rendering so inline Markdown bold markers such as `**Forgot password?**` display as styled text instead of showing the literal asterisks.
+- Fixed the Android launch presentation with a dedicated, correctly padded native splash icon and a launch background that matches the app theme on Android 12+ and older supported Android versions.
+
 ## [1.0.1078] - 2026-09-11
 
 ### Added

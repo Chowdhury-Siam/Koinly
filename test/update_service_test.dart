@@ -122,6 +122,14 @@ Read [release notes](https://example.com).
     expect(blocks.last.segments.any((segment) => segment.url == 'https://example.com'), isTrue);
   });
 
+  test('changelog parser removes Markdown bold markers and preserves bold styling', () {
+    final blocks = ChangelogParser.parse('- Added **Forgot password?** recovery and __safe migration__.');
+    final segments = blocks.single.segments;
+    expect(blocks.single.plainText, 'Added Forgot password? recovery and safe migration.');
+    expect(segments.any((segment) => segment.text == 'Forgot password?' && segment.bold), isTrue);
+    expect(segments.any((segment) => segment.text == 'safe migration' && segment.bold), isTrue);
+  });
+
   test('download progress calculates percentage and speed', () {
     final start = DateTime(2026, 1, 1);
     final progress = DownloadProgressSnapshot(

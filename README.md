@@ -520,14 +520,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1078
+  --dart-define=KOINLY_APP_VERSION=1.0.1079
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1078
+  --dart-define=KOINLY_APP_VERSION=1.0.1079
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.

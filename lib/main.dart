@@ -1798,6 +1798,7 @@ class AppController extends ChangeNotifier {
   final GithubUpdateService updateService = GithubUpdateService();
   UpdateCheckOutcome updateCheckOutcome = UpdateCheckOutcome.noReleaseAvailable;
   bool updateCheckBusy = false;
+  bool automaticUpdatePopupEnabled = true;
 
   bool get cloudSyncOperationBusy => _syncInProgress || cloudSyncBusy || syncAuthBusy;
   bool updateDownloadBusy = false;
@@ -1952,6 +1953,7 @@ class AppController extends ChangeNotifier {
     defaultIncomeCategoryId = await prefs.getString('defaultIncomeCategoryId', '');
     if (defaultIncomeCategoryId?.isEmpty == true) defaultIncomeCategoryId = null;
     compactHomeSummary = await prefs.getBool('compactHomeSummary', false);
+    automaticUpdatePopupEnabled = await prefs.getBool('automaticUpdatePopupEnabled', true);
     final sharedPreferences = await prefs.prefs;
     await sharedPreferences.remove('reducedMotion');
     reminderEnabled = await prefs.getBool('reminderEnabled', false);
@@ -1972,7 +1974,9 @@ class AppController extends ChangeNotifier {
     // Account sync is self-hosted only. Migrate the URL from releases that
     // stored it as the "custom" endpoint. Sessions that belonged to the
     // legacy non-self-hosted endpoint are cleared below without touching finance data.
-    final legacyUsedSelfHostedSync = await prefs.getBool('useCustomCloudSync', false);
+    final syncPrefs = await prefs.prefs;
+    final hadLegacyCustomSyncFlag = syncPrefs.containsKey('useCustomCloudSync');
+    final legacyUsedSelfHostedSync = hadLegacyCustomSyncFlag && await prefs.getBool('useCustomCloudSync', false);
     final legacySelfHostedUrl = CloudSyncService.normalizeApiBaseUrl(
       await prefs.getString('customCloudSyncApiBaseUrl', ''),
     );
@@ -1981,7 +1985,6 @@ class AppController extends ChangeNotifier {
     );
     cloudSyncApiBaseUrl = selfHostedSyncApiBaseUrl;
     await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
-    final syncPrefs = await prefs.prefs;
     await syncPrefs.remove('useCustomCloudSync');
     await syncPrefs.remove('customCloudSyncApiBaseUrl');
     cloudSyncId = await prefs.getString('cloudSyncId', '');
@@ -2015,7 +2018,7 @@ class AppController extends ChangeNotifier {
     }
     syncAccessToken = await secureCredentials.readAccessToken();
     syncRefreshToken = await secureCredentials.readRefreshToken();
-    if (!legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty)) {
+    if (hadLegacyCustomSyncFlag && !legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty)) {
       await secureCredentials.clearAccountTokens();
       syncAccessToken = '';
       syncRefreshToken = '';
@@ -2518,6 +2521,7 @@ class AppController extends ChangeNotifier {
       ..writeln('Updates')
       ..writeln('- Repository: $updateRepositorySlug')
       ..writeln('- Update status: $updateStatusMessage')
+      ..writeln('- Automatic update pop-ups: ${automaticUpdatePopupEnabled ? 'on' : 'off'}')
       ..writeln('- Latest release: ${latestGithubRelease?.displayVersion ?? 'not checked'}')
       ..writeln('- Pending Android APK: ${pendingAndroidUpdatePath.isNotEmpty ? pendingAndroidUpdateVersion : 'none'}')
       ..writeln('')
@@ -2574,6 +2578,7 @@ class AppController extends ChangeNotifier {
       'authoritativeCloudUploadPending',
       'newSyncAccountAwaitingSetupChoice',
       'cloudSyncLastAt',
+      'automaticUpdatePopupEnabled',
       'cloudSyncApiBaseUrl',
       'selfHostedSyncApiBaseUrl',
       'useCustomCloudSync', // legacy, ignored if an old backup contains it
@@ -2664,6 +2669,13 @@ class AppController extends ChangeNotifier {
 
   void selectAndroidUpdateKind(UpdateAssetKind kind) {
     selectedAndroidUpdateKind = kind;
+    notifyListeners();
+  }
+
+  Future<void> setAutomaticUpdatePopupEnabled(bool enabled) async {
+    if (automaticUpdatePopupEnabled == enabled) return;
+    automaticUpdatePopupEnabled = enabled;
+    await prefs.setBool('automaticUpdatePopupEnabled', enabled);
     notifyListeners();
   }
 
@@ -5313,7 +5325,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _showAutomaticUpdateDialogIfReady(AppController state, GithubRelease release) async {
-    if (!mounted || !state.canShowStartupUpdateDialog(release)) return;
+    if (!mounted || !state.automaticUpdatePopupEnabled || !state.canShowStartupUpdateDialog(release)) return;
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) {
       _scheduleAutomaticUpdateCheck(delay: _blockedUpdatePromptRetryDelay);
@@ -13705,6 +13717,17 @@ class UpdatesScreen extends StatelessWidget {
                       label: const Text('Show update details'),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: state.automaticUpdatePopupEnabled,
+                    onChanged: (value) => context.read<AppController>().setAutomaticUpdatePopupEnabled(value),
+                    title: const Text('Automatic update pop-ups', style: TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: Text(
+                      'Show update details automatically when a newer version is found. Manual update checks still work when this is off.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -14204,10 +14227,11 @@ class _LinkedSegmentsText extends StatelessWidget {
     final style = Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.35, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .92), fontWeight: FontWeight.w700);
     return Wrap(
       children: segments.map((segment) {
-        if (segment.url == null) return Text(segment.text, style: style);
+        final segmentStyle = segment.bold ? style?.copyWith(fontWeight: FontWeight.w900) : style;
+        if (segment.url == null) return Text(segment.text, style: segmentStyle);
         return MotionInkWell(
           onTap: () => launchUrl(Uri.parse(segment.url!), mode: LaunchMode.externalApplication),
-          child: Text(segment.text, style: style?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
+          child: Text(segment.text, style: segmentStyle?.copyWith(color: kSleekAccent, decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
         );
       }).toList(),
     );

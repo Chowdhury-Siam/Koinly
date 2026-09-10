@@ -367,9 +367,10 @@ enum ChangelogBlockType { heading, bullet, numbered, paragraph }
 
 @immutable
 class MarkdownTextSegment {
-  const MarkdownTextSegment(this.text, {this.url});
+  const MarkdownTextSegment(this.text, {this.url, this.bold = false});
   final String text;
   final String? url;
+  final bool bold;
 }
 
 @immutable
@@ -434,11 +435,18 @@ class ChangelogParser {
 
   static List<MarkdownTextSegment> _parseSegments(String text) {
     final segments = <MarkdownTextSegment>[];
-    final linkRegex = RegExp(r'\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)');
+    final inlineRegex = RegExp(r'\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|\*\*([^*]+)\*\*|__([^_]+)__');
     var index = 0;
-    for (final match in linkRegex.allMatches(text)) {
+    for (final match in inlineRegex.allMatches(text)) {
       if (match.start > index) segments.add(MarkdownTextSegment(text.substring(index, match.start)));
-      segments.add(MarkdownTextSegment(match.group(1)!, url: match.group(2)!));
+      final linkText = match.group(1);
+      final linkUrl = match.group(2);
+      final boldText = match.group(3) ?? match.group(4);
+      if (linkText != null && linkUrl != null) {
+        segments.add(MarkdownTextSegment(linkText, url: linkUrl));
+      } else if (boldText != null) {
+        segments.add(MarkdownTextSegment(boldText, bold: true));
+      }
       index = match.end;
     }
     if (index < text.length) segments.add(MarkdownTextSegment(text.substring(index)));
