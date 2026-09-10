@@ -20,11 +20,12 @@
 
 | Start here | Self-hosted sync | App & backups | Developers |
 | --- | --- | --- | --- |
-| [What is Koinly?](#what-is-koinly)<br>[Features](#features)<br>[Getting started](#getting-started) | [What self-hosted sync means](#optional-self-hosted-sync)<br>[Deploy your Worker](#deploy-your-self-hosted-worker)<br>[Connect Koinly](#connect-koinly-to-your-worker)<br>[Telegram backups](#optional-telegram-cloud-backup) | [Automatic local backup](#automatic-local-backup)<br>[Data safety](#data-safety-and-security)<br>[Troubleshooting](#troubleshooting) | [Build from source](#build-from-source)<br>[Worker development](#worker-development)<br>[Project structure](#project-structure)<br>[License](#license) |
+| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[7. Telegram backups](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
 
 ---
 
-## What is Koinly?
+<a id="what-is-koinly"></a>
+## 1. What is Koinly?
 
 Koinly is a personal finance tracker designed to keep your data under your control.
 Your accounts, transactions, categories, budgets, loans, plans, and other finance data are saved to a local SQLite database first.
@@ -33,7 +34,7 @@ You **do not need an account or server to use Koinly**. Install the app, choose 
 
 If you want the same data on multiple devices, Koinly also supports **self-hosted sync**. You create a small Cloudflare Worker connected to your own Turso database, then enter the Worker URL in the app.
 
-### In simple terms
+### 1.1 In simple terms
 
 - **Koinly app** = the finance app on your phone or PC.
 - **Cloudflare Worker** = your small private sync server.
@@ -42,9 +43,10 @@ If you want the same data on multiple devices, Koinly also supports **self-hoste
 
 You do not need to write Cloudflare or Turso code yourself.
 
-## Features
+<a id="features"></a>
+## 2. Features
 
-### Personal finance
+### 2.1 Personal finance
 
 - Multiple cash, bank, card, savings, and custom accounts
 - Income, expense, and transfer transactions
@@ -57,7 +59,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Search and filters for account, category, type, and date
 - Quick account/category creation from transaction pickers
 
-### Backup and restore
+### 2.2 Backup and restore
 
 - Encrypted `.koinlybackup` files
 - Merge-based restore instead of destructive replacement
@@ -68,7 +70,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Optional deletion of the previous automatic backup after a new backup succeeds
 - Privacy-safe diagnostics in **Advanced settings > Data health**
 
-### App experience
+### 2.3 App experience
 
 - Material 3 design
 - Light, dark, and system themes
@@ -79,7 +81,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Android reminders
 - GitHub Releases update checks
 
-### Self-hosted sync
+### 2.4 Self-hosted sync
 
 - Your own Cloudflare Worker and Turso database
 - One owner account per Worker
@@ -93,9 +95,10 @@ You do not need to write Cloudflare or Turso code yourself.
 
 ---
 
-## Getting started
+<a id="getting-started"></a>
+## 3. Getting started
 
-### Use Koinly without sync
+### 3.1 Use Koinly without sync
 
 This is the easiest option and requires no Cloudflare, Turso, or GitHub setup.
 
@@ -106,7 +109,7 @@ This is the easiest option and requires no Cloudflare, Turso, or GitHub setup.
 
 Everything stays on that device unless you later connect a self-hosted Worker.
 
-### Use Koinly on multiple devices
+### 3.2 Use Koinly on multiple devices
 
 Set up the self-hosted Worker once, then use the same Worker URL and account on your other devices.
 
@@ -114,7 +117,8 @@ The full beginner-friendly deployment guide is below.
 
 ---
 
-# Optional self-hosted sync
+<a id="optional-self-hosted-sync"></a>
+# 4. Optional self-hosted sync
 
 Self-hosted sync is optional. It is only needed if you want your Koinly data synchronized through your own backend.
 
@@ -125,7 +129,7 @@ Before starting, you need:
 - a Cloudflare account; and
 - a fork of this repository.
 
-### The six values you will create
+### 4.1 The six values you will create
 
 You will add these names to **GitHub > Settings > Secrets and variables > Actions**:
 
@@ -142,7 +146,8 @@ Keep the token/secret values private. Never post them in issues, screenshots, ch
 
 ---
 
-# Deploy your self-hosted Worker
+<a id="deploy-your-self-hosted-worker"></a>
+# 5. Deploy your self-hosted Worker
 
 The normal setup is:
 
@@ -162,7 +167,7 @@ Copy the workers.dev URL
 Paste it into Koinly
 ```
 
-## Step 1 — Fork Koinly
+## 5.1 Step 1 — Fork Koinly
 
 1. Open this repository on GitHub.
 2. Click **Fork** in the upper-right corner.
@@ -171,7 +176,7 @@ Paste it into Koinly
 
 The deployment workflow runs from your fork, so you do not need to edit Worker source code.
 
-## Step 2 — Create your Turso account and database
+## 5.2 Step 2 — Create your Turso account and database
 
 Turso stores the synchronized copy of your Koinly data.
 
@@ -184,7 +189,7 @@ Turso stores the synchronized copy of your Koinly data.
 7. Leave the normal/default group selected unless you specifically need another one.
 8. Click **Create Database**.
 
-### Copy the Turso database URL
+### 5.2.1 Copy the Turso database URL
 
 After the database is created:
 
@@ -207,7 +212,7 @@ TURSO_DATABASE_URL
 
 > **Important:** Do not copy the normal `https://app.turso.tech/...` browser address. Koinly needs the `libsql://...turso.io` database URL shown under **Connect**.
 
-### Create the Turso token
+### 5.2.2 Create the Turso token
 
 On the same database page:
 
@@ -225,7 +230,7 @@ TURSO_AUTH_TOKEN
 
 Turso may not show the full token again after you leave the page, so store it safely.
 
-### Optional Turso CLI method
+### 5.2.3 Optional Turso CLI method
 
 The web dashboard is recommended for most users. If you already use the Turso CLI, the equivalent commands are:
 
@@ -235,7 +240,7 @@ turso db show koinly --url
 turso db tokens create koinly
 ```
 
-## Step 3 — Create your Cloudflare account
+## 5.3 Step 3 — Create your Cloudflare account
 
 Cloudflare runs the Koinly sync Worker.
 
@@ -245,7 +250,7 @@ Cloudflare runs the Koinly sync Worker.
 
 You do not need to buy or configure a domain for the normal Koinly setup. The deployment uses a `workers.dev` address.
 
-## Step 4 — Create the Cloudflare API token
+## 5.4 Step 4 — Create the Cloudflare API token
 
 1. In Cloudflare, open **Manage account**.
 2. Open **Account API tokens**.
@@ -264,7 +269,7 @@ CLOUDFLARE_API_TOKEN
 
 The standard template should provide the Worker deployment permissions the GitHub workflow needs. Avoid granting unrelated permissions.
 
-## Step 5 — Copy your Cloudflare Account ID
+## 5.5 Step 5 — Copy your Cloudflare Account ID
 
 Use the **Account ID** for the same Cloudflare account that owns the Worker.
 
@@ -276,7 +281,7 @@ Copy it and add it to GitHub later as:
 CLOUDFLARE_ACCOUNT_ID
 ```
 
-## Step 6 — Choose a Worker name
+## 5.6 Step 6 — Choose a Worker name
 
 Choose a short name such as:
 
@@ -304,15 +309,15 @@ https://my-koinly-sync.<your-workers-subdomain>.workers.dev
 
 The workflow prints the exact URL after deployment.
 
-## Step 7 — Create `JWT_SECRET`
+## 5.7 Step 7 — Create `JWT_SECRET`
 
 `JWT_SECRET` protects Koinly login sessions and Worker-side encrypted secrets. It must be at least 32 characters long.
 
-### Easy option
+### 5.7.1 Easy option
 
 Use a password manager's secure password generator and create a long random value.
 
-### OpenSSL option
+### 5.7.2 OpenSSL option
 
 ```bash
 openssl rand -hex 32
@@ -326,13 +331,13 @@ JWT_SECRET
 
 Do not reuse your email password, GitHub password, Cloudflare password, or Turso token as `JWT_SECRET`.
 
-## Step 8 — Add the values to GitHub
+## 5.8 Step 8 — Add the values to GitHub
 
 Open your **forked Koinly repository**, then go to:
 
 **Settings > Secrets and variables > Actions**
 
-### Add these as repository secrets
+### 5.8.1 Add these as repository secrets
 
 Open the **Secrets** tab and create:
 
@@ -351,7 +356,7 @@ For each one:
 3. Paste the matching value.
 4. Click **Add secret**.
 
-### Add the Worker name
+### 5.8.2 Add the Worker name
 
 For `CLOUDFLARE_NAME`, either:
 
@@ -364,7 +369,7 @@ Example:
 CLOUDFLARE_NAME = my-koinly-sync
 ```
 
-### Final checklist
+### 5.8.3 Final checklist
 
 Before deploying, your GitHub configuration should contain:
 
@@ -379,7 +384,7 @@ JWT_SECRET
 
 Spelling matters. The workflow expects these exact names.
 
-## Step 9 — Deploy the Worker
+## 5.9 Step 9 — Deploy the Worker
 
 1. Open the **Actions** tab in your fork.
 2. If GitHub asks you to enable Actions for the fork, enable them.
@@ -409,7 +414,8 @@ You do **not** need to manually create Turso tables. The workflow applies the sc
 
 ---
 
-# Connect Koinly to your Worker
+<a id="connect-koinly-to-your-worker"></a>
+# 6. Connect Koinly to your Worker
 
 After deployment:
 
@@ -422,7 +428,7 @@ After deployment:
 
 A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account.
 
-### Sync controls
+### 6.1 Sync controls
 
 - **Upload local changes** merges your current local data into the Worker copy.
 - **Restore cloud copy** downloads the Worker copy and merges it into the device.
@@ -431,7 +437,8 @@ Both are merge-based. Matching records are reconciled rather than blindly duplic
 
 ---
 
-## Optional Telegram cloud backup
+<a id="optional-telegram-cloud-backup"></a>
+## 7. Optional Telegram cloud backup
 
 Telegram backup is available only when using your self-hosted Worker.
 
@@ -454,7 +461,8 @@ The saved bot token is encrypted by the Worker before it is stored in Turso.
 
 ---
 
-## Automatic local backup
+<a id="automatic-local-backup"></a>
+## 8. Automatic local backup
 
 Open **Settings > Advanced settings > Automatic local backup**.
 
@@ -470,7 +478,8 @@ On Android, Koinly uses the system folder picker and creates/uses a `Koinly/Back
 
 ---
 
-## Data safety and security
+<a id="data-safety-and-security"></a>
+## 9. Data safety and security
 
 - Finance data is written to local SQLite first.
 - Sync access and refresh tokens use platform secure storage.
@@ -485,18 +494,19 @@ On Android, Koinly uses the system folder picker and creates/uses a `Koinly/Back
 
 ---
 
-# Build from source
+<a id="build-from-source"></a>
+# 10. Build from source
 
 Most users do not need this section. It is for developers or people building Koinly themselves.
 
-## Requirements
+## 10.1 Requirements
 
 - Flutter with Dart `>=3.5.0 <4.0.0`
 - Android Studio / Android SDK 36 / Java 17 for Android
 - Visual Studio with **Desktop development with C++** for Windows
 - Node.js 22 for Worker development
 
-## Run locally
+## 10.2 Run locally
 
 ```bash
 git clone https://github.com/Chowdhury-Siam/Koinly.git
@@ -507,7 +517,7 @@ flutter run
 
 A Worker is not required for local/offline use.
 
-## Android build
+## 10.3 Android build
 
 ```bash
 flutter build apk --release \
@@ -515,7 +525,7 @@ flutter build apk --release \
   --dart-define=KOINLY_APP_VERSION=1.0.1077
 ```
 
-## Windows build
+## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
@@ -524,24 +534,25 @@ flutter build windows --release \
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.
 
-### GitHub Actions
+### 10.4.1 GitHub Actions
 
 | Workflow | Purpose |
 | --- | --- |
 | `build-android-apks.yml` | Tests/builds Android APKs and Windows release artifacts |
 | `deploy-sync-worker.yml` | Deploys a fork owner's self-hosted Cloudflare Worker |
 
-### Android signing
+### 10.4.2 Android signing
 
 Release APK builds expect a permanent signing key through repository secrets. Keep the keystore and passwords outside the repository.
 
-### Windows signing
+### 10.4.3 Windows signing
 
 Windows code signing is optional. Without a signing certificate, the installer can still be generated, but Windows SmartScreen may show an unrecognized-publisher warning.
 
 ---
 
-## Worker development
+<a id="worker-development"></a>
+## 11. Worker development
 
 ```bash
 cd cloud/worker
@@ -571,9 +582,10 @@ See [`cloud/worker/README.md`](cloud/worker/README.md) for Worker API and develo
 
 ---
 
-# Troubleshooting
+<a id="troubleshooting"></a>
+# 12. Troubleshooting
 
-## GitHub says a deployment value is missing
+## 12.1 GitHub says a deployment value is missing
 
 Open your fork and check:
 
@@ -592,7 +604,7 @@ JWT_SECRET
 
 Also check that you did not accidentally add an extra space to a name or value.
 
-## `TURSO_DATABASE_URL` is rejected
+## 12.2 `TURSO_DATABASE_URL` is rejected
 
 The value must be the Turso database URL that starts with `libsql://` and normally ends with `.turso.io`.
 
@@ -609,11 +621,11 @@ https://app.turso.tech/...
 https://something.workers.dev/...
 ```
 
-## Cloudflare authentication error / code 10000
+## 12.3 Cloudflare authentication error / code 10000
 
 Create a new Cloudflare API token using the **Edit Cloudflare Workers** template, then replace `CLOUDFLARE_API_TOKEN` in your GitHub repository secrets and run the deployment again.
 
-## Worker validation fails in Koinly
+## 12.4 Worker validation fails in Koinly
 
 Open this address in a browser:
 
@@ -633,15 +645,15 @@ registrationMode: first-user
 
 If it does not, open the failed GitHub Actions deployment and read the first red/error step.
 
-## Cloudflare error 1042
+## 12.5 Cloudflare error 1042
 
 Confirm that `TURSO_DATABASE_URL` is your Turso `libsql://...turso.io` URL, not a Cloudflare Worker URL. Also remove any Worker route that loops back into the same Koinly Worker.
 
-## I cannot create another Koinly account
+## 12.6 I cannot create another Koinly account
 
 That is expected after the first owner account is created on a Worker. Use **Login** with the original account on additional devices.
 
-## Telegram backup is empty or fails
+## 12.7 Telegram backup is empty or fails
 
 1. Make sure the latest Worker is deployed.
 2. In Koinly, use **Upload local changes** once.
@@ -649,13 +661,14 @@ That is expected after the first owner account is created on a Worker. Use **Log
 
 The Worker rejects an empty finance backup instead of intentionally sending an empty file.
 
-## Android automatic folder backup fails
+## 12.8 Android automatic folder backup fails
 
 Open **Automatic local backup**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission.
 
 ---
 
-## Project structure
+<a id="project-structure"></a>
+## 13. Project structure
 
 ```text
 Koinly/
@@ -673,6 +686,7 @@ Koinly/
 └── README.md
 ```
 
-## License
+<a id="license"></a>
+## 14. License
 
 Licensed under the Apache License 2.0. See [`LICENSE`](LICENSE).
