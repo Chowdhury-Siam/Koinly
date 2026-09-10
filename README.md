@@ -15,6 +15,14 @@
   A local-first personal finance tracker for Android and Windows with optional self-hosted multi-device synchronization.
 </p>
 
+## Quick navigation
+
+Use these shortcuts to jump directly to any part of the README.
+
+| Koinly | Setup & builds | Self-hosted sync | Reference |
+| --- | --- | --- | --- |
+| [Overview](#overview)<br>[Features](#features)<br>&nbsp;&nbsp;[Personal finance](#personal-finance)<br>&nbsp;&nbsp;[Data and backups](#data-and-backups)<br>&nbsp;&nbsp;[App experience](#app-experience)<br>&nbsp;&nbsp;[Self-hosted sync features](#self-hosted-sync)<br>[Architecture](#architecture) | [Supported release targets](#supported-release-targets)<br>[Quick start](#quick-start)<br>&nbsp;&nbsp;[Requirements](#requirements)<br>&nbsp;&nbsp;[Run locally](#run-locally)<br>[Build the app](#build-the-app)<br>&nbsp;&nbsp;[Android](#android)<br>&nbsp;&nbsp;[Windows](#windows)<br>[GitHub Actions](#github-actions) | [Self-hosted cloud sync](#self-hosted-cloud-sync)<br>[Deploy with GitHub Actions](#deploy-with-github-actions)<br>&nbsp;&nbsp;[Create Turso account/database](#1-create-the-turso-account-and-database)<br>&nbsp;&nbsp;[Turso CLI alternative](#turso-cli-alternative)<br>&nbsp;&nbsp;[Create Cloudflare account/token](#2-create-the-cloudflare-account-and-deployment-token)<br>&nbsp;&nbsp;[Add Actions configuration](#3-add-github-actions-configuration)<br>&nbsp;&nbsp;[Deploy](#4-deploy)<br>&nbsp;&nbsp;[Connect Koinly](#5-connect-koinly)<br>[Sync behavior](#sync-behavior)<br>[Telegram cloud backup](#optional-telegram-cloud-backup)<br>[Automatic local backup](#automatic-local-backup) | [Android signing](#android-signing)<br>[Windows signing](#windows-signing)<br>[Worker development](#worker-development)<br>[Data safety and security](#data-safety-and-security)<br>[Testing](#testing)<br>[Troubleshooting](#troubleshooting)<br>&nbsp;&nbsp;[Worker validation fails](#worker-validation-fails)<br>&nbsp;&nbsp;[Cloudflare error 1042](#cloudflare-error-1042)<br>&nbsp;&nbsp;[Cannot create another account](#cannot-create-another-account)<br>&nbsp;&nbsp;[Telegram backup issues](#telegram-backup-is-empty-or-fails)<br>&nbsp;&nbsp;[Android folder backup issues](#android-folder-backup-fails)<br>[Project structure](#project-structure)<br>[License](#license) |
+
 ## Overview
 
 Koinly stores finance data in local SQLite first. Accounts, transactions,
