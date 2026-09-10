@@ -183,32 +183,101 @@ The standard deployment flow is:
 
 ```text
 Fork Koinly
-  -> create Turso database
-  -> configure GitHub Actions values
+  -> create/sign in to Turso and create a database
+  -> create/sign in to Cloudflare and create an API token
+  -> add the Turso/Cloudflare values to GitHub Actions
   -> run Deploy Self-Hosted Sync Worker
   -> copy the workers.dev URL
   -> validate the URL in Koinly
   -> create the first owner account
 ```
 
-### 1. Create a Turso database
+### 1. Create the Turso account and database
 
-Install and authenticate the Turso CLI, then run:
+The easiest setup is through the Turso web dashboard, matching the setup shown
+in the project video.
 
-```bash
-turso db create koinly-sync
-turso db show koinly-sync --url
-turso db tokens create koinly-sync
+1. Open **https://app.turso.tech/** and create/sign in to your Turso account.
+2. Open **Databases**.
+3. Click **Create Database**.
+4. Keep **New Database** selected.
+5. Enter a database name, for example `koinly`.
+6. Leave the database in your normal/default group unless you specifically need
+   another Turso region/group.
+7. Click **Create Database**.
+
+After Turso creates the database, open its **Overview** page. Under **Connect**:
+
+1. Copy the **Database URL**. It starts with `libsql://` and ends in
+   `.turso.io`. Save it as the GitHub Actions secret
+   `TURSO_DATABASE_URL_U`.
+2. Click **Create Token**.
+3. For **Expires**, choose the lifetime you want. The video uses **Never** for a
+   persistent deployment token.
+4. For **Authorization Level**, choose **Read & Write**. Koinly must be able to
+   create/update sync records.
+5. Click **Create Token**.
+6. Copy the generated token immediately and save it as
+   `TURSO_AUTH_TOKEN_U`. Turso only shows the full token when it is created.
+
+Keep both values private:
+
+```text
+TURSO_DATABASE_URL_U=libsql://your-database....turso.io
+TURSO_AUTH_TOKEN_U=<your Turso read/write database token>
 ```
 
-Keep the `libsql://...turso.io` database URL and token.
+> Do not use the database page URL from your browser. Koinly needs the
+> `libsql://...turso.io` value shown under **Connect**.
 
-### 2. Create a Cloudflare API token
+#### Turso CLI alternative
 
-Create a Cloudflare token based on **Edit Cloudflare Workers**. It needs access
-to the Cloudflare account that will host the Worker.
+If you prefer the CLI instead of the dashboard:
 
-The account must have a `workers.dev` subdomain enabled.
+```bash
+turso db create koinly
+turso db show koinly --url
+turso db tokens create koinly
+```
+
+### 2. Create the Cloudflare account and deployment token
+
+1. Open **https://dash.cloudflare.com/** and create/sign in to your Cloudflare
+   account.
+2. Select the account that will own the Koinly Worker.
+3. In the left sidebar open **Manage account > Account API tokens**.
+4. Click **Create Token**.
+5. Set a clear token name such as `koinly`.
+6. Choose the **Edit Cloudflare Workers** token template. This is the template
+   used by the deployment shown in the video.
+7. Keep the template's Worker deployment permissions for the selected account.
+   Do not grant unrelated account permissions just to deploy Koinly.
+8. If Cloudflare asks which account/resources the token can use, select the
+   account that will host the Worker. If the template includes a Workers Routes
+   zone rule, keep it scoped to the zones in that same account.
+9. Choose a token expiration. **No expiration** is convenient for GitHub Actions,
+   while a dated expiration is safer if you are willing to rotate the token.
+10. Click **Review token**, verify the permissions, then click **Create token**.
+11. Copy **Your API Token** immediately. Save it as
+    `CLOUDFLARE_API_TOKEN_U`. Cloudflare does not show the full token again.
+12. On the successful-token screen, copy the **Account ID** for the same
+    Cloudflare account and save it as `CLOUDFLARE_ACCOUNT_ID_U`.
+
+The deployment workflow also needs a Worker name. Pick a short lowercase name
+with letters, numbers, and hyphens, for example:
+
+```text
+my-koinly-sync
+```
+
+Save that value as `CLOUDFLARE_NAME_U`. Cloudflare includes your account's
+workers.dev subdomain in the final public URL, for example:
+
+```text
+https://my-koinly-sync.<account-subdomain>.workers.dev
+```
+
+The GitHub Actions workflow resolves and prints the exact URL after deployment.
 
 ### 3. Add GitHub Actions configuration
 
@@ -218,23 +287,27 @@ In the fork, open:
 
 Add:
 
-| Name | Store as | Purpose |
-| --- | --- | --- |
-| `CLOUDFLARE_NAME_U` | Secret or variable | Worker name, for example `my-koinly-sync` |
-| `CLOUDFLARE_API_TOKEN_U` | Secret | Deploys the Worker |
-| `CLOUDFLARE_ACCOUNT_ID_U` | Secret | Cloudflare account ID |
-| `TURSO_DATABASE_URL_U` | Secret | `libsql://...turso.io` database URL |
-| `TURSO_AUTH_TOKEN_U` | Secret | Turso database token |
-| `JWT_SECRET_U` | Secret | Signs sessions and protects encrypted Worker-side secrets |
+| Name | Store as | Purpose | Where to get it |
+| --- | --- | --- | --- |
+| `CLOUDFLARE_NAME_U` | Secret or variable | Worker name, for example `my-koinly-sync` | Choose the name yourself |
+| `CLOUDFLARE_API_TOKEN_U` | Secret | Deploys the Worker | Cloudflare **Manage account > Account API tokens** |
+| `CLOUDFLARE_ACCOUNT_ID_U` | Secret | Selects the Cloudflare account | Cloudflare token/account details |
+| `TURSO_DATABASE_URL_U` | Secret | `libsql://...turso.io` database URL | Turso database **Overview > Connect** |
+| `TURSO_AUTH_TOKEN_U` | Secret | Read/write Turso database token | Turso **Create Token** |
+| `JWT_SECRET_U` | Secret | Signs sessions and protects encrypted Worker-side secrets | Generate locally |
 
-`JWT_SECRET_U` must contain at least 32 characters. Generate one with:
+`JWT_SECRET_U` must contain at least 32 characters. Generate a strong value with:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Never commit real credentials to workflow files, Wrangler configuration, source
-code, screenshots, or logs.
+If you do not have OpenSSL, use a password manager's secure random generator
+and create a long random value of at least 32 characters.
+
+Never commit real Turso tokens, Cloudflare API tokens, account IDs, or
+`JWT_SECRET_U` values to workflow files, Wrangler configuration, source code,
+screenshots, or logs.
 
 ### 4. Deploy
 
