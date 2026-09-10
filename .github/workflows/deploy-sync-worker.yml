@@ -38,44 +38,44 @@ jobs:
       - name: Check self-hosted deployment secrets
         run: |
           missing=0
-          for secret_name in CLOUDFLARE_NAME_U CLOUDFLARE_API_TOKEN_U CLOUDFLARE_ACCOUNT_ID_U TURSO_DATABASE_URL_U TURSO_AUTH_TOKEN_U JWT_SECRET_U; do
+          for secret_name in CLOUDFLARE_NAME CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TURSO_DATABASE_URL TURSO_AUTH_TOKEN JWT_SECRET; do
             if [ -z "${!secret_name}" ]; then
-              echo "Missing GitHub secret: ${secret_name}"
+              echo "Missing GitHub Actions value: ${secret_name}"
               missing=1
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "Create the missing secrets in GitHub repo Settings > Secrets and variables > Actions."
+            echo "Create the missing values in GitHub repo Settings > Secrets and variables > Actions. CLOUDFLARE_NAME may be a repository variable; the other values should be repository secrets."
             exit 1
           fi
-          if ! [[ "$CLOUDFLARE_NAME_U" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
-            echo "CLOUDFLARE_NAME_U must be 1-63 lowercase letters, numbers, or dashes, and cannot start or end with a dash."
+          if ! [[ "$CLOUDFLARE_NAME" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+            echo "CLOUDFLARE_NAME must be 1-63 lowercase letters, numbers, or dashes, and cannot start or end with a dash."
             exit 1
           fi
-          if [ "${#JWT_SECRET_U}" -lt 32 ]; then
-            echo "JWT_SECRET_U must contain at least 32 characters."
+          if [ "${#JWT_SECRET}" -lt 32 ]; then
+            echo "JWT_SECRET must contain at least 32 characters."
             exit 1
           fi
-          if ! [[ "$TURSO_DATABASE_URL_U" =~ ^libsql://[^/?[:space:]]+\.turso\.io/?$ ]]; then
-            echo "::error::TURSO_DATABASE_URL_U must be the libsql:// URL returned by 'turso db show <database> --url'. Do not use a workers.dev URL."
+          if ! [[ "$TURSO_DATABASE_URL" =~ ^libsql://[^/?[:space:]]+\.turso\.io/?$ ]]; then
+            echo "::error::TURSO_DATABASE_URL must be the libsql:// URL returned by 'turso db show <database> --url'. Do not use a workers.dev URL."
             exit 1
           fi
           echo "All deployment secrets are present."
-          echo "If deploy later fails with authentication code 10000, recreate CLOUDFLARE_API_TOKEN_U using Cloudflare's Edit Cloudflare Workers token template."
+          echo "If deploy later fails with authentication code 10000, recreate CLOUDFLARE_API_TOKEN using Cloudflare's Edit Cloudflare Workers token template."
           echo "Required permissions: Account Workers Scripts Edit/Write, Account Settings Read, User Details Read, User Memberships Read."
         env:
-          CLOUDFLARE_NAME_U: ${{ secrets.CLOUDFLARE_NAME_U || vars.CLOUDFLARE_NAME_U }}
-          CLOUDFLARE_API_TOKEN_U: ${{ secrets.CLOUDFLARE_API_TOKEN_U }}
-          CLOUDFLARE_ACCOUNT_ID_U: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_U }}
-          TURSO_DATABASE_URL_U: ${{ secrets.TURSO_DATABASE_URL_U }}
-          TURSO_AUTH_TOKEN_U: ${{ secrets.TURSO_AUTH_TOKEN_U }}
-          JWT_SECRET_U: ${{ secrets.JWT_SECRET_U }}
+          CLOUDFLARE_NAME: ${{ secrets.CLOUDFLARE_NAME || vars.CLOUDFLARE_NAME }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Apply Turso schema
         run: npm run schema:apply
         env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL_U }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN_U }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
 
       - name: Deploy self-hosted Worker
         run: |
@@ -102,12 +102,12 @@ jobs:
           echo "WORKER_URL=$worker_url" >> "$GITHUB_ENV"
           echo "Deployed Worker URL: $worker_url"
         env:
-          CLOUDFLARE_NAME: ${{ secrets.CLOUDFLARE_NAME_U || vars.CLOUDFLARE_NAME_U }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_U }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID_U }}
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL_U }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN_U }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET_U }}
+          CLOUDFLARE_NAME: ${{ secrets.CLOUDFLARE_NAME || vars.CLOUDFLARE_NAME }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
 
       - name: Check self-hosted Worker health
         run: |
@@ -138,7 +138,7 @@ jobs:
             head -c 1200 "$health_file"
             echo
             if grep -q 'error code: 1042' "$health_file"; then
-              echo "::error::Cloudflare 1042 blocked a Worker loop. Confirm TURSO_DATABASE_URL_U is a libsql://*.turso.io URL, not a workers.dev URL, and remove any same-account proxy route in front of this Worker."
+              echo "::error::Cloudflare 1042 blocked a Worker loop. Confirm TURSO_DATABASE_URL is a libsql://*.turso.io URL, not a workers.dev URL, and remove any same-account proxy route in front of this Worker."
             fi
             exit 1
           fi

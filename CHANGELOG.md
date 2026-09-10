@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1077] - 2026-09-10
+
+- Rewrote the main README as a beginner-friendly user and self-hosted deployment guide suitable for public distribution.
+- Simplified the self-hosted GitHub Actions variable/secret names to `CLOUDFLARE_NAME`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `JWT_SECRET`.
+- Updated the deployment workflow, Worker documentation, validation messages, and Wrangler comments to use the same names consistently.
+
+
 ## [1.0.1076] - 2026-09-10
 
 - Added app-wide text-field focus dismissal on outside taps so amount, payment amount, title, notes, profile fields, loan fields, sync fields, and other text inputs release focus when the user moves to another control.
@@ -485,15 +492,13 @@
 
 ### Changed
 
-- Owner/default-service deployment keeps the existing unprefixed GitHub
-  configuration, while user self-hosted deployment uses separate `_U` names.
+- Separated the user self-hosted deployment configuration from the legacy owner deployment configuration.
 
 ## [1.0.75] - 2026-08-27
 
 ### Changed
 
-- User self-hosted GitHub configuration now uses the `_U` suffix, while
-  owner/default-service configuration uses the `_A` suffix.
+- Separated self-hosted GitHub deployment configuration from the legacy owner deployment configuration.
 
 ## [1.0.74] - 2026-08-27
 

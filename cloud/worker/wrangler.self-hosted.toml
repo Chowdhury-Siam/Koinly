@@ -1,5 +1,5 @@
 # Self-hosted Koinly Sync Worker configuration.
-# The user deployment workflow overrides this fallback with CLOUDFLARE_NAME_U.
+# The user deployment workflow overrides this fallback with CLOUDFLARE_NAME.
 name = "koinly-sync-worker"
 main = "src/index.ts"
 compatibility_date = "2026-08-21"
