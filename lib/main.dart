@@ -5568,9 +5568,18 @@ class _SideRailNavigation extends StatelessWidget {
                   destinations: _FloatingDockNavigation.destinations
                       .map(
                         (destination) => NavigationRailDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.activeIcon),
-                          label: Text(destination.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          icon: MotionTouchFeedback(
+                            scale: .94,
+                            child: Icon(destination.icon),
+                          ),
+                          selectedIcon: MotionTouchFeedback(
+                            scale: .94,
+                            child: Icon(destination.activeIcon),
+                          ),
+                          label: MotionTouchFeedback(
+                            scale: .97,
+                            child: Text(destination.label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                         ),
                       )
                       .toList(),
@@ -5688,6 +5697,29 @@ class _FloatingDockNavigation extends StatelessWidget {
 }
 
 
+class _KeyboardDismissOnBack extends StatelessWidget {
+  const _KeyboardDismissOnBack({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+
+    // Keep Android back/predictive-back keyboard-first everywhere text input
+    // can appear. The first back action only clears focus/dismisses the IME;
+    // after the insets close, the next back action can pop the route normally.
+    return PopScope<Object?>(
+      canPop: !keyboardVisible,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !keyboardVisible) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: child,
+    );
+  }
+}
+
 class PageScaffold extends StatelessWidget {
   const PageScaffold({super.key, required this.title, this.actions = const [], required this.child, this.subtitle});
   final String title;
@@ -5700,31 +5732,33 @@ class PageScaffold extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final small = AppBreakpoints.isSmall(context);
     final desktop = AppBreakpoints.isExpanded(context);
-    return Scaffold(
-      backgroundColor: scheme.background,
-      appBar: AppBar(
-        toolbarHeight: desktop ? 76 : small ? 68 : 76,
-        titleSpacing: small ? 12 : 18,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 26 : small ? 23 : 27)),
-            if (subtitle != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
-              ),
-          ],
+    return _KeyboardDismissOnBack(
+      child: Scaffold(
+        backgroundColor: scheme.background,
+        appBar: AppBar(
+          toolbarHeight: desktop ? 76 : small ? 68 : 76,
+          titleSpacing: small ? 12 : 18,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(fontSize: desktop ? 26 : small ? 23 : 27)),
+              if (subtitle != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                ),
+            ],
+          ),
+          actions: actions
+              .map((action) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: action,
+                  ))
+              .toList(),
         ),
-        actions: actions
-            .map((action) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: action,
-                ))
-            .toList(),
+        body: KoinlyAtmosphere(child: SafeArea(top: false, child: child)),
       ),
-      body: KoinlyAtmosphere(child: SafeArea(top: false, child: child)),
     );
   }
 }
@@ -7307,18 +7341,8 @@ class _KoinlyPopupFrame extends StatelessWidget {
     );
     final resolvedWidth = math.min(maxWidth, availableWidth);
     final resolvedHeight = math.min(maxHeight, availableHeight);
-    final keyboardVisible = media.viewInsets.bottom > 0;
 
-    // Android back is handled keyboard-first for every center popup.
-    // While the IME is visible, prevent the dialog route from popping and
-    // explicitly clear focus instead. A second back press, after the keyboard
-    // has closed, is allowed to dismiss the popup normally.
-    return PopScope<Object?>(
-      canPop: !keyboardVisible,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop || !keyboardVisible) return;
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
+    return _KeyboardDismissOnBack(
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
@@ -7641,130 +7665,133 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final signedInSetupPending = !state.onboardingCompleted && state.cloudSyncEnabled && state.syncAccountUsername.trim().isNotEmpty;
-    return Scaffold(
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= 900;
-            final horizontalPadding = desktop ? 32.0 : 20.0;
-            return Column(
-              children: [
-                Expanded(
-                  child: PageView(
-                    controller: controller,
-                    physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
-                    onPageChanged: (value) => setState(() => index = value),
-                    children: [
-                      _OnboardingPane(
-                        icon: Icons.account_balance_wallet_rounded,
-                        title: 'Track money without losing detail',
-                        body: 'Accounts, categories, transactions, budgets, analysis, exports, reminders, and local backup are available from the first setup.',
-                        actions: Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            if (signedInSetupPending)
-                              FilledButton.icon(
-                                onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: true),
-                                icon: const Icon(Icons.arrow_forward_rounded),
-                                label: const Text('Continue setup'),
-                              )
-                            else ...[
-                              FilledButton.icon(
-                                onPressed: () => _openAccountSync(createAccount: false),
-                                icon: const Icon(Icons.login_rounded),
-                                label: const Text('Login'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => _openAccountSync(createAccount: true),
-                                icon: const Icon(Icons.person_add_alt_rounded),
-                                label: const Text('Create account'),
-                              ),
-                              TextButton.icon(
-                                onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: false),
-                                icon: const Icon(Icons.wifi_off_rounded),
-                                label: const Text('Use offline'),
-                              ),
+    return _KeyboardDismissOnBack(
+      child: Scaffold(
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final desktop = constraints.maxWidth >= 900;
+              final horizontalPadding = desktop ? 32.0 : 20.0;
+              return Column(
+                children: [
+                  Expanded(
+                    child: PageView(
+                      controller: controller,
+                      physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+                      onPageChanged: (value) => setState(() => index = value),
+                      children: [
+                        _OnboardingPane(
+                          icon: Icons.account_balance_wallet_rounded,
+                          title: 'Track money without losing detail',
+                          body: 'Accounts, categories, transactions, budgets, analysis, exports, reminders, and local backup are available from the first setup.',
+                          actions: Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              if (signedInSetupPending)
+                                FilledButton.icon(
+                                  onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: true),
+                                  icon: const Icon(Icons.arrow_forward_rounded),
+                                  label: const Text('Continue setup'),
+                                )
+                              else ...[
+                                FilledButton.icon(
+                                  onPressed: () => _openAccountSync(createAccount: false),
+                                  icon: const Icon(Icons.login_rounded),
+                                  label: const Text('Login'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: () => _openAccountSync(createAccount: true),
+                                  icon: const Icon(Icons.person_add_alt_rounded),
+                                  label: const Text('Create account'),
+                                ),
+                                TextButton.icon(
+                                  onPressed: choosingInitialSetup ? null : () => _chooseInitialSetup(syncAccountCreated: false),
+                                  icon: const Icon(Icons.wifi_off_rounded),
+                                  label: const Text('Use offline'),
+                                ),
+                              ],
                             ],
+                          ),
+                        ),
+                        CurrencySetupPane(state: state),
+                        AccountSetupPane(
+                          state: state,
+                          onSkip: () async {
+                            await state.skipStarterAccounts();
+                            if (!mounted) return;
+                            await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
+                          },
+                        ),
+                        _OnboardingPane(
+                          icon: Icons.privacy_tip_rounded,
+                          title: 'Private local database',
+                          body: 'Your main finance data is stored locally with SQLite. Backup and restore stay on this device unless you share a backup file yourself.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.94),
+                      border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(.55))),
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 780),
+                        child: Row(
+                          children: [
+                            Row(
+                              children: List.generate(4, (i) => AnimatedContainer(
+                                    duration: AppMotion.medium,
+                                    width: i == index ? 24 : 8,
+                                    height: 8,
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: i == index ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant),
+                                  )),
+                            ),
+                            const Spacer(),
+                            if (index > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: OutlinedButton(
+                                  onPressed: () => controller.previousPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
+                                  child: const Text('Back'),
+                                ),
+                              ),
+                            FilledButton(
+                              onPressed: choosingInitialSetup
+                                  ? null
+                                  : () async {
+                                if (index == 0) {
+                                  await _chooseInitialSetup(syncAccountCreated: signedInSetupPending);
+                                  return;
+                                }
+                                if (index < 3) {
+                                  await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
+                                } else {
+                                  await state.completeOnboarding();
+                                }
+                              },
+                              child: Text(index == 0 && signedInSetupPending ? 'Continue' : index < 3 ? 'Next' : 'Start'),
+                            ),
                           ],
                         ),
                       ),
-                      CurrencySetupPane(state: state),
-                      AccountSetupPane(
-                        state: state,
-                        onSkip: () async {
-                          await state.skipStarterAccounts();
-                          if (!mounted) return;
-                          await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
-                        },
-                      ),
-                      _OnboardingPane(
-                        icon: Icons.privacy_tip_rounded,
-                        title: 'Private local database',
-                        body: 'Your main finance data is stored locally with SQLite. Backup and restore stay on this device unless you share a backup file yourself.',
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 20),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).scaffoldBackgroundColor.withOpacity(.94),
-                    border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(.55))),
-                  ),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 780),
-                      child: Row(
-                        children: [
-                          Row(
-                            children: List.generate(4, (i) => AnimatedContainer(
-                                  duration: AppMotion.medium,
-                                  width: i == index ? 24 : 8,
-                                  height: 8,
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(99), color: i == index ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outlineVariant),
-                                )),
-                          ),
-                          const Spacer(),
-                          if (index > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: OutlinedButton(
-                                onPressed: () => controller.previousPage(duration: AppMotion.medium, curve: Curves.easeOutCubic),
-                                child: const Text('Back'),
-                              ),
-                            ),
-                          FilledButton(
-                            onPressed: choosingInitialSetup
-                                ? null
-                                : () async {
-                              if (index == 0) {
-                                await _chooseInitialSetup(syncAccountCreated: signedInSetupPending);
-                                return;
-                              }
-                              if (index < 3) {
-                                await controller.nextPage(duration: AppMotion.medium, curve: Curves.easeOutCubic);
-                              } else {
-                                await state.completeOnboarding();
-                              }
-                            },
-                            child: Text(index == 0 && signedInSetupPending ? 'Continue' : index < 3 ? 'Next' : 'Start'),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
+
 }
 
 class OnboardingPageFrame extends StatelessWidget {
@@ -14933,6 +14960,7 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           Text('Enter your username, saved recovery key, and a new password.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 14),
           TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: username,
             enabled: !busy,
             autocorrect: false,
@@ -14942,6 +14970,7 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           ),
           const SizedBox(height: 10),
           TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: recoveryKey,
             enabled: !busy,
             autocorrect: false,
@@ -14951,6 +14980,7 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           ),
           const SizedBox(height: 10),
           TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: password,
             enabled: !busy,
             obscureText: obscurePassword,
@@ -14965,6 +14995,7 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           ),
           const SizedBox(height: 10),
           TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: confirmPassword,
             enabled: !busy,
             obscureText: obscurePassword,

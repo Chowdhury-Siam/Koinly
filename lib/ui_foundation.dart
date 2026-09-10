@@ -52,6 +52,12 @@ class AppMotion {
     damping: 27,
   );
 
+  static const SpringDescription edgeSpring = SpringDescription(
+    mass: 0.78,
+    stiffness: 430,
+    damping: 30,
+  );
+
   static Future<void> selectionHaptic(BuildContext context) async {
     if (MediaQuery.of(context).disableAnimations) return;
     await HapticFeedback.selectionClick();
@@ -140,28 +146,48 @@ class _MotionPressableState extends State<MotionPressable> with SingleTickerProv
   );
 
   bool _pressed = false;
+  bool _hovered = false;
 
-  void _press() {
-    if (_pressed || widget.onTap == null || !mounted) return;
-    _pressed = true;
-    if (MediaQuery.of(context).disableAnimations) return;
-    _scaleController.animateTo(
-      widget.scale,
-      duration: const Duration(milliseconds: 72),
-      curve: Curves.easeOutCubic,
-    );
+  double get _restScale => kIsDesktopApp && _hovered ? 1.008 : 1.0;
+  double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
+
+  void _animateTo(double target, {Duration duration = const Duration(milliseconds: 72)}) {
+    if (!mounted || MediaQuery.of(context).disableAnimations) return;
+    _scaleController.animateTo(target, duration: duration, curve: Curves.easeOutCubic);
   }
 
-  void _release() {
-    if (!_pressed || !mounted) return;
-    _pressed = false;
+  void _springToRest() {
+    if (!mounted) return;
     if (MediaQuery.of(context).disableAnimations) {
       _scaleController.value = 1;
       return;
     }
     _scaleController.animateWith(
-      SpringSimulation(AppMotion.pressSpring, _scaleController.value, 1, 0),
+      SpringSimulation(AppMotion.pressSpring, _scaleController.value, _restScale, 0),
     );
+  }
+
+  void _press() {
+    if (_pressed || widget.onTap == null || !mounted) return;
+    _pressed = true;
+    _animateTo(_pressedScale, duration: const Duration(milliseconds: 66));
+  }
+
+  void _release() {
+    if (!_pressed || !mounted) return;
+    _pressed = false;
+    _springToRest();
+  }
+
+  void _hover(bool value) {
+    if (!kIsDesktopApp || _hovered == value || !mounted) return;
+    _hovered = value;
+    if (_pressed) return;
+    if (value) {
+      _animateTo(_restScale, duration: const Duration(milliseconds: 105));
+    } else {
+      _springToRest();
+    }
   }
 
   void _tap() {
@@ -183,6 +209,8 @@ class _MotionPressableState extends State<MotionPressable> with SingleTickerProv
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => _hover(true),
+      onExit: (_) => _hover(false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapDown: (_) => _press(),
@@ -206,7 +234,9 @@ class _MotionPressableState extends State<MotionPressable> with SingleTickerProv
 }
 
 /// Adds elastic press feedback around an already-interactive child without
-/// stealing its gesture. This is useful for Material buttons/FABs.
+/// stealing its gesture. This is useful for Material buttons/FABs. On desktop
+/// the same spring is driven by mouse press/release and a very small hover lift
+/// so the interaction remains visible even when a mouse click is brief.
 class MotionTouchFeedback extends StatefulWidget {
   const MotionTouchFeedback({
     super.key,
@@ -226,22 +256,52 @@ class MotionTouchFeedback extends StatefulWidget {
 class _MotionTouchFeedbackState extends State<MotionTouchFeedback> with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: 1);
   int? _pointer;
+  bool _hovered = false;
+
+  double get _restScale => kIsDesktopApp && _hovered ? 1.008 : 1.0;
+  double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
 
   void _down(PointerDownEvent event) {
     if (!widget.enabled || _pointer != null) return;
     _pointer = event.pointer;
     if (MediaQuery.of(context).disableAnimations) return;
-    _scaleController.animateTo(widget.scale, duration: const Duration(milliseconds: 70), curve: Curves.easeOutCubic);
+    _scaleController.animateTo(
+      _pressedScale,
+      duration: const Duration(milliseconds: 64),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   void _up(PointerEvent event) {
     if (_pointer != event.pointer) return;
     _pointer = null;
+    _springToRest();
+  }
+
+  void _hover(bool value) {
+    if (!kIsDesktopApp || _hovered == value || !mounted) return;
+    _hovered = value;
+    if (_pointer != null || MediaQuery.of(context).disableAnimations) return;
+    if (value) {
+      _scaleController.animateTo(
+        _restScale,
+        duration: const Duration(milliseconds: 105),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _springToRest();
+    }
+  }
+
+  void _springToRest() {
+    if (!mounted) return;
     if (MediaQuery.of(context).disableAnimations) {
       _scaleController.value = 1;
       return;
     }
-    _scaleController.animateWith(SpringSimulation(AppMotion.pressSpring, _scaleController.value, 1, 0));
+    _scaleController.animateWith(
+      SpringSimulation(AppMotion.pressSpring, _scaleController.value, _restScale, 0),
+    );
   }
 
   @override
@@ -253,15 +313,23 @@ class _MotionTouchFeedbackState extends State<MotionTouchFeedback> with SingleTi
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled || MediaQuery.of(context).disableAnimations) return widget.child;
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: _down,
-      onPointerUp: _up,
-      onPointerCancel: _up,
-      child: AnimatedBuilder(
-        animation: _scaleController,
-        child: widget.child,
-        builder: (context, child) => Transform.scale(scale: _scaleController.value, child: child),
+    return MouseRegion(
+      onEnter: (_) => _hover(true),
+      onExit: (_) => _hover(false),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _down,
+        onPointerUp: _up,
+        onPointerCancel: _up,
+        child: AnimatedBuilder(
+          animation: _scaleController,
+          child: widget.child,
+          builder: (context, child) => Transform.scale(
+            scale: _scaleController.value,
+            alignment: Alignment.center,
+            child: child,
+          ),
+        ),
       ),
     );
   }
@@ -294,13 +362,67 @@ class MotionInkWell extends StatefulWidget {
 
 class _MotionInkWellState extends State<MotionInkWell> with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: 1);
+  int? _pointer;
+  bool _hovered = false;
+
+  double get _restScale => kIsDesktopApp && _hovered ? 1.006 : 1.0;
+  double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .968) : widget.scale;
+
+  void _press() {
+    if (!mounted || MediaQuery.of(context).disableAnimations) return;
+    _scaleController.animateTo(
+      _pressedScale,
+      duration: const Duration(milliseconds: 66),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _release() {
+    if (!mounted) return;
+    if (MediaQuery.of(context).disableAnimations) {
+      _scaleController.value = 1;
+      return;
+    }
+    _scaleController.animateWith(
+      SpringSimulation(AppMotion.surfaceSpring, _scaleController.value, _restScale, 0),
+    );
+  }
+
+  void _pointerDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _press();
+  }
+
+  void _pointerUp(PointerEvent event) {
+    if (_pointer != event.pointer) return;
+    _pointer = null;
+    _release();
+  }
 
   void _highlight(bool value) {
-    if (!mounted || MediaQuery.of(context).disableAnimations) return;
+    // InkWell still drives keyboard activation (Enter/Space). Pointer presses
+    // are handled by Listener so mouse input gets the exact same spring path.
+    if (_pointer != null) return;
     if (value) {
-      _scaleController.animateTo(widget.scale, duration: const Duration(milliseconds: 72), curve: Curves.easeOutCubic);
+      _press();
     } else {
-      _scaleController.animateWith(SpringSimulation(AppMotion.surfaceSpring, _scaleController.value, 1, 0));
+      _release();
+    }
+  }
+
+  void _hover(bool value) {
+    if (!kIsDesktopApp || _hovered == value || !mounted) return;
+    _hovered = value;
+    if (_pointer != null || MediaQuery.of(context).disableAnimations) return;
+    if (value) {
+      _scaleController.animateTo(
+        _restScale,
+        duration: const Duration(milliseconds: 105),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _release();
     }
   }
 
@@ -322,10 +444,25 @@ class _MotionInkWellState extends State<MotionInkWell> with SingleTickerProvider
     );
     if (widget.onTap == null && widget.onLongPress == null) return ink;
     if (MediaQuery.of(context).disableAnimations) return ink;
-    return AnimatedBuilder(
-      animation: _scaleController,
-      child: ink,
-      builder: (context, child) => Transform.scale(scale: _scaleController.value, child: child),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _hover(true),
+      onExit: (_) => _hover(false),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _pointerDown,
+        onPointerUp: _pointerUp,
+        onPointerCancel: _pointerUp,
+        child: AnimatedBuilder(
+          animation: _scaleController,
+          child: ink,
+          builder: (context, child) => Transform.scale(
+            scale: _scaleController.value,
+            alignment: Alignment.center,
+            child: child,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -344,7 +481,7 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    if (kIsDesktopApp) return const RangeMaintainingScrollPhysics(parent: ClampingScrollPhysics());
+    if (kIsDesktopApp) return const KoinlyDesktopScrollPhysics(parent: AlwaysScrollableScrollPhysics());
     return const KoinlyMobileScrollPhysics(parent: AlwaysScrollableScrollPhysics());
   }
 
@@ -355,22 +492,131 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
-    // Keep desktop scrolling native. Intercepting pointer-wheel signals and
-    // repeatedly calling animateTo/animateToItem caused queued animations,
-    // overshoot, and visible jumps with fast mouse-wheel or touchpad input.
-    // Flutter's normal scroll pipeline is smoother and preserves precise
-    // trackpad deltas while FixedExtentScrollPhysics still snaps wheel pickers.
+    // Keep the actual desktop scroll offset fully native. A lightweight visual
+    // edge spring is layered on top so mouse-wheel input also feels elastic at
+    // the top/bottom without queuing animateTo calls or altering wheel deltas.
+    if (kIsDesktopApp) return _DesktopElasticScrollFeedback(child: child);
     return child;
   }
 }
 
+class _DesktopElasticScrollFeedback extends StatefulWidget {
+  const _DesktopElasticScrollFeedback({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_DesktopElasticScrollFeedback> createState() => _DesktopElasticScrollFeedbackState();
+}
+
+class _DesktopElasticScrollFeedbackState extends State<_DesktopElasticScrollFeedback> with SingleTickerProviderStateMixin {
+  late final AnimationController _offsetController = AnimationController.unbounded(vsync: this, value: 0);
+  Axis _axis = Axis.vertical;
+  double _pixels = 0;
+  double _minExtent = 0;
+  double _maxExtent = 0;
+  bool _hasMetrics = false;
+
+  void _captureMetrics(ScrollMetrics metrics) {
+    _axis = axisDirectionToAxis(metrics.axisDirection);
+    _pixels = metrics.pixels;
+    _minExtent = metrics.minScrollExtent;
+    _maxExtent = metrics.maxScrollExtent;
+    _hasMetrics = true;
+  }
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.depth == 0) _captureMetrics(notification.metrics);
+    return false;
+  }
+
+  bool _onMetrics(ScrollMetricsNotification notification) {
+    if (notification.depth == 0) _captureMetrics(notification.metrics);
+    return false;
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (!_hasMetrics || event is! PointerScrollEvent || MediaQuery.of(context).disableAnimations) return;
+    final delta = _axis == Axis.vertical ? event.scrollDelta.dy : event.scrollDelta.dx;
+    if (delta == 0) return;
+
+    const tolerance = .75;
+    final atStart = _pixels <= _minExtent + tolerance;
+    final atEnd = _pixels >= _maxExtent - tolerance;
+    final pushesPastStart = atStart && delta < 0;
+    final pushesPastEnd = atEnd && delta > 0;
+    if (!pushesPastStart && !pushesPastEnd) return;
+
+    final direction = pushesPastStart ? 1.0 : -1.0;
+    final impulse = (delta.abs() / 70.0).clamp(.20, 1.0) * 7.0 * direction;
+    final next = (_offsetController.value + impulse).clamp(-10.0, 10.0).toDouble();
+    _offsetController.value = next;
+    _offsetController.animateWith(SpringSimulation(AppMotion.edgeSpring, next, 0, 0));
+  }
+
+  @override
+  void dispose() {
+    _offsetController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.of(context).disableAnimations) return widget.child;
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: _onMetrics,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerSignal: _onPointerSignal,
+          child: AnimatedBuilder(
+            animation: _offsetController,
+            child: widget.child,
+            builder: (context, child) {
+              final offset = _axis == Axis.vertical
+                  ? Offset(0, _offsetController.value)
+                  : Offset(_offsetController.value, 0);
+              return Transform.translate(offset: offset, child: child);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 ScrollPhysics optimizedScrollPhysics(BuildContext context) {
-  if (kIsDesktopApp) return const RangeMaintainingScrollPhysics(parent: ClampingScrollPhysics());
+  if (kIsDesktopApp) return const KoinlyDesktopScrollPhysics(parent: AlwaysScrollableScrollPhysics());
   return const KoinlyMobileScrollPhysics(parent: AlwaysScrollableScrollPhysics());
 }
 
+/// Desktop keeps Flutter's native mouse-wheel/trackpad pipeline, but uses
+/// bouncing boundary physics so reaching the top/bottom has the same restrained
+/// elastic response as touch. No pointer-wheel animation queue is introduced.
+class KoinlyDesktopScrollPhysics extends BouncingScrollPhysics {
+  const KoinlyDesktopScrollPhysics({super.parent});
+
+  @override
+  KoinlyDesktopScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return KoinlyDesktopScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double get minFlingDistance => 2.0;
+
+  @override
+  double get minFlingVelocity => 20;
+
+  @override
+  double carriedMomentum(double existingVelocity) {
+    final boost = (0.00045 * math.pow(existingVelocity.abs(), 1.88)).toDouble();
+    return existingVelocity.sign * math.min<double>(boost, 22000.0);
+  }
+}
+
 /// Mobile lists keep Android's precise fling behavior while adding a restrained
-/// elastic edge response. Desktop remains clamped for mouse/trackpad precision.
+/// elastic edge response.
 class KoinlyMobileScrollPhysics extends BouncingScrollPhysics {
   const KoinlyMobileScrollPhysics({super.parent});
 

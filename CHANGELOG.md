@@ -1,11 +1,21 @@
 # Changelog
 
+## [1.0.1084] - 2026-09-11
+
+### Fixed
+
+- Fixed the spring/elastic UI feedback being too subtle or effectively absent with mouse input on the Windows/desktop build. Shared pressable surfaces, Material buttons/FAB wrappers, cards, selectors, and navigation now react directly to mouse pointer down/up and spring back consistently.
+- Added a restrained desktop hover lift before the press compression so short mouse clicks still make the elastic interaction visible without changing layout or hit targets; Windows side-rail navigation icons/labels now use the same feedback.
+- Enabled restrained elastic top/bottom edge scrolling on desktop while keeping Flutter's native mouse-wheel/trackpad pipeline; no queued `animateTo` wheel handler was reintroduced, so fast PC scrolling remains precise.
+- Kept system Reduce Motion / disabled-animation accessibility behavior intact.
+
 ## [1.0.1083] - 2026-09-11
 
 ### Fixed
 
-- Fixed Android back navigation dismissing a centered popup while its on-screen keyboard was open. Center popups now consume the first back action while the IME is visible, clear the focused text field, and keep all entered form data intact.
-- Applied the keyboard-first back behavior at the shared popup frame level, so Add/Edit transaction and every other centered popup get the same protection without duplicating per-screen handlers. A subsequent back action after the keyboard has closed dismisses the popup normally.
+- Fixed Android Back / predictive Back dismissing a page or centered popup together with the on-screen keyboard. While the IME is visible, the first Back action now only clears text-field focus and dismisses the keyboard; all entered values and the current form remain intact. A later Back action, after the keyboard is closed, navigates away normally.
+- Centralized the behavior in a shared keyboard-back guard used by every standard `PageScaffold`, every centered Koinly popup, and first-run onboarding currency setup. This covers transaction, account, category, budget, loan, profile, search, login/sync, recovery, currency, and other existing text-entry flows without screen-specific hacks.
+- Added the missing tap-outside focus dismissal to all account-recovery text fields so keyboard dismissal behavior is consistent with the rest of the app.
 
 ## [1.0.1082] - 2026-09-11
 
