@@ -14,7 +14,8 @@ class SyncAuthSession {
   const SyncAuthSession({
     required this.accessToken,
     required this.refreshToken,
-    required this.email,
+    required this.username,
+    this.recoveryKey,
     required this.userId,
     required this.deviceId,
     required this.accessExpiresAt,
@@ -22,7 +23,8 @@ class SyncAuthSession {
 
   final String accessToken;
   final String refreshToken;
-  final String email;
+  final String username;
+  final String? recoveryKey;
   final String userId;
   final String deviceId;
   final DateTime accessExpiresAt;

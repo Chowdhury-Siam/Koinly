@@ -85,7 +85,8 @@ You do not need to write Cloudflare or Turso code yourself.
 
 - Your own Cloudflare Worker and Turso database
 - One owner account per Worker
-- Login from additional devices
+- Username/password login from additional devices
+- Recovery-key password reset without requiring an email address
 - Offline-first local outbox
 - Incremental push/pull synchronization
 - Merge-first **Restore cloud copy** and **Upload local changes**
@@ -214,21 +215,16 @@ TURSO_DATABASE_URL
 
 ### 5.2.2 Create the Turso token
 
-On the same database page:
+In the current Turso dashboard shown in the setup recording:
 
-1. Click **Create Token**.
-2. Choose an expiration period. For a long-running personal deployment, you may choose **Never** if that matches your security preference.
-3. Set **Authorization Level** to **Read & Write**.
-4. Click **Create Token**.
-5. Copy the token immediately.
+1. Open your database **Overview** page.
+2. In the **Connect** section, click **Create Token**.
+3. Turso immediately opens a **Token Created** dialog.
+4. Copy the long token from the first field. This is your `TURSO_AUTH_TOKEN`.
+5. The same dialog also shows the `libsql://...turso.io` database URL. You can copy it there as a second check for `TURSO_DATABASE_URL`.
+6. Save the token before closing the dialog because the full token is not shown again later.
 
-Add it to GitHub later as:
-
-```text
-TURSO_AUTH_TOKEN
-```
-
-Turso may not show the full token again after you leave the page, so store it safely.
+If Turso adds an authorization/permission choice in a future dashboard version, the Worker needs normal **read and write** database access. Do not enable **Block Reads** or **Block Writes** on the database.
 
 ### 5.2.3 Optional Turso CLI method
 
@@ -252,28 +248,21 @@ You do not need to buy or configure a domain for the normal Koinly setup. The de
 
 ## 5.4 Step 4 — Create the Cloudflare API token
 
-1. In Cloudflare, open **Manage account**.
-2. Open **Account API tokens**.
-3. Click **Create Token**.
-4. Choose the **Edit Cloudflare Workers** template.
-5. Give the token a recognizable name such as `koinly`.
-6. Keep it scoped to the Cloudflare account that will host the Worker.
-7. Review the permissions and create the token.
-8. Copy the API token immediately.
+1. In Cloudflare, open **Manage account > Account API tokens**.
+2. Click **Create Token**.
+3. Choose the **Edit Cloudflare Workers** template.
+4. Give the token a recognizable name such as `koinly`.
+5. In the policy, scope the token to the Cloudflare account that will host Koinly. **Do not use “Read all resources” or “Write all resources”, and do not select every permission group.** The Worker deployment does not need account-wide access to unrelated products.
+6. Keep the permissions supplied by the **Edit Cloudflare Workers** template. The current template includes **Workers Routes Write**, **Workers Scripts Write**, **Workers KV Storage Write**, **Workers Tail Read**, **Workers R2 Storage Write**, **Account Settings Read**, **User Details Read**, and **User Memberships Read**. You do **not** need to manually turn every permission group into **Read & Write**.
+7. Click **Review token**, then **Create token**.
+8. On the **Token created successfully** dialog, copy **Your API Token** immediately. This is `CLOUDFLARE_API_TOKEN`.
+9. The same success dialog shows **Account ID**. Copy that value too; it is `CLOUDFLARE_ACCOUNT_ID`.
 
-Add it to GitHub later as:
+The deployment workflow checks the values before running Wrangler. If Cloudflare changes the template later, recreate the token from the **Edit Cloudflare Workers** template rather than granting unrelated account-wide permissions.
 
-```text
-CLOUDFLARE_API_TOKEN
-```
+## 5.5 Step 5 — Confirm your Cloudflare Account ID
 
-The standard template should provide the Worker deployment permissions the GitHub workflow needs. Avoid granting unrelated permissions.
-
-## 5.5 Step 5 — Copy your Cloudflare Account ID
-
-Use the **Account ID** for the same Cloudflare account that owns the Worker.
-
-Depending on the Cloudflare dashboard layout, you can find it in the account details/overview or alongside the API token/account information.
+The easiest place to copy the Account ID is the **Token created successfully** dialog shown immediately after creating the token. Use the Account ID from the same Cloudflare account that owns the Worker.
 
 Copy it and add it to GitHub later as:
 
@@ -329,7 +318,7 @@ Add the generated value to GitHub as:
 JWT_SECRET
 ```
 
-Do not reuse your email password, GitHub password, Cloudflare password, or Turso token as `JWT_SECRET`.
+Do not reuse your Koinly password, GitHub password, Cloudflare password, or Turso token as `JWT_SECRET`.
 
 ## 5.8 Step 8 — Add the values to GitHub
 
@@ -423,12 +412,21 @@ After deployment:
 2. Go to **Settings > Account & sync**.
 3. Paste your Cloudflare Worker URL.
 4. Tap **Validate and use Worker**.
-5. If this is a new Worker, create the first Koinly account.
-6. On another device, use the same Worker URL and choose **Login** with that same account.
+5. If this is a new Worker, choose **Create account** and enter a **username** and password. Koinly no longer asks for an email address.
+6. After the account is created, Koinly shows a one-time **recovery key**. Copy it and store it somewhere safe before closing the popup.
+7. On another device, use the same Worker URL and choose **Login** with the same username and password.
 
-A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account.
+A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
 
-### 6.1 Sync controls
+### 6.1 Forgot your password?
+
+On the Login screen, choose **Forgot password?** and enter your username, saved recovery key, and a new password. A successful reset revokes the old refresh sessions and signs the current device in with the new password.
+
+While signed in, **Settings > Account & sync > Recovery key** creates a replacement recovery key. The previous recovery key stops working immediately.
+
+> Existing self-hosted databases created by older Koinly releases are migrated from email login to username login when the latest deployment workflow applies the schema. The old email's part before `@` becomes the initial username. Existing accounts do not have a recovery key until you sign in once and create one from **Recovery key**.
+
+### 6.2 Sync controls
 
 - **Upload local changes** merges your current local data into the Worker copy.
 - **Restore cloud copy** downloads the Worker copy and merges it into the device.
@@ -522,14 +520,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1077
+  --dart-define=KOINLY_APP_VERSION=1.0.1078
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1077
+  --dart-define=KOINLY_APP_VERSION=1.0.1078
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.
@@ -651,7 +649,7 @@ Confirm that `TURSO_DATABASE_URL` is your Turso `libsql://...turso.io` URL, not 
 
 ## 12.6 I cannot create another Koinly account
 
-That is expected after the first owner account is created on a Worker. Use **Login** with the original account on additional devices.
+That is expected after the first owner account is created on a Worker. Use **Login** with the original username on additional devices.
 
 ## 12.7 Telegram backup is empty or fails
 

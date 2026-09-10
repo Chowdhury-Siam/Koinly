@@ -332,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             );
             final informationCard = _ProfileInformationCard(
               displayName: displayName,
-              email: state.syncAccountEmail,
+              username: state.syncAccountUsername,
               busy: profileBusy,
               onSave: _saveProfile,
             );
@@ -479,13 +479,13 @@ class _ProfileMediaCard extends StatelessWidget {
 class _ProfileInformationCard extends StatelessWidget {
   const _ProfileInformationCard({
     required this.displayName,
-    required this.email,
+    required this.username,
     required this.busy,
     required this.onSave,
   });
 
   final TextEditingController displayName;
-  final String email;
+  final String username;
   final bool busy;
   final VoidCallback onSave;
 
@@ -511,13 +511,13 @@ class _ProfileInformationCard extends StatelessWidget {
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Display name', hintText: 'How should Koinly address you?'),
           ),
-          if (email.trim().isNotEmpty) ...[
+          if (username.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.alternate_email_rounded, color: kSleekAccent),
+              leading: const Icon(Icons.person_rounded, color: kSleekAccent),
               title: const Text('Sync account'),
-              subtitle: Text(email.trim()),
+              subtitle: Text(username.trim()),
             ),
           ],
           const SizedBox(height: 10),
@@ -593,7 +593,7 @@ class _ProfileMediaFramingEditorState extends State<ProfileMediaFramingEditor> {
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

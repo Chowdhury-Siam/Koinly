@@ -12,7 +12,7 @@ type Env = {
 
 type AuthContext = {
   userId: string;
-  email: string;
+  username: string;
   deviceId: string;
 };
 
@@ -53,9 +53,11 @@ export default {
 
       if (request.method === 'POST' && url.pathname === '/v1/auth/register') return await register(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/login') return await login(request, env, db);
+      if (request.method === 'POST' && url.pathname === '/v1/auth/recover') return await recoverAccount(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/refresh') return await refresh(request, env, db);
       const auth = await requireAuth(request, env);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/initial') return await initialSync(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/push') return await push(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/replace') return await replaceAll(request, env, db, auth);
@@ -727,6 +729,8 @@ function rootResponse(env: Env): Response {
       health: '/health',
       register: 'POST /v1/auth/register',
       login: 'POST /v1/auth/login',
+      recover: 'POST /v1/auth/recover',
+      recoveryKey: 'POST /v1/auth/recovery-key',
       refresh: 'POST /v1/auth/refresh',
       logout: 'POST /v1/auth/logout',
       initialSync: 'POST /v1/sync/initial',
@@ -816,7 +820,13 @@ async function missingSchemaTables(db: Client): Promise<string[]> {
     args: requiredTables,
   })).rows;
   const existing = new Set(rows.map(row => String(row.name)));
-  return requiredTables.filter(table => !existing.has(table));
+  const missing = requiredTables.filter(table => !existing.has(table));
+  if (!existing.has('users')) return missing;
+
+  const userColumns = new Set((await db.execute("PRAGMA table_info('users')")).rows.map(row => String(row.name)));
+  if (!userColumns.has('username')) missing.push('users.username');
+  if (!userColumns.has('recovery_key_hash')) missing.push('users.recovery_key_hash');
+  return missing;
 }
 
 function databaseErrorMessage(error: unknown): string {
@@ -827,7 +837,7 @@ function databaseErrorMessage(error: unknown): string {
 
 async function register(request: Request, env: Env, db: Client): Promise<Response> {
   const body = await readJson(request);
-  const email = normalizeEmail(body.email);
+  const username = normalizeUsername(body.username);
   const password = String(body.password ?? '');
   const deviceId = normalizeId(body.deviceId, 'deviceId');
   const deviceName = cleanText(body.deviceName, 80) || 'Koinly device';
@@ -837,6 +847,8 @@ async function register(request: Request, env: Env, db: Client): Promise<Respons
   const now = Date.now();
   const userId = crypto.randomUUID();
   const passwordHash = await hashPassword(password, env.JWT_SECRET);
+  const recoveryKey = generateRecoveryKey();
+  const recoveryKeyHash = await hashRecoveryKey(recoveryKey, env.JWT_SECRET);
   const transaction = await db.transaction('write');
   try {
     const userCount = Number((await transaction.execute('SELECT COUNT(*) AS count FROM users')).rows[0]?.count ?? 0);
@@ -844,8 +856,8 @@ async function register(request: Request, env: Env, db: Client): Promise<Respons
       throw new HttpError(403, 'Self-hosted registration is closed. Sign in with the first account.');
     }
     await transaction.execute({
-      sql: 'INSERT INTO users(id, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      args: [userId, email, passwordHash, now, now],
+      sql: 'INSERT INTO users(id, username, password_hash, recovery_key_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [userId, username, passwordHash, recoveryKeyHash, now, now],
     });
     await transaction.execute({
       sql: 'INSERT INTO devices(id, user_id, name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -856,13 +868,13 @@ async function register(request: Request, env: Env, db: Client): Promise<Respons
     if (error instanceof HttpError) throw error;
     const message = databaseErrorMessage(error);
     if (message.toLowerCase().includes('unique') || message.toLowerCase().includes('constraint')) {
-      throw new HttpError(409, 'An account already exists for this email.');
+      throw new HttpError(409, 'That username is already in use.');
     }
     throw new HttpError(503, `Could not create sync account: ${message}`);
   } finally {
     transaction.close();
   }
-  return issueTokens(env, db, { userId, email, deviceId });
+  return issueTokens(env, db, { userId, username, deviceId }, recoveryKey);
 }
 
 
@@ -878,15 +890,15 @@ function privateJson(value: unknown, status = 200): Response {
 
 async function login(request: Request, env: Env, db: Client): Promise<Response> {
   const body = await readJson(request);
-  const email = normalizeEmail(body.email);
+  const username = normalizeUsername(body.username);
   const password = String(body.password ?? '');
   const deviceId = normalizeId(body.deviceId, 'deviceId');
   const deviceName = cleanText(body.deviceName, 80) || 'Koinly device';
   const platform = cleanText(body.platform, 40) || 'unknown';
 
-  const row = (await db.execute({ sql: 'SELECT id, email, password_hash FROM users WHERE email = ?', args: [email] })).rows[0];
+  const row = (await db.execute({ sql: 'SELECT id, username, password_hash FROM users WHERE username = ?', args: [username] })).rows[0];
   if (!row || !(await verifyPassword(password, String(row.password_hash), env.JWT_SECRET))) {
-    throw new HttpError(401, 'Invalid email or password.');
+    throw new HttpError(401, 'Invalid username or password.');
   }
 
   const now = Date.now();
@@ -896,7 +908,62 @@ async function login(request: Request, env: Env, db: Client): Promise<Response> 
           ON CONFLICT(user_id, id) DO UPDATE SET name = excluded.name, platform = excluded.platform, last_seen_at = excluded.last_seen_at, revoked_at = NULL`,
     args: [deviceId, String(row.id), deviceName, platform, now, now],
   });
-  return issueTokens(env, db, { userId: String(row.id), email: String(row.email), deviceId });
+  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId });
+}
+
+async function recoverAccount(request: Request, env: Env, db: Client): Promise<Response> {
+  const body = await readJson(request);
+  const username = normalizeUsername(body.username);
+  const recoveryKey = normalizeRecoveryKey(body.recoveryKey);
+  const newPassword = String(body.newPassword ?? '');
+  const deviceId = normalizeId(body.deviceId, 'deviceId');
+  const deviceName = cleanText(body.deviceName, 80) || 'Koinly device';
+  const platform = cleanText(body.platform, 40) || 'unknown';
+  validatePassword(newPassword);
+
+  await enforceRateLimit(db, `recover:${username}`, 8, 15 * 60 * 1000);
+  const row = (await db.execute({
+    sql: 'SELECT id, username, recovery_key_hash FROM users WHERE username = ?',
+    args: [username],
+  })).rows[0];
+  const storedRecoveryHash = String(row?.recovery_key_hash ?? '');
+  if (!row || !storedRecoveryHash || !constantTimeEqual(await hashRecoveryKey(recoveryKey, env.JWT_SECRET), storedRecoveryHash)) {
+    throw new HttpError(401, 'Username or recovery key is incorrect.');
+  }
+
+  const now = Date.now();
+  const passwordHash = await hashPassword(newPassword, env.JWT_SECRET);
+  const transaction = await db.transaction('write');
+  try {
+    await transaction.execute({
+      sql: 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+      args: [passwordHash, now, String(row.id)],
+    });
+    await transaction.execute({
+      sql: 'UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL',
+      args: [now, String(row.id)],
+    });
+    await transaction.execute({
+      sql: `INSERT INTO devices(id, user_id, name, platform, created_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, id) DO UPDATE SET name = excluded.name, platform = excluded.platform, last_seen_at = excluded.last_seen_at, revoked_at = NULL`,
+      args: [deviceId, String(row.id), deviceName, platform, now, now],
+    });
+    await transaction.commit();
+  } finally {
+    transaction.close();
+  }
+  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId });
+}
+
+async function rotateRecoveryKey(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  const recoveryKey = generateRecoveryKey();
+  const recoveryKeyHash = await hashRecoveryKey(recoveryKey, env.JWT_SECRET);
+  await db.execute({
+    sql: 'UPDATE users SET recovery_key_hash = ?, updated_at = ? WHERE id = ?',
+    args: [recoveryKeyHash, Date.now(), auth.userId],
+  });
+  return privateJson({ ok: true, recoveryKey });
 }
 
 async function refresh(request: Request, env: Env, db: Client): Promise<Response> {
@@ -907,7 +974,7 @@ async function refresh(request: Request, env: Env, db: Client): Promise<Response
 
   const tokenHash = await sha256(refreshToken);
   const row = (await db.execute({
-    sql: `SELECT rt.id, rt.user_id, u.email
+    sql: `SELECT rt.id, rt.user_id, u.username
           FROM refresh_tokens rt
           JOIN users u ON u.id = rt.user_id
           WHERE rt.token_hash = ? AND rt.device_id = ? AND rt.revoked_at IS NULL AND rt.expires_at > ?`,
@@ -916,7 +983,7 @@ async function refresh(request: Request, env: Env, db: Client): Promise<Response
   if (!row) throw new HttpError(401, 'Refresh token is invalid or expired.');
 
   await db.execute({ sql: 'UPDATE refresh_tokens SET revoked_at = ?, rotated_at = ? WHERE id = ?', args: [Date.now(), Date.now(), String(row.id)] });
-  return issueTokens(env, db, { userId: String(row.user_id), email: String(row.email), deviceId });
+  return issueTokens(env, db, { userId: String(row.user_id), username: String(row.username), deviceId });
 }
 
 async function logout(request: Request, db: Client, auth: AuthContext): Promise<Response> {
@@ -1216,17 +1283,25 @@ async function maxSequence(db: Client, auth: AuthContext): Promise<number> {
   return Number(row?.sequence ?? 0);
 }
 
-async function issueTokens(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+async function issueTokens(env: Env, db: Client, auth: AuthContext, recoveryKey?: string): Promise<Response> {
   const now = Date.now();
   const accessExpiresAt = now + numberEnv(env.ACCESS_TOKEN_TTL_SECONDS, 900) * 1000;
   const refreshExpiresAt = now + numberEnv(env.REFRESH_TOKEN_TTL_SECONDS, 2592000) * 1000;
-  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, email: auth.email, deviceId: auth.deviceId, exp: Math.floor(accessExpiresAt / 1000) });
+  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, username: auth.username, deviceId: auth.deviceId, exp: Math.floor(accessExpiresAt / 1000) });
   const refreshToken = crypto.randomUUID() + '.' + crypto.randomUUID();
   await db.execute({
     sql: 'INSERT INTO refresh_tokens(id, user_id, token_hash, device_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
     args: [crypto.randomUUID(), auth.userId, await sha256(refreshToken), auth.deviceId, refreshExpiresAt, now],
   });
-  return json({ accessToken, refreshToken, accessExpiresAt, refreshExpiresAt, user: { id: auth.userId, email: auth.email }, deviceId: auth.deviceId });
+  return privateJson({
+    accessToken,
+    refreshToken,
+    accessExpiresAt,
+    refreshExpiresAt,
+    user: { id: auth.userId, username: auth.username },
+    deviceId: auth.deviceId,
+    ...(recoveryKey ? { recoveryKey } : {}),
+  });
 }
 
 async function requireAuth(request: Request, env: Env): Promise<AuthContext> {
@@ -1234,7 +1309,8 @@ async function requireAuth(request: Request, env: Env): Promise<AuthContext> {
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
   if (!token) throw new HttpError(401, 'Missing access token.');
   const payload = await verifyToken(env.JWT_SECRET, token);
-  return { userId: String(payload.sub), email: String(payload.email), deviceId: String(payload.deviceId) };
+  const username = String(payload.username ?? payload.email ?? '');
+  return { userId: String(payload.sub), username, deviceId: String(payload.deviceId) };
 }
 
 async function signToken(secret: string, payload: Record<string, unknown>): Promise<string> {
@@ -1282,6 +1358,42 @@ async function verifyPassword(password: string, stored: string, pepper: string):
   return b64urlBytes(bits) === hashRaw;
 }
 
+function generateRecoveryKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let body = '';
+  for (const byte of bytes) body += alphabet[byte % alphabet.length];
+  return `KLY-${body.slice(0, 5)}-${body.slice(5, 10)}-${body.slice(10, 15)}-${body.slice(15, 20)}`;
+}
+
+async function hashRecoveryKey(recoveryKey: string, secret: string): Promise<string> {
+  return sha256(`recovery.${secret}.${recoveryKey}`);
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i += 1) diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  return diff === 0;
+}
+
+async function enforceRateLimit(db: Client, key: string, maxAttempts: number, windowMs: number): Promise<void> {
+  const now = Date.now();
+  const row = (await db.execute({ sql: 'SELECT window_start, count FROM rate_limits WHERE key = ?', args: [key] })).rows[0];
+  const windowStart = Number(row?.window_start ?? 0);
+  const count = Number(row?.count ?? 0);
+  if (!row || now - windowStart >= windowMs) {
+    await db.execute({
+      sql: `INSERT INTO rate_limits(key, window_start, count) VALUES (?, ?, 1)
+            ON CONFLICT(key) DO UPDATE SET window_start = excluded.window_start, count = 1`,
+      args: [key, now],
+    });
+    return;
+  }
+  if (count >= maxAttempts) throw new HttpError(429, 'Too many recovery attempts. Try again later.');
+  await db.execute({ sql: 'UPDATE rate_limits SET count = count + 1 WHERE key = ?', args: [key] });
+}
+
 async function sha256(value: string): Promise<string> {
   return b64urlBytes(await crypto.subtle.digest('SHA-256', enc.encode(value)));
 }
@@ -1301,10 +1413,18 @@ function validateOperation(raw: unknown): SyncOperation {
   };
 }
 
-function normalizeEmail(value: unknown): string {
-  const email = String(value ?? '').trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address.');
-  return email;
+function normalizeUsername(value: unknown): string {
+  const username = String(value ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/.test(username)) {
+    throw new HttpError(400, 'Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.');
+  }
+  return username;
+}
+
+function normalizeRecoveryKey(value: unknown): string {
+  const recoveryKey = String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!/^KLY-[A-Z0-9-]{23,80}$/.test(recoveryKey)) throw new HttpError(400, 'Enter a valid recovery key.');
+  return recoveryKey;
 }
 
 function validatePassword(password: string): void {

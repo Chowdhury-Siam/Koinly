@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.1078] - 2026-09-11
+
+### Added
+
+- Added username-based self-hosted authentication and removed email from the login/create-account flow.
+- Added recovery-key based **Forgot password?** recovery, including recovery-key rotation for signed-in users.
+- Added compatibility migration for existing self-hosted databases and local preferences that still use email-based account identifiers.
+
+### Changed
+
+- Reworked centered popup bodies to stay non-scrollable and scale to the available viewport while keeping intentionally scrollable picker lists contained inside their own fixed-height regions.
+- Updated the Turso and Cloudflare setup guide to match the current dashboards shown in the setup recording and the current Cloudflare **Edit Cloudflare Workers** token template.
+
+### Security
+
+- Recovery keys are stored only as keyed hashes, password-recovery attempts are rate limited, successful recovery revokes existing refresh sessions, and recovery responses are marked private/no-store.
+
 ## [1.0.1077] - 2026-09-10
 
 - Rewrote the main README as a beginner-friendly user and self-hosted deployment guide suitable for public distribution.

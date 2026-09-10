@@ -57,12 +57,12 @@ jobs:
             exit 1
           fi
           if ! [[ "$TURSO_DATABASE_URL" =~ ^libsql://[^/?[:space:]]+\.turso\.io/?$ ]]; then
-            echo "::error::TURSO_DATABASE_URL must be the libsql:// URL returned by 'turso db show <database> --url'. Do not use a workers.dev URL."
+            echo "::error::TURSO_DATABASE_URL must be the libsql://...turso.io Database URL shown in your Turso database Overview > Connect section. Do not use a workers.dev URL or the app.turso.tech browser URL."
             exit 1
           fi
           echo "All deployment secrets are present."
           echo "If deploy later fails with authentication code 10000, recreate CLOUDFLARE_API_TOKEN using Cloudflare's Edit Cloudflare Workers token template."
-          echo "Required permissions: Account Workers Scripts Edit/Write, Account Settings Read, User Details Read, User Memberships Read."
+          echo "Use Cloudflare's Edit Cloudflare Workers template. It supplies Workers Routes Write, Workers Scripts Write, Workers KV Storage Write, Workers Tail Read, Workers R2 Storage Write, Account Settings Read, User Details Read, and User Memberships Read."
         env:
           CLOUDFLARE_NAME: ${{ secrets.CLOUDFLARE_NAME || vars.CLOUDFLARE_NAME }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

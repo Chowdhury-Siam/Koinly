@@ -7,7 +7,7 @@ For the easiest setup, follow the beginner-friendly guide in the repository's ma
 
 ## Registration model
 
-A fresh Worker accepts one owner account. After that account is created, registration closes and additional devices use **Login** with the same account.
+A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. Registration returns a one-time recovery key; after registration closes, additional devices use **Login** with the same username and password.
 
 ## GitHub Actions deployment values
 
@@ -57,7 +57,7 @@ wrangler secret put JWT_SECRET
 npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
 ```
 
-`schema.sql` is idempotent and can be applied again without deleting existing sync data.
+`schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` also migrates older `users.email` schemas to `users.username` and adds the recovery-key column.
 
 ## Health check
 
@@ -88,6 +88,8 @@ A ready Worker returns values equivalent to:
 - `GET /health`
 - `POST /v1/auth/register`
 - `POST /v1/auth/login`
+- `POST /v1/auth/recover`
+- `POST /v1/auth/recovery-key` (authenticated; rotates the key)
 - `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
 - `POST /v1/sync/initial`
@@ -134,4 +136,11 @@ Then redeploy or recheck `/health`.
 
 ### Registration is closed
 
-This is expected after the first owner account exists. Use **Login** from additional devices.
+This is expected after the first owner account exists. Use **Login** from additional devices. If an older deployment used email login, redeploy the latest Worker first; the schema migration converts the old email local-part into the username.
+
+
+### Password recovery
+
+New registrations return a recovery key once. The Worker stores only a keyed hash of that recovery key. `POST /v1/auth/recover` accepts the username, recovery key, and new password, rate-limits failed attempts, revokes existing refresh tokens after a successful reset, and issues a new session.
+
+An authenticated user can call `POST /v1/auth/recovery-key` to rotate the recovery key. Only the newly generated key remains valid.

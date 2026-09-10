@@ -29,12 +29,61 @@ const client = createClient({
 });
 
 try {
+  await migrateLegacyUsersTable(client);
   for (const statement of statements) {
     await client.execute(statement);
   }
+  await migrateLegacyUsersTable(client);
   console.log(`Applied Turso schema successfully (${statements.length} statements).`);
 } finally {
   client.close();
+}
+
+async function migrateLegacyUsersTable(client) {
+  const table = (await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'")).rows[0];
+  if (!table) return;
+
+  let columns = await userColumns(client);
+  if (columns.has('email') && !columns.has('username')) {
+    await client.execute('ALTER TABLE users RENAME COLUMN email TO username');
+    columns = await userColumns(client);
+
+    const rows = (await client.execute('SELECT id, username FROM users')).rows;
+    for (const row of rows) {
+      const legacy = String(row.username ?? '');
+      const migrated = legacyUsername(legacy);
+      if (migrated !== legacy) {
+        await client.execute({
+          sql: 'UPDATE users SET username = ?, updated_at = ? WHERE id = ?',
+          args: [migrated, Date.now(), String(row.id)],
+        });
+      }
+    }
+    console.log('Migrated legacy email login column to username.');
+  }
+
+  columns = await userColumns(client);
+  if (!columns.has('recovery_key_hash')) {
+    await client.execute('ALTER TABLE users ADD COLUMN recovery_key_hash TEXT');
+    console.log('Added recovery-key support to existing users table.');
+  }
+}
+
+async function userColumns(client) {
+  const rows = (await client.execute("PRAGMA table_info('users')")).rows;
+  return new Set(rows.map((row) => String(row.name)));
+}
+
+function legacyUsername(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  const localPart = raw.includes('@') ? raw.split('@')[0] : raw;
+  let username = localPart
+    .replace(/[^a-z0-9._-]+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 32);
+  if (!username) username = 'koinly_owner';
+  while (username.length < 3) username += '_owner';
+  return username.slice(0, 32).replace(/[._-]+$/g, '') || 'koinly_owner';
 }
 
 function splitSqlStatements(source) {

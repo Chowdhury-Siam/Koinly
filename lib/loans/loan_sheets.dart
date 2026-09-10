@@ -183,7 +183,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
       updatedOn: now,
     );
     final emi = loanEmiAmount(preview);
-    return SingleChildScrollView(
+    return KoinlyPopupContent(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -485,7 +485,7 @@ class _LoanPaymentSheetState extends State<_LoanPaymentSheet> {
     final value = double.tryParse(amount.text) ?? 0;
     final split = allocateLoanPayment(widget.loan, state.paymentsForLoan(widget.loan.id), value, paidOn);
     final account = state.accountOf(accountId ?? '');
-    return SingleChildScrollView(
+    return KoinlyPopupContent(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

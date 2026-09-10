@@ -31,7 +31,7 @@ void main() {
   testWidgets('signed-in unfinished onboarding exposes Continue setup', (tester) async {
     final controller = await pumpOnboarding(tester);
     controller.cloudSyncEnabled = true;
-    controller.syncAccountEmail = 'owner@example.com';
+    controller.syncAccountUsername = 'owner';
     controller.notifyListeners();
     await tester.pumpAndSettle();
 

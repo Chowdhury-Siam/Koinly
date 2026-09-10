@@ -52,6 +52,27 @@ part 'profile/profile_ui.dart';
 
 const _uuid = Uuid();
 
+String? _syncUsernameValidationError(String value) {
+  final username = value.trim().toLowerCase();
+  if (!RegExp(r'^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$').hasMatch(username)) {
+    return 'Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.';
+  }
+  return null;
+}
+
+String _legacyUsernameFromEmail(String value) {
+  final raw = value.trim().toLowerCase();
+  if (raw.isEmpty) return '';
+  final local = raw.contains('@') ? raw.split('@').first : raw;
+  var username = local.replaceAll(RegExp(r'[^a-z0-9._-]+'), '_');
+  username = username.replaceAll(RegExp(r'^[._-]+|[._-]+$'), '');
+  if (username.isEmpty) username = 'koinly_owner';
+  while (username.length < 3) { username = '${username}_owner'; }
+  if (username.length > 32) username = username.substring(0, 32);
+  username = username.replaceAll(RegExp(r'[._-]+$'), '');
+  return username.isEmpty ? 'koinly_owner' : username;
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kUsesDesktopSqlite) {
@@ -1768,7 +1789,7 @@ class AppController extends ChangeNotifier {
   Timer? _cloudSyncRetryTimer;
   Timer? _cloudSyncAutoPullTimer;
   DateTime? _lastCloudAutoPullAt;
-  String syncAccountEmail = '';
+  String syncAccountUsername = '';
   String syncAccessToken = '';
   String syncRefreshToken = '';
   String syncDeviceId = '';
@@ -1827,8 +1848,8 @@ class AppController extends ChangeNotifier {
   String get profileDisplayLabel {
     final customName = profileDisplayName.trim();
     if (customName.isNotEmpty) return customName;
-    final emailName = syncAccountEmail.trim().split('@').first.trim();
-    return emailName.isEmpty ? 'Profile' : emailName;
+    final username = syncAccountUsername.trim();
+    return username.isEmpty ? 'Profile' : username;
   }
 
   void selectTabIndex(int index) {
@@ -1978,7 +1999,15 @@ class AppController extends ChangeNotifier {
     syncMongoSyncPin = await secureCredentials.readMongoDbSyncPin();
     syncTursoDatabaseUrl = await prefs.getString('syncTursoDatabaseUrl', '');
     syncTursoAuthToken = await secureCredentials.readTursoAuthToken();
-    syncAccountEmail = await prefs.getString('syncAccountEmail', '');
+    syncAccountUsername = await prefs.getString('syncAccountUsername', '');
+    if (syncAccountUsername.trim().isEmpty) {
+      final legacyEmail = await prefs.getString('syncAccountEmail', '');
+      syncAccountUsername = _legacyUsernameFromEmail(legacyEmail);
+      if (syncAccountUsername.isNotEmpty) {
+        await prefs.setString('syncAccountUsername', syncAccountUsername);
+      }
+      await (await prefs.prefs).remove('syncAccountEmail');
+    }
     syncDeviceId = await prefs.getString('syncDeviceId', '');
     if (syncDeviceId.trim().isEmpty) {
       syncDeviceId = _uuid.v4();
@@ -1990,8 +2019,8 @@ class AppController extends ChangeNotifier {
       await secureCredentials.clearAccountTokens();
       syncAccessToken = '';
       syncRefreshToken = '';
-      syncAccountEmail = '';
-      await prefs.setString('syncAccountEmail', '');
+      syncAccountUsername = '';
+      await prefs.setString('syncAccountUsername', '');
       await prefs.setBool('cloudSyncEnabled', false);
       await database.resetLocalSyncTracking();
       await database.writeSyncState('serverCursor', '0');
@@ -2441,18 +2470,11 @@ class AppController extends ChangeNotifier {
     await checkDataHealth();
   }
 
-  String _maskedSyncEmail() {
-    final trimmed = syncAccountEmail.trim();
-    if (trimmed.isEmpty || !trimmed.contains('@')) return trimmed.isEmpty ? 'Not signed in' : 'Configured';
-    final parts = trimmed.split('@');
-    final name = parts.first;
-    final domain = parts.skip(1).join('@');
-    final visibleName = name.isEmpty
-        ? '*'
-        : name.length <= 2
-            ? '${name.substring(0, 1)}*'
-            : '${name.substring(0, 2)}***';
-    return '$visibleName@$domain';
+  String _maskedSyncUsername() {
+    final trimmed = syncAccountUsername.trim();
+    if (trimmed.isEmpty) return 'Not signed in';
+    if (trimmed.length <= 2) return '${trimmed.substring(0, 1)}*';
+    return '${trimmed.substring(0, 2)}***';
   }
 
   Future<String> buildDiagnosticsReport() async {
@@ -2481,7 +2503,7 @@ class AppController extends ChangeNotifier {
       ..writeln('Sync')
       ..writeln('- Self-hosted Worker configured: ${selfHostedSyncApiBaseUrl.isNotEmpty}')
       ..writeln('- Signed in: $cloudSyncEnabled')
-      ..writeln('- Account: ${_maskedSyncEmail()}')
+      ..writeln('- Account: ${_maskedSyncUsername()}')
       ..writeln('- New account setup choice pending: $newSyncAccountAwaitingSetupChoice')
       ..writeln('- Status: $syncStatus')
       ..writeln('- Pending upload operations: ${report.pendingSyncOperations}')
@@ -2558,7 +2580,7 @@ class AppController extends ChangeNotifier {
       'customCloudSyncApiBaseUrl', // legacy, ignored if an old backup contains it
       'cloudSyncId',
       'cloudSyncPin',
-      'syncAccountEmail',
+      'syncAccountUsername',
       'syncDeviceId',
       'profileMediaPath',
       'profileMediaOriginalName',
@@ -3431,26 +3453,26 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> registerSyncAccount({
-    required String email,
+  Future<String?> registerSyncAccount({
+    required String username,
     required String password,
     bool deferInitialDataSync = false,
   }) async {
-    await _authenticateSyncAccount(
+    return _authenticateSyncAccount(
       register: true,
-      email: email,
+      username: username,
       password: password,
       deferInitialDataSync: deferInitialDataSync,
     );
   }
 
-  Future<void> loginSyncAccount({required String email, required String password, bool preferCloudData = true}) async {
-    await _authenticateSyncAccount(register: false, email: email, password: password, preferCloudData: preferCloudData);
+  Future<void> loginSyncAccount({required String username, required String password, bool preferCloudData = true}) async {
+    await _authenticateSyncAccount(register: false, username: username, password: password, preferCloudData: preferCloudData);
   }
 
-  Future<void> _authenticateSyncAccount({
+  Future<String?> _authenticateSyncAccount({
     required bool register,
-    required String email,
+    required String username,
     required String password,
     bool preferCloudData = true,
     bool deferInitialDataSync = false,
@@ -3466,13 +3488,13 @@ class AppController extends ChangeNotifier {
       final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
       final session = register
           ? await api.register(
-              email: email,
+              username: username,
               password: password,
               deviceId: syncDeviceId,
               deviceName: _deviceName(),
               platform: _platformName(),
             )
-          : await api.login(email: email, password: password, deviceId: syncDeviceId, deviceName: _deviceName(), platform: _platformName());
+          : await api.login(username: username, password: password, deviceId: syncDeviceId, deviceName: _deviceName(), platform: _platformName());
       await _saveSyncSession(session);
       await database.writeSyncState('serverCursor', '0');
       if (!register || !deferInitialDataSync) {
@@ -3492,36 +3514,94 @@ class AppController extends ChangeNotifier {
         await database.enqueueAllForAdoption(await exportPreferences());
         await performMultiDeviceSync(silent: true);
       } else {
-        // Existing-account login is a two-phase merge. Pull the complete cloud
-        // state first so this account's server versions are known, then adopt
-        // the merged local snapshot back to cloud. This prevents data that was
-        // already on the device before login from being omitted from a new
-        // self-hosted Worker simply because it had no outbox operation.
-        await discardPreloadedStarterAccountsForImport();
-        await performMultiDeviceSync(
-          silent: !preferCloudData,
-          pushLocalChanges: false,
-          pullFullCloudCopy: true,
-        );
-        final removedCloudStarterPlaceholders = await discardPreloadedStarterAccountsForImport();
-        if (cloudSyncError == null) {
-          await syncToCloud(force: true, silent: true);
-        }
-        if (removedCloudStarterPlaceholders && cloudSyncError == null) {
-          // Push the placeholder tombstones immediately so they cannot return
-          // on this device or another device during the next cloud pull.
-          await performMultiDeviceSync(silent: true, pushLocalChanges: true, pullFullCloudCopy: true);
-        }
+        await _mergeAfterExistingAccountAuth(preferCloudData: preferCloudData);
       }
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();
       }
+      return session.recoveryKey;
+    } catch (error) {
+      cloudSyncError = _cleanSyncError(error);
+      syncStatus = 'Sync error';
+      return null;
+    } finally {
+      syncAuthBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> recoverSyncAccount({
+    required String username,
+    required String recoveryKey,
+    required String newPassword,
+    bool preferCloudData = true,
+  }) async {
+    syncAuthBusy = true;
+    cloudSyncError = null;
+    syncStatus = 'Recovering account...';
+    notifyListeners();
+    try {
+      if (cloudSyncApiBaseUrl.isEmpty) {
+        throw StateError('Validate your self-hosted Sync Worker first.');
+      }
+      final session = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).recoverAccount(
+        username: username,
+        recoveryKey: recoveryKey,
+        newPassword: newPassword,
+        deviceId: syncDeviceId,
+        deviceName: _deviceName(),
+        platform: _platformName(),
+      );
+      await _saveSyncSession(session);
+      await database.writeSyncState('serverCursor', '0');
+      newSyncAccountAwaitingSetupChoice = false;
+      await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+      if (authoritativeCloudUploadPending) {
+        await _prepareRestoredDataForMergeSync();
+      }
+      await _mergeAfterExistingAccountAuth(preferCloudData: preferCloudData);
+      _startCloudAutoPull();
     } catch (error) {
       cloudSyncError = _cleanSyncError(error);
       syncStatus = 'Sync error';
     } finally {
       syncAuthBusy = false;
       notifyListeners();
+    }
+  }
+
+  Future<String?> rotateSyncRecoveryKey() async {
+    if (!cloudSyncEnabled || syncAccessToken.isEmpty) return null;
+    syncAuthBusy = true;
+    cloudSyncError = null;
+    notifyListeners();
+    try {
+      return await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).rotateRecoveryKey(accessToken: syncAccessToken);
+    } catch (error) {
+      cloudSyncError = _cleanSyncError(error);
+      return null;
+    } finally {
+      syncAuthBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _mergeAfterExistingAccountAuth({required bool preferCloudData}) async {
+    // Existing-account authentication is a two-phase merge. Pull the complete
+    // cloud state first so server versions are known, then adopt the merged
+    // local snapshot back to cloud. Local-only records are preserved.
+    await discardPreloadedStarterAccountsForImport();
+    await performMultiDeviceSync(
+      silent: !preferCloudData,
+      pushLocalChanges: false,
+      pullFullCloudCopy: true,
+    );
+    final removedCloudStarterPlaceholders = await discardPreloadedStarterAccountsForImport();
+    if (cloudSyncError == null) {
+      await syncToCloud(force: true, silent: true);
+    }
+    if (removedCloudStarterPlaceholders && cloudSyncError == null) {
+      await performMultiDeviceSync(silent: true, pushLocalChanges: true, pullFullCloudCopy: true);
     }
   }
 
@@ -3538,11 +3618,11 @@ class AppController extends ChangeNotifier {
     await secureCredentials.clearAccountTokens();
     syncAccessToken = '';
     syncRefreshToken = '';
-    syncAccountEmail = '';
+    syncAccountUsername = '';
     cloudSyncEnabled = false;
     newSyncAccountAwaitingSetupChoice = false;
     syncStatus = 'Offline';
-    await prefs.setString('syncAccountEmail', '');
+    await prefs.setString('syncAccountUsername', '');
     await prefs.setBool('cloudSyncEnabled', false);
     await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
     // Entity versions/cursors belong to one authenticated backend/account.
@@ -3559,12 +3639,12 @@ class AppController extends ChangeNotifier {
   Future<void> _saveSyncSession(SyncAuthSession session) async {
     syncAccessToken = session.accessToken;
     syncRefreshToken = session.refreshToken;
-    syncAccountEmail = session.email;
+    syncAccountUsername = session.username;
     syncDeviceId = session.deviceId.isNotEmpty ? session.deviceId : syncDeviceId;
     cloudSyncEnabled = syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty;
     await secureCredentials.writeAccessToken(syncAccessToken);
     await secureCredentials.writeRefreshToken(syncRefreshToken);
-    await prefs.setString('syncAccountEmail', syncAccountEmail);
+    await prefs.setString('syncAccountUsername', syncAccountUsername);
     await prefs.setString('syncDeviceId', syncDeviceId);
     await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
     await prefs.setBool('cloudSyncEnabled', cloudSyncEnabled);
@@ -3572,7 +3652,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> _refreshSyncSession() async {
     if (syncRefreshToken.isEmpty) throw StateError('Sign in to sync first.');
-    final session = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).refresh(refreshToken: syncRefreshToken, deviceId: syncDeviceId, email: syncAccountEmail);
+    final session = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).refresh(refreshToken: syncRefreshToken, deviceId: syncDeviceId, username: syncAccountUsername);
     await _saveSyncSession(session);
   }
 
@@ -5086,8 +5166,7 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
               itemBuilder: (context, index) {
                 final item = widget.prompts[index];
                 final summary = FinancialHealthSummary.build(state, period: item.period, selectedDate: item.selectedDate);
-                return SingleChildScrollView(
-                  physics: optimizedScrollPhysics(context),
+                return KoinlyPopupContent(
                   padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
                   child: FinancialHealthSummarySection(summary: summary),
                 );
@@ -6463,7 +6542,6 @@ class _CenteredDateRangePicker extends StatefulWidget {
 }
 
 class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
-  final ScrollController _scrollController = ScrollController();
   late DateTime _start;
   late DateTime _end;
   late bool _useRange;
@@ -6476,12 +6554,6 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
     _end = widget.initialRange.end;
     _useRange = widget.initialUseRange;
     if (!_useRange) _end = _start;
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   DateTime get _activeDate => _activeEndpoint == _RangeEndpoint.start ? _start : _end;
@@ -6566,80 +6638,74 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
           ),
         ),
         Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    summary,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 16),
-                  SleekPillSelector<bool>(
-                    options: const [
-                      SleekPillOption(value: false, label: 'Single date', icon: Icons.calendar_today_rounded),
-                      SleekPillOption(value: true, label: 'Use range', icon: Icons.date_range_rounded),
-                    ],
-                    selected: _useRange,
-                    onChanged: _setRangeMode,
-                  ),
-                  const SizedBox(height: 14),
-                  if (_useRange)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _RangeEndpointButton(
-                            label: 'Start',
-                            value: formatter.format(_start),
-                            selected: _activeEndpoint == _RangeEndpoint.start,
-                            onTap: () => _selectEndpoint(_RangeEndpoint.start),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _RangeEndpointButton(
-                            label: 'End',
-                            value: formatter.format(_end),
-                            selected: _activeEndpoint == _RangeEndpoint.end,
-                            onTap: () => _selectEndpoint(_RangeEndpoint.end),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    _RangeEndpointButton(
-                      label: 'Date',
-                      value: formatter.format(_start),
-                      selected: true,
-                      onTap: () {},
-                    ),
-                  const SizedBox(height: 10),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest.withOpacity(.34),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: scheme.outline.withOpacity(.18)),
-                    ),
-                    child: CalendarDatePicker(
-                      key: ValueKey('${_useRange ? _activeEndpoint.name : 'single'}-${_activeDate.millisecondsSinceEpoch}'),
-                      initialDate: _activeDate,
-                      firstDate: widget.firstDate,
-                      lastDate: widget.lastDate,
-                      currentDate: DateTime.now(),
-                      onDateChanged: _onDateChanged,
-                    ),
-                  ),
-                ],
+          child: KoinlyPopupContent(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
-            ),
+              const SizedBox(height: 16),
+              SleekPillSelector<bool>(
+                options: const [
+                  SleekPillOption(value: false, label: 'Single date', icon: Icons.calendar_today_rounded),
+                  SleekPillOption(value: true, label: 'Use range', icon: Icons.date_range_rounded),
+                ],
+                selected: _useRange,
+                onChanged: _setRangeMode,
+              ),
+              const SizedBox(height: 14),
+              if (_useRange)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RangeEndpointButton(
+                        label: 'Start',
+                        value: formatter.format(_start),
+                        selected: _activeEndpoint == _RangeEndpoint.start,
+                        onTap: () => _selectEndpoint(_RangeEndpoint.start),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _RangeEndpointButton(
+                        label: 'End',
+                        value: formatter.format(_end),
+                        selected: _activeEndpoint == _RangeEndpoint.end,
+                        onTap: () => _selectEndpoint(_RangeEndpoint.end),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                _RangeEndpointButton(
+                  label: 'Date',
+                  value: formatter.format(_start),
+                  selected: true,
+                  onTap: () {},
+                ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest.withOpacity(.34),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: scheme.outline.withOpacity(.18)),
+                ),
+                child: CalendarDatePicker(
+                  key: ValueKey('${_useRange ? _activeEndpoint.name : 'single'}-${_activeDate.millisecondsSinceEpoch}'),
+                  initialDate: _activeDate,
+                  firstDate: widget.firstDate,
+                  lastDate: widget.lastDate,
+                  currentDate: DateTime.now(),
+                  onDateChanged: _onDateChanged,
+                ),
+              ),
+            ],
           ),
+        ),
         ),
         Container(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
@@ -6720,7 +6786,6 @@ class _CenteredTimeRangePicker extends StatefulWidget {
 }
 
 class _CenteredTimeRangePickerState extends State<_CenteredTimeRangePicker> {
-  final ScrollController _scrollController = ScrollController();
   late TimeOfDay _start;
   late TimeOfDay _end;
   late bool _useRange;
@@ -6733,12 +6798,6 @@ class _CenteredTimeRangePickerState extends State<_CenteredTimeRangePicker> {
     _end = widget.initialEnd;
     _useRange = widget.initialUseRange;
     if (!_useRange) _end = _start;
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   int _minutes(TimeOfDay value) => value.hour * 60 + value.minute;
@@ -6819,80 +6878,74 @@ class _CenteredTimeRangePickerState extends State<_CenteredTimeRangePicker> {
           ),
         ),
         Expanded(
-          child: Scrollbar(
-            controller: _scrollController,
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    summary,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-                  ),
-                  const SizedBox(height: 16),
-                  SleekPillSelector<bool>(
-                    options: const [
-                      SleekPillOption(value: false, label: 'Single time', icon: Icons.schedule_rounded),
-                      SleekPillOption(value: true, label: 'Use range', icon: Icons.timelapse_rounded),
-                    ],
-                    selected: _useRange,
-                    onChanged: _setRangeMode,
-                  ),
-                  const SizedBox(height: 16),
-                  if (_useRange)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _RangeEndpointButton(
-                            label: 'Start',
-                            value: format(_start),
-                            selected: _activeEndpoint == _RangeEndpoint.start,
-                            onTap: () => _pickEndpoint(_RangeEndpoint.start),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _RangeEndpointButton(
-                            label: 'End',
-                            value: format(_end),
-                            selected: _activeEndpoint == _RangeEndpoint.end,
-                            onTap: () => _pickEndpoint(_RangeEndpoint.end),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    _RangeEndpointButton(
-                      label: 'Time',
-                      value: format(_start),
-                      selected: true,
-                      onTap: () => _pickEndpoint(_RangeEndpoint.start),
-                    ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => _pickEndpoint(_activeEndpoint),
-                    icon: const Icon(Icons.schedule_rounded),
-                    label: Text(_useRange
-                        ? 'Change ${_activeEndpoint == _RangeEndpoint.start ? 'start' : 'end'} time'
-                        : 'Change time'),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _useRange
-                        ? 'Tap Start or End to edit either time. The transaction remains one record and its amount is counted once.'
-                        : 'Use range only when this transaction should cover a start and end time.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
-                  ),
-                ],
+          child: KoinlyPopupContent(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                summary,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
-            ),
+              const SizedBox(height: 16),
+              SleekPillSelector<bool>(
+                options: const [
+                  SleekPillOption(value: false, label: 'Single time', icon: Icons.schedule_rounded),
+                  SleekPillOption(value: true, label: 'Use range', icon: Icons.timelapse_rounded),
+                ],
+                selected: _useRange,
+                onChanged: _setRangeMode,
+              ),
+              const SizedBox(height: 16),
+              if (_useRange)
+                Row(
+                  children: [
+                    Expanded(
+                      child: _RangeEndpointButton(
+                        label: 'Start',
+                        value: format(_start),
+                        selected: _activeEndpoint == _RangeEndpoint.start,
+                        onTap: () => _pickEndpoint(_RangeEndpoint.start),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _RangeEndpointButton(
+                        label: 'End',
+                        value: format(_end),
+                        selected: _activeEndpoint == _RangeEndpoint.end,
+                        onTap: () => _pickEndpoint(_RangeEndpoint.end),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                _RangeEndpointButton(
+                  label: 'Time',
+                  value: format(_start),
+                  selected: true,
+                  onTap: () => _pickEndpoint(_RangeEndpoint.start),
+                ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () => _pickEndpoint(_activeEndpoint),
+                icon: const Icon(Icons.schedule_rounded),
+                label: Text(_useRange
+                    ? 'Change ${_activeEndpoint == _RangeEndpoint.start ? 'start' : 'end'} time'
+                    : 'Change time'),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _useRange
+                    ? 'Tap Start or End to edit either time. The transaction remains one record and its amount is counted once.'
+                    : 'Use range only when this transaction should cover a start and end time.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+              ),
+            ],
           ),
+        ),
         ),
         Container(
           padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
@@ -7268,6 +7321,50 @@ class _KoinlyPopupFrame extends StatelessWidget {
   }
 }
 
+
+/// Fixed-size popup body used by center dialogs.
+///
+/// Center popups intentionally do not become full-card scroll views. The body
+/// keeps its natural size and, only when the available viewport is shorter
+/// than the content (for example on a small phone or while the keyboard is
+/// open), scales down as one unit so every action remains visible.
+class KoinlyPopupContent extends StatelessWidget {
+  const KoinlyPopupContent({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.alignment = Alignment.topCenter,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final AlignmentGeometry alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final resolvedPadding = padding.resolve(Directionality.of(context));
+        final availableWidth = constraints.maxWidth.isFinite
+            ? math.max(1.0, constraints.maxWidth - resolvedPadding.horizontal)
+            : 560.0;
+        final body = SizedBox(width: availableWidth, child: child);
+        if (!constraints.maxHeight.isFinite) {
+          return Padding(padding: resolvedPadding, child: body);
+        }
+        return Padding(
+          padding: resolvedPadding,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: alignment,
+            child: body,
+          ),
+        );
+      },
+    );
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Onboarding
 // -----------------------------------------------------------------------------
@@ -7360,7 +7457,7 @@ class _InitialSetupChoicePopup extends StatelessWidget {
       );
     }
 
-    return SingleChildScrollView(
+    return KoinlyPopupContent(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -7511,7 +7608,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final signedInSetupPending = !state.onboardingCompleted && state.cloudSyncEnabled && state.syncAccountEmail.trim().isNotEmpty;
+    final signedInSetupPending = !state.onboardingCompleted && state.cloudSyncEnabled && state.syncAccountUsername.trim().isNotEmpty;
     return Scaffold(
       body: SafeArea(
         child: LayoutBuilder(
@@ -8626,7 +8723,7 @@ class _AccountEditorState extends State<AccountEditor> {
     final state = context.watch<AppController>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -8894,7 +8991,7 @@ class ColorSelectionPage extends StatelessWidget {
         builder: (dialogContext) {
           final dark = Theme.of(dialogContext).brightness == Brightness.dark;
           final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
-          return SingleChildScrollView(
+          return KoinlyPopupContent(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -9851,7 +9948,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
     final state = context.watch<AppController>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -10107,7 +10204,7 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -10587,7 +10684,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
     if (type == MoneyTransactionType.transfer) categoryId = '';
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -10972,7 +11069,7 @@ class _FilterSheetState extends State<FilterSheet> {
     final state = context.watch<AppController>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13428,7 +13525,7 @@ class _BudgetEditorState extends State<BudgetEditor> {
     final state = context.watch<AppController>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13483,7 +13580,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
             SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountEmail}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
@@ -14136,7 +14233,7 @@ class MultiDeviceSyncScreen extends StatefulWidget {
 }
 
 class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
-  late final TextEditingController _emailController;
+  late final TextEditingController _usernameController;
   late final TextEditingController _passwordController;
   late final TextEditingController _workerUrlController;
   bool _obscurePassword = true;
@@ -14147,7 +14244,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   void initState() {
     super.initState();
     final state = context.read<AppController>();
-    _emailController = TextEditingController(text: state.syncAccountEmail);
+    _usernameController = TextEditingController(text: state.syncAccountUsername);
     _passwordController = TextEditingController();
     _workerUrlController = TextEditingController(text: state.selfHostedSyncApiBaseUrl);
     _registerMode = widget.initialRegisterMode;
@@ -14155,7 +14252,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _workerUrlController.dispose();
     super.dispose();
@@ -14191,25 +14288,41 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       showSnack(context, 'Validate and use the self-hosted Worker first.');
       return;
     }
-    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
-      showSnack(context, 'Enter email and password.');
+    if (_usernameController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+      showSnack(context, 'Enter username and password.');
       return;
     }
+    final usernameError = _syncUsernameValidationError(_usernameController.text);
+    if (usernameError != null) {
+      showSnack(context, usernameError);
+      return;
+    }
+    final normalizedUsername = _usernameController.text.trim().toLowerCase();
+    _usernameController.value = _usernameController.value.copyWith(
+      text: normalizedUsername,
+      selection: TextSelection.collapsed(offset: normalizedUsername.length),
+      composing: TextRange.empty,
+    );
+    String? recoveryKey;
     if (register) {
-      await state.registerSyncAccount(
-        email: _emailController.text,
+      recoveryKey = await state.registerSyncAccount(
+        username: normalizedUsername,
         password: _passwordController.text,
         deferInitialDataSync: onboardingAuthFlow,
       );
     } else {
       await state.loginSyncAccount(
-        email: _emailController.text,
+        username: normalizedUsername,
         password: _passwordController.text,
         preferCloudData: onboardingAuthFlow ? true : widget.preferCloudDataOnAuth,
       );
     }
     if (mounted && state.cloudSyncError == null) {
       _passwordController.clear();
+      if (register && recoveryKey != null && recoveryKey.isNotEmpty) {
+        await _showRecoveryKey(recoveryKey);
+        if (!mounted) return;
+      }
       showSnack(
         context,
         register
@@ -14227,6 +14340,54 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
         if (mounted) Navigator.pop(context, false);
       }
     }
+  }
+
+  Future<void> _showRecoveryKey(String recoveryKey) async {
+    await showKoinlyPopup<void>(
+      context,
+      maxWidth: 520,
+      maxHeight: 430,
+      barrierDismissible: false,
+      child: _RecoveryKeyPopup(recoveryKey: recoveryKey),
+    );
+  }
+
+  Future<void> _showForgotPassword() async {
+    final state = context.read<AppController>();
+    if (!_isWorkerActive(state)) {
+      showSnack(context, 'Validate and use the self-hosted Worker first.');
+      return;
+    }
+    final recovered = await showKoinlyPopup<bool>(
+      context,
+      maxWidth: 540,
+      maxHeight: 620,
+      barrierDismissible: false,
+      child: _AccountRecoveryPopup(
+        initialUsername: _usernameController.text.trim(),
+        preferCloudData: widget.completeOnAuth || widget.returnOnAuth ? true : widget.preferCloudDataOnAuth,
+      ),
+    );
+    if (!mounted || recovered != true) return;
+    _usernameController.text = state.syncAccountUsername;
+    _passwordController.clear();
+    showSnack(context, 'Password changed and account recovered.');
+    final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
+    if (onboardingAuthFlow) {
+      await state.completeOnboarding();
+      if (mounted) Navigator.pop(context, false);
+    }
+  }
+
+  Future<void> _rotateRecoveryKey() async {
+    final state = context.read<AppController>();
+    final recoveryKey = await state.rotateSyncRecoveryKey();
+    if (!mounted) return;
+    if (recoveryKey == null || recoveryKey.isEmpty) {
+      showSnack(context, state.cloudSyncError ?? 'Could not create a recovery key.');
+      return;
+    }
+    await _showRecoveryKey(recoveryKey);
   }
 
   Future<void> _restoreCloudCopy() async {
@@ -14269,13 +14430,13 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final signedIn = state.cloudSyncEnabled && state.syncAccountEmail.isNotEmpty;
+    final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty;
     final busy = state.cloudSyncOperationBusy || _endpointBusy;
     const uploadButtonLabel = 'Upload local changes';
     final backendConfigured = _isWorkerActive(state);
     return PageScaffold(
       title: 'Account & sync',
-      subtitle: signedIn ? state.syncAccountEmail : 'Self-hosted multi-device sync',
+      subtitle: signedIn ? state.syncAccountUsername : 'Self-hosted multi-device sync',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Telegram backup',
@@ -14386,10 +14547,13 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             const SizedBox(height: 12),
             TextField(
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              controller: _emailController,
+              controller: _usernameController,
               enabled: !busy && !signedIn,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_rounded)),
+              keyboardType: TextInputType.text,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.none,
+              decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_rounded)),
             ),
             const SizedBox(height: 12),
             if (!signedIn)
@@ -14444,6 +14608,11 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     label: Text(uploadButtonLabel),
                   ),
                   OutlinedButton.icon(
+                    onPressed: busy ? null : _rotateRecoveryKey,
+                    icon: const Icon(Icons.key_rounded),
+                    label: const Text('Recovery key'),
+                  ),
+                  OutlinedButton.icon(
                     onPressed: busy ? null : () => state.logoutSyncAccount(),
                     icon: const Icon(Icons.logout_rounded),
                     label: const Text('Sign out'),
@@ -14467,10 +14636,216 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     icon: Icon(_registerMode ? Icons.login_rounded : Icons.person_add_alt_rounded),
                     label: Text(_registerMode ? 'Use login instead' : 'Create account instead'),
                   ),
+                  if (!_registerMode)
+                    TextButton.icon(
+                      onPressed: busy || !backendConfigured ? null : _showForgotPassword,
+                      icon: const Icon(Icons.lock_reset_rounded),
+                      label: const Text('Forgot password?'),
+                    ),
                 ],
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RecoveryKeyPopup extends StatelessWidget {
+  const _RecoveryKeyPopup({required this.recoveryKey});
+
+  final String recoveryKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return KoinlyPopupContent(
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.key_rounded, size: 42, color: kSleekAccent),
+          const SizedBox(height: 12),
+          Text('Save your recovery key', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text(
+            'This key is the only in-app way to reset a forgotten password. Store it somewhere safe. Creating a new recovery key invalidates the previous one.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: SelectableText(recoveryKey, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: recoveryKey));
+                    if (context.mounted) showSnack(context, 'Recovery key copied.');
+                  },
+                  icon: const Icon(Icons.copy_rounded),
+                  label: const Text('Copy'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('I saved it'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountRecoveryPopup extends StatefulWidget {
+  const _AccountRecoveryPopup({required this.initialUsername, required this.preferCloudData});
+
+  final String initialUsername;
+  final bool preferCloudData;
+
+  @override
+  State<_AccountRecoveryPopup> createState() => _AccountRecoveryPopupState();
+}
+
+class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
+  late final TextEditingController username;
+  final recoveryKey = TextEditingController();
+  final password = TextEditingController();
+  final confirmPassword = TextEditingController();
+  bool obscurePassword = true;
+  bool busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    username = TextEditingController(text: widget.initialUsername);
+  }
+
+  @override
+  void dispose() {
+    username.dispose();
+    recoveryKey.dispose();
+    password.dispose();
+    confirmPassword.dispose();
+    super.dispose();
+  }
+
+  Future<void> _recover() async {
+    if (busy) return;
+    final usernameValue = username.text.trim().toLowerCase();
+    final recoveryValue = recoveryKey.text.trim();
+    if (usernameValue.isEmpty || recoveryValue.isEmpty || password.text.isEmpty || confirmPassword.text.isEmpty) {
+      showSnack(context, 'Complete all recovery fields.');
+      return;
+    }
+    final usernameError = _syncUsernameValidationError(usernameValue);
+    if (usernameError != null) {
+      showSnack(context, usernameError);
+      return;
+    }
+    if (password.text != confirmPassword.text) {
+      showSnack(context, 'Passwords do not match.');
+      return;
+    }
+    if (password.text.length < 8) {
+      showSnack(context, 'Password must be at least 8 characters.');
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => busy = true);
+    final state = context.read<AppController>();
+    await state.recoverSyncAccount(
+      username: usernameValue,
+      recoveryKey: recoveryValue,
+      newPassword: password.text,
+      preferCloudData: widget.preferCloudData,
+    );
+    if (!mounted) return;
+    if (state.cloudSyncError != null) {
+      setState(() => busy = false);
+      showSnack(context, state.cloudSyncError!);
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KoinlyPopupContent(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Recover account', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+              IconButton(onPressed: busy ? null : () => Navigator.pop(context, false), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text('Enter your username, saved recovery key, and a new password.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: username,
+            enabled: !busy,
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.none,
+            decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_rounded)),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: recoveryKey,
+            enabled: !busy,
+            autocorrect: false,
+            enableSuggestions: false,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(labelText: 'Recovery key', prefixIcon: Icon(Icons.key_rounded)),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: password,
+            enabled: !busy,
+            obscureText: obscurePassword,
+            decoration: InputDecoration(
+              labelText: 'New password',
+              prefixIcon: const Icon(Icons.lock_rounded),
+              suffixIcon: IconButton(
+                onPressed: busy ? null : () => setState(() => obscurePassword = !obscurePassword),
+                icon: Icon(obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: confirmPassword,
+            enabled: !busy,
+            obscureText: obscurePassword,
+            onSubmitted: (_) => _recover(),
+            decoration: const InputDecoration(labelText: 'Confirm new password', prefixIcon: Icon(Icons.lock_outline_rounded)),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: busy ? null : _recover,
+            icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.lock_reset_rounded),
+            label: Text(busy ? 'Recovering...' : 'Reset password'),
+          ),
+        ],
       ),
     );
   }
@@ -15615,7 +15990,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -15890,7 +16265,7 @@ void showCurrencySheet(BuildContext context) {
     maxHeight: 720,
     child: Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: SingleChildScrollView(
+      child: KoinlyPopupContent(
         child: CurrencyForm(initialSymbol: state.currencySymbol, initialCode: state.currencyCode, initialPosition: state.currencyPosition, initialSeparators: state.useSeparators, closeAfterSave: true),
       ),
     ),
@@ -16301,7 +16676,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
         final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
         final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
 
-        return SingleChildScrollView(
+        return KoinlyPopupContent(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -16640,7 +17015,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
     final locationText = directoryUri.trim().isNotEmpty
         ? (directoryLabel.trim().isEmpty ? 'Koinly/Backup' : directoryLabel.trim())
         : (directoryPath.trim().isEmpty ? 'No backup folder selected' : directoryPath.trim());
-    return SingleChildScrollView(
+    return KoinlyPopupContent(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

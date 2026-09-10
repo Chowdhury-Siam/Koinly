@@ -172,42 +172,70 @@ class KoinlySyncApi {
   }
 
   Future<SyncAuthSession> register({
-    required String email,
+    required String username,
     required String password,
     required String deviceId,
     required String deviceName,
     required String platform,
   }) async {
     final data = await _post('/v1/auth/register', {
-      'email': email,
+      'username': username,
       'password': password,
       'deviceId': deviceId,
       'deviceName': deviceName,
       'platform': platform,
     });
-    return _sessionFromResponse(data, email);
+    return _sessionFromResponse(data, username);
   }
 
   Future<SyncAuthSession> login({
-    required String email,
+    required String username,
     required String password,
     required String deviceId,
     required String deviceName,
     required String platform,
   }) async {
     final data = await _post('/v1/auth/login', {
-      'email': email,
+      'username': username,
       'password': password,
       'deviceId': deviceId,
       'deviceName': deviceName,
       'platform': platform,
     });
-    return _sessionFromResponse(data, email);
+    return _sessionFromResponse(data, username);
   }
 
-  Future<SyncAuthSession> refresh({required String refreshToken, required String deviceId, required String email}) async {
+  Future<SyncAuthSession> recoverAccount({
+    required String username,
+    required String recoveryKey,
+    required String newPassword,
+    required String deviceId,
+    required String deviceName,
+    required String platform,
+  }) async {
+    final data = await _post('/v1/auth/recover', {
+      'username': username,
+      'recoveryKey': recoveryKey,
+      'newPassword': newPassword,
+      'deviceId': deviceId,
+      'deviceName': deviceName,
+      'platform': platform,
+    });
+    return _sessionFromResponse(data, username);
+  }
+
+  Future<String> rotateRecoveryKey({required String accessToken}) async {
+    final data = await _post('/v1/auth/recovery-key', const {}, accessToken: accessToken);
+    final recoveryKey = data['recoveryKey']?.toString() ?? '';
+    if (recoveryKey.isEmpty) {
+      throw const CloudSyncException('The Worker did not return a recovery key.');
+    }
+    return recoveryKey;
+  }
+
+  Future<SyncAuthSession> refresh({required String refreshToken, required String deviceId, required String username}) async {
     final data = await _post('/v1/auth/refresh', {'refreshToken': refreshToken, 'deviceId': deviceId});
-    return _sessionFromResponse(data, email);
+    return _sessionFromResponse(data, username);
   }
 
   Future<void> logout({required String accessToken, required String refreshToken}) async {
@@ -345,12 +373,13 @@ class KoinlySyncApi {
     return data;
   }
 
-  SyncAuthSession _sessionFromResponse(Map<String, dynamic> data, String fallbackEmail) {
+  SyncAuthSession _sessionFromResponse(Map<String, dynamic> data, String fallbackUsername) {
     final user = (data['user'] as Map? ?? {}).cast<String, dynamic>();
     return SyncAuthSession(
       accessToken: data['accessToken']?.toString() ?? '',
       refreshToken: data['refreshToken']?.toString() ?? '',
-      email: user['email']?.toString() ?? fallbackEmail,
+      username: user['username']?.toString() ?? fallbackUsername,
+      recoveryKey: data['recoveryKey']?.toString(),
       userId: user['id']?.toString() ?? '',
       deviceId: data['deviceId']?.toString() ?? '',
       accessExpiresAt: DateTime.fromMillisecondsSinceEpoch((data['accessExpiresAt'] as num? ?? DateTime.now().millisecondsSinceEpoch).toInt()),
