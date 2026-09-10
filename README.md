@@ -76,6 +76,10 @@ You do not need to write Cloudflare or Turso code yourself.
 - Light, dark, and system themes
 - Android and Windows layouts
 - Spring-based touch feedback and restrained elastic motion
+- Interactive FL Chart cash-flow, balance, and category visualizations
+- Swipe/slide quick actions for transactions, planned purchases, and loans
+- Chronological loan repayment timelines
+- Branded SpinKit loading states, semantic rich snackbars, and restrained Lottie empty-state animation
 - App-wide keyboard/focus dismissal for text and numeric fields
 - Profile image/GIF/short-video media with repositioning, crop framing, and zoom
 - Android reminders
@@ -520,14 +524,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1085
+  --dart-define=KOINLY_APP_VERSION=1.0.1086
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1085
+  --dart-define=KOINLY_APP_VERSION=1.0.1086
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.

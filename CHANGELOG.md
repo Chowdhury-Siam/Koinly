@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.1086] - 2026-09-11
+
+### Added
+
+- Added Lottie-powered empty states for key zero-data screens while respecting the system Reduce Motion setting.
+- Added Flutter SpinKit loaders and centralized compact/page loading indicators across the app.
+- Added Awesome Snackbar Content for semantic success, warning, and failure feedback while preserving Koinly's lightweight top notification for ordinary informational messages.
+- Added Flutter Slidable actions to transaction, purchase-plan, and loan rows. Touch users can quickly duplicate/edit/delete transactions, buy/edit/delete planned items, and record/edit loans; desktop transaction rows keep an explicit action menu.
+- Added a Timelines-based chronological loan history with loan creation, repayments, dates, amounts, and existing repayment deletion controls. The maintained `timelines_plus` implementation is used for current Flutter compatibility.
+
+### Changed
+
+- Expanded `fl_chart` usage by replacing the custom category donut painter with an animated `PieChart`, while keeping category badges, center totals, and the existing green/dark visual system. Existing cash-flow and balance charts remain interactive FL Chart views.
+- Added busy-state protection and branded SpinKit feedback to transaction saving, plus success/failure snackbar feedback.
+- Raised the declared Dart SDK floor to 3.12 because the current Lottie release requires it; the GitHub Actions Flutter 3.47.x toolchain uses Dart 3.13.x.
+- Bumped application metadata to `1.0.1086+130`.
+
 ## [1.0.1085] - 2026-09-11
 
 ### Fixed

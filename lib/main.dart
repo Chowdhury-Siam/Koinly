@@ -10,6 +10,11 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:lottie/lottie.dart';
+import 'package:timelines_plus/timelines_plus.dart';
 import 'package:flutter/foundation.dart' hide Category, Summary;
 import 'package:flutter/material.dart' hide Category, Summary;
 import 'package:flutter/cupertino.dart' hide Category, Summary;
@@ -5235,7 +5240,7 @@ class SplashScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
-            const CircularProgressIndicator(),
+            const KoinlyInlineLoader(size: 28),
           ],
         ),
       ),
@@ -7076,13 +7081,60 @@ Future<TimeOfDay?> pickTime(BuildContext context, TimeOfDay initial) => showTime
 
 OverlayEntry? _activeKoinlySnackEntry;
 
+enum _KoinlySnackKind { success, failure, warning, info }
+
+_KoinlySnackKind _snackKindFor(String message) {
+  final lower = message.toLowerCase();
+  const failures = ['failed', 'failure', 'error', 'could not', "couldn't", 'malformed', 'unavailable'];
+  const successes = ['saved', 'added', 'created', 'updated', 'deleted', 'removed', 'recorded', 'copied', 'recovered', 'connected', 'uploaded', 'complete', 'completed', 'restored', 'merged', 'purchased'];
+  const warnings = ['cancelled', 'canceled', 'reset', 'already running', 'overdue'];
+  if (failures.any(lower.contains)) return _KoinlySnackKind.failure;
+  if (successes.any(lower.contains)) return _KoinlySnackKind.success;
+  if (warnings.any(lower.contains)) return _KoinlySnackKind.warning;
+  return _KoinlySnackKind.info;
+}
+
+void _showRichSnack(BuildContext context, String message, _KoinlySnackKind kind) {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  if (messenger == null) return;
+  final (title, contentType, color) = switch (kind) {
+    _KoinlySnackKind.success => ('Done', ContentType.success, kSleekAccent),
+    _KoinlySnackKind.failure => ('Something went wrong', ContentType.failure, kSleekExpense),
+    _KoinlySnackKind.warning => ('Please note', ContentType.warning, kSleekWarning),
+    _KoinlySnackKind.info => ('Koinly', ContentType.help, kSleekAccent),
+  };
+  final snackBar = SnackBar(
+    elevation: 0,
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: Colors.transparent,
+    duration: kind == _KoinlySnackKind.failure ? const Duration(seconds: 5) : const Duration(milliseconds: 3600),
+    content: AwesomeSnackbarContent(
+      title: title,
+      message: message,
+      contentType: contentType,
+      color: color,
+      titleTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+      messageTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+    ),
+  );
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(snackBar);
+}
+
 void showSnack(BuildContext context, String message) {
   final trimmedMessage = message.trim();
   if (trimmedMessage.isEmpty) return;
 
+  final kind = _snackKindFor(trimmedMessage);
+  if (kind != _KoinlySnackKind.info && ScaffoldMessenger.maybeOf(context) != null) {
+    _showRichSnack(context, trimmedMessage, kind);
+    return;
+  }
+
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(trimmedMessage)));
+    _showRichSnack(context, trimmedMessage, kind);
     return;
   }
 
@@ -7973,7 +8025,7 @@ class HomeDashboardScreen extends StatelessWidget {
     final budgetSection = <Widget>[
       SectionHeader('Budgets', trailing: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())), child: const Text('View all'))),
       if (state.budgets.isEmpty)
-        EmptyCard(icon: Icons.savings_rounded, title: 'No budget yet', body: 'Create a monthly budget and track spending against limits.', action: () => showBudgetEditor(context), actionLabel: 'Create budget')
+        EmptyCard(icon: Icons.savings_rounded, title: 'No budget yet', body: 'Create a monthly budget and track spending against limits.', action: () => showBudgetEditor(context), actionLabel: 'Create budget', animated: true)
       else
         ...state.budgetProgress().take(2).map((b) => Padding(padding: const EdgeInsets.only(bottom: 10), child: BudgetProgressTile(progress: b))),
     ];
@@ -7983,7 +8035,7 @@ class HomeDashboardScreen extends StatelessWidget {
     final categorySection = <Widget>[
       SectionHeader('Category spending'),
       if (topCategories.isEmpty)
-        const EmptyCard(icon: Icons.pie_chart_rounded, title: 'No spending data', body: 'Add expenses to see where money is going.')
+        const EmptyCard(icon: Icons.pie_chart_rounded, title: 'No spending data', body: 'Add expenses to see where money is going.', animated: true)
       else
         ExpressiveCard(
           child: Column(
@@ -8487,20 +8539,73 @@ class _DecorativeSparkline extends StatelessWidget {
   }
 }
 
+class KoinlyInlineLoader extends StatelessWidget {
+  const KoinlyInlineLoader({super.key, this.size = 18, this.color});
+
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SpinKitThreeBounce(
+      color: color ?? Theme.of(context).colorScheme.primary,
+      size: size,
+    );
+  }
+}
+
+class KoinlyPageLoader extends StatelessWidget {
+  const KoinlyPageLoader({super.key, this.size = 38});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: SpinKitFadingCircle(
+        color: Theme.of(context).colorScheme.primary,
+        size: size,
+      ),
+    );
+  }
+}
+
 class EmptyCard extends StatelessWidget {
-  const EmptyCard({super.key, required this.icon, required this.title, required this.body, this.action, this.actionLabel});
+  const EmptyCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.action,
+    this.actionLabel,
+    this.animated = false,
+  });
+
   final IconData icon;
   final String title;
   final String body;
   final VoidCallback? action;
   final String? actionLabel;
+  final bool animated;
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     return ExpressiveCard(
       child: Column(
         children: [
-          Icon(icon, size: 42),
+          if (animated && !reduceMotion)
+            SizedBox(
+              width: 92,
+              height: 92,
+              child: Lottie.asset(
+                'assets/lottie/empty_state.json',
+                repeat: true,
+                fit: BoxFit.contain,
+              ),
+            )
+          else
+            Icon(icon, size: 42, color: kSleekAccent),
           const SizedBox(height: 12),
           Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
@@ -10132,11 +10237,34 @@ class PurchasePlanScreen extends StatelessWidget {
           body: 'Add something you want to buy later, including its expected price and expense category.',
           action: () => showPlannedPurchaseEditor(context),
           actionLabel: 'Add item',
+          animated: true,
         ),
         itemBuilder: (context, index) => PlannedPurchaseTile(item: items[index]),
       ),
     );
   }
+}
+
+Future<void> _confirmDeletePlannedPurchase(BuildContext context, PlannedPurchase item) async {
+  final state = context.read<AppController>();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete planned item?'),
+      content: Text('“${item.name}” will be removed from your plan. Existing transactions are not affected.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          style: FilledButton.styleFrom(backgroundColor: kSleekExpense),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  await state.deletePlannedPurchase(item.id);
+  if (context.mounted) showSnack(context, 'Planned item deleted.');
 }
 
 class PlannedPurchaseTile extends StatelessWidget {
@@ -10152,7 +10280,7 @@ class PlannedPurchaseTile extends StatelessWidget {
     final iconName = category?.iconName ?? 'category';
     final iconColor = category?.iconColor ?? kSleekAccentHex;
 
-    return ExpressiveCard(
+    final card = ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -10202,6 +10330,44 @@ class PlannedPurchaseTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    return Slidable(
+      key: ValueKey('planned-${item.id}'),
+      startActionPane: ActionPane(
+        motion: const StretchMotion(),
+        extentRatio: .26,
+        children: [
+          SlidableAction(
+            onPressed: (_) => showPurchasePlannedItemDialog(context, item),
+            backgroundColor: kSleekAccent,
+            foregroundColor: Colors.white,
+            icon: Icons.shopping_cart_checkout_rounded,
+            label: 'Buy',
+          ),
+        ],
+      ),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: .48,
+        children: [
+          SlidableAction(
+            onPressed: (_) => showPlannedPurchaseEditor(context, item: item),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            icon: Icons.edit_rounded,
+            label: 'Edit',
+          ),
+          SlidableAction(
+            onPressed: (_) => _confirmDeletePlannedPurchase(context, item),
+            backgroundColor: kSleekExpense,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+          ),
+        ],
+      ),
+      child: card,
     );
   }
 }
@@ -10540,7 +10706,7 @@ class TransactionListScreen extends StatelessWidget {
       child: ResponsiveListContent(
         header: [ActiveFilterChips(state: state)],
         itemCount: txs.length,
-        empty: EmptyCard(icon: Icons.receipt_long_rounded, title: 'No transactions', body: 'Create a transaction or change filters.', action: () => showTransactionEditor(context), actionLabel: 'Add transaction'),
+        empty: EmptyCard(icon: Icons.receipt_long_rounded, title: 'No transactions', body: 'Create a transaction or change filters.', action: () => showTransactionEditor(context), actionLabel: 'Add transaction', animated: true),
         itemBuilder: (context, index) => TransactionTile(tx: txs[index]),
       ),
     );
@@ -10569,6 +10735,63 @@ class ActiveFilterChips extends StatelessWidget {
   }
 }
 
+Future<void> _duplicateTransaction(BuildContext context, MoneyTransaction tx) async {
+  if (tx.isLoanTransaction) {
+    showSnack(context, 'Loan-linked transactions cannot be duplicated.');
+    return;
+  }
+  final state = context.read<AppController>();
+  final now = DateTime.now();
+  final range = tx.endOn == null ? null : tx.effectiveEndOn.difference(tx.createdOn);
+  final duplicate = MoneyTransaction(
+    id: _uuid.v4(),
+    type: tx.type,
+    amount: tx.amount,
+    title: tx.title,
+    notes: tx.notes,
+    categoryId: tx.categoryId,
+    fromAccountId: tx.fromAccountId,
+    toAccountId: tx.toAccountId,
+    imagePath: tx.imagePath,
+    excludeFromReports: tx.excludeFromReports,
+    createdOn: now,
+    endOn: range == null ? null : now.add(range),
+    updatedOn: now,
+  );
+  await state.addTransaction(duplicate);
+  if (context.mounted) showSnack(context, 'Transaction duplicated and added.');
+}
+
+Future<void> _confirmDeleteTransaction(BuildContext context, MoneyTransaction tx) async {
+  final state = context.read<AppController>();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete transaction?'),
+      content: Text(
+        tx.isLoanTransaction
+            ? 'This transaction is linked to a loan. Deleting it will update the linked loan record.'
+            : 'This transaction will be removed and the account balance will be recalculated.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          style: FilledButton.styleFrom(backgroundColor: kSleekExpense),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  if (tx.isLoanTransaction) {
+    await state.deleteLinkedLoanTransaction(tx);
+  } else {
+    await state.deleteTransaction(tx.id);
+  }
+  if (context.mounted) showSnack(context, 'Transaction deleted.');
+}
+
 class TransactionTile extends StatelessWidget {
   const TransactionTile({super.key, required this.tx});
   final MoneyTransaction tx;
@@ -10592,31 +10815,94 @@ class TransactionTile extends StatelessWidget {
       transactionDateTimeLabel(tx),
       if (tx.notes.trim().isNotEmpty) tx.notes.trim(),
     ];
-    return MotionTouchFeedback(
+
+    final tile = MotionTouchFeedback(
       enabled: true,
       scale: .985,
       child: ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      radius: 24,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: tx.type == MoneyTransactionType.transfer
-            ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? kSleekAccentHex, size: 44),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-        subtitle: Text(
-          subtitleParts.join(' • '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        radius: 24,
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: tx.type == MoneyTransactionType.transfer
+              ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
+              : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? kSleekAccentHex, size: 44),
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: Text(
+            subtitleParts.join(' • '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$amountPrefix${state.format(tx.amount)}',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
+              ),
+              if (kIsDesktopApp) ...[
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  tooltip: 'Transaction actions',
+                  onSelected: (value) async {
+                    if (value == 'edit' && context.mounted) await showTransactionEditor(context, transaction: tx);
+                    if (value == 'duplicate' && context.mounted) await _duplicateTransaction(context, tx);
+                    if (value == 'delete' && context.mounted) await _confirmDeleteTransaction(context, tx);
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    if (!tx.isLoanTransaction) const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          onTap: () => showTransactionEditor(context, transaction: tx),
         ),
-        trailing: Text(
-          '$amountPrefix${state.format(tx.amount)}',
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
-        ),
-        onTap: () => showTransactionEditor(context, transaction: tx),
       ),
-    ),
+    );
+
+    return Slidable(
+      key: ValueKey('transaction-${tx.id}'),
+      startActionPane: tx.isLoanTransaction
+          ? null
+          : ActionPane(
+              motion: const StretchMotion(),
+              extentRatio: .26,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => _duplicateTransaction(context, tx),
+                  backgroundColor: kSleekAccent,
+                  foregroundColor: Colors.white,
+                  icon: Icons.copy_rounded,
+                  label: 'Duplicate',
+                ),
+              ],
+            ),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: .48,
+        children: [
+          SlidableAction(
+            onPressed: (_) => showTransactionEditor(context, transaction: tx),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            icon: Icons.edit_rounded,
+            label: 'Edit',
+          ),
+          SlidableAction(
+            onPressed: (_) => _confirmDeleteTransaction(context, tx),
+            backgroundColor: kSleekExpense,
+            foregroundColor: Colors.white,
+            icon: Icons.delete_outline_rounded,
+            label: 'Delete',
+          ),
+        ],
+      ),
+      child: tile,
     );
   }
 }
@@ -10678,6 +10964,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
   bool dateRangeEnabled = false;
   bool timeRangeEnabled = false;
   bool _amountHasFocus = false;
+  bool busy = false;
 
   @override
   void initState() {
@@ -11037,44 +11324,64 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 if (context.mounted) Navigator.pop(context);
               }, child: const Text('Delete'))),
               if (widget.transaction != null) const SizedBox(width: 12),
-              Expanded(flex: 2, child: FilledButton(onPressed: () async {
-                _dismissAmountFocus();
-                final value = double.tryParse(amount.text) ?? 0;
-                if (value <= 0) return showSnack(context, 'Enter a valid amount');
-                final transactionTitle = title.text.trim();
-                if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
-                if (fromAccountId == null) return showSnack(context, 'Select an account');
-                if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
-                if (!isLoanTransaction && type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
-                final rangeRequested = dateRangeEnabled || timeRangeEnabled;
-                if (rangeRequested && selectedEndDate.isBefore(selectedDate)) return showSnack(context, 'The end of the range must be after the start');
-                final hasEffectiveRange = rangeRequested && selectedEndDate.isAfter(selectedDate);
-                final tx = MoneyTransaction(
-                  id: widget.transaction?.id ?? _uuid.v4(),
-                  type: type,
-                  amount: value,
-                  title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
-                  notes: notes.text.trim(),
-                  categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
-                  fromAccountId: fromAccountId!,
-                  toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
-                  imagePath: widget.transaction?.imagePath ?? '',
-                  excludeFromReports: widget.transaction?.excludeFromReports ?? false,
-                  linkedEntityType: widget.transaction?.linkedEntityType,
-                  linkedEntityId: widget.transaction?.linkedEntityId,
-                  createdOn: selectedDate,
-                  endOn: hasEffectiveRange ? selectedEndDate : null,
-                  updatedOn: DateTime.now(),
-                );
-                if (widget.transaction == null) {
-                  await state.addTransaction(tx);
-                } else if (isLoanTransaction) {
-                  await state.updateLinkedLoanTransaction(tx);
-                } else {
-                  await state.updateTransaction(tx);
-                }
-                if (context.mounted) Navigator.pop(context);
-              }, child: const Text('Save'))),
+              Expanded(
+                flex: 2,
+                child: FilledButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          _dismissAmountFocus();
+                          final value = double.tryParse(amount.text) ?? 0;
+                          if (value <= 0) return showSnack(context, 'Enter a valid amount');
+                          final transactionTitle = title.text.trim();
+                          if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
+                          if (fromAccountId == null) return showSnack(context, 'Select an account');
+                          if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
+                          if (!isLoanTransaction && type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
+                          final rangeRequested = dateRangeEnabled || timeRangeEnabled;
+                          if (rangeRequested && selectedEndDate.isBefore(selectedDate)) return showSnack(context, 'The end of the range must be after the start');
+                          final hasEffectiveRange = rangeRequested && selectedEndDate.isAfter(selectedDate);
+                          setState(() => busy = true);
+                          try {
+                            final tx = MoneyTransaction(
+                              id: widget.transaction?.id ?? _uuid.v4(),
+                              type: type,
+                              amount: value,
+                              title: type == MoneyTransactionType.transfer ? '' : transactionTitle,
+                              notes: notes.text.trim(),
+                              categoryId: type == MoneyTransactionType.transfer ? '' : (categoryId ?? ''),
+                              fromAccountId: fromAccountId!,
+                              toAccountId: type == MoneyTransactionType.transfer ? toAccountId : null,
+                              imagePath: widget.transaction?.imagePath ?? '',
+                              excludeFromReports: widget.transaction?.excludeFromReports ?? false,
+                              linkedEntityType: widget.transaction?.linkedEntityType,
+                              linkedEntityId: widget.transaction?.linkedEntityId,
+                              createdOn: selectedDate,
+                              endOn: hasEffectiveRange ? selectedEndDate : null,
+                              updatedOn: DateTime.now(),
+                            );
+                            if (widget.transaction == null) {
+                              await state.addTransaction(tx);
+                            } else if (isLoanTransaction) {
+                              await state.updateLinkedLoanTransaction(tx);
+                            } else {
+                              await state.updateTransaction(tx);
+                            }
+                            if (context.mounted) {
+                              showSnack(context, widget.transaction == null ? 'Transaction added.' : 'Transaction updated.');
+                              Navigator.pop(context);
+                            }
+                          } catch (error) {
+                            if (context.mounted) {
+                              showSnack(context, 'Could not save transaction. ${error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', '')}');
+                            }
+                          } finally {
+                            if (mounted) setState(() => busy = false);
+                          }
+                        },
+                  child: busy ? const KoinlyInlineLoader(size: 18, color: Colors.white) : const Text('Save'),
+                ),
+              ),
             ]),
           ],
         ),
@@ -12970,7 +13277,6 @@ class CategoryBreakdownCard extends StatelessWidget {
     final chartSurfaceTop = isDark ? scheme.surfaceContainerHighest.withOpacity(.18) : const Color(0xFFF7FCFD);
     final chartSurfaceBottom = isDark ? scheme.surfaceContainerHigh.withOpacity(.06) : Colors.white;
     final chartBorderColor = isDark ? Colors.transparent : const Color(0xFFDCEBEE).withOpacity(.95);
-    final donutTrackColor = isDark ? kSleekOutline.withOpacity(.30) : const Color(0xFFE3EEE7);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13082,10 +13388,23 @@ class CategoryBreakdownCard extends StatelessWidget {
                                 width: chartSize,
                                 height: chartSize,
                                 child: RepaintBoundary(
-                                  child: CustomPaint(
-                                    isComplex: true,
-                                    willChange: progress < 1,
-                                    painter: _ExpressiveDonutPainter(slices: slices, total: total, progress: progress, trackColor: donutTrackColor),
+                                  child: PieChart(
+                                    PieChartData(
+                                      startDegreeOffset: -90,
+                                      sectionsSpace: 2.2,
+                                      centerSpaceRadius: chartSize * .285,
+                                      sections: slices.asMap().entries.map((entry) {
+                                        final selected = selectedBadgeIndex == entry.key;
+                                        return PieChartSectionData(
+                                          value: entry.value.value,
+                                          color: entry.value.color,
+                                          radius: (chartSize * (selected ? .135 : .118)) * progress,
+                                          showTitle: false,
+                                        );
+                                      }).toList(),
+                                    ),
+                                    swapAnimationDuration: const Duration(milliseconds: 260),
+                                    swapAnimationCurve: Curves.easeOutCubic,
                                   ),
                                 ),
                               ),
@@ -13300,55 +13619,6 @@ class _BreakdownSlice {
   String get iconName => iconNameOverride ?? category?.iconName ?? 'category';
 }
 
-class _ExpressiveDonutPainter extends CustomPainter {
-  const _ExpressiveDonutPainter({required this.slices, required this.total, required this.progress, required this.trackColor});
-
-  final List<_BreakdownSlice> slices;
-  final double total;
-  final double progress;
-  final Color trackColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final strokeWidth = size.shortestSide * .125;
-    final radius = (size.shortestSide - strokeWidth) / 2 - 3;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    final trackPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.butt
-      ..color = trackColor;
-    canvas.drawCircle(center, radius, trackPaint);
-
-    if (total <= 0) return;
-
-    var start = -math.pi / 2;
-    for (final slice in slices) {
-      final sweep = (slice.value / total) * math.pi * 2;
-      final animatedSweep = sweep * progress;
-      if (animatedSweep <= 0) {
-        start += sweep;
-        continue;
-      }
-      final gap = animatedSweep > .08 ? .025 : 0.0;
-      final paint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.butt
-        ..color = slice.color;
-      canvas.drawArc(rect, start + (gap / 2), math.max(0, animatedSweep - gap), false, paint);
-      start += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ExpressiveDonutPainter oldDelegate) {
-    return oldDelegate.slices != slices || oldDelegate.total != total || oldDelegate.progress != progress || oldDelegate.trackColor != trackColor;
-  }
-}
-
 class _DonutBadgePositioned extends StatelessWidget {
   const _DonutBadgePositioned({
     required this.angleDegrees,
@@ -13527,7 +13797,7 @@ class BudgetListScreen extends StatelessWidget {
       actions: [IconButton(onPressed: () => showBudgetEditor(context), icon: const Icon(Icons.add_rounded))],
       child: ResponsiveContent(
         child: progress.isEmpty
-            ? EmptyCard(icon: Icons.savings_rounded, title: 'No budgets', body: 'Create a monthly budget for all accounts/categories or selected scopes.', action: () => showBudgetEditor(context), actionLabel: 'Create budget')
+            ? EmptyCard(icon: Icons.savings_rounded, title: 'No budgets', body: 'Create a monthly budget for all accounts/categories or selected scopes.', action: () => showBudgetEditor(context), actionLabel: 'Create budget', animated: true)
             : Column(
                 children: progress
                     .map(
@@ -13820,7 +14090,7 @@ class UpdatesScreen extends StatelessWidget {
                             }
                           },
                     icon: state.updateCheckBusy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const KoinlyInlineLoader(size: 18)
                         : const Icon(Icons.refresh_rounded),
                     label: Text(state.updateCheckBusy ? 'Checking...' : 'Check for updates'),
                   ),
@@ -14629,7 +14899,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   OutlinedButton.icon(
                     onPressed: busy ? null : _saveSyncEndpoint,
                     icon: _endpointBusy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const KoinlyInlineLoader(size: 18)
                         : const Icon(Icons.verified_rounded),
                     label: const Text('Validate and use Worker'),
                   ),
@@ -14741,7 +15011,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: FilledButton.icon(
                           onPressed: busy ? null : _restoreCloudCopy,
                           icon: busy
-                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const KoinlyInlineLoader(size: 18)
                               : const Icon(Icons.cloud_download_rounded),
                           label: const Text('Restore cloud copy'),
                         ),
@@ -14786,7 +15056,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   FilledButton.icon(
                     onPressed: busy || !backendConfigured ? null : () => _login(register: _registerMode),
                     icon: busy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const KoinlyInlineLoader(size: 18)
                         : Icon(_registerMode ? Icons.person_add_alt_rounded : Icons.login_rounded),
                     label: Text(_registerMode ? 'Create account' : 'Login'),
                   ),
@@ -15005,7 +15275,7 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: busy ? null : _recover,
-            icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.lock_reset_rounded),
+            icon: busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.lock_reset_rounded),
             label: Text(busy ? 'Recovering...' : 'Reset password'),
           ),
         ],
@@ -15225,7 +15495,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
       return const PageScaffold(
         title: 'Telegram backup',
         subtitle: 'Self-hosted Sync Worker',
-        child: Center(child: CircularProgressIndicator()),
+        child: const KoinlyPageLoader(),
       );
     }
 
@@ -15391,7 +15661,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
             FilledButton.icon(
               onPressed: _busy ? null : _save,
               icon: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const KoinlyInlineLoader(size: 18)
                   : const Icon(Icons.save_rounded),
               label: const Text('Save Telegram backup settings'),
             ),
@@ -15581,7 +15851,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
             FilledButton.icon(
               onPressed: state.cloudSyncBusy || state.syncDatabaseProvider == SyncDatabaseProvider.local ? null : _syncNow,
               icon: state.cloudSyncBusy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const KoinlyInlineLoader(size: 18)
                   : const Icon(Icons.cloud_sync_rounded),
               label: const Text('Sync'),
             ),
@@ -15894,7 +16164,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _testing || state.cloudSyncBusy ? null : _testConnection,
-                    icon: _testing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.network_check_rounded),
+                    icon: _testing ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.network_check_rounded),
                     label: const Text('Test'),
                   ),
                 ),
@@ -16050,7 +16320,7 @@ class _ProviderSyncActions extends StatelessWidget {
           const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: disabled ? null : onSync,
-            icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync_rounded),
+            icon: busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.sync_rounded),
             label: const Text('Sync'),
           ),
           const SizedBox(height: 10),
@@ -16199,7 +16469,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _testing ? null : _testConnection,
-                    icon: _testing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.network_check_rounded),
+                    icon: _testing ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.network_check_rounded),
                     label: const Text('Test Connection'),
                   ),
                 ),
@@ -17439,7 +17709,7 @@ class _DataHealthScreenState extends State<DataHealthScreen> {
                   const SizedBox(height: 16),
                   FilledButton.icon(
                     onPressed: busy ? null : () => context.read<AppController>().checkDataHealth(),
-                    icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh_rounded),
+                    icon: busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.refresh_rounded),
                     label: Text(busy ? 'Checking...' : 'Check again'),
                   ),
                   const SizedBox(height: 10),
@@ -17786,7 +18056,7 @@ class _KoinlyLicenseScreenState extends State<KoinlyLicenseScreen> {
         future: _licensesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const KoinlyPageLoader();
           }
           if (snapshot.hasError) {
             return Center(
@@ -17938,7 +18208,7 @@ class _KoinlyLicenseDetailScreenState extends State<KoinlyLicenseDetailScreen> {
         future: _entriesFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const KoinlyPageLoader();
           }
           final entries = snapshot.data ?? const <LicenseEntry>[];
           return LayoutBuilder(

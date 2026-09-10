@@ -438,7 +438,7 @@ class _ProfileMediaCard extends StatelessWidget {
               FilledButton.icon(
                 onPressed: busy ? null : onPick,
                 icon: busy
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const KoinlyInlineLoader(size: 18)
                     : Icon(hasMedia ? Icons.swap_horiz_rounded : Icons.add_photo_alternate_rounded),
                 label: Text(hasMedia ? 'Replace' : 'Add media'),
               ),
@@ -667,7 +667,7 @@ class _ProfileMediaFramingEditorState extends State<ProfileMediaFramingEditor> {
                   child: FilledButton.icon(
                     onPressed: saving ? null : _save,
                     icon: saving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const KoinlyInlineLoader(size: 18)
                         : const Icon(Icons.check_rounded),
                     label: const Text('Save crop'),
                   ),
@@ -846,7 +846,7 @@ class _ProfileVideoViewState extends State<_ProfileVideoView> {
       return const Center(child: Icon(Icons.videocam_off_rounded, color: kSleekMuted));
     }
     if (!ready || current == null || !current.value.isInitialized) {
-      return const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)));
+      return const KoinlyInlineLoader(size: 24);
     }
     final size = current.value.size;
     return ClipRect(

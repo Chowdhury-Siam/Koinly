@@ -150,6 +150,7 @@ class _LoansScreenState extends State<LoansScreen> {
           body: 'Add the first amount you lend or borrow, then record repayments here.',
           action: () => showLoanEditorSheet(context, defaultDirection: filter == _LoanFilter.pay ? LoanDirection.borrowed : LoanDirection.lent),
           actionLabel: 'New loan',
+          animated: true,
         ),
         itemBuilder: (context, index) {
           final item = items[index];
@@ -229,47 +230,80 @@ class _LoanTile extends StatelessWidget {
     final computation = state.computationFor(loan.id);
     final dueLabel = _loanDueLabel(loan, computation);
     final accent = computation.overdue ? kSleekWarning : loan.isLent ? kSleekIncome : kSleekExpense;
-    return Semantics(
+    final tile = Semantics(
       button: true,
       label: '${contact?.name ?? 'Unknown person'}, ${loan.isLent ? 'lent' : 'borrowed'} ${state.format(loan.principal)}, ${state.format(loanNonNegative(computation.outstanding))} outstanding, $dueLabel',
       child: MotionTouchFeedback(
         scale: .985,
         child: ExpressiveCard(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: iconBubble(context, loan.isLent ? 'gift' : 'cash', loan.isLent ? '#27D17F' : '#FF5353', size: 48),
-          title: Text(contact?.name ?? 'Unknown person', style: const TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              Text(
-                '${loan.isLent ? 'They will pay you' : 'You will pay them'} · $dueLabel',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: computation.overdue ? kSleekWarning : kSleekMuted, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(value: computation.progress, minHeight: 5, color: accent, backgroundColor: accent.withOpacity(.13)),
-              ),
-            ],
-          ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(state.format(loanNonNegative(computation.outstanding)), style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 3),
-              Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ],
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: iconBubble(context, loan.isLent ? 'gift' : 'cash', loan.isLent ? '#27D17F' : '#FF5353', size: 48),
+            title: Text(contact?.name ?? 'Unknown person', style: const TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  '${loan.isLent ? 'They will pay you' : 'You will pay them'} · $dueLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: computation.overdue ? kSleekWarning : kSleekMuted, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(value: computation.progress, minHeight: 5, color: accent, backgroundColor: accent.withOpacity(.13)),
+                ),
+              ],
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(state.format(loanNonNegative(computation.outstanding)), style: TextStyle(color: accent, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ],
+            ),
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoanDetailScreen(loanId: loan.id))),
           ),
         ),
       ),
+    );
+
+    return Slidable(
+      key: ValueKey('loan-${loan.id}'),
+      startActionPane: loan.status == LoanStatus.active && !computation.settled
+          ? ActionPane(
+              motion: const StretchMotion(),
+              extentRatio: .28,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => showLoanPaymentSheet(context, loan: loan),
+                  backgroundColor: kSleekAccent,
+                  foregroundColor: Colors.white,
+                  icon: Icons.add_card_rounded,
+                  label: 'Payment',
+                ),
+              ],
+            )
+          : null,
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: .28,
+        children: [
+          SlidableAction(
+            onPressed: (_) => showLoanEditorSheet(context, loan: loan),
+            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+            icon: Icons.edit_rounded,
+            label: 'Edit',
+          ),
+        ],
+      ),
+      child: tile,
     );
   }
 }
@@ -291,7 +325,7 @@ class LoanDetailScreen extends StatelessWidget {
     }
     final contact = state.loanContactOf(loan.contactId);
     final computation = state.computationFor(loan.id);
-    final payments = state.paymentsForLoan(loan.id).reversed.toList(growable: false);
+    final payments = state.paymentsForLoan(loan.id).toList()..sort((a, b) => a.paidOn.compareTo(b.paidOn));
     final remaining = loanNonNegative(computation.outstanding);
     return PageScaffold(
       title: contact?.name ?? 'Loan details',
@@ -332,7 +366,8 @@ class LoanDetailScreen extends StatelessWidget {
         ),
       ],
       child: ResponsiveListContent(
-        itemCount: payments.length,
+        itemCount: payments.length + 1,
+        itemSpacing: 0,
         header: [
           _LoanDetailHero(loan: loan, computation: computation),
           const SizedBox(height: 10),
@@ -367,30 +402,115 @@ class LoanDetailScreen extends StatelessWidget {
             icon: const Icon(Icons.add_card_rounded),
             label: const Text('Record payment'),
           ),
-          const SectionHeader('Payments'),
+          const SectionHeader('Loan timeline'),
         ],
-        empty: const EmptyCard(icon: Icons.receipt_long_rounded, title: 'No payments yet', body: 'Payments recorded for this person will appear here.'),
         itemBuilder: (context, index) {
-          final payment = payments[index];
-          return ExpressiveCard(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: iconBubble(context, 'receipt', '#A6E3A1', size: 44),
-              title: Text(state.format(payment.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: Text(
-                '${DateFormat('MMM d, yyyy • h:mm a').format(payment.paidOn)} · ${state.format(payment.interestComponent)} interest + ${state.format(payment.principalComponent)} principal',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                tooltip: 'Delete payment',
-                icon: const Icon(Icons.delete_outline_rounded),
-                onPressed: () => _confirmDeleteLoanPayment(context, state, payment),
-              ),
+          if (index == 0) {
+            return _LoanTimelineEntry(
+              date: loan.startDate,
+              title: loan.isLent ? 'Money lent' : 'Money borrowed',
+              body: payments.isEmpty
+                  ? '${state.format(loan.principal)} · No repayments recorded yet'
+                  : '${state.format(loan.principal)} principal',
+              icon: loan.isLent ? Icons.south_west_rounded : Icons.north_east_rounded,
+              color: loan.isLent ? kSleekIncome : kSleekExpense,
+              isFirst: true,
+              isLast: payments.isEmpty,
+            );
+          }
+          final payment = payments[index - 1];
+          return _LoanTimelineEntry(
+            date: payment.paidOn,
+            title: 'Payment ${state.format(payment.amount)}',
+            body: '${state.format(payment.interestComponent)} interest + ${state.format(payment.principalComponent)} principal',
+            icon: Icons.payments_rounded,
+            color: kSleekAccent,
+            isFirst: false,
+            isLast: index == payments.length,
+            trailing: IconButton(
+              tooltip: 'Delete payment',
+              icon: const Icon(Icons.delete_outline_rounded),
+              onPressed: () => _confirmDeleteLoanPayment(context, state, payment),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _LoanTimelineEntry extends StatelessWidget {
+  const _LoanTimelineEntry({
+    required this.date,
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.color,
+    required this.isFirst,
+    required this.isLast,
+    this.trailing,
+  });
+
+  final DateTime date;
+  final String title;
+  final String body;
+  final IconData icon;
+  final Color color;
+  final bool isFirst;
+  final bool isLast;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final connectorColor = Theme.of(context).colorScheme.outline.withOpacity(.36);
+    return TimelineTile(
+      nodePosition: .20,
+      oppositeContents: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 14, 10, 16),
+        child: Text(
+          DateFormat('MMM d\nyyyy').format(date),
+          textAlign: TextAlign.right,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: kSleekMuted,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+        ),
+      ),
+      node: TimelineNode(
+        indicator: ContainerIndicator(
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: color.withOpacity(.16),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(.72), width: 1.5),
+            ),
+            child: Icon(icon, size: 13, color: color),
+          ),
+        ),
+        startConnector: isFirst ? null : SolidLineConnector(color: connectorColor, thickness: 2),
+        endConnector: isLast ? null : SolidLineConnector(color: connectorColor, thickness: 2),
+      ),
+      contents: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 5, 0, 10),
+        child: ExpressiveCard(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          radius: 20,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+            subtitle: Text(
+              '${DateFormat('h:mm a').format(date)} · $body',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+            ),
+            trailing: trailing,
+          ),
+        ),
       ),
     );
   }
