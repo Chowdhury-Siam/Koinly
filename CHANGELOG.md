@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1085] - 2026-09-11
+
+### Fixed
+
+- Restored Android and Windows release compilation after the desktop elastic-scroll update by importing Flutter's gesture library for `PointerSignalEvent` and `PointerScrollEvent`.
+- Kept the desktop mouse-wheel edge spring behavior unchanged while making the pointer-signal types available on every Flutter target.
+- Synchronized fallback Android version metadata with `1.0.1085+129`.
+
 ## [1.0.1084] - 2026-09-11
 
 ### Fixed
