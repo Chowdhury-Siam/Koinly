@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.1088] - 2026-09-11
+
+### Fixed
+
+- Fixed Flutter Slidable rows rendering as clipped rectangular action strips during partial swipes. Transaction, planned-purchase, and loan quick actions now use rounded Koinly action surfaces with stable BehindMotion, compact fitted labels, auto-close behavior, and per-list grouping so only one row stays open.
+- Fixed the mobile tab transition briefly mixing the previous page with the next tab's dock selection and transaction Plan/Add controls. Page content, dock state, and tab-specific floating actions now transition as one keyed stage.
+
+### Changed
+
+- Removed the **Plan / Monthly installments** controls from the New/Edit loan popup. Existing installment metadata on older loans is preserved when those loans are edited, so the UI cleanup does not erase historical data.
+- Removed the per-loan **Account movement** controls from the New/Edit loan popup. New-loan account movement now follows **Loan preferences → Record account movements by default** and automatically uses the default/first regular account when one is available.
+- Bumped application metadata to `1.0.1088+132`.
+
 ## [1.0.1087] - 2026-09-11
 
 ### Fixed

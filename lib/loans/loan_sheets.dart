@@ -28,12 +28,9 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
   late DateTime startDate;
   DateTime? dueDate;
   String? contactId;
-  String? accountId;
-  late bool recordInAccount;
   bool busy = false;
   late final TextEditingController amount;
   late final TextEditingController rate;
-  late final TextEditingController installments;
   late final TextEditingController note;
   late final TextEditingController newPerson;
 
@@ -51,10 +48,8 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
     contactId = loan?.contactId;
     amount = TextEditingController(text: loan == null ? '' : loan.principal.toStringAsFixed(2));
     rate = TextEditingController(text: loan == null || loan.interestRate == 0 ? '' : loan.interestRate.toStringAsFixed(2));
-    installments = TextEditingController(text: loan?.installmentCount?.toString() ?? '');
     note = TextEditingController(text: loan?.note ?? '');
     newPerson = TextEditingController();
-    recordInAccount = false;
   }
 
   @override
@@ -63,8 +58,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
     if (defaultsLoaded) return;
     final state = context.read<AppController>();
     contactId ??= state.loanContacts.where((contact) => !contact.archived).firstOrNull?.id ?? '__new__';
-    accountId ??= state.defaultAccountId ?? state.accounts.firstOrNull?.id;
-    if (!editing) recordInAccount = state.loanRecordTransactionsByDefault;
     defaultsLoaded = true;
   }
 
@@ -72,7 +65,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
   void dispose() {
     amount.dispose();
     rate.dispose();
-    installments.dispose();
     note.dispose();
     newPerson.dispose();
     super.dispose();
@@ -99,23 +91,19 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
     if (selected != null && mounted) setState(() => contactId = selected);
   }
 
-  Future<void> _pickAccount(AppController state) async {
-    final options = state.accounts.map((account) => optionFromAccount(account, state)).toList();
-    final selected = await showAppleWheelSelectionSheet(context, title: 'Choose an account', options: options, selectedId: accountId);
-    if (selected != null && mounted) setState(() => accountId = selected);
-  }
-
   Future<void> _save() async {
     if (busy) return;
     final state = context.read<AppController>();
     final principal = double.tryParse(amount.text.trim()) ?? 0;
     final annualRate = interestType == LoanInterestType.none ? 0.0 : double.tryParse(rate.text.trim()) ?? 0;
-    final installmentCount = int.tryParse(installments.text.trim());
     if (!principal.isFinite || principal <= 0) return showSnack(context, 'Enter a valid amount.');
     if (!annualRate.isFinite || annualRate < 0 || annualRate > 1000) return showSnack(context, 'Enter a valid annual rate.');
-    if (installmentCount != null && (installmentCount < 1 || installmentCount > 600)) return showSnack(context, 'Installments must be between 1 and 600.');
     if (dueDate != null && dueDate!.isBefore(startDate)) return showSnack(context, 'Due date cannot be before the start date.');
-    if (recordInAccount && (accountId == null || accountId!.isEmpty)) return showSnack(context, 'Select an account.');
+    final movementAccountId = state.defaultAccountId ?? state.accounts.firstOrNull?.id;
+    final recordDisbursal = !editing &&
+        state.loanRecordTransactionsByDefault &&
+        movementAccountId != null &&
+        movementAccountId.isNotEmpty;
     setState(() => busy = true);
     try {
       var selectedContactId = contactId;
@@ -140,7 +128,9 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
         interestPeriod: interestPeriod,
         startDate: DateTime(startDate.year, startDate.month, startDate.day, startDate.hour, startDate.minute),
         dueDate: dueDate == null ? null : DateTime(dueDate!.year, dueDate!.month, dueDate!.day, dueDate!.hour, dueDate!.minute),
-        installmentCount: installmentCount,
+        // The plan/installment editor was removed from this popup. Preserve an
+        // existing value when editing older records instead of silently erasing it.
+        installmentCount: old?.installmentCount,
         interestAccrualStop: old?.interestAccrualStop ?? LoanAccrualStop.settled,
         note: note.text.trim(),
         status: old?.status ?? LoanStatus.active,
@@ -149,7 +139,11 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
         createdOn: old?.createdOn ?? now,
         updatedOn: now,
       );
-      await state.saveLoan(value, recordDisbursal: !editing && recordInAccount, accountId: accountId);
+      await state.saveLoan(
+        value,
+        recordDisbursal: recordDisbursal,
+        accountId: movementAccountId,
+      );
       if (mounted) Navigator.pop(context);
     } catch (error) {
       if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', ''));
@@ -162,27 +156,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final contactOption = _contactOption(state);
-    final account = state.accountOf(accountId ?? '');
-    final accountOption = account == null ? null : optionFromAccount(account, state);
-    final previewPrincipal = double.tryParse(amount.text) ?? 0;
-    final previewRate = double.tryParse(rate.text) ?? 0;
-    final previewCount = int.tryParse(installments.text);
-    final now = DateTime.now();
-    final preview = Loan(
-      id: 'preview',
-      contactId: contactId ?? '',
-      direction: direction,
-      principal: loanNonNegative(previewPrincipal),
-      interestType: interestType,
-      interestRate: loanNonNegative(previewRate),
-      interestPeriod: interestPeriod,
-      startDate: startDate,
-      dueDate: dueDate,
-      installmentCount: previewCount,
-      createdOn: now,
-      updatedOn: now,
-    );
-    final emi = loanEmiAmount(preview);
     return KoinlyPopupContent(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
       child: Column(
@@ -218,7 +191,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(labelText: 'Amount', prefixText: state.currencyPosition == CurrencyPosition.prefix ? state.currencySymbol : null, suffixText: state.currencyPosition == CurrencyPosition.suffix ? state.currencySymbol : null),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
@@ -277,7 +249,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: rate,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 labelText: interestPeriod == LoanInterestPeriod.flat ? 'Fixed total interest' : 'Annual interest rate',
                 suffixText: interestPeriod == LoanInterestPeriod.flat ? '% of principal' : '% APR',
@@ -299,18 +270,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
               selected: interestPeriod,
               onChanged: (value) => setState(() => interestPeriod = value),
             ),
-          ],
-          const SectionHeader('Plan'),
-          TextField(
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            controller: installments,
-            keyboardType: TextInputType.number,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(labelText: 'Monthly installments (optional)', hintText: 'Example: 12'),
-          ),
-          if (emi != null) ...[
-            const SizedBox(height: 8),
-            Text('Estimated monthly payment: ${state.format(emi)}', style: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900)),
           ],
           const SizedBox(height: 10),
           SwitchListTile(
@@ -355,17 +314,6 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
               icon: const Icon(Icons.schedule_rounded),
               label: Text('Due time · ${DateFormat('h:mm a').format(dueDate!)}'),
             ),
-          ],
-          if (!editing) ...[
-            const SectionHeader('Account movement'),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: recordInAccount,
-              onChanged: (value) => setState(() => recordInAccount = value),
-              title: const Text('Record this in an account', style: TextStyle(fontWeight: FontWeight.w800)),
-              subtitle: const Text('Updates the balance without changing income or expense reports.'),
-            ),
-            if (recordInAccount) AppleSelectionField(label: 'Account', option: accountOption, onTap: () => _pickAccount(state)),
           ],
           const SizedBox(height: 12),
           TextField(

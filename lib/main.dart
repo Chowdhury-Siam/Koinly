@@ -5423,48 +5423,49 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                   onSelected: selectTab,
                 ),
               Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: AnimatedSwitcher(
-                        duration: AppMotion.medium,
-                        switchInCurve: AppMotion.emphasized,
-                        switchOutCurve: AppMotion.emphasizedAccelerate,
-                        transitionBuilder: (child, animation) {
-                          final scale = Tween<double>(begin: .988, end: 1).animate(animation);
-                          return FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(scale: scale, child: child),
-                          );
-                        },
-                        child: KeyedSubtree(key: ValueKey<int>(tabIndex), child: pages[tabIndex]),
-                      ),
+                child: AnimatedSwitcher(
+                  duration: AppMotion.medium,
+                  switchInCurve: AppMotion.emphasized,
+                  switchOutCurve: AppMotion.emphasizedAccelerate,
+                  transitionBuilder: (child, animation) {
+                    final scale = Tween<double>(begin: .988, end: 1).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: scale, child: child),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(tabIndex),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(child: pages[tabIndex]),
+                        if (planButton != null)
+                          Positioned(
+                            left: useDesktopNavigation
+                                ? 34
+                                : math.max(20.0, constraints.maxWidth * .247 - 64.0),
+                            bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
+                            child: planButton,
+                          ),
+                        if (actionButton != null)
+                          Positioned(
+                            right: useDesktopNavigation ? 34 : 28,
+                            bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
+                            child: actionButton,
+                          ),
+                        if (!useDesktopNavigation)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: _FloatingDockNavigation(
+                              selectedIndex: tabIndex,
+                              onSelected: selectTab,
+                            ),
+                          ),
+                      ],
                     ),
-                    if (planButton != null)
-                      Positioned(
-                        left: useDesktopNavigation
-                            ? 34
-                            : math.max(20.0, constraints.maxWidth * .247 - 64.0),
-                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
-                        child: planButton,
-                      ),
-                    if (actionButton != null)
-                      Positioned(
-                        right: useDesktopNavigation ? 34 : 28,
-                        bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
-                        child: actionButton,
-                      ),
-                    if (!useDesktopNavigation)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _FloatingDockNavigation(
-                          selectedIndex: tabIndex,
-                          onSelected: selectTab,
-                        ),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -5901,27 +5902,90 @@ class ResponsiveListContent extends StatelessWidget {
           alignment: Alignment.topCenter,
           child: SizedBox(
             width: width,
-            child: ListView.builder(
-              padding: resolvedPadding,
-              physics: optimizedScrollPhysics(context),
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              cacheExtent: kIsDesktopApp ? 620 : 420,
-              addAutomaticKeepAlives: false,
-              addSemanticIndexes: false,
-              itemCount: header.length + bodyCount,
-              itemBuilder: (context, index) {
-                if (index < header.length) return header[index];
-                final bodyIndex = index - header.length;
-                if (itemCount == 0) return empty!;
-                return Padding(
-                  padding: EdgeInsets.only(bottom: itemSpacing),
-                  child: itemBuilder(context, bodyIndex),
-                );
-              },
+            child: SlidableAutoCloseBehavior(
+              closeWhenOpened: true,
+              closeWhenTapped: true,
+              child: ListView.builder(
+                padding: resolvedPadding,
+                physics: optimizedScrollPhysics(context),
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                cacheExtent: kIsDesktopApp ? 620 : 420,
+                addAutomaticKeepAlives: false,
+                addSemanticIndexes: false,
+                itemCount: header.length + bodyCount,
+                itemBuilder: (context, index) {
+                  if (index < header.length) return header[index];
+                  final bodyIndex = index - header.length;
+                  if (itemCount == 0) return empty!;
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: itemSpacing),
+                    child: itemBuilder(context, bodyIndex),
+                  );
+                },
+              ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+
+class _KoinlySlidableAction extends StatelessWidget {
+  const _KoinlySlidableAction({
+    required this.onPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.icon,
+    required this.label,
+  });
+
+  final SlidableActionCallback onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomSlidableAction(
+      autoClose: true,
+      backgroundColor: Colors.transparent,
+      padding: const EdgeInsets.all(4),
+      onPressed: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: foregroundColor.withOpacity(.10)),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 20, color: foregroundColor),
+                  const SizedBox(height: 3),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                      color: foregroundColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -10334,11 +10398,13 @@ class PlannedPurchaseTile extends StatelessWidget {
 
     return Slidable(
       key: ValueKey('planned-${item.id}'),
+      groupTag: 'planned-purchases',
+      closeOnScroll: true,
       startActionPane: ActionPane(
-        motion: const StretchMotion(),
+        motion: const BehindMotion(),
         extentRatio: .26,
         children: [
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => showPurchasePlannedItemDialog(context, item),
             backgroundColor: kSleekAccent,
             foregroundColor: Colors.white,
@@ -10348,17 +10414,17 @@ class PlannedPurchaseTile extends StatelessWidget {
         ],
       ),
       endActionPane: ActionPane(
-        motion: const DrawerMotion(),
+        motion: const BehindMotion(),
         extentRatio: .48,
         children: [
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => showPlannedPurchaseEditor(context, item: item),
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             icon: Icons.edit_rounded,
             label: 'Edit',
           ),
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => _confirmDeletePlannedPurchase(context, item),
             backgroundColor: kSleekExpense,
             foregroundColor: Colors.white,
@@ -10867,33 +10933,35 @@ class TransactionTile extends StatelessWidget {
 
     return Slidable(
       key: ValueKey('transaction-${tx.id}'),
+      groupTag: 'transactions',
+      closeOnScroll: true,
       startActionPane: tx.isLoanTransaction
           ? null
           : ActionPane(
-              motion: const StretchMotion(),
+              motion: const BehindMotion(),
               extentRatio: .26,
               children: [
-                SlidableAction(
+                _KoinlySlidableAction(
                   onPressed: (_) => _duplicateTransaction(context, tx),
                   backgroundColor: kSleekAccent,
                   foregroundColor: Colors.white,
                   icon: Icons.copy_rounded,
-                  label: 'Duplicate',
+                  label: 'Copy',
                 ),
               ],
             ),
       endActionPane: ActionPane(
-        motion: const DrawerMotion(),
+        motion: const BehindMotion(),
         extentRatio: .48,
         children: [
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => showTransactionEditor(context, transaction: tx),
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             icon: Icons.edit_rounded,
             label: 'Edit',
           ),
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => _confirmDeleteTransaction(context, tx),
             backgroundColor: kSleekExpense,
             foregroundColor: Colors.white,

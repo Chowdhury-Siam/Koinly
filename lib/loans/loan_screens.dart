@@ -275,12 +275,14 @@ class _LoanTile extends StatelessWidget {
 
     return Slidable(
       key: ValueKey('loan-${loan.id}'),
+      groupTag: 'loans',
+      closeOnScroll: true,
       startActionPane: loan.status == LoanStatus.active && !computation.settled
           ? ActionPane(
-              motion: const StretchMotion(),
+              motion: const BehindMotion(),
               extentRatio: .28,
               children: [
-                SlidableAction(
+                _KoinlySlidableAction(
                   onPressed: (_) => showLoanPaymentSheet(context, loan: loan),
                   backgroundColor: kSleekAccent,
                   foregroundColor: Colors.white,
@@ -291,10 +293,10 @@ class _LoanTile extends StatelessWidget {
             )
           : null,
       endActionPane: ActionPane(
-        motion: const DrawerMotion(),
+        motion: const BehindMotion(),
         extentRatio: .28,
         children: [
-          SlidableAction(
+          _KoinlySlidableAction(
             onPressed: (_) => showLoanEditorSheet(context, loan: loan),
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
