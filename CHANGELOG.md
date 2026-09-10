@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1083] - 2026-09-11
+
+### Fixed
+
+- Fixed Android back navigation dismissing a centered popup while its on-screen keyboard was open. Center popups now consume the first back action while the IME is visible, clear the focused text field, and keep all entered form data intact.
+- Applied the keyboard-first back behavior at the shared popup frame level, so Add/Edit transaction and every other centered popup get the same protection without duplicating per-screen handlers. A subsequent back action after the keyboard has closed dismisses the popup normally.
+
 ## [1.0.1082] - 2026-09-11
 
 ### Changed

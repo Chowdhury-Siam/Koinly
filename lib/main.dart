@@ -7307,30 +7307,42 @@ class _KoinlyPopupFrame extends StatelessWidget {
     );
     final resolvedWidth = math.min(maxWidth, availableWidth);
     final resolvedHeight = math.min(maxHeight, availableHeight);
+    final keyboardVisible = media.viewInsets.bottom > 0;
 
-    return Material(
-      type: MaterialType.transparency,
-      child: SafeArea(
-        child: AnimatedPadding(
-          duration: AppMotion.fast,
-          curve: AppMotion.emphasized,
-          padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
-          child: Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
-              child: Material(
-                color: dark ? kSleekSurface : scheme.surface,
-                elevation: 18,
-                shadowColor: Colors.black.withOpacity(.45),
-                borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 34),
-                clipBehavior: Clip.antiAlias,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 34),
-                    border: Border.all(color: dark ? Colors.white.withOpacity(.08) : scheme.outline.withOpacity(.16)),
+    // Android back is handled keyboard-first for every center popup.
+    // While the IME is visible, prevent the dialog route from popping and
+    // explicitly clear focus instead. A second back press, after the keyboard
+    // has closed, is allowed to dismiss the popup normally.
+    return PopScope<Object?>(
+      canPop: !keyboardVisible,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !keyboardVisible) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: AnimatedPadding(
+            duration: AppMotion.fast,
+            curve: AppMotion.emphasized,
+            padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
+            child: Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
+                child: Material(
+                  color: dark ? kSleekSurface : scheme.surface,
+                  elevation: 18,
+                  shadowColor: Colors.black.withOpacity(.45),
+                  borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 34),
+                  clipBehavior: Clip.antiAlias,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(media.size.width < 420 ? 30 : 34),
+                      border: Border.all(color: dark ? Colors.white.withOpacity(.08) : scheme.outline.withOpacity(.16)),
+                    ),
+                    child: child,
                   ),
-                  child: child,
                 ),
               ),
             ),
