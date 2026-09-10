@@ -5223,7 +5223,15 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/icons/koinly_mark.png', width: 104, height: 104, fit: BoxFit.contain),
+            SizedBox(
+              width: 88,
+              height: 104,
+              child: Image.asset(
+                'assets/icons/koinly_mark.png',
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
             const SizedBox(height: 24),
             Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
@@ -14685,29 +14693,49 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               const SizedBox(height: 10),
             ],
             if (signedIn)
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FilledButton.icon(
-                    onPressed: busy ? null : _restoreCloudCopy,
-                    icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_download_rounded),
-                    label: const Text('Restore cloud copy'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: busy ? null : _restoreCloudCopy,
+                          icon: busy
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.cloud_download_rounded),
+                          label: const Text('Restore cloud copy'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: busy ? null : _uploadPendingChanges,
+                          icon: const Icon(Icons.cloud_upload_rounded),
+                          label: Text(uploadButtonLabel),
+                        ),
+                      ),
+                    ],
                   ),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : _uploadPendingChanges,
-                    icon: const Icon(Icons.cloud_upload_rounded),
-                    label: Text(uploadButtonLabel),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : _rotateRecoveryKey,
-                    icon: const Icon(Icons.key_rounded),
-                    label: const Text('Recovery key'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : () => state.logoutSyncAccount(),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Sign out'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: busy ? null : _rotateRecoveryKey,
+                          icon: const Icon(Icons.key_rounded),
+                          label: const Text('Recovery key'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: busy ? null : () => state.logoutSyncAccount(),
+                          icon: const Icon(Icons.logout_rounded),
+                          label: const Text('Sign out'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               )

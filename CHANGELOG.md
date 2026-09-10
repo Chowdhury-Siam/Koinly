@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1081] - 2026-09-11
+
+### Changed
+
+- Moved **Upload local changes** beside **Restore cloud copy** on the signed-in Account & sync screen, with Recovery key and Sign out kept together on the row below.
+
+### Fixed
+
+- Fixed the Android release workflow overwriting Koinly's custom splash resources when it regenerated missing Gradle wrapper binaries. Release builds now preserve the complete checked-in Android project and copy back only the generated wrapper files, so Android 12+ uses the dedicated transparent/padded K mark instead of falling back to the rounded-square launcher icon.
+- Tightened the Flutter loading mark bounds so the in-app fallback splash also keeps the full K artwork visible without clipping.
+
 ## [1.0.1080] - 2026-09-11
 
 ### Changed

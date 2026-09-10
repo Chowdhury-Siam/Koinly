@@ -74,13 +74,37 @@ jobs:
           restore-keys: |
             koinly-${{ runner.os }}-pub-
 
-      - name: Restore Android Gradle wrapper files
+      - name: Restore Android Gradle wrapper without replacing app resources
+        shell: bash
         run: |
+          set -euo pipefail
+          ANDROID_SOURCE="$RUNNER_TEMP/koinly-android-source"
+          WRAPPER_SOURCE="$RUNNER_TEMP/koinly-generated-wrapper"
+          rm -rf "$ANDROID_SOURCE" "$WRAPPER_SOURCE"
+
+          # flutter create is used only to regenerate binary Gradle wrapper files that are
+          # intentionally not kept in the source ZIP. Preserve the complete Android app
+          # first so Flutter cannot silently replace the custom launcher/splash resources.
+          cp -a android "$ANDROID_SOURCE"
           flutter create --platforms=android --project-name koinly --no-pub .
-          git checkout -- android/app/build.gradle android/build.gradle android/settings.gradle android/gradle.properties android/app/src/main/AndroidManifest.xml || true
-          rm -f android/build.gradle.kts android/settings.gradle.kts android/app/build.gradle.kts
-          find android/app/src/main/res -type f \( -name "ic_launcher.png" -o -name "ic_launcher_round.png" -o -name "ic_launcher_foreground.png" \) -delete
+
+          mkdir -p "$WRAPPER_SOURCE"
+          cp android/gradlew "$WRAPPER_SOURCE/gradlew"
+          cp android/gradlew.bat "$WRAPPER_SOURCE/gradlew.bat"
+          cp -a android/gradle/wrapper "$WRAPPER_SOURCE/wrapper"
+
+          rm -rf android
+          cp -a "$ANDROID_SOURCE" android
+          cp "$WRAPPER_SOURCE/gradlew" android/gradlew
+          cp "$WRAPPER_SOURCE/gradlew.bat" android/gradlew.bat
+          mkdir -p android/gradle
+          rm -rf android/gradle/wrapper
+          cp -a "$WRAPPER_SOURCE/wrapper" android/gradle/wrapper
           chmod +x android/gradlew
+
+          # Fail immediately if the dedicated splash configuration was lost.
+          grep -q '@drawable/koinly_splash_icon' android/app/src/main/res/values-v31/styles.xml
+          test -f android/app/src/main/res/drawable-nodpi/koinly_splash_icon.png
 
       - name: Force Gradle wrapper 8.14.1
         run: |
