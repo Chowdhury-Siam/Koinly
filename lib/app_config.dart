@@ -3,18 +3,38 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-const Color kSleekBackground = Color(0xFF020B0F);
-const Color kSleekSurface = Color(0xFF07171D);
-const Color kSleekSurfaceHigh = Color(0xFF0C2028);
-const Color kSleekSurfaceHigher = Color(0xFF132B34);
-const Color kSleekAccent = Color(0xFF00D7E8);
-const Color kSleekIncome = Color(0xFF27D17F);
+// Koinly's visual system uses an emerald-on-ink palette. Keep app-wide
+// surfaces here so screens, popups, charts and navigation all inherit the
+// same green cast instead of drifting back toward blue/cyan.
+const Color kSleekBackground = Color(0xFF06110D);
+const Color kSleekSurfaceLow = Color(0xFF081510);
+const Color kSleekSurface = Color(0xFF0B1914);
+const Color kSleekSurfaceContainer = Color(0xFF0E1E18);
+const Color kSleekSurfaceHigh = Color(0xFF11251D);
+const Color kSleekSurfaceHigher = Color(0xFF183127);
+const Color kSleekOutline = Color(0xFF29463A);
+const Color kSleekOutlineVariant = Color(0xFF19372C);
+
+const Color kSleekLightBackground = Color(0xFFF6F9F6);
+const Color kSleekLightSurfaceLow = Color(0xFFFBFDFB);
+const Color kSleekLightSurface = Color(0xFFFFFFFF);
+const Color kSleekLightSurfaceContainer = Color(0xFFF3F8F4);
+const Color kSleekLightSurfaceHigh = Color(0xFFECF4EF);
+const Color kSleekLightSurfaceHigher = Color(0xFFE3EFE7);
+const Color kSleekLightOutline = Color(0xFFB9CBC1);
+const Color kSleekLightOutlineVariant = Color(0xFFD9E7DE);
+
+const Color kSleekAccent = Color(0xFF10B981);
+const Color kSleekIncome = Color(0xFF34D399);
 const Color kSleekExpense = Color(0xFFFF5353);
 const Color kSleekWarning = Color(0xFFF59E0B);
-const Color kSleekMuted = Color(0xFF90A4AD);
+const Color kSleekMuted = Color(0xFF8FA69C);
+
+const String kSleekAccentHex = '#10B981';
+const String kLegacyStarterCashIconHex = '#78D8E8';
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1080');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1082');
 const kLowEndFriendlyUi = true;
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';

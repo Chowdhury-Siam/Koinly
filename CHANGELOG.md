@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.1082] - 2026-09-11
+
+### Changed
+
+- Reworked the app-wide visual system from blue/cyan-tinted dark surfaces to the emerald/forest-green palette shown in the supplied reference video. The update is centralized in shared theme tokens so Home, Analysis, Loans, Transactions, Categories, settings, dialogs, charts, navigation, controls, and future theme-aware components stay consistent.
+- Updated dark-mode background/surface layers, glass gradients, navigation highlights, focused controls, progress/switch states, and default theme-facing icon accents to emerald while preserving semantic expense red, warning amber, and category-specific colors.
+- Updated the light theme to use a subtle green-neutral surface palette so switching appearance modes keeps the same visual identity.
+
+### Compatibility
+
+- Existing user-selected account/category colors are left untouched. Legacy starter Cash accounts that used the old pale-blue default are still recognized by import/cleanup logic.
+
 ## [1.0.1081] - 2026-09-11
 
 ### Changed

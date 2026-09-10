@@ -111,7 +111,7 @@ int dateToDb(DateTime value) => value.millisecondsSinceEpoch;
 bool isSameCalendarDay(DateTime first, DateTime second) =>
     first.year == second.year && first.month == second.month && first.day == second.day;
 
-Color colorFromHex(String value, {Color fallback = const Color(0xFF78D8E8)}) {
+Color colorFromHex(String value, {Color fallback = const Color(0xFF10B981)}) {
   final cleaned = value.replaceAll('#', '').trim();
   if (cleaned.isEmpty) return fallback;
   final normalized = cleaned.length == 6 ? 'FF$cleaned' : cleaned;
@@ -189,7 +189,7 @@ class Account {
         name: map['name'] as String,
         type: enumByName(AccountType.values, map['type'] as String?, AccountType.regular),
         iconName: map['icon_name'] as String? ?? 'wallet',
-        iconColor: map['icon_color'] as String? ?? '#78D8E8',
+        iconColor: map['icon_color'] as String? ?? '#10B981',
         amount: (map['amount'] as num? ?? 0).toDouble(),
         creditLimit: (map['credit_limit'] as num? ?? 0).toDouble(),
         sequence: (map['sequence'] as num? ?? 0).toInt(),
@@ -250,7 +250,7 @@ class Category {
         name: map['name'] as String,
         type: enumByName(CategoryType.values, map['type'] as String?, CategoryType.expense),
         iconName: map['icon_name'] as String? ?? 'category',
-        iconColor: map['icon_color'] as String? ?? '#78D8E8',
+        iconColor: map['icon_color'] as String? ?? '#10B981',
         createdOn: dateFromDb(map['created_on']),
         updatedOn: dateFromDb(map['updated_on']),
       );

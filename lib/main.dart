@@ -425,7 +425,7 @@ class KoinlyDatabase {
 
     final now = DateTime.now();
     final starterAccounts = [
-      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: '#78D8E8', amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
+      Account(id: _uuid.v4(), name: 'Cash', type: AccountType.regular, iconName: 'wallet', iconColor: kSleekAccentHex, amount: 0, creditLimit: 0, sequence: 0, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Card', type: AccountType.credit, iconName: 'credit_card', iconColor: '#89A7FF', amount: 0, creditLimit: 0, sequence: 1, createdOn: now, updatedOn: now),
       Account(id: _uuid.v4(), name: 'Bank Account', type: AccountType.regular, iconName: 'bank', iconColor: '#A6E3A1', amount: 0, creditLimit: 0, sequence: 2, createdOn: now, updatedOn: now),
     ];
@@ -445,7 +445,7 @@ class KoinlyDatabase {
       return (account.name == 'Cash' &&
               account.type == AccountType.regular &&
               account.iconName == 'wallet' &&
-              account.iconColor.toUpperCase() == '#78D8E8') ||
+              {kLegacyStarterCashIconHex, kSleekAccentHex}.contains(account.iconColor.toUpperCase())) ||
           (account.name == 'Card' &&
               account.type == AccountType.credit &&
               account.iconName == 'credit_card' &&
@@ -498,7 +498,7 @@ class KoinlyDatabase {
       return (account.name == 'Cash' &&
               account.type == AccountType.regular &&
               account.iconName == 'wallet' &&
-              account.iconColor.toUpperCase() == '#78D8E8') ||
+              {kLegacyStarterCashIconHex, kSleekAccentHex}.contains(account.iconColor.toUpperCase())) ||
           (account.name == 'Card' &&
               account.type == AccountType.credit &&
               account.iconName == 'credit_card' &&
@@ -4755,31 +4755,31 @@ class KoinlyApp extends StatelessWidget {
     final scheme = isDark
         ? baseScheme.copyWith(
             primary: kSleekAccent,
-            onPrimary: const Color(0xFF002022),
-            secondary: const Color(0xFF2BD9A1),
+            onPrimary: Colors.white,
+            secondary: kSleekIncome,
             tertiary: const Color(0xFFFF5C7A),
             surface: kSleekSurface,
-            surfaceContainerLow: const Color(0xFF061319),
-            surfaceContainer: const Color(0xFF0A1B22),
+            surfaceContainerLow: kSleekSurfaceLow,
+            surfaceContainer: kSleekSurfaceContainer,
             surfaceContainerHigh: kSleekSurfaceHigh,
             surfaceContainerHighest: kSleekSurfaceHigher,
             background: kSleekBackground,
-            outline: const Color(0xFF28414A),
-            outlineVariant: const Color(0xFF183039),
+            outline: kSleekOutline,
+            outlineVariant: kSleekOutlineVariant,
           )
         : baseScheme.copyWith(
             primary: kSleekAccent,
-            onPrimary: const Color(0xFF002022),
-            secondary: const Color(0xFF00A879),
+            onPrimary: Colors.white,
+            secondary: const Color(0xFF0F9F70),
             tertiary: const Color(0xFFFF5074),
-            surface: Colors.white,
-            surfaceContainerLow: const Color(0xFFF8FDFF),
-            surfaceContainer: const Color(0xFFF2F9FB),
-            surfaceContainerHigh: const Color(0xFFEAF4F7),
-            surfaceContainerHighest: const Color(0xFFE0EEF2),
-            background: const Color(0xFFF5FAFB),
-            outline: const Color(0xFFB9C9CF),
-            outlineVariant: const Color(0xFFD8E6EA),
+            surface: kSleekLightSurface,
+            surfaceContainerLow: kSleekLightSurfaceLow,
+            surfaceContainer: kSleekLightSurfaceContainer,
+            surfaceContainerHigh: kSleekLightSurfaceHigh,
+            surfaceContainerHighest: kSleekLightSurfaceHigher,
+            background: kSleekLightBackground,
+            outline: kSleekLightOutline,
+            outlineVariant: kSleekLightOutlineVariant,
           );
 
     final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
@@ -4851,7 +4851,7 @@ class KoinlyApp extends StatelessWidget {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF1C2B30) : const Color(0xFF0F172A),
+        backgroundColor: isDark ? kSleekSurfaceHigher : const Color(0xFF0F172A),
         contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         shape: RoundedRectangleBorder(borderRadius: AppShapes.medium),
       ),
@@ -4873,7 +4873,7 @@ class KoinlyApp extends StatelessWidget {
         unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.82), fontWeight: FontWeight.w800, fontSize: 11),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xE607171D) : Colors.white.withOpacity(.96),
+        backgroundColor: isDark ? const Color(0xE60B1914) : Colors.white.withOpacity(.96),
         indicatorColor: kSleekAccent.withOpacity(isDark ? .24 : .18),
         height: 78,
         elevation: 0,
@@ -4905,7 +4905,7 @@ class KoinlyApp extends StatelessWidget {
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
           backgroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
-          foregroundColor: states(normal: const Color(0xFF021012), disabled: scheme.onSurface.withOpacity(.38)),
+          foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
           overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.10)),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
@@ -4948,7 +4948,7 @@ class KoinlyApp extends StatelessWidget {
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: kSleekAccent,
-        foregroundColor: const Color(0xFF021012),
+        foregroundColor: Colors.white,
         elevation: 6,
         highlightElevation: 2,
         shape: AppShapes.squircle(22),
@@ -4980,9 +4980,9 @@ class KoinlyApp extends StatelessWidget {
         secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(color: kSleekAccent, linearTrackColor: Color(0x3324C7D8)),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: kSleekAccent, linearTrackColor: Color(0x3310B981)),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? const Color(0xFF002022) : scheme.outline),
+        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.white : scheme.outline),
         trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent : scheme.surfaceContainerHighest),
         trackOutlineColor: WidgetStatePropertyAll(scheme.outlineVariant),
       ),
@@ -5151,7 +5151,7 @@ class _FinancialHealthReviewDialogState extends State<FinancialHealthReviewDialo
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
             child: Row(
               children: [
-                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 48),
+                iconBubble(context, prompt.period == FinancialHealthPeriod.monthly ? 'month' : 'year', prompt.period == FinancialHealthPeriod.monthly ? kSleekAccentHex : '#FBC879', size: 48),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -5498,7 +5498,7 @@ class _SideRailNavigation extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = dark ? Colors.white.withOpacity(.06) : scheme.outline.withOpacity(.14);
-    final railColor = dark ? const Color(0xFF081316) : Colors.white;
+    final railColor = dark ? kSleekSurfaceLow : Colors.white;
 
     return Material(
       color: railColor,
@@ -5607,7 +5607,7 @@ class _FloatingDockNavigation extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final active = kSleekAccent;
     final inactive = dark ? scheme.onSurface.withOpacity(.72) : scheme.onSurfaceVariant.withOpacity(.78);
-    final dockColor = dark ? const Color(0xF20A161C) : Colors.white.withOpacity(.94);
+    final dockColor = dark ? const Color(0xF20B1914) : Colors.white.withOpacity(.94);
     final selectedColor = dark ? kSleekAccent.withOpacity(.32) : kSleekAccent.withOpacity(.18);
 
     return SafeArea(
@@ -5627,8 +5627,8 @@ class _FloatingDockNavigation extends StatelessWidget {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        const Color(0xFF0D2128).withOpacity(.94),
-                        const Color(0xFF071217).withOpacity(.96),
+                        kSleekSurfaceHigh.withOpacity(.94),
+                        kSleekSurfaceLow.withOpacity(.96),
                       ],
                     )
                   : null,
@@ -5743,7 +5743,7 @@ class KoinlyAtmosphere extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF8FDFF), Color(0xFFEFF8FB), Color(0xFFFFFFFF)],
+            colors: [Color(0xFFF8FBF8), Color(0xFFEEF6F1), Color(0xFFFFFFFF)],
           ),
         ),
         child: child,
@@ -5756,7 +5756,7 @@ class KoinlyAtmosphere extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF021116), Color(0xFF020B0F), Color(0xFF041015)],
+          colors: [Color(0xFF071711), kSleekBackground, Color(0xFF091914)],
         ),
       ),
       child: child,
@@ -6333,9 +6333,9 @@ Future<String?> showAppleWheelSelectionSheet(
                     ? options.length - 1
                     : selectedIndex;
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+        final innerColor = dark ? kSleekSurfaceLow : kSleekLightBackground;
+        final innerBorderColor = dark ? kSleekOutlineVariant : kSleekLightOutlineVariant;
+        final handleColor = dark ? const Color(0xFF466057) : const Color(0xFFB7C9BF);
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -7914,7 +7914,7 @@ class HomeDashboardScreen extends StatelessWidget {
       const SectionHeader('Accounts'),
       HomeNavigationTile(
         iconName: 'wallet',
-        iconColor: '#78D8E8',
+        iconColor: kSleekAccentHex,
         title: 'Accounts',
         subtitle: '${state.operatingAccounts.length} regular accounts',
         amount: state.format(state.operatingAccountBalance),
@@ -7972,7 +7972,7 @@ class HomeDashboardScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  iconBubble(context, 'wallet', '#78D8E8', size: 50),
+                  iconBubble(context, 'wallet', kSleekAccentHex, size: 50),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -8154,14 +8154,14 @@ class QuickActionTile extends StatelessWidget {
           curve: AppMotion.spring,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           decoration: BoxDecoration(
-            color: dark ? const Color(0xFF0B1B21).withOpacity(.78) : Colors.white.withOpacity(.94),
+            color: dark ? kSleekSurface.withOpacity(.82) : Colors.white.withOpacity(.94),
             gradient: dark
                 ? LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Color.alphaBlend(accent.withOpacity(.09), const Color(0xFF0B1B21)),
-                      const Color(0xFF09151A),
+                      Color.alphaBlend(accent.withOpacity(.09), kSleekSurface),
+                      kSleekSurfaceLow,
                     ],
                   )
                 : null,
@@ -8182,7 +8182,7 @@ class QuickActionTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: dark ? const Color(0xFFDDE9EC) : scheme.onSurface,
+                      color: dark ? const Color(0xFFDCE9E2) : scheme.onSurface,
                       fontWeight: FontWeight.w900,
                       height: 1.05,
                     ),
@@ -8306,9 +8306,9 @@ class BalanceHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = dark ? const Color(0xFFC8E7EC) : scheme.onSurface.withOpacity(.86);
+    final titleColor = dark ? const Color(0xFFD1E8DC) : scheme.onSurface.withOpacity(.86);
     final valueColor = dark ? Colors.white : scheme.onSurface;
-    final subtitleColor = dark ? const Color(0xFF9AB0B8) : scheme.onSurfaceVariant.withOpacity(.78);
+    final subtitleColor = dark ? const Color(0xFF96ACA2) : scheme.onSurfaceVariant.withOpacity(.78);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -8319,9 +8319,9 @@ class BalanceHeroCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF083E47),
-                  const Color(0xFF08242B),
-                  const Color(0xFF07171D),
+                  const Color(0xFF0A3A28),
+                  const Color(0xFF0B281D),
+                  kSleekSurface,
                 ],
               )
             : LinearGradient(
@@ -8329,7 +8329,7 @@ class BalanceHeroCard extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [
                   Colors.white,
-                  const Color(0xFFF2FBFC),
+                  const Color(0xFFF1FAF5),
                   scheme.surface,
                 ],
               ),
@@ -8361,7 +8361,7 @@ class BalanceHeroCard extends StatelessWidget {
                     child: Icon(
                       amountsHidden ? Icons.visibility_off_rounded : Icons.visibility_rounded,
                       size: 16,
-                      color: dark ? const Color(0xFF9EDDE7) : kSleekAccent.withOpacity(.82),
+                      color: dark ? const Color(0xFF93DFBC) : kSleekAccent.withOpacity(.82),
                     ),
                   ),
                 ),
@@ -8700,7 +8700,7 @@ class _AccountEditorState extends State<AccountEditor> {
   final creditLimit = TextEditingController();
   AccountType type = AccountType.regular;
   String icon = 'wallet';
-  String color = '#78D8E8';
+  String color = kSleekAccentHex;
 
   List<AccountType> get allowedTypes => widget.allowedTypes ?? AccountType.values;
 
@@ -8842,7 +8842,7 @@ class IconColorPicker extends StatelessWidget {
     'calendar', 'time', 'flag', 'profile'
   ];
   static const colors = [
-    '#78D8E8', '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
+    kSleekAccentHex, '#38BDF8', '#0EA5E9', '#2563EB', '#1D4ED8', '#6366F1', '#8B5CF6', '#A855F7',
     '#D946EF', '#EC4899', '#F472B6', '#FB7185', '#EF4444', '#F97316', '#FB923C', '#F59E0B',
     '#FBC879', '#FACC15', '#A3E635', '#84CC16', '#22C55E', '#16A34A', '#10B981', '#14B8A6',
     '#2DD4BF', '#86E3CE', '#A6E3A1', '#89A7FF', '#B4A5FF', '#C4B5FD', '#F5A3A3', '#FFB5D0',
@@ -9001,7 +9001,7 @@ class ColorSelectionPage extends StatelessWidget {
   }
 
   Future<String?> _showCustomColorOptions(BuildContext context) async {
-    final initial = _normalizeColor(selectedColor).isEmpty ? '#78D8E8' : _normalizeColor(selectedColor);
+    final initial = _normalizeColor(selectedColor).isEmpty ? kSleekAccentHex : _normalizeColor(selectedColor);
 
     final choice = await showKoinlyPopup<String>(
       context,
@@ -9010,7 +9010,7 @@ class ColorSelectionPage extends StatelessWidget {
       child: Builder(
         builder: (dialogContext) {
           final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-          final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+          final handleColor = dark ? const Color(0xFF466057) : const Color(0xFFB7C9BF);
           return KoinlyPopupContent(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
             child: Column(
@@ -9641,7 +9641,7 @@ class _PhotoColorPickerPageState extends State<PhotoColorPickerPage> {
                       borderRadius: BorderRadius.circular(18),
                       child: Container(
                         height: 300,
-                        color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB),
+                        color: Theme.of(context).brightness == Brightness.dark ? kSleekSurfaceLow : kSleekLightBackground,
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -9947,7 +9947,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
   final name = TextEditingController();
   CategoryType type = CategoryType.expense;
   String icon = 'category';
-  String color = '#78D8E8';
+  String color = kSleekAccentHex;
 
   @override
   void initState() {
@@ -10111,7 +10111,7 @@ class PlannedPurchaseTile extends StatelessWidget {
     final category = state.categoryOf(item.categoryId);
     final categoryName = category?.name ?? 'Missing category';
     final iconName = category?.iconName ?? 'category';
-    final iconColor = category?.iconColor ?? '#78D8E8';
+    final iconColor = category?.iconColor ?? kSleekAccentHex;
 
     return ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -10563,7 +10563,7 @@ class TransactionTile extends StatelessWidget {
         contentPadding: EdgeInsets.zero,
         leading: tx.type == MoneyTransactionType.transfer
             ? iconBubble(context, 'exchange', '#38BDF8', size: 44)
-            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? '#78D8E8', size: 44),
+            : iconBubble(context, category?.iconName ?? 'category', category?.iconColor ?? kSleekAccentHex, size: 44),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         subtitle: Text(
           subtitleParts.join(' • '),
@@ -11077,7 +11077,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'Today',
         subtitle: 'Only today',
         iconName: 'today',
-        iconColor: '#78D8E8',
+        iconColor: kSleekAccentHex,
       );
     case DateRangeType.thisWeek:
       return const SelectionOption(
@@ -11093,7 +11093,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
         title: 'This Month',
         subtitle: 'Current month',
         iconName: 'month',
-        iconColor: '#78D8E8',
+        iconColor: kSleekAccentHex,
       );
     case DateRangeType.thisYear:
       return const SelectionOption(
@@ -11296,7 +11296,7 @@ List<SelectionOption> financialMonthOptions() {
       title: DateFormat('MMMM yyyy').format(month),
       subtitle: index == 0 ? 'Current month' : 'Monthly health summary',
       iconName: 'month',
-      iconColor: '#78D8E8',
+      iconColor: kSleekAccentHex,
     );
   });
 }
@@ -11683,7 +11683,7 @@ class FinancialHealthPeriodCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 child: Row(
                   children: [
-                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? '#78D8E8' : '#FBC879', size: 42),
+                    iconBubble(context, period == FinancialHealthPeriod.monthly ? 'month' : 'year', period == FinancialHealthPeriod.monthly ? kSleekAccentHex : '#FBC879', size: 42),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -12576,7 +12576,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                             tooltipRoundedRadius: 14,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => dark ? const Color(0xFF10242B) : const Color(0xFF10242B),
+                            getTooltipColor: (_) => dark ? const Color(0xFF142A22) : const Color(0xFF142A22),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
@@ -12931,7 +12931,7 @@ class CategoryBreakdownCard extends StatelessWidget {
     final chartSurfaceTop = isDark ? scheme.surfaceContainerHighest.withOpacity(.18) : const Color(0xFFF7FCFD);
     final chartSurfaceBottom = isDark ? scheme.surfaceContainerHigh.withOpacity(.06) : Colors.white;
     final chartBorderColor = isDark ? Colors.transparent : const Color(0xFFDCEBEE).withOpacity(.95);
-    final donutTrackColor = isDark ? const Color(0xFF26383C).withOpacity(.36) : const Color(0xFFE1ECEF);
+    final donutTrackColor = isDark ? kSleekOutline.withOpacity(.30) : const Color(0xFFE3EEE7);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -13093,7 +13093,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                     height: centerSize,
                                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF111417).withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      color: isDark ? const Color(0xFF101A15).withOpacity(.97) : Colors.white.withOpacity(.98),
                                       shape: BoxShape.circle,
                                       boxShadow: [
                                         BoxShadow(
@@ -13134,7 +13134,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                                               maxLines: 1,
                                               textAlign: TextAlign.center,
                                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: const Color(0xFF10CADA),
+                                                    color: kSleekAccent,
                                                     fontWeight: FontWeight.w900,
                                                   ),
                                             ),
@@ -13373,14 +13373,14 @@ class _DonutPercentBadge extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final badgeBackground = selected
         ? (isDark ? color.withOpacity(.28) : color.withOpacity(.20))
-        : (isDark ? const Color(0xFF181B1F).withOpacity(.96) : Colors.white.withOpacity(.96));
-    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : const Color(0xFFD8E6EA));
+        : (isDark ? const Color(0xFF151E19).withOpacity(.96) : Colors.white.withOpacity(.96));
+    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : kSleekLightOutlineVariant);
     final textColor = isDark ? Colors.white.withOpacity(.96) : scheme.onSurface;
     final iconBackground = useTextBadge
-        ? (isDark ? Colors.black : const Color(0xFFF3F8F9))
+        ? (isDark ? Colors.black : kSleekLightSurfaceContainer)
         : color.withOpacity(isDark ? .18 : .16);
     final iconBorder = useTextBadge
-        ? (isDark ? Colors.white.withOpacity(.06) : const Color(0xFFDCEBED))
+        ? (isDark ? Colors.white.withOpacity(.06) : kSleekLightOutlineVariant)
         : color.withOpacity(isDark ? .28 : .30);
     final iconColor = isDark ? Colors.white : color;
 
@@ -13666,10 +13666,10 @@ class SettingsScreen extends StatelessWidget {
         child: Column(
           children: [
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
-            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: '#78D8E8', onTap: () => showCurrencySheet(context)),
+            SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: kSleekAccentHex, onTap: () => showCurrencySheet(context)),
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: '#78D8E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: '#00D7E8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
@@ -13750,7 +13750,7 @@ class UpdatesScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#00D7E8', size: 54),
+                      iconBubble(context, 'download', kSleekAccentHex, size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -13847,7 +13847,7 @@ Future<void> showUpdateBottomSheet(BuildContext context) {
                 children: [
                   Row(
                     children: [
-                      iconBubble(context, 'download', '#00D7E8', size: 54),
+                      iconBubble(context, 'download', kSleekAccentHex, size: 54),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -16352,7 +16352,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
         title: 'Battery Saver / System',
         subtitle: 'Use system behavior',
         iconName: 'theme_battery',
-        iconColor: '#78D8E8',
+        iconColor: kSleekAccentHex,
       );
   }
 }
@@ -16792,9 +16792,9 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
             ? 96.0
             : math.min(288.0, math.max(rowExtent, filtered.length * rowExtent));
         final dark = Theme.of(dialogContext).brightness == Brightness.dark;
-        final innerColor = dark ? const Color(0xFF0B1417) : const Color(0xFFF5FAFB);
-        final innerBorderColor = dark ? const Color(0xFF1F3036) : const Color(0xFFDCE8EB);
-        final handleColor = dark ? const Color(0xFF43545B) : const Color(0xFFB7C8CE);
+        final innerColor = dark ? kSleekSurfaceLow : kSleekLightBackground;
+        final innerBorderColor = dark ? kSleekOutlineVariant : kSleekLightOutlineVariant;
+        final handleColor = dark ? const Color(0xFF466057) : const Color(0xFFB7C9BF);
 
         return KoinlyPopupContent(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
@@ -17314,7 +17314,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(children: [
-          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: '#78D8E8', onTap: () => showDefaultSelection(context, 'account')),
+          SettingsTile(icon: Icons.account_balance_wallet_rounded, title: 'Default account', subtitle: state.defaultAccountId == null ? 'Not selected' : state.accountOf(state.defaultAccountId!)?.name ?? 'Unknown', color: kSleekAccentHex, onTap: () => showDefaultSelection(context, 'account')),
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
           SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
@@ -17325,7 +17325,7 @@ class AdvancedSettingsScreen extends StatelessWidget {
             icon: Icons.fact_check_rounded,
             title: 'Data health',
             subtitle: state.dataHealthReport?.statusTitle ?? 'Check references, sync backlog, and setup leftovers',
-            color: '#00D7E8',
+            color: kSleekAccentHex,
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DataHealthScreen())),
           ),
         ]),
@@ -17640,7 +17640,7 @@ class AboutScreen extends StatelessWidget {
               ]),
             ),
             const SectionHeader('Legal'),
-            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: '#78D8E8', onTap: () => _showLegal(context, 'Privacy Policy')),
+            SettingsTile(icon: Icons.privacy_tip_rounded, title: 'Privacy Policy', subtitle: 'Local data-first finance tracker', color: kSleekAccentHex, onTap: () => _showLegal(context, 'Privacy Policy')),
             SettingsTile(icon: Icons.description_rounded, title: 'Terms and conditions', subtitle: 'Usage terms', color: '#A6E3A1', onTap: () => _showLegal(context, 'Terms and conditions')),
             SettingsTile(icon: Icons.balance_rounded, title: 'Open-source licenses', subtitle: 'Apache License 2.0 and Flutter package notices', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KoinlyLicenseScreen()))),
           ],
