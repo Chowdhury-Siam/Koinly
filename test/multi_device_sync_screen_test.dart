@@ -4,7 +4,7 @@ import 'package:koinly/main.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  testWidgets('selecting self-hosted removes the registration key field', (tester) async {
+  testWidgets('Account & sync exposes only the self-hosted Worker', (tester) async {
     final controller = AppController();
 
     await tester.pumpWidget(
@@ -16,12 +16,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Registration Key'), findsOneWidget);
-
-    await tester.tap(find.text('Self-hosted'));
-    await tester.pump();
-
+    expect(find.text('Self-hosted Sync Worker'), findsOneWidget);
+    expect(find.text('Cloudflare Worker URL'), findsOneWidget);
+    expect(find.text('Validate and use Worker'), findsOneWidget);
+    expect(find.text('Default'), findsNothing);
     expect(find.text('Registration Key'), findsNothing);
-    expect(find.text('A valid single-use invitation key is required.'), findsNothing);
   });
 }

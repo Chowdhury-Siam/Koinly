@@ -505,6 +505,7 @@ class _ProfileInformationCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: displayName,
             maxLength: 60,
             textCapitalization: TextCapitalization.words,

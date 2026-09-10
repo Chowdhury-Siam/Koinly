@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --config wrangler.self-hosted.toml",
+    "dev": "wrangler dev --config wrangler.self-hosted.toml",
     "schema:apply": "node scripts/apply-schema.mjs",
     "test": "node --test --experimental-transform-types test/*.test.ts",
     "typecheck": "tsc --noEmit"

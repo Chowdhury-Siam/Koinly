@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1076] - 2026-09-10
+
+- Added app-wide text-field focus dismissal on outside taps so amount, payment amount, title, notes, profile fields, loan fields, sync fields, and other text inputs release focus when the user moves to another control.
+- Simplified Account & sync to one runtime-configured self-hosted Cloudflare Worker, including first-owner registration and Telegram backup access.
+- Added migration for existing self-hosted Worker URLs and safely clears obsolete non-self-hosted sync sessions without deleting local finance data.
+- Simplified Android/Windows builds and Worker deployment so no sync endpoint is compiled into the app.
+- Updated the self-hosted Worker to first-owner registration only and removed the old registration-key deployment path.
+- Reworked the main and Worker documentation around the self-hosted-only sync model.
+
 ## [1.0.1075] - 2026-09-10
 
 ### Changed

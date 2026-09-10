@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:koinly/sync_services.dart';
 
 void main() {
-  test('custom sync endpoint accepts only an HTTPS origin', () {
+  test('self-hosted sync endpoint accepts only an HTTPS origin', () {
     expect(
       CloudSyncService.validateApiBaseUrl(' https://my-sync.example.com/ '),
       'https://my-sync.example.com',
@@ -11,29 +11,11 @@ void main() {
     expect(() => CloudSyncService.validateApiBaseUrl('https://my-sync.example.com/v1'), throwsStateError);
   });
 
-  test('self-hosted registration payload omits an empty registration key', () {
-    final payload = KoinlySyncApi.buildRegistrationPayload(
-      email: 'owner@example.com',
-      password: 'correct horse battery staple',
-      registrationKey: '   ',
-      deviceId: 'device-1',
-      deviceName: 'Owner phone',
-      platform: 'android',
+  test('sync endpoint resolution never falls back to a compiled service', () {
+    expect(CloudSyncService.resolveApiBaseUrl(), isEmpty);
+    expect(
+      CloudSyncService.resolveApiBaseUrl(' https://owner-sync.example.workers.dev/ '),
+      'https://owner-sync.example.workers.dev',
     );
-
-    expect(payload.containsKey('registrationKey'), isFalse);
-  });
-
-  test('default-service registration payload keeps a supplied registration key', () {
-    final payload = KoinlySyncApi.buildRegistrationPayload(
-      email: 'user@example.com',
-      password: 'correct horse battery staple',
-      registrationKey: '  KLY1-TEST-KEY  ',
-      deviceId: 'device-2',
-      deviceName: 'User phone',
-      platform: 'android',
-    );
-
-    expect(payload['registrationKey'], 'KLY1-TEST-KEY');
   });
 }

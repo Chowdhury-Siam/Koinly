@@ -1,4 +1,5 @@
-# GitHub Actions overrides this local fallback with CLOUDFLARE_NAME.
+# Self-hosted Koinly Sync Worker configuration.
+# GitHub Actions overrides this local fallback with CLOUDFLARE_NAME_U.
 name = "koinly-sync-worker"
 main = "src/index.ts"
 compatibility_date = "2026-08-21"
@@ -9,9 +10,12 @@ ACCESS_TOKEN_TTL_SECONDS = "900"
 REFRESH_TOKEN_TTL_SECONDS = "2592000"
 MAX_SYNC_BATCH_SIZE = "100"
 MAX_SYNC_REPLACE_SIZE = "25000"
-REGISTRATION_KEY_TTL_SECONDS = "2592000"
 
 # Set these as Cloudflare Worker secrets, not committed vars:
 # wrangler secret put TURSO_DATABASE_URL
 # wrangler secret put TURSO_AUTH_TOKEN
 # wrangler secret put JWT_SECRET
+
+# Check optional Telegram .koinlybackup schedules every five minutes.
+[triggers]
+crons = ["*/5 * * * *"]

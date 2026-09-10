@@ -72,32 +72,10 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   count INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS registration_keys (
-  id TEXT PRIMARY KEY,
-  key_hash TEXT NOT NULL UNIQUE,
-  encrypted_key TEXT NOT NULL,
-  encryption_iv TEXT NOT NULL,
-  created_at INTEGER NOT NULL,
-  expires_at INTEGER,
-  used_at INTEGER,
-  used_by_user_id TEXT,
-  status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'USED', 'REVOKED', 'EXPIRED')),
-  revoked_at INTEGER,
-  created_by TEXT NOT NULL,
-  delivery_status TEXT NOT NULL DEFAULT 'PENDING' CHECK(delivery_status IN ('PENDING', 'DELIVERED', 'FAILED')),
-  delivery_attempts INTEGER NOT NULL DEFAULT 0,
-  last_delivery_attempt_at INTEGER,
-  delivered_at INTEGER,
-  delivery_error TEXT,
-  FOREIGN KEY(used_by_user_id) REFERENCES users(id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id, device_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_changes_user_sequence ON sync_changes(user_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_sync_entities_user_updated ON sync_entities(user_id, updated_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_keys_one_active ON registration_keys(status) WHERE status = 'ACTIVE';
-CREATE INDEX IF NOT EXISTS idx_registration_keys_created ON registration_keys(created_at DESC);
 
 CREATE TABLE IF NOT EXISTS telegram_backup_settings (
   user_id TEXT PRIMARY KEY,

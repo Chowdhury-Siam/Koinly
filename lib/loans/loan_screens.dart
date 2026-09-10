@@ -114,6 +114,7 @@ class _LoansScreenState extends State<LoansScreen> {
           const SizedBox(height: 14),
           if (searching) ...[
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: search,
               autofocus: true,
               onChanged: (_) => setState(() {}),

@@ -1,4 +1,4 @@
-name: Deploy User Self-Hosted Sync Worker
+name: Deploy Self-Hosted Sync Worker
 
 on:
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Check user deployment secrets
+      - name: Check self-hosted deployment secrets
         run: |
           missing=0
           for secret_name in CLOUDFLARE_NAME_U CLOUDFLARE_API_TOKEN_U CLOUDFLARE_ACCOUNT_ID_U TURSO_DATABASE_URL_U TURSO_AUTH_TOKEN_U JWT_SECRET_U; do
@@ -71,13 +71,13 @@ jobs:
           TURSO_AUTH_TOKEN_U: ${{ secrets.TURSO_AUTH_TOKEN_U }}
           JWT_SECRET_U: ${{ secrets.JWT_SECRET_U }}
 
-      - name: Apply user Turso schema
+      - name: Apply Turso schema
         run: npm run schema:apply
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL_U }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN_U }}
 
-      - name: Deploy user Worker
+      - name: Deploy self-hosted Worker
         run: |
           deploy_output="$RUNNER_TEMP/wrangler-output.jsonl"
           trap 'rm -f .worker-secrets "$deploy_output"' EXIT
@@ -109,7 +109,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN_U }}
           JWT_SECRET: ${{ secrets.JWT_SECRET_U }}
 
-      - name: Check user Worker health
+      - name: Check self-hosted Worker health
         run: |
           health_file="$RUNNER_TEMP/koinly-worker-health"
           http_status=""
@@ -144,7 +144,7 @@ jobs:
           fi
 
           if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true' "$health_file" >/dev/null; then
-            echo "::error::The user Worker is not healthy, is missing the Telegram-backup schema/capability, or first-user registration is not enabled (HTTP $http_status). Use a separate Worker name from the owner/default service."
+            echo "::error::The user Worker is not healthy, is missing the Telegram-backup schema/capability, or first-user registration is not enabled (HTTP $http_status). Check the Worker secrets, Turso schema, and deployment URL."
             jq -c . "$health_file"
             exit 1
           fi

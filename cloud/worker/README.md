@@ -1,24 +1,35 @@
-# Koinly Sync Worker
+# Koinly Self-Hosted Sync Worker
 
-Cloudflare Worker backend for Koinly multi-device sync. The app talks to the
-Worker, while Turso credentials remain in encrypted Worker secrets and never
-ship inside the app.
+Cloudflare Worker backend for Koinly multi-device synchronization. Finance data
+is stored in the user's Turso database. Turso credentials and `JWT_SECRET` stay
+in Cloudflare Worker secrets and are never shipped inside the Flutter app.
 
-## Deployment workflows
+## Registration model
 
-The repository keeps user and owner deployments separate:
+A fresh Worker accepts exactly one owner account. After the first account is
+created, registration closes. Additional devices sign in with the same account.
 
-- **Deploy User Self-Hosted Sync Worker** is the fork-friendly workflow. It
-  runs manually or when Worker files change on `main`/`master`.
-- **Deploy Owner Default Sync Worker** is manual-only and deploys the managed
-  default service with invite-key registration and Telegram key delivery.
+The public health response reports:
 
-Both workflows reuse this Worker implementation while deploying independent
-Cloudflare Workers and Turso databases.
+```json
+{
+  "service": "koinly-sync",
+  "registrationMode": "first-user"
+}
+```
 
-## User self-hosted configuration
+## Required Worker secrets
 
-The user workflow requires these repository values:
+```text
+TURSO_DATABASE_URL
+TURSO_AUTH_TOKEN
+JWT_SECRET
+```
+
+`JWT_SECRET` must contain at least 32 characters.
+
+The GitHub deployment workflow reads these repository values and maps them to
+the Worker runtime names:
 
 ```text
 CLOUDFLARE_NAME_U
@@ -29,52 +40,7 @@ TURSO_AUTH_TOKEN_U
 JWT_SECRET_U
 ```
 
-`JWT_SECRET_U` must contain at least 32 characters. Self-hosted deployments do
-not require the managed-service `REGISTRATION_ADMIN_SECRET`,
-`REGISTRATION_KEY_CHAT_ID`, or `TELEGRAM_BOT_TOKEN` GitHub secrets. A user's
-optional backup-bot token is configured later from the authenticated Koinly app
-and encrypted by the Worker before being stored in Turso.
-
-The workflow applies `schema.sql`, uploads the Turso and JWT values as
-Cloudflare Worker secrets, deploys using `CLOUDFLARE_NAME_U`, and verifies the
-deployed `/health` endpoint in `first-user` registration mode.
-
-## Owner/default-service configuration
-
-The owner workflow keeps the existing unprefixed GitHub values:
-
-```text
-CLOUDFLARE_NAME
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_ACCOUNT_ID
-TURSO_DATABASE_URL
-TURSO_AUTH_TOKEN
-JWT_SECRET
-TELEGRAM_BOT_TOKEN
-REGISTRATION_KEY_CHAT_ID
-REGISTRATION_ADMIN_SECRET
-```
-
-`JWT_SECRET` and `REGISTRATION_ADMIN_SECRET` must each contain at
-least 32 characters and must be different. The workflow validates the values,
-deploys in `invite-key` mode, creates an active registration key, and confirms
-Telegram delivery. Fork users do not need these owner values.
-
-Only user self-hosted GitHub configuration uses the `_U` suffix. The user
-workflow maps those values to the standard Worker runtime names; the owner
-workflow uses the unprefixed names directly.
-
-## User self-hosted registration
-
-A new self-hosted backend accepts one owner account without a registration
-key. Registration closes after that account is created. Additional devices
-must log in with the same owner account. This keeps a public `workers.dev`
-endpoint from allowing unlimited account creation without adding a separate
-invite system.
-
 ## Local deployment
-
-Install dependencies, apply the schema, and add runtime secrets:
 
 ```bash
 npm ci
@@ -87,24 +53,18 @@ wrangler secret put JWT_SECRET
 npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
 ```
 
-`schema.sql` is idempotent, so applying it again does not erase existing sync
-data.
-
-The Cloudflare API token used by automation should be scoped to the target
-account and created from the **Edit Cloudflare Workers** template. A standard
-`workers.dev` deployment needs Workers Scripts edit access plus account and
-membership read access. Custom routes or domains may need Workers Routes edit
-access too.
-
-`MAX_SYNC_BATCH_SIZE` controls normal incremental sync pages and defaults to
-`100`. `MAX_SYNC_REPLACE_SIZE` controls full cloud replacement after a backup
-restore and defaults to `25000`, so larger restored local datasets can upload
-without lowering the normal incremental sync batch size.
+`schema.sql` is idempotent and can be applied again without deleting existing
+sync data.
 
 ## Health check
 
-Open `https://<worker-name>.<account-subdomain>.workers.dev/health`. A ready
-self-hosted backend returns values equivalent to:
+Open:
+
+```text
+https://<worker-name>.<account-subdomain>.workers.dev/health
+```
+
+A ready Worker returns values equivalent to:
 
 ```json
 {
@@ -112,6 +72,7 @@ self-hosted backend returns values equivalent to:
   "service": "koinly-sync",
   "configured": true,
   "registrationMode": "first-user",
+  "telegramBackupAvailable": true,
   "databaseReachable": true,
   "schemaReady": true,
   "missingTables": []
@@ -131,59 +92,62 @@ self-hosted backend returns values equivalent to:
 - `POST /v1/sync/replace`
 - `GET /v1/sync/pull?cursor=0&limit=100`
 - `GET /v1/sync/status`
-
-## Sync model
-
-Clients write local SQLite first and queue entity operations. The Worker
-deduplicates operations by ID, stores each user's current entity state, and
-appends ordered changes for other devices to pull. Backup restore uses
-`POST /v1/sync/replace` to replace only the authenticated user's cloud state.
-
-The backend uses tenant-scoped queries, password hashing, signed short-lived
-access tokens, rotating refresh tokens, bounded batches, idempotent operation
-IDs, stale-version conflict checks, and transactional database writes.
-
-## Troubleshooting
-
-If deployment health returns Cloudflare error `1042`, confirm
-`TURSO_DATABASE_URL` is the `libsql://*.turso.io` value printed by the Turso
-CLI. A Worker URL or same-account Worker proxy can create a request loop that
-Cloudflare blocks before the health endpoint can return JSON. The deployment
-workflow uses Wrangler's exact reported target and prints the HTTP response to
-make this failure clear.
-
-## Optional self-hosted Telegram `.koinlybackup`
-
-The **user self-hosted** deployment includes `wrangler.self-hosted.toml`, which
-adds a Cron Trigger every five minutes. After signing in to that Worker, the
-Koinly app can configure an optional Telegram backup from the bot icon on
-**Account & sync**.
-
-No additional GitHub secret is required for this feature. The owner supplies the
-Telegram bot token from the authenticated app screen. The Worker encrypts that
-token with AES-GCM using key material derived from `JWT_SECRET` before storing it
-in `telegram_backup_settings` in Turso. The API never returns the plaintext
-saved token.
-
-Available authenticated endpoints on a first-owner/self-hosted Worker:
-
 - `GET /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/test`
 - `POST /v1/telegram-backup/send-now`
 
-Scheduled and manual deliveries rebuild a `.koinlybackup` from the current
-non-deleted `sync_entities` rows plus the synced preferences entity and upload it
-with Telegram `sendDocument`. If canonical entities are unexpectedly empty, the
-Worker attempts to reconstruct the latest active snapshot from `sync_changes`
-after the most recent reset marker. It refuses to upload an empty finance backup
-and records a clear delivery error instead. Current app builds also perform a full
-local/cloud reconciliation before enabling the schedule or using **Upload backup
-now**, which hydrates a newly linked self-hosted account with pre-existing local
-data. Daily, weekly, and monthly schedules use the UTC offset captured from the
-configuring device. The Cron Trigger checks every five minutes, so scheduled
-delivery is best-effort within that interval.
+## Sync model
 
-The managed/default invite-key Worker intentionally rejects these endpoints and
-is deployed with the normal `wrangler.toml`, so it does not receive the user
-Telegram-backup Cron Trigger.
+Clients write SQLite first and queue entity operations. The Worker deduplicates
+operation IDs, stores current entity state, appends ordered changes for other
+devices, and enforces authenticated user scoping.
+
+The Flutter client uses merge-first synchronization. Full local reconciliation
+can enqueue the complete device snapshot, while full cloud restore merges the
+remote state into the device instead of deleting local-only data.
+
+`MAX_SYNC_BATCH_SIZE` defaults to `100`. `MAX_SYNC_REPLACE_SIZE` defaults to
+`25000` for large reconciliation payloads.
+
+## Telegram `.koinlybackup`
+
+`wrangler.self-hosted.toml` configures a Cron Trigger every five minutes. Users
+configure the optional Telegram bot from the authenticated Koinly app.
+
+The Worker:
+
+- validates the bot and target chat;
+- encrypts the bot token with AES-GCM using key material derived from
+  `JWT_SECRET`;
+- stores only the encrypted token and IV in Turso;
+- builds a portable `.koinlybackup` from synchronized cloud entities;
+- falls back to reconstructing active data from sync history when needed;
+- refuses to send an empty finance backup; and
+- supports daily, weekly, and monthly schedules plus manual upload.
+
+For Telegram channels, the bot must be an administrator with permission to post
+messages.
+
+## Troubleshooting
+
+### Cloudflare error 1042
+
+`TURSO_DATABASE_URL` must be a Turso `libsql://*.turso.io` URL. Do not point it
+at another Worker. Remove Worker proxy routes that loop back into the same
+account deployment.
+
+### Schema is not ready
+
+Run:
+
+```bash
+npm run schema:apply
+```
+
+Then redeploy or recheck `/health`.
+
+### Registration is closed
+
+This is expected after the first owner account exists. Use Login from additional
+devices.

@@ -9,13 +9,6 @@ import 'sync_models.dart';
 
 class CloudSyncService {
   static const int payloadVersion = 7;
-  static const String defaultApiBaseUrl = String.fromEnvironment(
-    'KOINLY_SYNC_API_BASE_URL',
-    defaultValue: '',
-  );
-
-  static String get configuredApiBaseUrl => resolveApiBaseUrl(defaultApiBaseUrl);
-
   static String normalizeSyncId(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.-]'), '-').replaceAll(RegExp(r'-+'), '-');
   }
@@ -43,11 +36,7 @@ class CloudSyncService {
     return normalized;
   }
 
-  static String resolveApiBaseUrl([String? savedValue]) {
-    final provided = normalizeApiBaseUrl(savedValue ?? '');
-    if (provided.isNotEmpty) return provided;
-    return normalizeApiBaseUrl(defaultApiBaseUrl);
-  }
+  static String resolveApiBaseUrl([String? savedValue]) => normalizeApiBaseUrl(savedValue ?? '');
 
   static Future<void> upload({
     required String apiBaseUrl,
@@ -112,7 +101,7 @@ class CloudSyncService {
   }) async {
     final baseUrl = resolveApiBaseUrl(apiBaseUrl);
     if (baseUrl.isEmpty || baseUrl.contains('your-koinly-sync-worker')) {
-      throw StateError('Cloud sync backend URL is not configured in this APK. Rebuild with --dart-define=KOINLY_SYNC_API_BASE_URL=https://your-worker.workers.dev.');
+      throw StateError('Enter and validate your self-hosted Cloudflare Worker URL first.');
     }
     final uri = Uri.parse('$baseUrl$path');
     final response = await http
@@ -145,7 +134,7 @@ class KoinlySyncApi {
 
   Uri _uri(String path, [Map<String, String>? query]) => Uri.parse('${CloudSyncService.normalizeApiBaseUrl(baseUrl)}$path').replace(queryParameters: query);
 
-  Future<void> validateBackend({bool requireFirstUserRegistration = false}) async {
+  Future<void> validateBackend() async {
     final validatedBaseUrl = CloudSyncService.validateApiBaseUrl(baseUrl);
     try {
       final response = await http
@@ -168,8 +157,8 @@ class KoinlySyncApi {
       if (data['schemaReady'] != true || data['ok'] != true || response.statusCode < 200 || response.statusCode >= 300) {
         throw const CloudSyncException('The Worker is reachable, but its Turso schema is not ready.');
       }
-      if (requireFirstUserRegistration && data['registrationMode'] != 'first-user') {
-        throw const CloudSyncException('This Worker has managed registration keys enabled. Use a self-hosted Worker configured for first-owner registration.');
+      if (data['registrationMode'] != 'first-user') {
+        throw const CloudSyncException('This Worker is not configured for self-hosted first-owner registration.');
       }
     } on TimeoutException {
       throw const CloudSyncException('Worker validation timed out. Check the URL and try again.');
@@ -185,39 +174,18 @@ class KoinlySyncApi {
   Future<SyncAuthSession> register({
     required String email,
     required String password,
-    required String registrationKey,
     required String deviceId,
     required String deviceName,
     required String platform,
   }) async {
-    final data = await _post('/v1/auth/register', buildRegistrationPayload(
-      email: email,
-      password: password,
-      registrationKey: registrationKey,
-      deviceId: deviceId,
-      deviceName: deviceName,
-      platform: platform,
-    ));
-    return _sessionFromResponse(data, email);
-  }
-
-  static Map<String, dynamic> buildRegistrationPayload({
-    required String email,
-    required String password,
-    required String registrationKey,
-    required String deviceId,
-    required String deviceName,
-    required String platform,
-  }) {
-    final normalizedRegistrationKey = registrationKey.trim();
-    return {
+    final data = await _post('/v1/auth/register', {
       'email': email,
       'password': password,
-      if (normalizedRegistrationKey.isNotEmpty) 'registrationKey': normalizedRegistrationKey,
       'deviceId': deviceId,
       'deviceName': deviceName,
       'platform': platform,
-    };
+    });
+    return _sessionFromResponse(data, email);
   }
 
   Future<SyncAuthSession> login({

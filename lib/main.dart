@@ -1745,9 +1745,8 @@ class AppController extends ChangeNotifier {
   bool loanShowWrittenOff = false;
   bool cloudSyncEnabled = false;
   SyncDatabaseProvider syncDatabaseProvider = SyncDatabaseProvider.mongoDb;
-  bool useCustomCloudSync = false;
-  String customCloudSyncApiBaseUrl = '';
-  String cloudSyncApiBaseUrl = CloudSyncService.configuredApiBaseUrl;
+  String selfHostedSyncApiBaseUrl = '';
+  String cloudSyncApiBaseUrl = '';
   String cloudSyncId = '';
   String cloudSyncPin = '';
   String syncMongoDbUrl = '';
@@ -1949,13 +1948,21 @@ class AppController extends ChangeNotifier {
       await prefs.setEnum('syncDatabaseProvider', SyncDatabaseProvider.mongoDb);
       await prefs.setBool('cloudSyncEnabled', false);
     }
-    useCustomCloudSync = await prefs.getBool('useCustomCloudSync', false);
-    customCloudSyncApiBaseUrl = CloudSyncService.normalizeApiBaseUrl(await prefs.getString('customCloudSyncApiBaseUrl', ''));
-    if (useCustomCloudSync && customCloudSyncApiBaseUrl.isEmpty) {
-      useCustomCloudSync = false;
-      await prefs.setBool('useCustomCloudSync', false);
-    }
-    cloudSyncApiBaseUrl = useCustomCloudSync ? customCloudSyncApiBaseUrl : CloudSyncService.configuredApiBaseUrl;
+    // Account sync is self-hosted only. Migrate the URL from releases that
+    // stored it as the "custom" endpoint. Sessions that belonged to the
+    // legacy non-self-hosted endpoint are cleared below without touching finance data.
+    final legacyUsedSelfHostedSync = await prefs.getBool('useCustomCloudSync', false);
+    final legacySelfHostedUrl = CloudSyncService.normalizeApiBaseUrl(
+      await prefs.getString('customCloudSyncApiBaseUrl', ''),
+    );
+    selfHostedSyncApiBaseUrl = CloudSyncService.normalizeApiBaseUrl(
+      await prefs.getString('selfHostedSyncApiBaseUrl', legacyUsedSelfHostedSync ? legacySelfHostedUrl : ''),
+    );
+    cloudSyncApiBaseUrl = selfHostedSyncApiBaseUrl;
+    await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
+    final syncPrefs = await prefs.prefs;
+    await syncPrefs.remove('useCustomCloudSync');
+    await syncPrefs.remove('customCloudSyncApiBaseUrl');
     cloudSyncId = await prefs.getString('cloudSyncId', '');
     cloudSyncPin = await secureCredentials.readCloudSyncPin();
     final legacyPin = await prefs.getString('cloudSyncPin', '');
@@ -1979,7 +1986,17 @@ class AppController extends ChangeNotifier {
     }
     syncAccessToken = await secureCredentials.readAccessToken();
     syncRefreshToken = await secureCredentials.readRefreshToken();
-    cloudSyncEnabled = syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty;
+    if (!legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty)) {
+      await secureCredentials.clearAccountTokens();
+      syncAccessToken = '';
+      syncRefreshToken = '';
+      syncAccountEmail = '';
+      await prefs.setString('syncAccountEmail', '');
+      await prefs.setBool('cloudSyncEnabled', false);
+      await database.resetLocalSyncTracking();
+      await database.writeSyncState('serverCursor', '0');
+    }
+    cloudSyncEnabled = syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty && selfHostedSyncApiBaseUrl.isNotEmpty;
     final lastSyncRaw = await prefs.getString('cloudSyncLastAt', '');
     cloudSyncLastAt = lastSyncRaw.isEmpty ? null : DateTime.tryParse(lastSyncRaw);
     cloudSyncPending = await prefs.getBool('cloudSyncPending', false);
@@ -2462,7 +2479,7 @@ class AppController extends ChangeNotifier {
       ..writeln('- Last safety backup: ${lastSafetyBackupAt?.toIso8601String() ?? 'none'}')
       ..writeln('')
       ..writeln('Sync')
-      ..writeln('- Backend build config present: ${CloudSyncService.configuredApiBaseUrl.isNotEmpty}')
+      ..writeln('- Self-hosted Worker configured: ${selfHostedSyncApiBaseUrl.isNotEmpty}')
       ..writeln('- Signed in: $cloudSyncEnabled')
       ..writeln('- Account: ${_maskedSyncEmail()}')
       ..writeln('- New account setup choice pending: $newSyncAccountAwaitingSetupChoice')
@@ -2536,8 +2553,9 @@ class AppController extends ChangeNotifier {
       'newSyncAccountAwaitingSetupChoice',
       'cloudSyncLastAt',
       'cloudSyncApiBaseUrl',
-      'useCustomCloudSync',
-      'customCloudSyncApiBaseUrl',
+      'selfHostedSyncApiBaseUrl',
+      'useCustomCloudSync', // legacy, ignored if an old backup contains it
+      'customCloudSyncApiBaseUrl', // legacy, ignored if an old backup contains it
       'cloudSyncId',
       'cloudSyncPin',
       'syncAccountEmail',
@@ -3332,8 +3350,8 @@ class AppController extends ChangeNotifier {
   }
 
   Future<T> _withSelfHostedSyncToken<T>(Future<T> Function(KoinlySyncApi api, String accessToken) action) async {
-    if (!useCustomCloudSync) {
-      throw StateError('Telegram cloud backups are available only for a self-hosted Sync Worker.');
+    if (selfHostedSyncApiBaseUrl.isEmpty) {
+      throw StateError('Validate your self-hosted Sync Worker first.');
     }
     if (!cloudSyncEnabled || syncAccessToken.isEmpty || syncRefreshToken.isEmpty) {
       throw StateError('Sign in to the self-hosted Sync Worker first.');
@@ -3397,27 +3415,18 @@ class AppController extends ChangeNotifier {
     return _withSelfHostedSyncToken((api, accessToken) => api.sendTelegramBackupNow(accessToken: accessToken));
   }
 
-  Future<void> configureAccountSyncEndpoint({required bool useCustom, required String customApiBaseUrl}) async {
-    final nextApiBaseUrl = useCustom
-        ? CloudSyncService.validateApiBaseUrl(customApiBaseUrl)
-        : CloudSyncService.configuredApiBaseUrl;
-    if (nextApiBaseUrl.isEmpty) {
-      throw StateError('Default cloud sync is not configured in this build.');
-    }
-    if (useCustom) {
-      await KoinlySyncApi(baseUrl: nextApiBaseUrl).validateBackend(requireFirstUserRegistration: true);
-    }
+  Future<void> configureSelfHostedSyncEndpoint(String apiBaseUrl) async {
+    final nextApiBaseUrl = CloudSyncService.validateApiBaseUrl(apiBaseUrl);
+    await KoinlySyncApi(baseUrl: nextApiBaseUrl).validateBackend();
     final endpointChanged = CloudSyncService.normalizeApiBaseUrl(cloudSyncApiBaseUrl) != nextApiBaseUrl;
     if (endpointChanged && cloudSyncEnabled) {
       await logoutSyncAccount();
     }
-    useCustomCloudSync = useCustom;
-    if (useCustom) customCloudSyncApiBaseUrl = nextApiBaseUrl;
+    selfHostedSyncApiBaseUrl = nextApiBaseUrl;
     cloudSyncApiBaseUrl = nextApiBaseUrl;
     cloudSyncError = null;
     cloudSyncErrorCode = null;
-    await prefs.setBool('useCustomCloudSync', useCustomCloudSync);
-    await prefs.setString('customCloudSyncApiBaseUrl', customCloudSyncApiBaseUrl);
+    await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
     await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
     notifyListeners();
   }
@@ -3425,14 +3434,12 @@ class AppController extends ChangeNotifier {
   Future<void> registerSyncAccount({
     required String email,
     required String password,
-    required String registrationKey,
     bool deferInitialDataSync = false,
   }) async {
     await _authenticateSyncAccount(
       register: true,
       email: email,
       password: password,
-      registrationKey: registrationKey,
       deferInitialDataSync: deferInitialDataSync,
     );
   }
@@ -3445,7 +3452,6 @@ class AppController extends ChangeNotifier {
     required bool register,
     required String email,
     required String password,
-    String registrationKey = '',
     bool preferCloudData = true,
     bool deferInitialDataSync = false,
   }) async {
@@ -3455,14 +3461,13 @@ class AppController extends ChangeNotifier {
     notifyListeners();
     try {
       if (cloudSyncApiBaseUrl.isEmpty) {
-        throw StateError('Choose a configured cloud sync service first.');
+        throw StateError('Validate your self-hosted Sync Worker first.');
       }
       final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
       final session = register
           ? await api.register(
               email: email,
               password: password,
-              registrationKey: useCustomCloudSync ? '' : registrationKey,
               deviceId: syncDeviceId,
               deviceName: _deviceName(),
               platform: _platformName(),
@@ -3541,7 +3546,7 @@ class AppController extends ChangeNotifier {
     await prefs.setBool('cloudSyncEnabled', false);
     await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
     // Entity versions/cursors belong to one authenticated backend/account.
-    // Never carry them into another self-hosted/default account; finance rows
+    // Never carry them into another self-hosted account; finance rows
     // stay local and will be merged/adopted again after the next login.
     await database.resetLocalSyncTracking();
     await database.writeSyncState('serverCursor', '0');
@@ -8628,7 +8633,9 @@ class _AccountEditorState extends State<AccountEditor> {
           children: [
             Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 18),
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Account name')),
+            TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: name, decoration: const InputDecoration(labelText: 'Account name')),
             const SizedBox(height: 12),
             SleekPillSelector<AccountType>(
               options: _typeOptions,
@@ -8642,7 +8649,9 @@ class _AccountEditorState extends State<AccountEditor> {
               }),
             ),
             const SizedBox(height: 12),
-            TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Balance')),
+            TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Balance')),
             if (type == AccountType.savings) ...[
               const SizedBox(height: 8),
               Text(
@@ -8652,7 +8661,9 @@ class _AccountEditorState extends State<AccountEditor> {
             ],
             if (type == AccountType.credit) ...[
               const SizedBox(height: 12),
-              TextField(controller: creditLimit, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Credit limit')),
+              TextField(
+                onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                controller: creditLimit, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Credit limit')),
             ],
             const SizedBox(height: 12),
             IconColorPicker(selectedIcon: icon, selectedColor: color, onChanged: (i, c) => setState(() { icon = i; color = c; })),
@@ -9214,6 +9225,7 @@ class _ColorWheelPickerPageState extends State<ColorWheelPickerPage> {
             ),
             const SizedBox(height: 14),
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: hexController,
               textAlign: TextAlign.center,
               textCapitalization: TextCapitalization.characters,
@@ -9846,7 +9858,9 @@ class _CategoryEditorState extends State<CategoryEditor> {
           children: [
             Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 18),
-            TextField(controller: name, decoration: const InputDecoration(labelText: 'Category name')),
+            TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
             if (widget.fixedType == null)
               SleekPillSelector<CategoryType>(
@@ -10105,6 +10119,7 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
             ),
             const SizedBox(height: 16),
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: name,
               textInputAction: TextInputAction.next,
               textCapitalization: TextCapitalization.sentences,
@@ -10118,6 +10133,7 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
             ),
             const SizedBox(height: 12),
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textInputAction: TextInputAction.next,
@@ -10611,6 +10627,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
             const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer) ...[
               TextField(
+                onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: title,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
@@ -10625,6 +10642,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               const SizedBox(height: 12),
             ],
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount,
               focusNode: amountFocus,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -10790,7 +10808,9 @@ class _TransactionEditorState extends State<TransactionEditor> {
               label: Text(transactionTimeSpanLabel(selectedDate, selectedEndDate, forceRange: timeRangeEnabled)),
             ),
             const SizedBox(height: 12),
-            TextField(controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
+            TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
             const SizedBox(height: 18),
             Row(children: [
               if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
@@ -13415,7 +13435,9 @@ class _BudgetEditorState extends State<BudgetEditor> {
           children: [
             Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
-            TextField(controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
+            TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
             const SizedBox(height: 12),
             OutlinedButton.icon(onPressed: () async { final d = await pickDate(context, month); if (d != null) setState(() => month = DateTime(d.year, d.month)); }, icon: const Icon(Icons.calendar_month_rounded), label: Text(DateFormat('MMMM yyyy').format(month))),
             SwitchListTile(value: allAccounts, onChanged: (v) => setState(() => allAccounts = v), title: const Text('Apply to all accounts')),
@@ -14116,11 +14138,9 @@ class MultiDeviceSyncScreen extends StatefulWidget {
 class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
-  late final TextEditingController _registrationKeyController;
-  late final TextEditingController _customApiBaseUrlController;
+  late final TextEditingController _workerUrlController;
   bool _obscurePassword = true;
   bool _endpointBusy = false;
-  late bool _useCustomCloudSync;
   late bool _registerMode;
 
   @override
@@ -14129,9 +14149,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final state = context.read<AppController>();
     _emailController = TextEditingController(text: state.syncAccountEmail);
     _passwordController = TextEditingController();
-    _registrationKeyController = TextEditingController();
-    _customApiBaseUrlController = TextEditingController(text: state.customCloudSyncApiBaseUrl);
-    _useCustomCloudSync = state.useCustomCloudSync;
+    _workerUrlController = TextEditingController(text: state.selfHostedSyncApiBaseUrl);
     _registerMode = widget.initialRegisterMode;
   }
 
@@ -14139,8 +14157,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _registrationKeyController.dispose();
-    _customApiBaseUrlController.dispose();
+    _workerUrlController.dispose();
     super.dispose();
   }
 
@@ -14149,19 +14166,14 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final wasSignedIn = state.cloudSyncEnabled;
     setState(() => _endpointBusy = true);
     try {
-      await state.configureAccountSyncEndpoint(
-        useCustom: _useCustomCloudSync,
-        customApiBaseUrl: _customApiBaseUrlController.text,
-      );
+      await state.configureSelfHostedSyncEndpoint(_workerUrlController.text);
       if (!mounted) return;
-      _customApiBaseUrlController.text = state.customCloudSyncApiBaseUrl;
+      _workerUrlController.text = state.selfHostedSyncApiBaseUrl;
       showSnack(
         context,
         wasSignedIn && !state.cloudSyncEnabled
-            ? 'Cloud sync service changed. Sign in to the selected service.'
-            : _useCustomCloudSync
-                ? 'Self-hosted Worker validated and enabled.'
-                : 'Default cloud sync enabled.',
+            ? 'Self-hosted Worker changed. Sign in to this Worker.'
+            : 'Self-hosted Worker validated and enabled.',
       );
     } catch (error) {
       if (mounted) {
@@ -14175,28 +14187,18 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   Future<void> _login({required bool register}) async {
     final state = context.read<AppController>();
     final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
-    if (!_isSelectedEndpointActive(state)) {
-      showSnack(
-        context,
-        _useCustomCloudSync
-            ? 'Validate and use the self-hosted Worker first.'
-            : 'Use the default cloud sync service first.',
-      );
+    if (!_isWorkerActive(state)) {
+      showSnack(context, 'Validate and use the self-hosted Worker first.');
       return;
     }
     if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
       showSnack(context, 'Enter email and password.');
       return;
     }
-    if (register && !_useCustomCloudSync && _registrationKeyController.text.trim().isEmpty) {
-      showSnack(context, 'Enter your registration key.');
-      return;
-    }
     if (register) {
       await state.registerSyncAccount(
         email: _emailController.text,
         password: _passwordController.text,
-        registrationKey: _useCustomCloudSync ? '' : _registrationKeyController.text,
         deferInitialDataSync: onboardingAuthFlow,
       );
     } else {
@@ -14208,7 +14210,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     }
     if (mounted && state.cloudSyncError == null) {
       _passwordController.clear();
-      _registrationKeyController.clear();
       showSnack(
         context,
         register
@@ -14218,15 +14219,8 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             : 'Signed in. Cloud data loaded.',
       );
       if (register && onboardingAuthFlow) {
-        // Registration is only the first onboarding step. Never mark setup as
-        // complete here, even when the user opened Login first and then changed
-        // to registration. Return a result so onboarding can ask whether this
-        // device should restore a local backup or start a new profile.
         if (mounted) Navigator.pop(context, true);
       } else if (!register && onboardingAuthFlow) {
-        // Existing-account login intentionally restores the cloud copy and can
-        // finish setup immediately, even if the user first opened Create
-        // account and then switched to Login inside this screen.
         await state.completeOnboarding();
         if (mounted) Navigator.pop(context, false);
       } else if (widget.returnOnAuth) {
@@ -14266,11 +14260,9 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     showSnack(context, state.cloudSyncError == null ? successMessage : state.cloudSyncError!);
   }
 
-  bool _isSelectedEndpointActive(AppController state) {
-    if (_useCustomCloudSync != state.useCustomCloudSync) return false;
+  bool _isWorkerActive(AppController state) {
     final activeUrl = CloudSyncService.normalizeApiBaseUrl(state.cloudSyncApiBaseUrl);
-    if (!_useCustomCloudSync) return activeUrl.isNotEmpty;
-    final selectedUrl = CloudSyncService.normalizeApiBaseUrl(_customApiBaseUrlController.text);
+    final selectedUrl = CloudSyncService.normalizeApiBaseUrl(_workerUrlController.text);
     return selectedUrl.isNotEmpty && selectedUrl == activeUrl;
   }
 
@@ -14280,29 +14272,28 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final signedIn = state.cloudSyncEnabled && state.syncAccountEmail.isNotEmpty;
     final busy = state.cloudSyncOperationBusy || _endpointBusy;
     const uploadButtonLabel = 'Upload local changes';
-    final backendConfigured = _isSelectedEndpointActive(state);
+    final backendConfigured = _isWorkerActive(state);
     return PageScaffold(
       title: 'Account & sync',
-      subtitle: signedIn ? state.syncAccountEmail : 'Multi-device online sync',
+      subtitle: signedIn ? state.syncAccountEmail : 'Self-hosted multi-device sync',
       actions: [
-        if (_useCustomCloudSync)
-          IconButton.filledTonal(
-            tooltip: 'Telegram backup',
-            onPressed: busy
-                ? null
-                : () {
-                    if (!backendConfigured) {
-                      showSnack(context, 'Validate and use the self-hosted Worker first.');
-                      return;
-                    }
-                    if (!signedIn) {
-                      showSnack(context, 'Sign in to the self-hosted Worker before configuring Telegram backups.');
-                      return;
-                    }
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
-                  },
-            icon: const Icon(Icons.smart_toy_rounded),
-          ),
+        IconButton.filledTonal(
+          tooltip: 'Telegram backup',
+          onPressed: busy
+              ? null
+              : () {
+                  if (!backendConfigured) {
+                    showSnack(context, 'Validate and use the self-hosted Worker first.');
+                    return;
+                  }
+                  if (!signedIn) {
+                    showSnack(context, 'Sign in to the self-hosted Worker before configuring Telegram backups.');
+                    return;
+                  }
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
+                },
+          icon: const Icon(Icons.smart_toy_rounded),
+        ),
       ],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -14313,49 +14304,39 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Cloud sync service', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 10),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, icon: Icon(Icons.cloud_rounded), label: Text('Default')),
-                      ButtonSegment(value: true, icon: Icon(Icons.dns_rounded), label: Text('Self-hosted')),
-                    ],
-                    selected: {_useCustomCloudSync},
-                    onSelectionChanged: busy
-                        ? null
-                        : (selection) => setState(() {
-                              _useCustomCloudSync = selection.first;
-                              if (_useCustomCloudSync) _registrationKeyController.clear();
-                            }),
+                  Text('Self-hosted Sync Worker', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Enter the HTTPS URL from your own Cloudflare Worker deployment.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
-                  if (_useCustomCloudSync) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _customApiBaseUrlController,
-                      enabled: !busy,
-                      keyboardType: TextInputType.url,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      onChanged: (_) => setState(() {}),
-                      decoration: const InputDecoration(
-                        labelText: 'Cloudflare Worker URL',
-                        hintText: 'https://my-sync.example.workers.dev',
-                        prefixIcon: Icon(Icons.link_rounded),
-                      ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    controller: _workerUrlController,
+                    enabled: !busy,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Cloudflare Worker URL',
+                      hintText: 'https://my-sync.example.workers.dev',
+                      prefixIcon: Icon(Icons.link_rounded),
                     ),
-                  ],
+                  ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: busy ? null : _saveSyncEndpoint,
                     icon: _endpointBusy
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.verified_rounded),
-                    label: Text(_useCustomCloudSync ? 'Validate and use Worker' : 'Use default service'),
+                    label: const Text('Validate and use Worker'),
                   ),
                   if (signedIn) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Changing services signs out this device because each backend has separate accounts and tokens.',
+                      'Changing the Worker signs out this device because each self-hosted deployment has separate accounts and tokens.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -14404,6 +14385,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _emailController,
               enabled: !busy && !signedIn,
               keyboardType: TextInputType.emailAddress,
@@ -14412,6 +14394,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             const SizedBox(height: 12),
             if (!signedIn)
               TextField(
+                onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: _passwordController,
                 enabled: !busy,
                 obscureText: _obscurePassword,
@@ -14424,29 +14407,19 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   ),
                 ),
               ),
-            if (!signedIn && _registerMode && !_useCustomCloudSync) ...[
-              const SizedBox(height: 12),
-              TextField(
-                controller: _registrationKeyController,
-                enabled: !busy,
-                autocorrect: false,
-                enableSuggestions: false,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  labelText: 'Registration Key',
-                  hintText: 'KLY1-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',
-                  helperText: 'A valid single-use invitation key is required.',
-                  prefixIcon: Icon(Icons.key_rounded),
-                ),
-              ),
-            ],
             const SizedBox(height: 16),
             if (!signedIn) ...[
               Text(
                 _registerMode ? 'Create your Koinly sync account' : 'Login to your Koinly sync account',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
-              if (!_registerMode) ...[
+              if (_registerMode) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Only the first account can be created on a new self-hosted Worker. After that, sign in with that account on your other devices.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
+                ),
+              ] else ...[
                 const SizedBox(height: 8),
                 Text(
                   'Login merges your cloud copy with finance data already on this device. Local-only records are preserved.',
@@ -14749,6 +14722,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   Text('Telegram bot', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 12),
                   TextField(
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                     controller: _botTokenController,
                     enabled: !_busy,
                     obscureText: _obscureToken,
@@ -14766,6 +14740,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   ),
                   const SizedBox(height: 12),
                   TextField(
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                     controller: _chatIdController,
                     enabled: !_busy,
                     autocorrect: false,
@@ -15036,6 +15011,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _syncIdController,
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
@@ -15046,6 +15022,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
             ),
             const SizedBox(height: 10),
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _pinController,
               obscureText: _obscurePin,
               decoration: InputDecoration(
@@ -15414,6 +15391,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           controller: _apiBaseUrlController,
           decoration: InputDecoration(
             labelText: '$label API URL',
@@ -15456,6 +15434,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _mongoUrlController,
               obscureText: _obscureMongoUrl,
               decoration: InputDecoration(
@@ -15710,6 +15689,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
+          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           controller: _apiBaseUrlController,
           decoration: InputDecoration(
             labelText: '$label API URL',
@@ -15751,6 +15731,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _mongoUrlController,
               obscureText: _obscureMongoUrl,
               decoration: InputDecoration(
@@ -16163,9 +16144,13 @@ class _CurrencyFormState extends State<CurrencyForm> {
         ),
         const SizedBox(height: 14),
         Row(children: [
-          Expanded(child: TextField(controller: symbol, decoration: const InputDecoration(labelText: 'Symbol'))),
+          Expanded(child: TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            controller: symbol, decoration: const InputDecoration(labelText: 'Symbol'))),
           const SizedBox(width: 10),
-          Expanded(child: TextField(controller: code, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Code'))),
+          Expanded(child: TextField(
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            controller: code, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Code'))),
         ]),
         const SizedBox(height: 12),
         SleekPillSelector<CurrencyPosition>(
@@ -16334,6 +16319,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
               ),
               const SizedBox(height: 12),
               TextField(
+                onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 autofocus: false,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.search_rounded),

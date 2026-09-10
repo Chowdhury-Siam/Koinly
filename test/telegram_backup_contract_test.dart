@@ -12,7 +12,6 @@ void main() {
     final selfHostedWrangler = File('cloud/worker/wrangler.self-hosted.toml').readAsStringSync();
 
     expect(app, contains("tooltip: 'Telegram backup'"));
-    expect(app, contains('if (_useCustomCloudSync)'));
     expect(app, contains('SelfHostedTelegramBackupScreen'));
     expect(app, contains("title: 'Telegram backup'"));
     expect(app, contains('Automatic Telegram backup'));
@@ -26,12 +25,12 @@ void main() {
     expect(api, contains('/v1/telegram-backup/test'));
     expect(api, contains('/v1/telegram-backup/send-now'));
 
-    expect(worker, contains("registrationMode(env) !== 'first-user'"));
     expect(worker, contains('sendDocument'));
     expect(worker, contains('telegram_backup_settings'));
     expect(worker, contains('telegramBackupFinanceRecordCount(database) === 0'));
     expect(worker, contains('finance_record_count'));
     expect(worker, contains('FROM sync_changes, last_reset'));
+    expect(worker, contains("registrationMode: 'first-user'"));
     expect(app, contains('await state.syncToCloud(force: true);'));
     expect(app, contains('while (settlePass < 4 && await database.pendingSyncOperationCount() > 0)'));
     expect(app, contains('serverVersion == 0 || currentRow == null'));
