@@ -264,6 +264,156 @@ extension LoanControllerActions on AppController {
     await reload(queueSync: true);
   }
 
+  Future<void> updateLinkedLoanTransaction(MoneyTransaction candidate) async {
+    final previous = transactions.where((item) => item.id == candidate.id).firstOrNull;
+    if (previous == null || !previous.isLoanTransaction) {
+      await updateTransaction(candidate);
+      return;
+    }
+    if (!candidate.amount.isFinite || candidate.amount <= 0) {
+      throw StateError('Enter a valid amount.');
+    }
+    if (candidate.fromAccountId.isEmpty) {
+      throw StateError('Select an account.');
+    }
+
+    if (previous.linkedEntityType == 'loan_payments') {
+      final payment = loanPayments.where((item) => item.id == previous.linkedEntityId).firstOrNull;
+      if (payment == null) throw StateError('The linked loan payment no longer exists.');
+      final loan = loanOf(payment.loanId);
+      if (loan == null) throw StateError('The linked loan no longer exists.');
+      if (candidate.createdOn.isBefore(loan.startDate)) {
+        throw StateError('Payment date cannot be before the loan start date.');
+      }
+      if (candidate.createdOn.isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
+        throw StateError('Payment date cannot be in the future.');
+      }
+
+      final otherPayments = paymentsForLoan(loan.id).where((item) => item.id != payment.id).toList();
+      final split = allocateLoanPayment(loan, otherPayments, candidate.amount, candidate.createdOn);
+      final updatedPayment = payment.copyWith(
+        amount: roundLoanMoney(candidate.amount),
+        interestComponent: split.interest,
+        principalComponent: split.principal,
+        paidOn: candidate.createdOn,
+        note: candidate.notes.trim(),
+        updatedOn: DateTime.now(),
+      );
+      final category = await _loanCategory(loan.direction, payment: true);
+      final canonical = _loanMoneyTransaction(
+        id: previous.id,
+        direction: loan.direction,
+        payment: true,
+        amount: updatedPayment.amount,
+        title: category.name,
+        accountId: candidate.fromAccountId,
+        categoryId: category.id,
+        linkedEntityType: 'loan_payments',
+        linkedEntityId: updatedPayment.id,
+        occurredOn: updatedPayment.paidOn,
+        notes: updatedPayment.note.isEmpty ? 'Recorded repayment' : updatedPayment.note,
+      );
+      await loanRepository.updatePaymentWithTransaction(updatedPayment, previous, canonical);
+      await database.enqueueTableRow('loan_payments', updatedPayment.id);
+      await database.enqueueTableRow('transactions', canonical.id);
+      await database.enqueueRowsForTable('accounts');
+
+      if (loan.status != LoanStatus.writtenOff) {
+        final revisedPayments = <LoanPayment>[
+          for (final item in paymentsForLoan(loan.id)) item.id == updatedPayment.id ? updatedPayment : item,
+        ];
+        final computation = computeLoan(loan, revisedPayments);
+        final targetStatus = computation.settled ? LoanStatus.closed : LoanStatus.active;
+        if (loan.status != targetStatus) {
+          await loanRepository.setLoanStatus(loan.id, targetStatus, targetStatus == LoanStatus.closed ? DateTime.now() : null);
+          await database.enqueueTableRow('loans', loan.id);
+        }
+      }
+      await reload(queueSync: true);
+      return;
+    }
+
+    if (previous.linkedEntityType == 'loans') {
+      final loan = loanOf(previous.linkedEntityId ?? '');
+      if (loan == null) throw StateError('The linked loan no longer exists.');
+      if (loan.dueDate != null && loan.dueDate!.isBefore(candidate.createdOn)) {
+        throw StateError('Loan start date cannot be after its due date.');
+      }
+      if (paymentsForLoan(loan.id).any((payment) => payment.paidOn.isBefore(candidate.createdOn))) {
+        throw StateError('Loan start date cannot be after an existing repayment.');
+      }
+
+      var updatedLoan = loan.copyWith(
+        principal: roundLoanMoney(candidate.amount),
+        startDate: candidate.createdOn,
+        note: candidate.notes.trim(),
+        disbursalTransactionId: previous.id,
+        updatedOn: DateTime.now(),
+      );
+      if (updatedLoan.status != LoanStatus.writtenOff) {
+        final computation = computeLoan(updatedLoan, paymentsForLoan(updatedLoan.id));
+        final targetStatus = computation.settled ? LoanStatus.closed : LoanStatus.active;
+        updatedLoan = updatedLoan.copyWith(
+          status: targetStatus,
+          closedOn: targetStatus == LoanStatus.closed ? (updatedLoan.closedOn ?? DateTime.now()) : null,
+          clearClosedOn: targetStatus == LoanStatus.active,
+        );
+      }
+      final category = await _loanCategory(updatedLoan.direction, payment: false);
+      final canonical = _loanMoneyTransaction(
+        id: previous.id,
+        direction: updatedLoan.direction,
+        payment: false,
+        amount: updatedLoan.principal,
+        title: category.name,
+        accountId: candidate.fromAccountId,
+        categoryId: category.id,
+        linkedEntityType: 'loans',
+        linkedEntityId: updatedLoan.id,
+        occurredOn: updatedLoan.startDate,
+        notes: updatedLoan.note.isEmpty ? 'Recorded money movement' : updatedLoan.note,
+      );
+      await loanRepository.updateLoanWithDisbursalTransaction(updatedLoan, previous, canonical);
+      await database.enqueueTableRow('loans', updatedLoan.id);
+      await database.enqueueTableRow('transactions', canonical.id);
+      await database.enqueueRowsForTable('accounts');
+      await reload(queueSync: true);
+      return;
+    }
+
+    await updateTransaction(candidate);
+  }
+
+  Future<void> deleteLinkedLoanTransaction(MoneyTransaction transaction) async {
+    if (!transaction.isLoanTransaction) {
+      await deleteTransaction(transaction.id);
+      return;
+    }
+    if (transaction.linkedEntityType == 'loan_payments') {
+      final paymentId = transaction.linkedEntityId;
+      if (paymentId == null || paymentId.isEmpty) {
+        await deleteTransaction(transaction.id);
+        return;
+      }
+      await deleteLoanPayment(paymentId, deleteLinkedTransaction: true);
+      return;
+    }
+    if (transaction.linkedEntityType == 'loans') {
+      final loan = loanOf(transaction.linkedEntityId ?? '');
+      if (loan != null && loan.disbursalTransactionId == transaction.id) {
+        final detached = loan.copyWith(clearDisbursalTransactionId: true, updatedOn: DateTime.now());
+        await loanRepository.upsertLoan(detached);
+        await database.enqueueTableRow('loans', detached.id);
+      }
+      await database.enqueueDelete('transactions', transaction.id);
+      await database.deleteTransaction(transaction.id);
+      await database.enqueueRowsForTable('accounts');
+      await reload(queueSync: true);
+      return;
+    }
+    await deleteTransaction(transaction.id);
+  }
+
   Future<void> deleteLoanPayment(String id, {bool deleteLinkedTransaction = false}) async {
     final payment = loanPayments.where((item) => item.id == id).firstOrNull;
     if (payment == null) return;

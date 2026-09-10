@@ -5223,7 +5223,7 @@ class SplashScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const KoinlyAppIcon(size: 92, borderRadius: 30),
+            Image.asset('assets/icons/koinly_mark.png', width: 104, height: 104, fit: BoxFit.contain),
             const SizedBox(height: 24),
             Text(appTitle, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
@@ -10686,6 +10686,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final scheme = Theme.of(context).colorScheme;
+    final isLoanTransaction = widget.transaction?.isLoanTransaction ?? false;
     final regularAccountOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
     final transferFromOptions = state.accounts.where((a) => a.id != toAccountId).toList();
     final transferToOptions = state.accounts.where((a) => a.id != fromAccountId).toList();
@@ -10693,7 +10694,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
     final fromAccount = state.accounts.where((a) => a.id == fromAccountId).firstOrNull;
     final toAccount = state.accounts.where((a) => a.id == toAccountId).firstOrNull;
     final relevantCategories = state.categories.where((c) => c.type == (type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense)).toList();
-    if (type == MoneyTransactionType.transfer) categoryId = '';
+    if (!isLoanTransaction && type == MoneyTransactionType.transfer) categoryId = '';
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
       child: KoinlyPopupContent(
@@ -10703,41 +10704,51 @@ class _TransactionEditorState extends State<TransactionEditor> {
           children: [
             Text(widget.transaction == null ? 'Add transaction' : 'Edit transaction', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 12),
-            SleekPillSelector<MoneyTransactionType>(
-              options: const [
-                SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
-                SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
-                SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
-              ],
-              selected: type,
-              onChanged: (v) {
-                _dismissAmountFocus();
-                setState(() {
-                  type = v;
-                  if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
-                    final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
-                    final newCategories = state.categories.where((c) => c.type == targetType).toList();
-                    categoryId = type == MoneyTransactionType.income
-                        ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
-                        : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
-                    final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
-                    if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
-                      fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
+            if (isLoanTransaction)
+              SleekPillSelector<MoneyTransactionType>(
+                options: [
+                  SleekPillOption(value: type, label: 'Loan', icon: Icons.account_balance_rounded),
+                ],
+                selected: type,
+                onChanged: (_) => _dismissAmountFocus(),
+              )
+            else
+              SleekPillSelector<MoneyTransactionType>(
+                options: const [
+                  SleekPillOption(value: MoneyTransactionType.expense, label: 'Expense', icon: Icons.north_east_rounded),
+                  SleekPillOption(value: MoneyTransactionType.income, label: 'Income', icon: Icons.south_west_rounded),
+                  SleekPillOption(value: MoneyTransactionType.transfer, label: 'Transfer', icon: Icons.swap_horiz_rounded),
+                ],
+                selected: type,
+                onChanged: (v) {
+                  _dismissAmountFocus();
+                  setState(() {
+                    type = v;
+                    if (type == MoneyTransactionType.income || type == MoneyTransactionType.expense) {
+                      final targetType = type == MoneyTransactionType.income ? CategoryType.income : CategoryType.expense;
+                      final newCategories = state.categories.where((c) => c.type == targetType).toList();
+                      categoryId = type == MoneyTransactionType.income
+                          ? state.defaultIncomeCategoryId ?? newCategories.firstOrNull?.id
+                          : state.defaultExpenseCategoryId ?? newCategories.firstOrNull?.id;
+                      final regularOptions = state.operatingAccounts.isEmpty ? state.accounts : state.operatingAccounts;
+                      if (fromAccountId == null || regularOptions.where((a) => a.id == fromAccountId).firstOrNull == null) {
+                        fromAccountId = state.defaultAccountId ?? regularOptions.firstOrNull?.id;
+                      }
+                      toAccountId = null;
+                    } else {
+                      categoryId = '';
+                      fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
+                      if (toAccountId == fromAccountId) toAccountId = null;
                     }
-                    toAccountId = null;
-                  } else {
-                    categoryId = '';
-                    fromAccountId = fromAccountId ?? state.accounts.firstOrNull?.id;
-                    if (toAccountId == fromAccountId) toAccountId = null;
-                  }
-                });
-              },
-            ),
+                  });
+                },
+              ),
             const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer) ...[
               TextField(
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: title,
+                readOnly: isLoanTransaction,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
                 maxLength: 100,
@@ -10776,7 +10787,55 @@ class _TransactionEditorState extends State<TransactionEditor> {
               ),
             ),
             const SizedBox(height: 12),
-            if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
+            if (isLoanTransaction)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 6),
+                    child: Text(
+                      'Category',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  ExpressiveCard(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: kSleekAccent.withOpacity(.13),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: kSleekAccent.withOpacity(.20)),
+                          ),
+                          child: const Icon(Icons.account_balance_rounded, color: kSleekAccent),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Loan', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.transaction?.linkedEntityType == 'loan_payments' ? 'Loan repayment' : 'Loan disbursal',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.lock_outline_rounded, color: scheme.onSurfaceVariant),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            else if (type != MoneyTransactionType.transfer && widget.lockedCategory == null)
               AppleSelectionField(
                 label: 'Category',
                 option: relevantCategories.where((c) => c.id == categoryId).firstOrNull == null ? null : optionFromCategory(relevantCategories.where((c) => c.id == categoryId).first),
@@ -10922,7 +10981,14 @@ class _TransactionEditorState extends State<TransactionEditor> {
               controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
             const SizedBox(height: 18),
             Row(children: [
-              if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async { await state.deleteTransaction(widget.transaction!.id); if (context.mounted) Navigator.pop(context); }, child: const Text('Delete'))),
+              if (widget.transaction != null) Expanded(child: OutlinedButton(onPressed: () async {
+                if (isLoanTransaction) {
+                  await state.deleteLinkedLoanTransaction(widget.transaction!);
+                } else {
+                  await state.deleteTransaction(widget.transaction!.id);
+                }
+                if (context.mounted) Navigator.pop(context);
+              }, child: const Text('Delete'))),
               if (widget.transaction != null) const SizedBox(width: 12),
               Expanded(flex: 2, child: FilledButton(onPressed: () async {
                 _dismissAmountFocus();
@@ -10932,7 +10998,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 if (type != MoneyTransactionType.transfer && transactionTitle.isEmpty) return showSnack(context, 'Enter a transaction title');
                 if (fromAccountId == null) return showSnack(context, 'Select an account');
                 if (type == MoneyTransactionType.transfer && (toAccountId == null || toAccountId == fromAccountId)) return showSnack(context, 'Select a different destination account');
-                if (type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
+                if (!isLoanTransaction && type != MoneyTransactionType.transfer && categoryId == null) return showSnack(context, 'Select a category');
                 final rangeRequested = dateRangeEnabled || timeRangeEnabled;
                 if (rangeRequested && selectedEndDate.isBefore(selectedDate)) return showSnack(context, 'The end of the range must be after the start');
                 final hasEffectiveRange = rangeRequested && selectedEndDate.isAfter(selectedDate);
@@ -10955,6 +11021,8 @@ class _TransactionEditorState extends State<TransactionEditor> {
                 );
                 if (widget.transaction == null) {
                   await state.addTransaction(tx);
+                } else if (isLoanTransaction) {
+                  await state.updateLinkedLoanTransaction(tx);
                 } else {
                   await state.updateTransaction(tx);
                 }

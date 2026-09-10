@@ -112,6 +112,44 @@ class LoanRepository {
     return linked;
   }
 
+  Future<void> updatePaymentWithTransaction(
+    LoanPayment payment,
+    MoneyTransaction previousTransaction,
+    MoneyTransaction updatedTransaction,
+  ) async {
+    final database = await _db();
+    await database.transaction((txn) async {
+      await _applyTransaction(txn, previousTransaction, -1);
+      await txn.insert('loan_payments', payment.toMap(), conflictAlgorithm: sql.ConflictAlgorithm.replace);
+      await txn.update(
+        'transactions',
+        updatedTransaction.toMap(),
+        where: 'id = ?',
+        whereArgs: [updatedTransaction.id],
+      );
+      await _applyTransaction(txn, updatedTransaction, 1);
+    });
+  }
+
+  Future<void> updateLoanWithDisbursalTransaction(
+    Loan loan,
+    MoneyTransaction previousTransaction,
+    MoneyTransaction updatedTransaction,
+  ) async {
+    final database = await _db();
+    await database.transaction((txn) async {
+      await _applyTransaction(txn, previousTransaction, -1);
+      await txn.insert('loans', loan.toMap(), conflictAlgorithm: sql.ConflictAlgorithm.replace);
+      await txn.update(
+        'transactions',
+        updatedTransaction.toMap(),
+        where: 'id = ?',
+        whereArgs: [updatedTransaction.id],
+      );
+      await _applyTransaction(txn, updatedTransaction, 1);
+    });
+  }
+
   Future<LoanDeleteResult> deleteLoanCascade(String id) async {
     final database = await _db();
     final loanRows = await database.query('loans', columns: ['disbursal_transaction_id'], where: 'id = ?', whereArgs: [id], limit: 1);

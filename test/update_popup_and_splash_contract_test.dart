@@ -14,12 +14,15 @@ void main() {
     expect(app, contains('checkForUpdates(manual: true)'));
   });
 
-  test('Android uses a dedicated padded native splash icon', () {
+  test('Android uses an uncropped transparent launch mark on native and Flutter splash screens', () {
     final baseStyles = File('android/app/src/main/res/values/styles.xml').readAsStringSync();
     final android12Styles = File('android/app/src/main/res/values-v31/styles.xml').readAsStringSync();
     final launchBackground = File('android/app/src/main/res/drawable/launch_background.xml').readAsStringSync();
 
     expect(File('android/app/src/main/res/drawable-nodpi/koinly_splash_icon.png').existsSync(), isTrue);
+    expect(File('assets/icons/koinly_mark.png').existsSync(), isTrue);
+    final app = File('lib/main.dart').readAsStringSync();
+    expect(app, contains("Image.asset('assets/icons/koinly_mark.png'"));
     expect(baseStyles, contains('@drawable/launch_background'));
     expect(android12Styles, contains('android:windowSplashScreenAnimatedIcon'));
     expect(android12Styles, contains('@drawable/koinly_splash_icon'));

@@ -346,7 +346,8 @@ class MoneyTransaction {
 
   bool get countsAsIncome => !excludeFromReports && type == MoneyTransactionType.income;
   bool get countsAsExpense => !excludeFromReports && type == MoneyTransactionType.expense;
-  String get displayType => enumName(type);
+  bool get isLoanTransaction => linkedEntityType == 'loans' || linkedEntityType == 'loan_payments';
+  String get displayType => isLoanTransaction ? 'Loan' : enumName(type);
   DateTime get effectiveEndOn {
     final value = endOn;
     return value == null || value.isBefore(createdOn) ? createdOn : value;

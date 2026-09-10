@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.1080] - 2026-09-11
+
+### Changed
+
+- Loan-generated entries remain visible in **Transactions**, but opening one now uses a dedicated **Loan** classification instead of presenting it as Expense, Income, or Transfer. The Loan classification is shown only for transactions linked to a loan or loan repayment.
+- Loan transaction categories are fixed to **Loan** in the transaction editor so users cannot accidentally reclassify a loan entry as a normal income/expense category.
+
+### Fixed
+
+- Reworked the Android launch artwork to use a transparent, extra-safe padded Koinly mark instead of the full rounded-square launcher tile, preventing OEM splash-screen masks from cropping the launch logo.
+- Editing a linked loan transaction now keeps the underlying loan/repayment record and account balance synchronized. Deleting a linked repayment removes its repayment record safely, while deleting a loan disbursal transaction detaches only the recorded account movement from the loan.
+
 ## [1.0.1079] - 2026-09-11
 
 ### Added
