@@ -11236,31 +11236,9 @@ class TransactionTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
           ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$amountPrefix${state.format(tx.amount)}',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
-              ),
-              if (kIsDesktopApp) ...[
-                const SizedBox(width: 4),
-                PopupMenuButton<String>(
-                  tooltip: 'Transaction actions',
-                  onSelected: (value) async {
-                    if (value == 'edit' && context.mounted) await showTransactionEditor(context, transaction: tx);
-                    if (value == 'duplicate' && context.mounted) await _duplicateTransaction(context, tx);
-                    if (value == 'delete' && context.mounted) await _confirmDeleteTransaction(context, tx);
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    if (!tx.isLoanTransaction) const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(value: 'delete', child: Text('Delete')),
-                  ],
-                ),
-              ],
-            ],
+          trailing: Text(
+            '$amountPrefix${state.format(tx.amount)}',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
           ),
           onTap: () => showTransactionEditor(context, transaction: tx),
         ),

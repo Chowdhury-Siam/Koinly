@@ -1,4 +1,5 @@
 import { createClient, type Client } from '@libsql/client/web';
+import { profileResponse } from './profile.ts';
 
 type Env = {
   TURSO_DATABASE_URL: string;
@@ -47,6 +48,7 @@ export default {
       if (request.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
       if (request.method === 'GET' && url.pathname === '/') return rootResponse(env);
       if (request.method === 'GET' && url.pathname === '/health') return healthResponse(env);
+      if (request.method === 'GET' && (url.pathname === '/profile' || url.pathname === '/profile/')) return profileResponse();
 
       validateWorkerConfig(env);
       db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
@@ -55,7 +57,8 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/auth/login') return await login(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recover') return await recoverAccount(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/refresh') return await refresh(request, env, db);
-      const auth = await requireAuth(request, env);
+      const auth = await requireAuth(request, env, db);
+      if (url.pathname === '/v1/profile/accounts') return await manageAccounts(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/initial') return await initialSync(request, db, auth);
@@ -79,7 +82,7 @@ export default {
           error: databaseErrorMessage(error),
         });
       }
-      return json({ error: message }, statusCode);
+      return privateJson({ error: message }, statusCode);
     } finally {
       db?.close();
     }
@@ -895,6 +898,7 @@ async function login(request: Request, env: Env, db: Client): Promise<Response> 
   const deviceId = normalizeId(body.deviceId, 'deviceId');
   const deviceName = cleanText(body.deviceName, 80) || 'Koinly device';
   const platform = cleanText(body.platform, 40) || 'unknown';
+  await enforceRateLimit(db, `login:${username}`, 20, 15 * 60 * 1000);
 
   const row = (await db.execute({ sql: 'SELECT id, username, password_hash FROM users WHERE username = ?', args: [username] })).rows[0];
   if (!row || !(await verifyPassword(password, String(row.password_hash), env.JWT_SECRET))) {
@@ -1287,7 +1291,10 @@ async function issueTokens(env: Env, db: Client, auth: AuthContext, recoveryKey?
   const now = Date.now();
   const accessExpiresAt = now + numberEnv(env.ACCESS_TOKEN_TTL_SECONDS, 900) * 1000;
   const refreshExpiresAt = now + numberEnv(env.REFRESH_TOKEN_TTL_SECONDS, 2592000) * 1000;
-  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, username: auth.username, deviceId: auth.deviceId, exp: Math.floor(accessExpiresAt / 1000) });
+  const user = (await db.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [auth.userId] })).rows[0];
+  if (!user) throw new HttpError(401, 'Account no longer exists.');
+  const credential = await sha256(String(user.password_hash));
+  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, username: auth.username, deviceId: auth.deviceId, credential, exp: Math.floor(accessExpiresAt / 1000) });
   const refreshToken = crypto.randomUUID() + '.' + crypto.randomUUID();
   await db.execute({
     sql: 'INSERT INTO refresh_tokens(id, user_id, token_hash, device_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -1304,11 +1311,15 @@ async function issueTokens(env: Env, db: Client, auth: AuthContext, recoveryKey?
   });
 }
 
-async function requireAuth(request: Request, env: Env): Promise<AuthContext> {
+async function requireAuth(request: Request, env: Env, db: Client): Promise<AuthContext> {
   const header = request.headers.get('authorization') ?? '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
   if (!token) throw new HttpError(401, 'Missing access token.');
   const payload = await verifyToken(env.JWT_SECRET, token);
+  const user = (await db.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [String(payload.sub)] })).rows[0];
+  if (!user || payload.credential !== await sha256(String(user.password_hash))) {
+    throw new HttpError(401, 'Session expired. Sign in again.');
+  }
   const username = String(payload.username ?? payload.email ?? '');
   return { userId: String(payload.sub), username, deviceId: String(payload.deviceId) };
 }
@@ -1379,19 +1390,15 @@ function constantTimeEqual(left: string, right: string): boolean {
 
 async function enforceRateLimit(db: Client, key: string, maxAttempts: number, windowMs: number): Promise<void> {
   const now = Date.now();
-  const row = (await db.execute({ sql: 'SELECT window_start, count FROM rate_limits WHERE key = ?', args: [key] })).rows[0];
-  const windowStart = Number(row?.window_start ?? 0);
-  const count = Number(row?.count ?? 0);
-  if (!row || now - windowStart >= windowMs) {
-    await db.execute({
-      sql: `INSERT INTO rate_limits(key, window_start, count) VALUES (?, ?, 1)
-            ON CONFLICT(key) DO UPDATE SET window_start = excluded.window_start, count = 1`,
-      args: [key, now],
-    });
-    return;
-  }
-  if (count >= maxAttempts) throw new HttpError(429, 'Too many recovery attempts. Try again later.');
-  await db.execute({ sql: 'UPDATE rate_limits SET count = count + 1 WHERE key = ?', args: [key] });
+  const row = (await db.execute({
+    sql: `INSERT INTO rate_limits(key, window_start, count) VALUES (?, ?, 1)
+          ON CONFLICT(key) DO UPDATE SET
+            count = CASE WHEN rate_limits.window_start <= ? THEN 1 ELSE rate_limits.count + 1 END,
+            window_start = CASE WHEN rate_limits.window_start <= ? THEN excluded.window_start ELSE rate_limits.window_start END
+          RETURNING count`,
+    args: [key, now, now - windowMs, now - windowMs],
+  })).rows[0];
+  if (Number(row.count) > maxAttempts) throw new HttpError(429, 'Too many attempts. Try again later.');
 }
 
 async function sha256(value: string): Promise<string> {
@@ -1428,6 +1435,7 @@ function normalizeRecoveryKey(value: unknown): string {
 }
 
 function validatePassword(password: string): void {
+  if (password.length > 1024) throw new HttpError(400, 'Password must be at most 1024 characters.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
 }
 
@@ -1449,7 +1457,9 @@ function cleanText(value: unknown, max: number): string {
 
 async function readJson(request: Request): Promise<Record<string, unknown>> {
   try {
-    return await request.json() as Record<string, unknown>;
+    const body: unknown = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Expected an object.');
+    return body as Record<string, unknown>;
   } catch {
     throw new HttpError(400, 'Invalid JSON body.');
   }
@@ -1502,5 +1512,65 @@ function cors(response: Response): Response {
 class HttpError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
+  }
+}
+
+// The first account owns this self-hosted Worker and cannot be deleted.
+async function manageAccounts(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  if (request.method === 'POST') await enforceRateLimit(db, `profile:${auth.userId}`, 30, 15 * 60 * 1000);
+  const transaction = await db.transaction('write');
+  try {
+    const owner = (await transaction.execute('SELECT id FROM users ORDER BY created_at, rowid LIMIT 1')).rows[0];
+    if (String(owner?.id) !== auth.userId) throw new HttpError(403, 'Only the Worker owner can manage accounts.');
+    if (request.method === 'GET') {
+      const accounts = (await transaction.execute('SELECT id, username, created_at FROM users ORDER BY created_at, rowid')).rows;
+      await transaction.commit();
+      return privateJson({ accounts, count: accounts.length, ownerId: auth.userId });
+    }
+    if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
+    const body = await readJson(request);
+    // Recheck the owner's password for every destructive or administrative action.
+    const ownerRow = (await transaction.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [auth.userId] })).rows[0];
+    if (!await verifyPassword(String(body.currentPassword ?? ''), String(ownerRow.password_hash), env.JWT_SECRET)) {
+      throw new HttpError(401, 'Owner password is incorrect.');
+    }
+    const now = Date.now();
+    if (body.action === 'create') {
+      const username = normalizeUsername(body.username);
+      const password = String(body.password ?? '');
+      validatePassword(password);
+      if ((await transaction.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: [username] })).rows.length) {
+        throw new HttpError(409, 'That username is already in use.');
+      }
+      const recoveryKey = generateRecoveryKey();
+      await transaction.execute({
+        sql: 'INSERT INTO users(id, username, password_hash, recovery_key_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), await hashRecoveryKey(recoveryKey, env.JWT_SECRET), now, now],
+      });
+      await transaction.commit();
+      return privateJson({ ok: true, recoveryKey }, 201);
+    }
+    const id = normalizeId(body.id, 'account ID');
+    const target = (await transaction.execute({ sql: 'SELECT username FROM users WHERE id = ?', args: [id] })).rows[0];
+    if (!target) throw new HttpError(404, 'Account not found.');
+    if (body.action === 'password') {
+      const password = String(body.password ?? '');
+      validatePassword(password);
+      await transaction.execute({ sql: 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', args: [await hashPassword(password, env.JWT_SECRET), now, id] });
+      await transaction.execute({ sql: 'DELETE FROM refresh_tokens WHERE user_id = ?', args: [id] });
+    } else if (body.action === 'delete') {
+      if (id === auth.userId) throw new HttpError(400, 'The owner account cannot be deleted.');
+      if (body.confirmUsername !== target.username) throw new HttpError(400, 'Type the account username to confirm deletion.');
+      for (const table of ['telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices']) {
+        await transaction.execute({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [id] });
+      }
+      await transaction.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] });
+    } else {
+      throw new HttpError(400, 'Invalid account action.');
+    }
+    await transaction.commit();
+    return privateJson({ ok: true });
+  } finally {
+    transaction.close();
   }
 }

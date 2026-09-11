@@ -16,6 +16,23 @@
   Use it completely offline, or connect your own Cloudflare Worker for optional multi-device sync.
 </p>
 
+## Web profile and account management
+
+**Redeploy the Cloudflare Worker to enable this update. Updating the Android or Windows app alone does not publish the website.** Run your existing self-hosted Worker deployment workflow, or follow the manual deployment commands in [`cloud/worker/README.md`](cloud/worker/README.md). Keep the same Worker name, Turso database, and secrets.
+
+After deployment, open **https://koinly-test.sweets-4c4.workers.dev/profile** (or append `/profile` to your own Worker URL). Sign in with the username and password of the **first account created on that Worker**. That account remains the owner; there is no separate default admin password. On a fresh Worker, create the first account from the Koinly app first.
+
+The website follows Koinly's green palette, rounded cards, and system light/dark appearance, with a responsive layout for phones and desktops. The owner can:
+
+- See the total number of login accounts and their usernames and creation dates.
+- Add accounts with a username and password. Save the recovery key shown once after creation and give it to the account holder securely.
+- Change any account's password, including the owner's, by confirming the current owner password. Existing access and refresh sessions for that account become invalid; sign in again on its devices.
+- Delete an additional account after typing its username and confirming the owner password. This permanently removes its cloud finance data, sessions, devices, and Telegram backup settings. Local device data and already-delivered backups remain. The owner cannot be deleted.
+
+These are **sync login accounts**, not the bank/cash accounts inside a finance profile. Each login keeps its own finance data. Only the first owner can access the management API; added accounts use the app's normal **Login** flow. Public registration stays closed after the first owner is created.
+
+No new secrets or schema migration are required for an up-to-date Worker. Existing app sessions may refresh or require sign-in once after redeployment because access tokens now validate the current account credentials. The web page keeps tokens in memory only: reloading the page or reaching the access-token expiry requires signing in again (15 minutes by default). No separate frontend hosting or build is needed.
+
 ## Quick navigation
 
 | Start here | Self-hosted sync | App & backups | Developers |
@@ -420,7 +437,7 @@ After deployment:
 6. After the account is created, Koinly shows a one-time **recovery key**. Copy it and store it somewhere safe before closing the popup.
 7. On another device, use the same Worker URL and choose **Login** with the same username and password.
 
-A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
+A fresh Worker accepts one owner account. After that account is created, additional devices use **Login**. The owner can create separate login accounts from `/profile`. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
 
 ### 6.1 Forgot your password?
 
@@ -524,14 +541,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1092
+  --dart-define=KOINLY_APP_VERSION=1.0.1093
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1092
+  --dart-define=KOINLY_APP_VERSION=1.0.1093
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.

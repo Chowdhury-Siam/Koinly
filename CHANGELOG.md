@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] - Web profile account management
+
+### Added
+
+- Added `/profile`, a responsive username/password sign-in and owner account-management website matching the app's green theme, rounded surfaces, and light/dark appearance.
+- The first Worker account can view account totals, create additional login accounts, change passwords, and permanently delete additional accounts and their cloud data. Owner deletion is blocked and each login retains separate finance data.
+- Added confirmation for administrative changes, one-time recovery keys for new accounts, login/action rate limits, private page/API responses, and credential validation that invalidates sessions after password changes or deletion.
+- Added executable account-management and page checks alongside the existing Worker tests.
+
+### Deployment required
+
+- **REDEPLOY THE CLOUDFLARE WORKER** using the existing self-hosted deployment workflow or manual Wrangler deployment. An app update alone will not enable `/profile`.
+- Keep the existing Worker name, database, and secrets. No new schema migration is required for an up-to-date deployment. Open `https://koinly-test.sweets-4c4.workers.dev/profile` after redeployment and sign in with the first owner's existing username and password.
+- Existing app sessions may refresh or require a one-time sign-in after deployment. The browser session ends on reload or access-token expiry.
+
+
+## [1.0.1093] - 2026-09-11
+
+### Changed
+
+- Removed the desktop-only three-dot transaction overflow menu from transaction cards. Desktop transaction rows now keep the clean amount-only trailing area shown in the mobile design; opening a transaction by clicking the row and the existing swipe/quick-action behavior remain unchanged.
+- Bumped application metadata to `1.0.1093+137`.
+
 ## [1.0.1092] - 2026-09-11
 
 ### Fixed

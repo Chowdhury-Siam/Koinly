@@ -7,7 +7,19 @@ For the easiest setup, follow the beginner-friendly guide in the repository's ma
 
 ## Registration model
 
-A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. Registration returns a one-time recovery key; after registration closes, additional devices use **Login** with the same username and password.
+A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. Registration returns a one-time recovery key; after registration closes, additional devices use **Login** with the same username and password. The first owner can also add separate login accounts from `/profile`; each has independent finance data.
+
+## Profile website (Worker redeployment required)
+
+**Redeploy the Cloudflare Worker for this feature.** The page and API are bundled into the Worker; there is no separate website deployment. Keep the same secrets, database, and Worker name. An up-to-date schema needs no migration.
+
+Open `https://koinly-test.sweets-4c4.workers.dev/profile`, or `/profile` on your own Worker. Sign in with the first account's username and password. Public registration remains first-user-only; the original account owns account management and cannot be deleted. Create that owner in the app first if the database is empty.
+
+The owner can count/list login accounts, add an account (save its one-time recovery key), change passwords, and delete additional accounts. Every mutation requires the current owner password. Deletion additionally requires the target username and atomically removes the account, cloud finance data, device/session records, and Telegram settings; existing local copies and delivered backups remain. Ordinary accounts cannot list or manage other accounts.
+
+Password changes revoke existing refresh sessions and invalidate access tokens. Existing app sessions may refresh or require sign-in after redeployment. Browser tokens are memory-only and expire after the configured access-token TTL (15 minutes by default); reload requires a new sign-in.
+
+For local checks use Node.js 22.13+ (Node.js 24 recommended); the profile test uses built-in SQLite, with no external database or credentials.
 
 ## GitHub Actions deployment values
 
@@ -86,6 +98,9 @@ A ready Worker returns values equivalent to:
 
 - `GET /`
 - `GET /health`
+- `GET /profile` (public sign-in page; also `/profile/`)
+- `GET /v1/profile/accounts` (owner bearer token; returns `accounts`, `count`, `ownerId`)
+- `POST /v1/profile/accounts` (owner bearer token plus `currentPassword`; `action: create` with `username`/`password`, `action: password` with `id`/`password`, or `action: delete` with `id`/`confirmUsername`)
 - `POST /v1/auth/register`
 - `POST /v1/auth/login`
 - `POST /v1/auth/recover`
