@@ -1770,6 +1770,7 @@ class AppController extends ChangeNotifier {
   bool loanRecordTransactionsByDefault = true;
   bool loanRemindersEnabled = true;
   bool loanShowWrittenOff = false;
+  bool loanTransactionsVisibleInTransactionList = true;
   bool cloudSyncEnabled = false;
   SyncDatabaseProvider syncDatabaseProvider = SyncDatabaseProvider.mongoDb;
   String selfHostedSyncApiBaseUrl = '';
@@ -1975,6 +1976,7 @@ class AppController extends ChangeNotifier {
     loanRecordTransactionsByDefault = await prefs.getBool('loanRecordTransactionsByDefault', true);
     loanRemindersEnabled = await prefs.getBool('loanRemindersEnabled', true);
     loanShowWrittenOff = await prefs.getBool('loanShowWrittenOff', false);
+    loanTransactionsVisibleInTransactionList = await prefs.getBool('loanTransactionsVisibleInTransactionList', true);
     cloudSyncEnabled = await prefs.getBool('cloudSyncEnabled', false);
     syncDatabaseProvider = await prefs.getEnum('syncDatabaseProvider', SyncDatabaseProvider.values, SyncDatabaseProvider.mongoDb);
     if (!userSyncDatabaseProviders.contains(syncDatabaseProvider)) {
@@ -2573,6 +2575,7 @@ class AppController extends ChangeNotifier {
         'loanRecordTransactionsByDefault': loanRecordTransactionsByDefault,
         'loanRemindersEnabled': loanRemindersEnabled,
         'loanShowWrittenOff': loanShowWrittenOff,
+        'loanTransactionsVisibleInTransactionList': loanTransactionsVisibleInTransactionList,
         'syncDatabaseProvider': enumName(syncDatabaseProvider),
         'syncMongoDatabaseName': syncMongoDatabaseName,
         'syncMongoCollectionName': syncMongoCollectionName,
@@ -4487,6 +4490,12 @@ class AppController extends ChangeNotifier {
         final byStartDate = b.createdOn.compareTo(a.createdOn);
         return byStartDate != 0 ? byStartDate : b.updatedOn.compareTo(a.updatedOn);
       });
+  }
+
+  List<MoneyTransaction> transactionListTransactions() {
+    final visible = filteredTransactions();
+    if (loanTransactionsVisibleInTransactionList) return visible;
+    return visible.where((tx) => !tx.isLoanTransaction).toList();
   }
 
   Summary summaryFor(List<MoneyTransaction> list) {
@@ -11184,7 +11193,7 @@ class TransactionListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final txs = state.filteredTransactions();
+    final txs = state.transactionListTransactions();
     return PageScaffold(
       title: 'Transaction',
       subtitle: '${txs.length} records • ${state.activeRange().label}',

@@ -457,7 +457,12 @@ extension LoanControllerActions on AppController {
     await reload(queueSync: true);
   }
 
-  Future<void> setLoanPreferences({bool? recordTransactions, bool? reminders, bool? showWrittenOff}) async {
+  Future<void> setLoanPreferences({
+    bool? recordTransactions,
+    bool? reminders,
+    bool? showWrittenOff,
+    bool? showTransactionsInTransactionList,
+  }) async {
     if (recordTransactions != null) {
       loanRecordTransactionsByDefault = recordTransactions;
       await prefs.setBool('loanRecordTransactionsByDefault', recordTransactions);
@@ -470,6 +475,10 @@ extension LoanControllerActions on AppController {
     if (showWrittenOff != null) {
       loanShowWrittenOff = showWrittenOff;
       await prefs.setBool('loanShowWrittenOff', showWrittenOff);
+    }
+    if (showTransactionsInTransactionList != null) {
+      loanTransactionsVisibleInTransactionList = showTransactionsInTransactionList;
+      await prefs.setBool('loanTransactionsVisibleInTransactionList', showTransactionsInTransactionList);
     }
     notifyListeners();
     await queuePreferenceSync();

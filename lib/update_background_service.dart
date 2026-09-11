@@ -10,6 +10,7 @@ import 'update_service.dart';
 
 const _backgroundUpdateUniqueName = 'koinly-periodic-update-check';
 const _backgroundUpdateTaskName = 'koinlyUpdateCheck';
+const _backgroundUpdateFrequency = Duration(minutes: 15);
 const _automaticUpdatePreferenceKey = 'automaticUpdatePopupEnabled';
 const _lastNotifiedUpdateVersionKey = 'lastNotifiedUpdateVersion';
 
@@ -43,11 +44,12 @@ class UpdateBackgroundService {
     await Workmanager().registerPeriodicTask(
       _backgroundUpdateUniqueName,
       _backgroundUpdateTaskName,
-      frequency: const Duration(hours: 6),
-      initialDelay: const Duration(minutes: 15),
+      // Android WorkManager's minimum periodic interval is 15 minutes.
+      // Keeping the updater at that floor means a release can be discovered
+      // while Koinly is closed instead of waiting for the next foreground launch.
+      frequency: _backgroundUpdateFrequency,
       constraints: Constraints(
         networkType: NetworkType.connected,
-        requiresBatteryNotLow: true,
       ),
       existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
       tag: 'koinly-updates',

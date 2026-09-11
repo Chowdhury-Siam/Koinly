@@ -18,6 +18,14 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+## [1.0.1096] - 2026-09-11
+
+### Changed
+- Background update checks now run at Android WorkManager's 15-minute periodic floor, so new-release notifications can arrive while Koinly is closed instead of depending on the next app launch.
+- Removed the battery-not-low constraint from the lightweight release check; only an active network connection is required.
+- Added a Loan preferences toggle to show or hide loan-linked movements from the main Transaction list without deleting them or changing loan/account data.
+- Bumped application metadata to `1.0.1096+140`.
+
 ## [1.0.1095] - 2026-09-11
 
 ### Changed

@@ -588,6 +588,13 @@ class _LoanPreferencesSheet extends StatelessWidget {
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
+            value: state.loanTransactionsVisibleInTransactionList,
+            onChanged: (value) => state.setLoanPreferences(showTransactionsInTransactionList: value),
+            title: const Text('Show loan transactions in Transaction', style: TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: const Text('Turn this off to hide loan-linked movements from the main Transaction list.'),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
             value: state.loanRemindersEnabled,
             onChanged: (value) => state.setLoanPreferences(reminders: value),
             title: const Text('Due-date reminders', style: TextStyle(fontWeight: FontWeight.w800)),
