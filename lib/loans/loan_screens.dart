@@ -282,8 +282,8 @@ class _LoanTile extends StatelessWidget {
         groupTag: 'loans',
         closeOnScroll: true,
         endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: canRecordPayment ? .44 : .24,
+          motion: const ScrollMotion(),
+          extentRatio: canRecordPayment ? .50 : .28,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,

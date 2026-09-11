@@ -5955,10 +5955,11 @@ class _KoinlySlidableAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep action surfaces flush with each other and let the Slidable's
-    // outer ClipRRect provide the row radius. Giving every action its own
-    // rounded rectangle creates visible green/red slivers while the pane is
-    // between snap points, especially when changing swipe direction.
+    // Use flutter_slidable's native action surface rather than nesting a
+    // rounded box inside a transparent CustomSlidableAction. The nested
+    // version could be clipped to a colored sliver while a drag was between
+    // snap points. Native actions keep a stable action width throughout the
+    // gesture and clip their own content correctly.
     return SlidableAction(
       autoClose: true,
       onPressed: onPressed,
@@ -5968,7 +5969,7 @@ class _KoinlySlidableAction extends StatelessWidget {
       label: label,
       spacing: 4,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      borderRadius: BorderRadius.zero,
+      borderRadius: BorderRadius.circular(18),
     );
   }
 }
@@ -7142,64 +7143,43 @@ _KoinlySnackKind _snackKindFor(String message) {
 }
 
 void _showRichSnack(BuildContext context, String message, _KoinlySnackKind kind) {
-  // Fallback for unusual contexts that do not expose a root Overlay. Normal
-  // in-app feedback uses the compact floating top notice below.
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
   final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
+  if (overlay == null) {
+    messenger?.hideCurrentSnackBar();
+    messenger?.hideCurrentMaterialBanner();
+    messenger?.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(message),
+      ),
+    );
+    return;
+  }
+
+  _activeKoinlySnackEntry?.remove();
+  _activeKoinlySnackEntry = null;
+  messenger?.hideCurrentSnackBar();
+  messenger?.hideCurrentMaterialBanner();
+
   final (title, contentType, color) = switch (kind) {
     _KoinlySnackKind.success => ('Done', ContentType.success, kSleekAccent),
     _KoinlySnackKind.failure => ('Something went wrong', ContentType.failure, kSleekExpense),
     _KoinlySnackKind.warning => ('Please note', ContentType.warning, kSleekWarning),
     _KoinlySnackKind.info => ('Koinly', ContentType.help, kSleekAccent),
   };
-  final materialBanner = MaterialBanner(
-    elevation: 0,
-    backgroundColor: Colors.transparent,
-    forceActionsBelow: true,
-    padding: EdgeInsets.zero,
-    content: AwesomeSnackbarContent(
-      title: title,
-      message: message,
-      contentType: contentType,
-      color: color,
-      inMaterialBanner: true,
-      titleTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-      messageTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-    ),
-    actions: const [SizedBox.shrink()],
-  );
-  messenger.hideCurrentSnackBar();
-  messenger.hideCurrentMaterialBanner();
-  final controller = messenger.showMaterialBanner(materialBanner);
   final duration = kind == _KoinlySnackKind.failure
       ? const Duration(seconds: 5)
       : const Duration(milliseconds: 3600);
-  Future<void>.delayed(duration, controller.close);
-}
-
-void showSnack(BuildContext context, String message) {
-  final trimmedMessage = message.trim();
-  if (trimmedMessage.isEmpty) return;
-
-  final kind = _snackKindFor(trimmedMessage);
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  messenger?.hideCurrentSnackBar();
-  messenger?.hideCurrentMaterialBanner();
-
-  final overlay = Overlay.maybeOf(context, rootOverlay: true);
-  if (overlay == null) {
-    _showRichSnack(context, trimmedMessage, kind);
-    return;
-  }
-
-  _activeKoinlySnackEntry?.remove();
-  _activeKoinlySnackEntry = null;
 
   late final OverlayEntry entry;
   entry = OverlayEntry(
-    builder: (overlayContext) => _KoinlyTopFeedback(
-      message: trimmedMessage,
-      kind: kind,
+    builder: (overlayContext) => _KoinlyTopFeedbackBanner(
+      title: title,
+      message: message,
+      color: color,
+      contentType: contentType,
+      visibleDuration: duration,
       onDismissed: () {
         if (_activeKoinlySnackEntry == entry) {
           _activeKoinlySnackEntry = null;
@@ -7208,69 +7188,65 @@ void showSnack(BuildContext context, String message) {
       },
     ),
   );
-
   _activeKoinlySnackEntry = entry;
   overlay.insert(entry);
 }
 
-class _KoinlyTopFeedback extends StatefulWidget {
-  const _KoinlyTopFeedback({
+class _KoinlyTopFeedbackBanner extends StatefulWidget {
+  const _KoinlyTopFeedbackBanner({
+    required this.title,
     required this.message,
-    required this.kind,
+    required this.color,
+    required this.contentType,
+    required this.visibleDuration,
     required this.onDismissed,
   });
 
+  final String title;
   final String message;
-  final _KoinlySnackKind kind;
+  final Color color;
+  final ContentType contentType;
+  final Duration visibleDuration;
   final VoidCallback onDismissed;
 
   @override
-  State<_KoinlyTopFeedback> createState() => _KoinlyTopFeedbackState();
+  State<_KoinlyTopFeedbackBanner> createState() => _KoinlyTopFeedbackBannerState();
 }
 
-class _KoinlyTopFeedbackState extends State<_KoinlyTopFeedback> with SingleTickerProviderStateMixin {
+class _KoinlyTopFeedbackBannerState extends State<_KoinlyTopFeedbackBanner>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   Timer? _hideTimer;
-  bool _dismissing = false;
+  bool _closing = false;
 
-  String get _title => switch (widget.kind) {
-        _KoinlySnackKind.success => 'Done',
-        _KoinlySnackKind.failure => 'Something went wrong',
-        _KoinlySnackKind.warning => 'Please note',
-        _KoinlySnackKind.info => 'Koinly',
-      };
+  IconData get _icon {
+    if (widget.contentType == ContentType.failure) return Icons.error_outline_rounded;
+    if (widget.contentType == ContentType.warning) return Icons.warning_amber_rounded;
+    if (widget.contentType == ContentType.help) return Icons.info_outline_rounded;
+    return Icons.check_rounded;
+  }
 
-  IconData get _icon => switch (widget.kind) {
-        _KoinlySnackKind.success => Icons.check_rounded,
-        _KoinlySnackKind.failure => Icons.close_rounded,
-        _KoinlySnackKind.warning => Icons.priority_high_rounded,
-        _KoinlySnackKind.info => Icons.info_outline_rounded,
-      };
-
-  Color get _accent => switch (widget.kind) {
-        _KoinlySnackKind.success => kSleekAccent,
-        _KoinlySnackKind.failure => kSleekExpense,
-        _KoinlySnackKind.warning => kSleekWarning,
-        _KoinlySnackKind.info => kSleekAccent,
-      };
+  String get _semanticType {
+    if (widget.contentType == ContentType.failure) return 'Error';
+    if (widget.contentType == ContentType.warning) return 'Warning';
+    if (widget.contentType == ContentType.help) return 'Information';
+    return 'Success';
+  }
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 360),
-      reverseDuration: const Duration(milliseconds: 210),
+      duration: const Duration(milliseconds: 260),
+      reverseDuration: const Duration(milliseconds: 180),
     )..forward();
-    _hideTimer = Timer(
-      widget.kind == _KoinlySnackKind.failure ? const Duration(seconds: 5) : const Duration(milliseconds: 3600),
-      _dismiss,
-    );
+    _hideTimer = Timer(widget.visibleDuration, _dismiss);
   }
 
   Future<void> _dismiss() async {
-    if (_dismissing || !mounted) return;
-    _dismissing = true;
+    if (_closing || !mounted) return;
+    _closing = true;
     _hideTimer?.cancel();
     if (!MediaQuery.of(context).disableAnimations) {
       await _controller.reverse();
@@ -7289,113 +7265,322 @@ class _KoinlyTopFeedbackState extends State<_KoinlyTopFeedback> with SingleTicke
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
     final reduceMotion = media.disableAnimations;
     final maxWidth = math.min(kIsDesktopApp ? 500.0 : 520.0, math.max(280.0, media.size.width - 24));
-    final noticeHeight = widget.message.length > 88 ? 86.0 : 74.0;
-    final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 8.0);
-    final foreground = dark ? Colors.white : const Color(0xFF10241D);
-    final muted = dark ? const Color(0xFFB8C9C3) : const Color(0xFF536A61);
-    final surface = dark ? const Color(0xFA0B211A) : const Color(0xFAF5FFF9);
+    final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 10.0);
+    final surface = Color.alphaBlend(
+      widget.color.withOpacity(dark ? .08 : .055),
+      dark ? scheme.surfaceContainerHigh : scheme.surface,
+    );
+
+    final card = Semantics(
+      liveRegion: true,
+      label: '$_semanticType. ${widget.title}. ${widget.message}',
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: maxWidth,
+          constraints: const BoxConstraints(minHeight: 68, maxHeight: 94),
+          padding: const EdgeInsets.fromLTRB(12, 10, 7, 10),
+          decoration: BoxDecoration(
+            color: surface.withOpacity(.985),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: widget.color.withOpacity(dark ? .28 : .22)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(dark ? .30 : .14),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: widget.color.withOpacity(.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: widget.color.withOpacity(.22)),
+                ),
+                child: Icon(_icon, color: widget.color, size: 21),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: IconButton(
+                  onPressed: _dismiss,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Dismiss',
+                  icon: Icon(Icons.close_rounded, color: scheme.onSurfaceVariant, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    Widget animatedCard = card;
+    if (!reduceMotion) {
+      final curved = CurvedAnimation(
+        parent: _controller,
+        curve: AppMotion.emphasized,
+        reverseCurve: AppMotion.emphasizedAccelerate,
+      );
+      animatedCard = FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, -.18), end: Offset.zero).animate(curved),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .985, end: 1).animate(curved),
+            child: card,
+          ),
+        ),
+      );
+    }
 
     return Material(
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              final raw = reduceMotion ? 1.0 : _controller.value;
-              final t = AppMotion.emphasized.transform(raw);
-              final opacity = Curves.easeOut.transform(t);
-              final y = ui.lerpDouble(-18, 0, t)!;
-              final scale = ui.lerpDouble(.975, 1, t)!;
+          Positioned(
+            top: topInset,
+            left: 12,
+            right: 12,
+            child: Center(child: animatedCard),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
-              return Positioned(
-                top: topInset + y,
-                left: 12,
-                right: 12,
-                child: Center(
-                  child: Opacity(
-                    opacity: opacity,
+void showSnack(BuildContext context, String message) {
+  final trimmedMessage = message.trim();
+  if (trimmedMessage.isEmpty) return;
+
+  final kind = _snackKindFor(trimmedMessage);
+  if (kind != _KoinlySnackKind.info && ScaffoldMessenger.maybeOf(context) != null) {
+    _showRichSnack(context, trimmedMessage, kind);
+    return;
+  }
+
+  ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) {
+    _showRichSnack(context, trimmedMessage, kind);
+    return;
+  }
+
+  _activeKoinlySnackEntry?.remove();
+  _activeKoinlySnackEntry = null;
+
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (overlayContext) => _KoinlyDynamicIslandSnack(
+      message: trimmedMessage,
+      onDismissed: () {
+        if (_activeKoinlySnackEntry == entry) {
+          _activeKoinlySnackEntry = null;
+          entry.remove();
+        }
+      },
+    ),
+  );
+
+  _activeKoinlySnackEntry = entry;
+  overlay.insert(entry);
+}
+
+class _KoinlyDynamicIslandSnack extends StatefulWidget {
+  const _KoinlyDynamicIslandSnack({required this.message, required this.onDismissed});
+
+  final String message;
+  final VoidCallback onDismissed;
+
+  @override
+  State<_KoinlyDynamicIslandSnack> createState() => _KoinlyDynamicIslandSnackState();
+}
+
+class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  Timer? _hideTimer;
+
+  bool get _isProblemMessage {
+    final lower = widget.message.toLowerCase();
+    return lower.contains('failed') ||
+        lower.contains('error') ||
+        lower.contains('invalid') ||
+        lower.contains('check') ||
+        lower.contains('missing');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+      reverseDuration: const Duration(milliseconds: 260),
+    );
+    _controller.forward();
+    _hideTimer = Timer(const Duration(milliseconds: 3400), () async {
+      if (!mounted) return;
+      await _controller.reverse();
+      if (mounted) widget.onDismissed();
+    });
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final maxWidth = math.min(kIsDesktopApp ? 520.0 : 560.0, math.max(280.0, media.size.width - 28));
+    final expandedHeight = widget.message.length > 96 ? 108.0 : widget.message.length > 54 ? 86.0 : 64.0;
+    final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 8.0);
+
+    return IgnorePointer(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Stack(
+          children: [
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                final raw = _controller.value;
+                final t = AppMotion.emphasized.transform(raw);
+                final contentT = (((t - .34) / .66).clamp(0.0, 1.0)).toDouble();
+                final width = ui.lerpDouble(92, maxWidth, t)!;
+                final height = ui.lerpDouble(38, expandedHeight, t)!;
+                final radius = ui.lerpDouble(999, 28, t)!;
+                final y = ui.lerpDouble(-52, 0, t)!;
+                final compactScale = ui.lerpDouble(.72, 1, t)!;
+                final borderOpacity = ui.lerpDouble(.16, .09, t)!;
+                final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
+                final iconColor = _isProblemMessage ? kSleekWarning : kSleekAccent;
+
+                return Positioned(
+                  top: topInset + y,
+                  left: 0,
+                  right: 0,
+                  child: Center(
                     child: Transform.scale(
-                      scale: scale,
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: maxWidth),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: BackdropFilter(
-                            filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                            child: Container(
-                              height: noticeHeight,
-                              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                              decoration: BoxDecoration(
-                                color: surface,
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: _accent.withOpacity(dark ? .28 : .22)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(dark ? .30 : .12),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
+                      scale: compactScale,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(radius),
+                        child: BackdropFilter(
+                          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 80),
+                            curve: Curves.linear,
+                            width: width,
+                            height: height,
+                            decoration: BoxDecoration(
+                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
+                              borderRadius: BorderRadius.circular(radius),
+                              border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(dark ? .42 : .24),
+                                  blurRadius: 34,
+                                  offset: const Offset(0, 16),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(radius),
+                              child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  Container(
-                                    width: 38,
-                                    height: 38,
-                                    decoration: BoxDecoration(
-                                      color: _accent.withOpacity(.17),
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(color: _accent.withOpacity(.26)),
-                                    ),
+                                  Align(
                                     alignment: Alignment.center,
-                                    child: Icon(_icon, color: _accent, size: 21),
-                                  ),
-                                  const SizedBox(width: 11),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.labelLarge?.copyWith(
-                                            color: foreground,
-                                            fontWeight: FontWeight.w900,
-                                            height: 1.0,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          widget.message,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.bodySmall?.copyWith(
-                                            color: muted,
-                                            fontWeight: FontWeight.w700,
-                                            height: 1.16,
-                                          ),
-                                        ),
-                                      ],
+                                    child: Container(
+                                      width: ui.lerpDouble(34, 0, contentT)!,
+                                      height: ui.lerpDouble(6, 0, contentT)!,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(ui.lerpDouble(.72, 0, contentT)!),
+                                        borderRadius: AppShapes.full,
+                                      ),
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  IconButton(
-                                    tooltip: 'Dismiss',
-                                    onPressed: _dismiss,
-                                    visualDensity: VisualDensity.compact,
-                                    constraints: const BoxConstraints.tightFor(width: 38, height: 38),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: foreground.withOpacity(dark ? .08 : .06),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                                  Opacity(
+                                    opacity: contentT,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: iconColor.withOpacity(.18),
+                                              borderRadius: BorderRadius.circular(18),
+                                              border: Border.all(color: iconColor.withOpacity(.22)),
+                                            ),
+                                            child: Icon(icon, color: iconColor, size: 21),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              widget.message,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w900,
+                                                height: 1.14,
+                                                letterSpacing: -.1,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    icon: Icon(Icons.close_rounded, size: 20, color: foreground),
                                   ),
                                 ],
                               ),
@@ -7405,11 +7590,11 @@ class _KoinlyTopFeedbackState extends State<_KoinlyTopFeedback> with SingleTicke
                       ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-        ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -10554,8 +10739,8 @@ class PlannedPurchaseTile extends StatelessWidget {
         groupTag: 'planned-purchases',
         closeOnScroll: true,
         endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: .60,
+          motion: const ScrollMotion(),
+          extentRatio: .66,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,
@@ -11092,8 +11277,8 @@ class TransactionTile extends StatelessWidget {
         startActionPane: tx.isLoanTransaction
             ? null
             : ActionPane(
-                motion: const BehindMotion(),
-                extentRatio: .24,
+                motion: const ScrollMotion(),
+                extentRatio: .28,
                 dragDismissible: false,
                 openThreshold: .34,
                 closeThreshold: .16,
@@ -11108,8 +11293,8 @@ class TransactionTile extends StatelessWidget {
                 ],
               ),
         endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: .42,
+          motion: const ScrollMotion(),
+          extentRatio: .48,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,

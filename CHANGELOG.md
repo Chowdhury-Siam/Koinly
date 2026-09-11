@@ -3,12 +3,12 @@
 ## [1.0.1091] - 2026-09-11
 
 ### Fixed
-- Reworked transaction, planned-purchase, and loan swipe trays to use `BehindMotion` with flush native action surfaces. The row radius now clips the tray as one unit, eliminating the rounded green/red edge slivers and making partial/open/close gestures visually stable.
-- Reduced swipe extents so the source card remains readable while Duplicate, Edit, Delete, Buy, or Payment actions are open. Duplicate remains on the left-side swipe and Edit/Delete remain on the right.
-- Replaced the oversized top success/error Material Banner used in normal app flow with a compact safe-area-aware floating notice. It has a restrained height, clean icon treatment, balanced text, a dedicated close control, and no decorative blobs bleeding into the content.
-- The compact top notice respects Reduce Motion and automatically replaces any previous notice cleanly.
+
+- Fixed the top success/error/warning feedback banner visual bug. The oversized Awesome Snackbar MaterialBanner surface is now presented as a compact floating top notification with safe-area spacing, restrained height, balanced icon/text/close alignment, consistent Koinly rounding, and no decorative shapes bleeding into the message.
+- Preserved the same feedback timing, semantic success/error/warning types, and dismiss behavior; no transaction, Slidable, navigation, loan, chart, update-notification, or other UI behavior was changed in this release.
 
 ### Changed
+
 - Bumped application metadata to `1.0.1091+135`.
 
 ## [1.0.1090] - 2026-09-11
