@@ -124,7 +124,7 @@ export async function profile(request: Request, env: Env, connect: () => Client 
     validateWorkerConfig(env);
     if (!env.ADMIN_USERNAME || normalizeUsername(env.ADMIN_USERNAME) !== env.ADMIN_USERNAME ||
         !/^pbkdf2\$100000\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/.test(env.ADMIN_PASSWORD_HASH ?? '')) {
-      throw new HttpError(503, 'Administrator login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD_HASH, then redeploy the Worker.');
+      throw new HttpError(503, 'Administrator login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD in GitHub repository secrets, then run Deploy Self-Hosted Sync Worker.');
     }
     if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
       throw new HttpError(400, 'Administrator access requires HTTPS.');

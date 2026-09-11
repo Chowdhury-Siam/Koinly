@@ -38,7 +38,7 @@ jobs:
       - name: Check self-hosted deployment secrets
         run: |
           missing=0
-          for secret_name in CLOUDFLARE_NAME CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TURSO_DATABASE_URL TURSO_AUTH_TOKEN JWT_SECRET; do
+          for secret_name in CLOUDFLARE_NAME CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TURSO_DATABASE_URL TURSO_AUTH_TOKEN JWT_SECRET ADMIN_USERNAME ADMIN_PASSWORD; do
             if [ -z "${!secret_name}" ]; then
               echo "Missing GitHub Actions value: ${secret_name}"
               missing=1
@@ -56,12 +56,7 @@ jobs:
             echo "JWT_SECRET must contain at least 32 characters."
             exit 1
           fi
-          if [ -n "$ADMIN_USERNAME$ADMIN_PASSWORD_HASH" ]; then
-            if ! [[ "$ADMIN_USERNAME" =~ ^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$ ]] || ! [[ "$ADMIN_PASSWORD_HASH" =~ ^pbkdf2\$100000\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$ ]]; then
-              echo "::error::Set both ADMIN_USERNAME and ADMIN_PASSWORD_HASH in GitHub repository secrets. Open the included admin-password.html in your browser to generate the protected password value."
-              exit 1
-            fi
-          fi
+          node --experimental-transform-types scripts/prepare-secrets.mjs --check
           if ! [[ "$TURSO_DATABASE_URL" =~ ^libsql://[^/?[:space:]]+\.turso\.io/?$ ]]; then
             echo "::error::TURSO_DATABASE_URL must be the libsql://...turso.io Database URL shown in your Turso database Overview > Connect section. Do not use a workers.dev URL or the app.turso.tech browser URL."
             exit 1
@@ -77,7 +72,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
       - name: Apply Turso schema
         run: npm run schema:apply
@@ -88,19 +83,12 @@ jobs:
       - name: Deploy self-hosted Worker
         run: |
           deploy_output="$RUNNER_TEMP/wrangler-output.jsonl"
-          trap 'rm -f .worker-secrets "$deploy_output"' EXIT
+          trap 'rm -f .worker-secrets.json "$deploy_output"' EXIT
           umask 077
-          {
-            printf 'TURSO_DATABASE_URL=%s\n' "$TURSO_DATABASE_URL"
-            printf 'TURSO_AUTH_TOKEN=%s\n' "$TURSO_AUTH_TOKEN"
-            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
-            if [ -n "$ADMIN_USERNAME" ]; then
-              printf 'ADMIN_USERNAME=%s\n' "$ADMIN_USERNAME"
-              printf 'ADMIN_PASSWORD_HASH=%s\n' "$ADMIN_PASSWORD_HASH"
-            fi
-          } > .worker-secrets
+          node --experimental-transform-types scripts/prepare-secrets.mjs > .worker-secrets.json
+          unset ADMIN_PASSWORD
           export WRANGLER_OUTPUT_FILE_PATH="$deploy_output"
-          npx wrangler deploy --config wrangler.self-hosted.toml --name "$CLOUDFLARE_NAME" --secrets-file .worker-secrets
+          npx wrangler deploy --config wrangler.self-hosted.toml --name "$CLOUDFLARE_NAME" --secrets-file .worker-secrets.json
 
           if [ ! -s "$deploy_output" ]; then
             echo "::error::Wrangler deployed the Worker but did not create its structured deployment report."
@@ -121,7 +109,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
       - name: Check self-hosted Worker health
         run: |

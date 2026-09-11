@@ -7,6 +7,7 @@ import { createHash, createHmac } from 'node:crypto';
 import test from 'node:test';
 import { createClient } from '@libsql/client';
 import worker, { profile, hashPassword, verifyPassword, requireAuth, login, refresh, register, recoverAccount, rotateRecoveryKey } from '../src/index.ts';
+import { deploymentSecrets } from '../scripts/prepare-secrets.mjs';
 
 const origin = 'https://worker.example';
 const schema = fs.readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
@@ -19,7 +20,7 @@ test('profile authentication and account lifecycle use the real database', async
   const db = connect();
   t.after(async () => { db.close(); await fs.promises.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
   await db.executeMultiple(schema);
-  const env = { TURSO_DATABASE_URL: databaseUrl, TURSO_AUTH_TOKEN: 'local-test', JWT_SECRET: 'x'.repeat(40), ADMIN_USERNAME: 'worker-admin', ADMIN_PASSWORD_HASH: await hashPassword(adminPassword) };
+  const env = await deploymentSecrets({ TURSO_DATABASE_URL: databaseUrl, TURSO_AUTH_TOKEN: 'local-test', JWT_SECRET: 'x'.repeat(40), ADMIN_USERNAME: 'worker-admin', ADMIN_PASSWORD: adminPassword });
   let cookie = '';
   const request = (route: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}) => new Request(origin + route, {
     method, headers: { origin, 'x-profile-request': '1', 'content-type': 'application/json', cookie, ...headers },

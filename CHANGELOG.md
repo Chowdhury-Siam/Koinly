@@ -4,15 +4,14 @@
 
 ### Added
 
-- Added a local browser page for generating the administrator password hash without terminal commands. Rewrote the administration guide around GitHub website setup and step-by-step dashboard actions, with command-line instructions kept in the optional developer reference.
-
+- Integrated `ADMIN_USERNAME` and `ADMIN_PASSWORD` into the main eight-value setup checklist and subsequent instructions. The GitHub deployment workflow hashes the administrator password automatically; no separate hash-generation page or command is needed.
 - Added the self-hosted Worker's authenticated `/profile` administration portal: account counts, paginated account lists, usernames, creation dates, Active/Invited status, manual account creation, password resets, and confirmed account deletion. The responsive dashboard follows Koinly's emerald colors, rounded cards, inputs, buttons, light/dark themes, transitions, and reduced-motion preferences.
-- Added separate `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` configuration, a hidden-input password-hash generator, and support for those secrets in the deployment workflow. Ordinary sync accounts cannot access the portal. The UI displays clear success, invalid-login, duplicate-username, and server/database error messages.
+- Added administrator login using `ADMIN_USERNAME` and `ADMIN_PASSWORD` repository secrets, with automatic salted hashing before deployment. Ordinary sync accounts cannot access the portal. The UI displays clear success, invalid-login, duplicate-username, and server/database error messages.
 - Added revocable, one-hour administrator sessions with secure HttpOnly cookies, same-origin protection, login throttling, private responses, and a restrictive content security policy. New account passwords use salted PBKDF2 hashes; password resets revoke access/refresh sessions and the previous recovery key. Account deletion removes related cloud records atomically.
 
 ### Deployment required
 
-- **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and configure both administrator secrets as documented in the README. Manual deployments must apply the latest schema before redeploying.
+- **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 ## [1.0.1093] - 2026-09-11

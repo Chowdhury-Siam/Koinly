@@ -13,7 +13,7 @@ When administrator credentials are configured, registration is managed exclusive
 
 ## GitHub Actions deployment values
 
-The self-hosted deployment workflow expects these exact GitHub names:
+Use the eight-value checklist in [Section 4.1 of the main README](../../README.md#41-the-eight-values-you-will-create). Add all values during the same setup:
 
 ```text
 CLOUDFLARE_NAME
@@ -22,21 +22,13 @@ CLOUDFLARE_ACCOUNT_ID
 TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 JWT_SECRET
+ADMIN_USERNAME
+ADMIN_PASSWORD
 ```
 
-`CLOUDFLARE_NAME` may be a GitHub repository variable or secret. The other five values should be repository secrets. `JWT_SECRET` must contain at least 32 characters.
+`CLOUDFLARE_NAME` may be a GitHub repository variable or secret. Save the other seven values as repository secrets. `JWT_SECRET` needs at least 32 characters. Choose a lowercase administrator username of 3–32 characters and a unique administrator password of 12–256 characters. Enter the password directly as `ADMIN_PASSWORD`; the deployment workflow creates the salted verifier automatically.
 
-To enable `/profile`, also add the repository secrets `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH`. Supply both together; generate the hash by opening the included **admin-password.html** file in your browser and selecting **Generate protected value**. The workflow validates and uploads them without printing them. They are optional for existing app-only sync deployments.
-
-At Worker runtime, Cloudflare receives only the secrets needed by the service:
-
-```text
-TURSO_DATABASE_URL
-TURSO_AUTH_TOKEN
-JWT_SECRET
-```
-
-The Worker also receives `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` when those administrator secrets are supplied. An administrator password is never stored in plaintext.
+The original administrator password stays in GitHub's encrypted secret storage. The workflow sends only its salted verifier to Cloudflare, alongside the administrator username and the existing Turso/JWT settings. It does not print the password or write it to the generated deployment file. Ordinary account passwords are hashed by the Worker before database storage.
 
 ## Administration portal
 
@@ -44,18 +36,16 @@ The Worker also receives `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` when those a
 
 Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
 
-The portal uses a dedicated administrator login. The recommended setup is through forms and buttons; no terminal or Node.js installation is required.
+Complete the main setup once, then use the website:
 
-1. Extract the updated project ZIP and open **cloud > worker > admin-password.html** in your browser.
-2. Enter and confirm a strong administrator password, then select **Generate protected value**. The page works locally without sending the password anywhere.
-3. In your GitHub repository, open **Settings > Secrets and variables > Actions**. Select **New repository secret** to add `ADMIN_USERNAME` with your chosen lowercase administrator username, and `ADMIN_PASSWORD_HASH` with the complete generated protected value.
-4. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch containing the updated project, start the workflow, and wait for success.
-5. Open your Worker's `/profile` address. Enter the administrator username and original password, then select **Sign in**.
-6. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. The account holder can use **Login** in Koinly afterward.
+1. Save all eight values from the main README's setup checklist in your GitHub repository.
+2. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch containing the updated project, start the workflow, and wait for success.
+3. Open your Worker's `/profile` address. Enter the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD`, then select **Sign in**.
+4. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. The account holder can use **Login** in Koinly afterward.
 
-Use **Change password** beside an account to reset its password. Use **Delete** to open the confirmation dialog; check the username before selecting **Delete account**. Use **Sign out** when finished.
+Use **Change password** beside an account to reset its password. Use **Delete** to open the confirmation dialog; check the username before selecting **Delete account**. Use **Sign out** when finished. There is no separate hash-generation or administrator setup page.
 
-For detailed steps, password changes, and troubleshooting, see [the main README's administration guide](../../README.md#worker-administration-portal). The [optional command-line setup](#optional-command-line-setup) below is for developers.
+For detailed steps, password changes, and troubleshooting, see [the main README's administration guide](../../README.md#worker-administration-portal).
 
 Account lists expose only IDs, usernames, creation/update timestamps, and status, with an exact total and 50 accounts per page. **Invited** means no device has signed in; **Active** means at least one has signed in historically, not that a session is online. The administrator is separate and excluded from this count.
 
@@ -64,13 +54,14 @@ Creation and reset accept 8–256 character account passwords. Share new passwor
 Security details:
 
 - Administrator authentication is required on the server for every account-management endpoint. An app bearer token cannot authorize portal access.
-- Random one-hour sessions use `__Host-koinly-admin` cookies with `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/`. Turso stores only keyed session hashes. Sign-out revokes the session; changing either administrator secret or `JWT_SECRET` invalidates portal sessions.
+- Random one-hour sessions use `__Host-koinly-admin` cookies with `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/`. Turso stores only keyed session hashes. Sign-out revokes the session; deployment refreshes the administrator verifier and invalidates portal sessions. Changing `JWT_SECRET` also invalidates them.
 - Write requests require an exact matching `Origin` and `X-Profile-Request: 1`. No portal route enables cross-origin requests. HTML/API responses are private and not cached; pages use a nonce-based CSP, frame protection, and no external assets.
 - Login is limited to eight attempts per Cloudflare-provided client IP and fifty globally per fifteen minutes, using atomic counters in Turso. Database errors fail closed and return a safe message.
 - New passwords use random 16-byte salts and PBKDF2-HMAC-SHA256 (100,000 iterations). This uses the existing verifier's format and [Cloudflare's native Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/), subject to the runtime's [PBKDF2 iteration limit](https://github.com/cloudflare/workerd/issues/1346). Legacy salted hashes remain usable; changing/resetting a password writes the new format. No password/hash is sent back in account API responses, embedded in HTML, or saved in browser storage.
 - Existing access tokens remain compatible until their account's session version changes. Every authenticated app request checks that version and account existence. Resets increment it and revoke refresh tokens; deletion removes the account.
 
-To recover administrator access, open **admin-password.html**, generate a protected value for your new password, update `ADMIN_PASSWORD_HASH` in GitHub's repository settings, and run **Deploy Self-Hosted Sync Worker** again. Do not change `JWT_SECRET` for a routine administrator password reset, because it also protects existing Worker credentials and encrypted data. Missing administrator settings show a setup message and block the portal without disabling ordinary app sync.
+To recover administrator access, edit `ADMIN_PASSWORD` under GitHub's **Settings > Secrets and variables > Actions**, save a new password, and run **Deploy Self-Hosted Sync Worker** again. Keep `JWT_SECRET` unchanged for a routine password reset because it also protects other credentials and encrypted Worker data. If administrator configuration is missing, the portal blocks access while ordinary app sync continues to work.
+
 
 ## Administration API
 
@@ -186,30 +177,8 @@ export TURSO_AUTH_TOKEN='your-token'
 npm run schema:apply
 ```
 
-Deploy from a terminal:
+For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. It applies the schema and prepares the administrator verifier automatically.
 
-```bash
-wrangler secret put TURSO_DATABASE_URL
-wrangler secret put TURSO_AUTH_TOKEN
-wrangler secret put JWT_SECRET
-npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
-```
+`schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` migrates older email-based accounts and adds the recovery-key and session-version columns.
 
-`schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` also migrates older `users.email` schemas to `users.username` and adds the recovery-key column.
-
-
-To generate an administrator password hash from a terminal instead of using the browser setup page:
-
-```bash
-npm run admin:password
-```
-
-To save administrator settings directly to an existing Worker:
-
-```bash
-npx wrangler secret put ADMIN_USERNAME --config wrangler.self-hosted.toml --name my-koinly-sync
-npx wrangler secret put ADMIN_PASSWORD_HASH --config wrangler.self-hosted.toml --name my-koinly-sync
-npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
-```
-
-For local development, put your generated hash and username alongside the other development secrets in the ignored `.dev.vars` file. Run `npm run dev`, then open `http://localhost:8787/profile`. Deployed Workers must use HTTPS.
+For advanced deployment integrations, `scripts/prepare-secrets.mjs` reads `ADMIN_PASSWORD` and the other required values from the process environment and emits a JSON secrets payload containing only the derived verifier. The GitHub workflow validates the inputs before applying the schema, writes this payload to a restricted temporary file, unsets the original password before calling Wrangler, and removes the file afterward. Do not invoke it in a way that displays the secrets payload in logs.

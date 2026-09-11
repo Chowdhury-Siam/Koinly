@@ -18,6 +18,7 @@ cloud/worker/dist/
 cloud/worker/build/
 cloud/worker/.env
 cloud/worker/.dev.vars
+cloud/worker/.worker-secrets.json
 
 outputs/
 package_phase*/

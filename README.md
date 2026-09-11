@@ -134,7 +134,7 @@ Before starting, you need:
 - a Cloudflare account; and
 - a fork of this repository.
 
-### 4.1 The six values you will create
+### 4.1 The eight values you will create
 
 You will add these names to **GitHub > Settings > Secrets and variables > Actions**:
 
@@ -146,6 +146,8 @@ You will add these names to **GitHub > Settings > Secrets and variables > Action
 | `TURSO_DATABASE_URL` | Your `libsql://...turso.io` database address | Turso |
 | `TURSO_AUTH_TOKEN` | Read/write access token for the Turso database | Turso |
 | `JWT_SECRET` | Long random secret used by your Worker | You generate it |
+| `ADMIN_USERNAME` | Administrator username for the `/profile` dashboard | You choose it |
+| `ADMIN_PASSWORD` | Administrator password for the `/profile` dashboard | You choose it |
 
 Keep the token/secret values private. Never post them in issues, screenshots, chats, logs, or source files.
 
@@ -163,13 +165,15 @@ Create a Turso database
         ↓
 Create a Cloudflare API token
         ↓
-Add 6 values to GitHub Actions
+Add 8 values to GitHub Actions
         ↓
 Run "Deploy Self-Hosted Sync Worker"
         ↓
 Copy the workers.dev URL
         ↓
-Paste it into Koinly
+Open /profile and create a sync account
+        ↓
+Sign in to that account in Koinly
 ```
 
 ## 5.1 Step 1 — Fork Koinly
@@ -229,16 +233,6 @@ In the current Turso dashboard shown in the setup recording:
 6. Save the token before closing the dialog because the full token is not shown again later.
 
 If Turso adds an authorization/permission choice in a future dashboard version, the Worker needs normal **read and write** database access. Do not enable **Block Reads** or **Block Writes** on the database.
-
-### 5.2.3 Optional Turso CLI method
-
-The web dashboard is recommended for most users. If you already use the Turso CLI, the equivalent commands are:
-
-```bash
-turso db create koinly
-turso db show koinly --url
-turso db tokens create koinly
-```
 
 ## 5.3 Step 3 — Create your Cloudflare account
 
@@ -302,13 +296,17 @@ https://my-koinly-sync.<your-workers-subdomain>.workers.dev
 
 The workflow prints the exact URL after deployment.
 
-## 5.7 Step 7 — Create `JWT_SECRET`
+## 5.7 Step 7 — Choose your security credentials
 
-`JWT_SECRET` protects Koinly login sessions and Worker-side encrypted secrets. It must be at least 32 characters long.
+Choose the remaining three values from the checklist in Section 4.1:
 
-Use your password manager's **Generate password** feature to create a random value of at least 32 characters. Save it securely, then copy it into the `JWT_SECRET` repository secret in the next step.
+- **`JWT_SECRET`:** Use your password manager to generate a random value of at least 32 characters. It protects login sessions and encrypted Worker data. Keep it unchanged when updating an existing Worker.
+- **`ADMIN_USERNAME`:** Choose a lowercase username such as `worker-admin`. Use 3–32 letters, numbers, dots, dashes, or underscores, starting and ending with a letter or number.
+- **`ADMIN_PASSWORD`:** Choose a strong, unique password of 12–256 characters and save it in your password manager. This is the password you will enter when signing in to `/profile`.
 
-Do not reuse your Koinly, administrator, GitHub, or Cloudflare password. Keep the same `JWT_SECRET` when updating an existing Worker.
+Enter these values directly in the GitHub secret fields in the next step. The deployment workflow hashes the administrator password automatically before sending its verifier to Cloudflare. You do not need to generate a hash or open a separate setup page. GitHub stores repository secrets encrypted; the password is not printed in deployment logs or stored in the account database.
+
+Use different values for `JWT_SECRET` and `ADMIN_PASSWORD`, and do not reuse your GitHub, Cloudflare, or Koinly account password.
 
 ## 5.8 Step 8 — Add the values to GitHub
 
@@ -326,6 +324,8 @@ CLOUDFLARE_ACCOUNT_ID
 TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 JWT_SECRET
+ADMIN_USERNAME
+ADMIN_PASSWORD
 ```
 
 For each one:
@@ -359,6 +359,8 @@ CLOUDFLARE_ACCOUNT_ID
 TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 JWT_SECRET
+ADMIN_USERNAME
+ADMIN_PASSWORD
 ```
 
 Spelling matters. The workflow expects these exact names.
@@ -377,7 +379,7 @@ The workflow automatically:
 2. checks the Worker source;
 3. runs Worker tests;
 4. applies the Koinly schema to your Turso database;
-5. uploads the Worker secrets securely;
+5. hashes `ADMIN_PASSWORD` automatically and uploads the Worker secrets securely;
 6. deploys the Cloudflare Worker; and
 7. checks that the deployed Worker is healthy.
 
@@ -396,7 +398,7 @@ You do **not** need to manually create Turso tables. The workflow applies the sc
 <a id="connect-koinly-to-your-worker"></a>
 # 6. Connect Koinly to your Worker
 
-After deployment, create and manage sync accounts from your Worker's [administration portal](#worker-administration-portal). If you have not enabled administrator access yet, complete the setup below first.
+After completing Sections 4 and 5, create and manage sync accounts from your Worker's [administration portal](#worker-administration-portal). Use the administrator credentials you already added to the main setup checklist.
 
 To connect an account to the app:
 
@@ -428,47 +430,13 @@ Both are merge-based. Matching records are reconciled rather than blindly duplic
 <a id="worker-administration-portal"></a>
 ### 6.3 Worker administration portal (`/profile`)
 
-Manage your Worker's accounts through a private web dashboard. The setup below uses your browser, the included password setup page, and GitHub's website. You do not need a terminal or a local Node.js installation.
+Manage your Worker's accounts through a private web dashboard. Administrator access is included in the normal setup in Sections 4 and 5; use the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you saved there.
 
-> **Existing Worker owners: redeployment is required.** After updating your project, run **Deploy Self-Hosted Sync Worker** again to install the `/profile` dashboard and account-management functionality. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
-
-#### 6.3.1 Prepare your administrator login
+> **Existing Worker owners: redeployment is required.** After updating your project, check that all eight values from Section 4.1 are saved on GitHub, then open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch with your updated files, start the workflow, and wait for success. This installs the `/profile` dashboard and account-management functionality. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
 
 The administrator login manages the Worker. Sync accounts are the accounts people use to sign in to Koinly; they are listed in the dashboard. Your administrator login is separate and is not included in that count.
 
-1. Download the updated Koinly project ZIP and extract it. On Windows, right-click the ZIP and select **Extract All**.
-2. Open the extracted project folder, then open **cloud > worker**.
-3. Double-click **admin-password.html**. If it does not open in a browser, right-click it, select **Open with**, and choose your browser. Open the downloaded file itself; GitHub's file preview displays its source instead of the setup form.
-4. In **Administrator password**, enter a strong, unique password of 12–256 characters. Enter it again in **Confirm password**.
-5. Select **Generate protected value**.
-6. Copy the complete value shown under **Protected password value**. This is a password hash: a protected representation of your password that the Worker uses to check sign-ins. The setup page generates it locally, makes no network requests, and clears the password fields afterward.
-7. Save your original password in your password manager. You will use that password to sign in to `/profile`.
-
-#### 6.3.2 Save the administrator settings on GitHub
-
-In your own Koinly repository, open **Settings > Secrets and variables > Actions**. Select the **Secrets** tab, then add the following two repository secrets:
-
-| Name | What to enter in the Secret field |
-| --- | --- |
-| `ADMIN_USERNAME` | Your chosen administrator username, for example `worker-admin` |
-| `ADMIN_PASSWORD_HASH` | The entire protected value copied from the setup page, starting with `pbkdf2$100000$` |
-
-For each row, select **New repository secret**, fill in **Name** and **Secret**, then select **Add secret**. Use lowercase letters, numbers, dots, dashes, or underscores for the administrator username; it must be 3–32 characters and start and end with a letter or number. These two values are additional to the six deployment values in Section 5. See [GitHub's instructions for repository secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
-
-Keep the original administrator password in your password manager. Paste only the generated protected value into `ADMIN_PASSWORD_HASH`.
-
-#### 6.3.3 Deploy using GitHub's website
-
-1. Make sure your repository contains the updated Koinly project files, including the new dashboard and `admin-password.html`.
-2. Open the **Actions** tab in your repository.
-3. Select **Deploy Self-Hosted Sync Worker**.
-4. Select **Run workflow**, choose the branch containing your updated files, then select **Run workflow** to start it.
-5. Open the new run and wait for it to finish successfully.
-6. Copy the **Worker URL** from the run summary.
-
-The workflow updates the database structure while preserving existing accounts and cloud data, saves the Worker settings, and deploys the dashboard. You do not need to edit database tables or run commands yourself. GitHub documents these controls in [Manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow?tool=webui).
-
-#### 6.3.4 Open the dashboard and sign in
+#### 6.3.1 Open the dashboard and sign in
 
 1. Open your Worker URL in a browser and add `/profile` to the end. For example:
 
@@ -477,12 +445,12 @@ The workflow updates the database structure while preserving existing accounts a
    ```
 
 2. Enter the administrator username saved in `ADMIN_USERNAME`.
-3. Enter the original administrator password you chose on the setup page.
+3. Enter the password you saved as `ADMIN_PASSWORD` in GitHub.
 4. Select **Sign in**.
 
 The dashboard shows the total number of registered accounts and a list of their usernames, creation dates, and status. **Invited** means an account has not signed in yet. **Active** means it has signed in at least once; it does not indicate that the person is online. Use **Previous** and **Next** to browse lists larger than 50 accounts.
 
-#### 6.3.5 Create an account from the website
+#### 6.3.2 Create an account from the website
 
 1. In the dashboard, select **+ Create account**.
 2. Enter the new account's **Username**.
@@ -493,7 +461,7 @@ The dashboard shows the total number of registered accounts and a list of their 
 
 Each account keeps its own synchronized data. Creating an account here does not grant administrator access.
 
-#### 6.3.6 Change or reset an account password
+#### 6.3.3 Change or reset an account password
 
 1. Find the account in the list and select **Change password**.
 2. Enter and confirm the new password.
@@ -502,7 +470,7 @@ Each account keeps its own synchronized data. Creating an account here does not 
 
 You do not need the old password. The reset signs out the account's devices and invalidates its previous recovery key. The account holder must sign in again and generate a replacement recovery key.
 
-#### 6.3.7 Delete an account
+#### 6.3.4 Delete an account
 
 1. Find the account and select **Delete**.
 2. Check the username in the confirmation dialog and read what will be removed.
@@ -511,22 +479,22 @@ You do not need the old password. The reset signs out the account's devices and 
 
 Deletion removes that account's synchronized cloud data, device and session records, and Telegram backup settings. It cannot be undone. Copies already saved on devices or sent to Telegram remain. Other accounts and the separate administrator login are preserved.
 
-#### 6.3.8 Change the administrator password
+#### 6.3.5 Change the administrator password
 
-1. Open the included **admin-password.html** setup page again.
-2. Enter and confirm your new administrator password, then select **Generate protected value**.
-3. On GitHub, open **Settings > Secrets and variables > Actions** and edit `ADMIN_PASSWORD_HASH`.
-4. Replace its value with the newly generated protected value and save the change.
-5. Run **Deploy Self-Hosted Sync Worker** again, then sign in to `/profile` with your new password.
+1. In your GitHub repository, open **Settings > Secrets and variables > Actions**.
+2. Find `ADMIN_PASSWORD` and select its edit button.
+3. Enter your new administrator password and save the change.
+4. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**, choose the updated branch, and start the workflow.
+5. When deployment succeeds, sign in to `/profile` with your new password.
 
-Changing either administrator setting signs out existing dashboard sessions. Keep `JWT_SECRET` unchanged; it also protects other Worker credentials and encrypted data.
+The workflow hashes the new password automatically. Deployments refresh the administrator verifier and sign out existing dashboard sessions. Keep `JWT_SECRET` unchanged; it also protects other Worker credentials and encrypted data.
 
-#### 6.3.9 Common messages
+#### 6.3.6 Common messages
 
 | Message or problem | What to do |
 | --- | --- |
-| Administrator login is not configured | Add both administrator secrets on GitHub, then run the deployment workflow again. |
-| Invalid administrator username or password | Check the username and use your original password, not the generated protected value. |
+| Administrator login is not configured | Check `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the main GitHub secrets checklist, then run the deployment workflow again. |
+| Invalid administrator username or password | Use the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD` on GitHub. |
 | Duplicate username | Choose a different username, or find the existing account and change its password. |
 | Session expired | Sign in again. Dashboard sessions last one hour. |
 | Too many attempts | Wait fifteen minutes before trying again. |
@@ -673,14 +641,7 @@ export TURSO_AUTH_TOKEN='your-token'
 npm run schema:apply
 ```
 
-Optional command-line deployment:
-
-```bash
-wrangler secret put TURSO_DATABASE_URL
-wrangler secret put TURSO_AUTH_TOKEN
-wrangler secret put JWT_SECRET
-npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
-```
+For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. This handles the administrator password securely and applies the required database updates.
 
 See [`cloud/worker/README.md`](cloud/worker/README.md) for Worker API and development details.
 
@@ -704,6 +665,8 @@ CLOUDFLARE_ACCOUNT_ID
 TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 JWT_SECRET
+ADMIN_USERNAME
+ADMIN_PASSWORD
 ```
 
 Also check that you did not accidentally add an extra space to a name or value.
