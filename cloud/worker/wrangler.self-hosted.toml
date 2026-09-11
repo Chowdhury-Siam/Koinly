@@ -5,6 +5,14 @@ main = "src/index.ts"
 compatibility_date = "2026-08-21"
 workers_dev = true
 
+[[durable_objects.bindings]]
+name = "SYNC_HUB"
+class_name = "SyncHub"
+
+[[migrations]]
+tag = "v1-realtime-sync-hub"
+new_sqlite_classes = ["SyncHub"]
+
 [vars]
 ACCESS_TOKEN_TTL_SECONDS = "900"
 REFRESH_TOKEN_TTL_SECONDS = "2592000"

@@ -11,6 +11,7 @@ type Env = {
   REFRESH_TOKEN_TTL_SECONDS?: string;
   MAX_SYNC_BATCH_SIZE?: string;
   MAX_SYNC_REPLACE_SIZE?: string;
+  SYNC_HUB?: DurableObjectNamespace;
 };
 
 type AuthContext = {
@@ -43,8 +44,58 @@ const requiredTables = [
   'admin_sessions',
 ];
 
+export class SyncHub {
+  constructor(private readonly state: DurableObjectState) {}
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/live') {
+      if ((request.headers.get('upgrade') ?? '').toLowerCase() !== 'websocket') {
+        return new Response('Expected WebSocket upgrade.', { status: 426 });
+      }
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      this.state.acceptWebSocket(server);
+      server.serializeAttachment({ deviceId: request.headers.get('x-koinly-device-id') ?? '' });
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/notify') {
+      const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
+      const sourceDeviceId = String(payload.deviceId ?? '');
+      const message = JSON.stringify({
+        type: 'sync-change',
+        deviceId: sourceDeviceId,
+        changedAt: Number(payload.changedAt ?? Date.now()),
+      });
+      for (const socket of this.state.getWebSockets()) {
+        const attachment = socket.deserializeAttachment() as { deviceId?: string } | null;
+        if (sourceDeviceId && attachment?.deviceId === sourceDeviceId) continue;
+        try { socket.send(message); } catch {}
+      }
+      return new Response(null, { status: 204 });
+    }
+
+    return new Response('Not found.', { status: 404 });
+  }
+
+  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
+    if (message === 'ping') {
+      try { socket.send('pong'); } catch {}
+    }
+  }
+
+  webSocketClose(socket: WebSocket, code: number, reason: string): void {
+    try { socket.close(code, reason); } catch {}
+  }
+
+  webSocketError(socket: WebSocket): void {
+    try { socket.close(1011, 'Realtime sync connection error.'); } catch {}
+  }
+}
+
 export default {
-  async fetch(request: Request, env: Env, _context: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     let db: Client | undefined;
 
@@ -67,9 +118,22 @@ export default {
       const auth = await requireAuth(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
-      if (request.method === 'POST' && url.pathname === '/v1/sync/initial') return await initialSync(request, db, auth);
-      if (request.method === 'POST' && url.pathname === '/v1/sync/push') return await push(request, env, db, auth);
-      if (request.method === 'POST' && url.pathname === '/v1/sync/replace') return await replaceAll(request, env, db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/sync/live') return await openLiveSync(request, env, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/sync/initial') {
+        const response = await initialSync(request, db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
+      if (request.method === 'POST' && url.pathname === '/v1/sync/push') {
+        const response = await push(request, env, db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
+      if (request.method === 'POST' && url.pathname === '/v1/sync/replace') {
+        const response = await replaceAll(request, env, db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
       if (request.method === 'GET' && url.pathname === '/v1/sync/pull') return await pull(url, env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/sync/status') return await status(db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/telegram-backup/settings') return await telegramBackupSettings(env, db, auth);
@@ -923,6 +987,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: false,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -940,6 +1005,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       databaseReachable: true,
       schemaReady,
       missingTables,
@@ -951,6 +1017,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -1175,6 +1242,34 @@ async function logout(request: Request, db: Client, auth: AuthContext): Promise<
     });
   }
   return json({ ok: true });
+}
+
+async function openLiveSync(request: Request, env: Env, auth: AuthContext): Promise<Response> {
+  if (!env.SYNC_HUB) throw new HttpError(503, 'Realtime sync is not configured on this Worker. Redeploy the latest Worker configuration.');
+  if ((request.headers.get('upgrade') ?? '').toLowerCase() !== 'websocket') {
+    throw new HttpError(426, 'Expected a WebSocket upgrade.');
+  }
+  const id = env.SYNC_HUB.idFromName(auth.userId);
+  const headers = new Headers(request.headers);
+  headers.set('x-koinly-device-id', auth.deviceId);
+  return env.SYNC_HUB.get(id).fetch(new Request('https://sync-hub/live', {
+    method: 'GET',
+    headers,
+  }));
+}
+
+async function notifySyncHub(env: Env, auth: AuthContext): Promise<void> {
+  if (!env.SYNC_HUB) return;
+  try {
+    const id = env.SYNC_HUB.idFromName(auth.userId);
+    await env.SYNC_HUB.get(id).fetch(new Request('https://sync-hub/notify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: auth.deviceId, changedAt: Date.now() }),
+    }));
+  } catch (error) {
+    console.warn('Realtime sync notification failed', databaseErrorMessage(error));
+  }
 }
 
 async function initialSync(request: Request, db: Client, auth: AuthContext): Promise<Response> {

@@ -1795,14 +1795,23 @@ class AppController extends ChangeNotifier {
   Timer? _cloudSyncDebounce;
   Timer? _cloudSyncRetryTimer;
   Timer? _cloudSyncAutoPullTimer;
+  Timer? _cloudSyncLiveReconnectTimer;
+  StreamSubscription<dynamic>? _cloudSyncLiveSubscription;
+  WebSocket? _cloudSyncLiveSocket;
   DateTime? _lastCloudAutoPullAt;
-  // Keep cross-device changes feeling near-real-time without hammering the
-  // self-hosted Worker. Local writes are pushed almost immediately and an
-  // open second device polls often enough to normally converge in ~1-3 s.
-  static const Duration _cloudSyncPushDebounce = Duration(milliseconds: 350);
-  static const Duration _cloudSyncAutoPullInterval = Duration(seconds: 3);
-  static const Duration _cloudSyncAutoPullMinimumGap = Duration(milliseconds: 2500);
-  static const Duration _cloudSyncRetryInterval = Duration(seconds: 10);
+  Duration? _cloudSyncActivePullInterval;
+  bool _cloudSyncLiveConnecting = false;
+  bool _cloudRealtimePullPending = false;
+  int _cloudSyncLiveReconnectAttempt = 0;
+  // Realtime notifications are delivered through the self-hosted Worker's
+  // WebSocket hub. Local writes are pushed after a very short debounce; the
+  // slower timer remains only as a resilience fallback when the live channel
+  // is unavailable or the platform temporarily suspends it.
+  static const Duration _cloudSyncPushDebounce = Duration(milliseconds: 120);
+  static const Duration _cloudSyncRealtimeFallbackInterval = Duration(seconds: 20);
+  static const Duration _cloudSyncDisconnectedFallbackInterval = Duration(seconds: 3);
+  static const Duration _cloudSyncAutoPullMinimumGap = Duration(milliseconds: 750);
+  static const Duration _cloudSyncRetryInterval = Duration(seconds: 5);
   String syncAccountUsername = '';
   String syncAccessToken = '';
   String syncRefreshToken = '';
@@ -3682,6 +3691,7 @@ class AppController extends ChangeNotifier {
     if (syncRefreshToken.isEmpty) throw StateError('Sign in to sync first.');
     final session = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).refresh(refreshToken: syncRefreshToken, deviceId: syncDeviceId, username: syncAccountUsername);
     await _saveSyncSession(session);
+    _restartCloudLiveConnection();
   }
 
   List<Map<String, dynamic>> _latestRemoteChangePerEntity(List<Map<String, dynamic>> changes) {
@@ -3875,6 +3885,10 @@ class AppController extends ChangeNotifier {
       if (!silent) {
         notifyListeners();
       }
+      if (_cloudRealtimePullPending && _hasConfiguredSyncTarget()) {
+        _cloudRealtimePullPending = false;
+        scheduleMicrotask(() => unawaited(syncCloudChangesIfIdle(force: true)));
+      }
     }
   }
 
@@ -4067,16 +4081,122 @@ class AppController extends ChangeNotifier {
       _stopCloudAutoPull();
       return;
     }
-    _cloudSyncAutoPullTimer ??= Timer.periodic(_cloudSyncAutoPullInterval, (_) {
-      unawaited(syncCloudChangesIfIdle());
-    });
+    // The timer is now a fallback rather than the primary propagation path.
+    // WebSocket notifications trigger forced pulls as soon as another device
+    // commits a change to the Worker.
+    _configureCloudFallbackPull(realtimeConnected: _cloudSyncLiveSocket != null);
+    _startCloudLiveConnection();
     unawaited(syncCloudChangesIfIdle(force: true));
   }
 
   void _stopCloudAutoPull() {
     _cloudSyncAutoPullTimer?.cancel();
     _cloudSyncAutoPullTimer = null;
+    _cloudSyncActivePullInterval = null;
     _lastCloudAutoPullAt = null;
+    _cloudRealtimePullPending = false;
+    _stopCloudLiveConnection();
+  }
+
+  void _configureCloudFallbackPull({required bool realtimeConnected}) {
+    if (!_hasConfiguredSyncTarget()) return;
+    final interval = realtimeConnected ? _cloudSyncRealtimeFallbackInterval : _cloudSyncDisconnectedFallbackInterval;
+    if (_cloudSyncAutoPullTimer != null && _cloudSyncActivePullInterval == interval) return;
+    _cloudSyncAutoPullTimer?.cancel();
+    _cloudSyncActivePullInterval = interval;
+    _cloudSyncAutoPullTimer = Timer.periodic(interval, (_) {
+      unawaited(syncCloudChangesIfIdle());
+    });
+  }
+
+  void _startCloudLiveConnection() {
+    if (!_hasConfiguredSyncTarget() || _cloudSyncLiveConnecting || _cloudSyncLiveSocket != null) return;
+    _cloudSyncLiveReconnectTimer?.cancel();
+    _cloudSyncLiveReconnectTimer = null;
+    unawaited(_connectCloudLive());
+  }
+
+  Future<void> _connectCloudLive() async {
+    if (!_hasConfiguredSyncTarget() || _cloudSyncLiveConnecting || _cloudSyncLiveSocket != null) return;
+    _cloudSyncLiveConnecting = true;
+    try {
+      final socket = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).connectLive(accessToken: syncAccessToken);
+      if (!_hasConfiguredSyncTarget()) {
+        await socket.close();
+        return;
+      }
+      _cloudSyncLiveSocket = socket;
+      _cloudSyncLiveReconnectAttempt = 0;
+      _configureCloudFallbackPull(realtimeConnected: true);
+      _cloudSyncLiveSubscription = socket.listen(
+        _handleCloudLiveMessage,
+        onDone: () => _handleCloudLiveClosed(socket),
+        onError: (_) => _handleCloudLiveClosed(socket),
+        cancelOnError: true,
+      );
+    } catch (_) {
+      _configureCloudFallbackPull(realtimeConnected: false);
+      _scheduleCloudLiveReconnect();
+    } finally {
+      _cloudSyncLiveConnecting = false;
+    }
+  }
+
+  void _handleCloudLiveMessage(dynamic rawMessage) {
+    if (rawMessage is! String) return;
+    try {
+      final decoded = jsonDecode(rawMessage);
+      if (decoded is! Map || decoded['type'] != 'sync-change') return;
+      final sourceDeviceId = decoded['deviceId']?.toString() ?? '';
+      if (sourceDeviceId.isNotEmpty && sourceDeviceId == syncDeviceId) return;
+      if (_syncInProgress || cloudSyncBusy || syncAuthBusy) {
+        _cloudRealtimePullPending = true;
+        return;
+      }
+      unawaited(syncCloudChangesIfIdle(force: true));
+    } catch (_) {
+      // Ignore malformed/non-sync WebSocket messages; the fallback pull timer
+      // still guarantees eventual convergence.
+    }
+  }
+
+  void _handleCloudLiveClosed(WebSocket socket) {
+    if (!identical(_cloudSyncLiveSocket, socket)) return;
+    _cloudSyncLiveSocket = null;
+    final subscription = _cloudSyncLiveSubscription;
+    _cloudSyncLiveSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    _configureCloudFallbackPull(realtimeConnected: false);
+    _scheduleCloudLiveReconnect();
+  }
+
+  void _scheduleCloudLiveReconnect() {
+    if (!_hasConfiguredSyncTarget() || _cloudSyncLiveReconnectTimer != null) return;
+    _cloudSyncLiveReconnectAttempt = math.min(_cloudSyncLiveReconnectAttempt + 1, 7);
+    final delaySeconds = math.min(1 << (_cloudSyncLiveReconnectAttempt - 1), 60);
+    _cloudSyncLiveReconnectTimer = Timer(Duration(seconds: delaySeconds), () {
+      _cloudSyncLiveReconnectTimer = null;
+      _startCloudLiveConnection();
+    });
+  }
+
+  void _restartCloudLiveConnection() {
+    if (!_hasConfiguredSyncTarget()) return;
+    _stopCloudLiveConnection(resetReconnectAttempt: false);
+    _startCloudLiveConnection();
+  }
+
+  void _stopCloudLiveConnection({bool resetReconnectAttempt = true}) {
+    _cloudSyncLiveReconnectTimer?.cancel();
+    _cloudSyncLiveReconnectTimer = null;
+    final subscription = _cloudSyncLiveSubscription;
+    _cloudSyncLiveSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
+    final socket = _cloudSyncLiveSocket;
+    _cloudSyncLiveSocket = null;
+    if (socket != null) unawaited(socket.close());
+    _cloudSyncLiveConnecting = false;
+    if (resetReconnectAttempt) _cloudSyncLiveReconnectAttempt = 0;
   }
 
   Future<void> syncCloudChangesIfIdle({bool force = false}) async {
@@ -4115,6 +4235,7 @@ class AppController extends ChangeNotifier {
     _cloudSyncDebounce?.cancel();
     _cloudSyncRetryTimer?.cancel();
     _cloudSyncAutoPullTimer?.cancel();
+    _stopCloudLiveConnection();
     _autoBackupTimer?.cancel();
     _updateDownloadClient?.close();
     updateService.close();

@@ -32,7 +32,7 @@ The original administrator password stays in GitHub's encrypted secret storage. 
 
 ## Administration portal
 
-**Existing self-hosted Worker owners MUST redeploy after updating to receive `/profile` and account management.** Apply the latest schema first (the GitHub workflow does this automatically). The migration adds `users.session_version` and `admin_sessions` while preserving existing users and cloud data. App updates alone do not update a deployed Worker.
+**Existing self-hosted Worker owners MUST redeploy after updating.** The current deployment provisions the `SyncHub` SQLite-backed Durable Object used for realtime WebSocket sync notifications, while preserving existing Turso data and accounts. Apply the latest schema first (the GitHub workflow does this automatically). App updates alone do not update a deployed Worker.
 
 Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
 
@@ -96,6 +96,7 @@ A ready Worker returns values equivalent to:
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
+  "realtimeSyncAvailable": true,
   "databaseReachable": true,
   "schemaReady": true,
   "missingTables": []
@@ -112,6 +113,7 @@ A ready Worker returns values equivalent to:
 - `POST /v1/auth/recovery-key` (authenticated; rotates the key)
 - `POST /v1/auth/refresh`
 - `POST /v1/auth/logout`
+- `GET /v1/sync/live` (authenticated WebSocket upgrade)
 - `POST /v1/sync/initial`
 - `POST /v1/sync/push`
 - `POST /v1/sync/replace`
@@ -124,7 +126,9 @@ A ready Worker returns values equivalent to:
 
 ## Sync model
 
-Clients write SQLite first and queue entity operations. The Worker stores the current entity state, deduplicates operation IDs, appends ordered changes for other devices, and enforces authenticated user scoping.
+Clients write SQLite first and queue entity operations. The Worker stores the current entity state, deduplicates operation IDs, appends ordered changes for other devices, and enforces authenticated user scoping. After a successful write, the Worker signals the signed-in user's `SyncHub` Durable Object. Connected devices receive a lightweight `sync-change` WebSocket event and immediately perform the ordinary versioned incremental pull. The sending device is excluded from its own notification.
+
+The WebSocket channel carries no finance payload; synchronized records still travel through the existing authenticated push/pull API. A periodic client pull remains as an eventual-consistency fallback if the live connection is unavailable.
 
 The Flutter client uses merge-first synchronization. Full local reconciliation can upload the complete device snapshot, while cloud restore merges the remote state into the device instead of deleting local-only data.
 

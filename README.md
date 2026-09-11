@@ -92,7 +92,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Username/password login from additional devices
 - Recovery-key password reset without requiring an email address
 - Offline-first local outbox
-- Incremental push/pull synchronization
+- Realtime foreground synchronization over an authenticated Cloudflare WebSocket hub, with incremental pull fallback
 - Merge-first **Restore cloud copy** and **Upload local changes**
 - Category deduplication across devices
 - Version-based conflict handling
@@ -427,12 +427,14 @@ While signed in, **Settings > Account & sync > Recovery key** creates a replacem
 
 Both are merge-based. Matching records are reconciled rather than blindly duplicated, while local-only and cloud-only records are preserved.
 
+When two signed-in devices are open, the Worker uses an authenticated Durable Object WebSocket hub to announce committed changes immediately. The receiving device then performs the normal versioned incremental pull. A slower periodic pull remains enabled as a fallback for dropped or suspended realtime connections.
+
 <a id="worker-administration-portal"></a>
 ### 6.3 Worker administration portal (`/profile`)
 
 Manage your Worker's accounts through a private web dashboard. Administrator access is included in the normal setup in Sections 4 and 5; use the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you saved there.
 
-> **Existing Worker owners: redeployment is required.** After updating your project, check that all eight values from Section 4.1 are saved on GitHub, then open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch with your updated files, start the workflow, and wait for success. This installs the `/profile` dashboard and account-management functionality. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
+> **Existing Worker owners: redeployment is required.** After updating your project, check that all eight values from Section 4.1 are saved on GitHub, then open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch with your updated files, start the workflow, and wait for success. The deployment now also provisions the `SyncHub` Durable Object used for realtime cross-device notifications. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
 
 The administrator login manages the Worker. Sync accounts are the accounts people use to sign in to Koinly; they are listed in the dashboard. Your administrator login is separate and is not included in that count.
 
@@ -592,14 +594,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1096
+  --dart-define=KOINLY_APP_VERSION=1.0.1097
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1096
+  --dart-define=KOINLY_APP_VERSION=1.0.1097
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.

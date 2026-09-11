@@ -18,6 +18,16 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+## [1.0.1097] - 2026-09-11
+
+### Changed
+- Replaced foreground 3-second-style sync polling with authenticated realtime WebSocket change notifications through a Cloudflare Durable Object hub.
+- Reduced local sync upload debounce to 120 ms so edits are committed and announced to other open devices almost immediately.
+- Uses a 20-second safety pull while realtime is connected, automatically falls back to 3-second polling if the live channel is unavailable, and pulls immediately after a realtime change event.
+- Reduced pending-sync retry cadence to 5 seconds and kept conflict/merge handling unchanged.
+- Added the `SYNC_HUB` Durable Object binding and deployment migration to the self-hosted Cloudflare Worker.
+- Bumped application metadata to `1.0.1097+141`.
+
 ## [1.0.1096] - 2026-09-11
 
 ### Changed

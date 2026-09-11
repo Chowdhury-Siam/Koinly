@@ -259,6 +259,29 @@ class KoinlySyncApi {
     return _get('/v1/sync/status', accessToken: accessToken);
   }
 
+  Future<WebSocket> connectLive({required String accessToken}) async {
+    final validatedBaseUrl = CloudSyncService.validateApiBaseUrl(baseUrl);
+    final httpUri = Uri.parse('$validatedBaseUrl/v1/sync/live');
+    final socketUri = httpUri.replace(scheme: httpUri.scheme == 'https' ? 'wss' : 'ws');
+    try {
+      final socket = await WebSocket.connect(
+        socketUri.toString(),
+        headers: {
+          'authorization': 'Bearer $accessToken',
+          'user-agent': 'Koinly realtime sync',
+        },
+      ).timeout(const Duration(seconds: 12));
+      socket.pingInterval = const Duration(seconds: 20);
+      return socket;
+    } on TimeoutException {
+      throw const CloudSyncException('Realtime sync connection timed out.');
+    } on SocketException {
+      throw const CloudSyncException('Realtime sync connection could not be established.');
+    } on WebSocketException catch (error) {
+      throw CloudSyncException('Realtime sync connection failed: ${error.message}');
+    }
+  }
+
   Future<TelegramBackupSettings> telegramBackupSettings({required String accessToken}) async {
     final data = await _get('/v1/telegram-backup/settings', accessToken: accessToken);
     return TelegramBackupSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
