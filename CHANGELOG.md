@@ -4,6 +4,8 @@
 
 ### Added
 
+- Added a local browser page for generating the administrator password hash without terminal commands. Rewrote the administration guide around GitHub website setup and step-by-step dashboard actions, with command-line instructions kept in the optional developer reference.
+
 - Added the self-hosted Worker's authenticated `/profile` administration portal: account counts, paginated account lists, usernames, creation dates, Active/Invited status, manual account creation, password resets, and confirmed account deletion. The responsive dashboard follows Koinly's emerald colors, rounded cards, inputs, buttons, light/dark themes, transitions, and reduced-motion preferences.
 - Added separate `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` configuration, a hidden-input password-hash generator, and support for those secrets in the deployment workflow. Ordinary sync accounts cannot access the portal. The UI displays clear success, invalid-login, duplicate-username, and server/database error messages.
 - Added revocable, one-hour administrator sessions with secure HttpOnly cookies, same-origin protection, login throttling, private responses, and a restrictive content security policy. New account passwords use salted PBKDF2 hashes; password resets revoke access/refresh sessions and the previous recovery key. Account deletion removes related cloud records atomically.

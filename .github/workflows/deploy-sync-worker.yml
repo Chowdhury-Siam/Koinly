@@ -58,7 +58,7 @@ jobs:
           fi
           if [ -n "$ADMIN_USERNAME$ADMIN_PASSWORD_HASH" ]; then
             if ! [[ "$ADMIN_USERNAME" =~ ^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$ ]] || ! [[ "$ADMIN_PASSWORD_HASH" =~ ^pbkdf2\$100000\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$ ]]; then
-              echo "::error::Set both ADMIN_USERNAME and ADMIN_PASSWORD_HASH. Generate the hash using npm run admin:password."
+              echo "::error::Set both ADMIN_USERNAME and ADMIN_PASSWORD_HASH in GitHub repository secrets. Open the included admin-password.html in your browser to generate the protected password value."
               exit 1
             fi
           fi

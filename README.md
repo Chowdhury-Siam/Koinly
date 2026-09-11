@@ -20,7 +20,7 @@
 
 | Start here | Self-hosted sync | App & backups | Developers |
 | --- | --- | --- | --- |
-| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[7. Telegram backups](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
+| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[Administration portal](#worker-administration-portal)<br>[7. Telegram backups](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
 
 ---
 
@@ -88,7 +88,7 @@ You do not need to write Cloudflare or Turso code yourself.
 ### 2.4 Self-hosted sync
 
 - Your own Cloudflare Worker and Turso database
-- One owner account per Worker
+- A private administration portal for creating and managing sync accounts
 - Username/password login from additional devices
 - Recovery-key password reset without requiring an email address
 - Offline-first local outbox
@@ -306,23 +306,9 @@ The workflow prints the exact URL after deployment.
 
 `JWT_SECRET` protects Koinly login sessions and Worker-side encrypted secrets. It must be at least 32 characters long.
 
-### 5.7.1 Easy option
+Use your password manager's **Generate password** feature to create a random value of at least 32 characters. Save it securely, then copy it into the `JWT_SECRET` repository secret in the next step.
 
-Use a password manager's secure password generator and create a long random value.
-
-### 5.7.2 OpenSSL option
-
-```bash
-openssl rand -hex 32
-```
-
-Add the generated value to GitHub as:
-
-```text
-JWT_SECRET
-```
-
-Do not reuse your Koinly password, GitHub password, Cloudflare password, or Turso token as `JWT_SECRET`.
+Do not reuse your Koinly, administrator, GitHub, or Cloudflare password. Keep the same `JWT_SECRET` when updating an existing Worker.
 
 ## 5.8 Step 8 — Add the values to GitHub
 
@@ -410,19 +396,19 @@ You do **not** need to manually create Turso tables. The workflow applies the sc
 <a id="connect-koinly-to-your-worker"></a>
 # 6. Connect Koinly to your Worker
 
-After deployment:
+After deployment, create and manage sync accounts from your Worker's [administration portal](#worker-administration-portal). If you have not enabled administrator access yet, complete the setup below first.
+
+To connect an account to the app:
 
 1. Open Koinly.
 2. Go to **Settings > Account & sync**.
-3. Paste your Cloudflare Worker URL.
-4. Tap **Validate and use Worker**.
-5. If this is a new Worker, choose **Create account** and enter a **username** and password. Koinly no longer asks for an email address.
-6. After the account is created, Koinly shows a one-time **recovery key**. Copy it and store it somewhere safe before closing the popup.
-7. On another device, use the same Worker URL and choose **Login** with the same username and password.
+3. Paste your Cloudflare Worker URL, without `/profile` at the end.
+4. Select **Validate and use Worker**.
+5. Select **Login** and enter the username and password created in the administration portal.
+6. While signed in, open **Recovery key**, generate a key, and save it securely.
+7. Repeat these steps on other devices using the same account.
 
-A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
-
-If you enable the administrator portal below, public registration closes and the administrator creates any new accounts from `/profile`. Existing accounts can still sign in normally.
+Existing accounts can continue to sign in with their current credentials. For Workers without administrator settings, the app still allows the first account to be created through **Create account** and displays a recovery key during registration. Once administrator settings are configured, use `/profile` to create accounts.
 
 ### 6.1 Forgot your password?
 
@@ -439,46 +425,117 @@ While signed in, **Settings > Account & sync > Recovery key** creates a replacem
 
 Both are merge-based. Matching records are reconciled rather than blindly duplicated, while local-only and cloud-only records are preserved.
 
+<a id="worker-administration-portal"></a>
 ### 6.3 Worker administration portal (`/profile`)
 
-**Existing self-hosted Worker owners must redeploy their Worker after updating. Updating the Koinly app alone does not install the new `/profile` dashboard or account-management functionality.** Run the latest **Deploy Self-Hosted Sync Worker** workflow; it applies the non-destructive database migration and deploys the new Worker code. Keep the same Worker name, database, and `JWT_SECRET`.
+Manage your Worker's accounts through a private web dashboard. The setup below uses your browser, the included password setup page, and GitHub's website. You do not need a terminal or a local Node.js installation.
 
-Open your Worker URL with `/profile` appended, for example:
+> **Existing Worker owners: redeployment is required.** After updating your project, run **Deploy Self-Hosted Sync Worker** again to install the `/profile` dashboard and account-management functionality. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
 
-```text
-https://koinly-test.sweets-4c4.workers.dev/profile
-```
+#### 6.3.1 Prepare your administrator login
 
-The portal has its own administrator login. This release adds that configuration; an ordinary Koinly account (including the first owner account) does **not** automatically receive administrator access. The administrator identity is separate from registered sync accounts and is not included in the account count.
+The administrator login manages the Worker. Sync accounts are the accounts people use to sign in to Koinly; they are listed in the dashboard. Your administrator login is separate and is not included in that count.
 
-To enable it:
+1. Download the updated Koinly project ZIP and extract it. On Windows, right-click the ZIP and select **Extract All**.
+2. Open the extracted project folder, then open **cloud > worker**.
+3. Double-click **admin-password.html**. If it does not open in a browser, right-click it, select **Open with**, and choose your browser. Open the downloaded file itself; GitHub's file preview displays its source instead of the setup form.
+4. In **Administrator password**, enter a strong, unique password of 12–256 characters. Enter it again in **Confirm password**.
+5. Select **Generate protected value**.
+6. Copy the complete value shown under **Protected password value**. This is a password hash: a protected representation of your password that the Worker uses to check sign-ins. The setup page generates it locally, makes no network requests, and clears the password fields afterward.
+7. Save your original password in your password manager. You will use that password to sign in to `/profile`.
 
-1. Download your updated repository and open a terminal in `cloud/worker`. Install Node.js 22.13 or newer if needed.
-2. Run `npm ci`, then `npm run admin:password`. Enter and confirm a strong, unique administrator password of 12–256 characters. Input is hidden; the command prints only a salted password hash.
-3. In your fork's **Settings > Secrets and variables > Actions**, add **both** repository secrets:
+#### 6.3.2 Save the administrator settings on GitHub
 
-   | Secret | Value |
-   | --- | --- |
-   | `ADMIN_USERNAME` | Your chosen lowercase username, 3–32 characters; use letters, numbers, dots, dashes, or underscores and start/end with a letter or number |
-   | `ADMIN_PASSWORD_HASH` | The complete `pbkdf2$100000$...$...` value printed by the command |
+In your own Koinly repository, open **Settings > Secrets and variables > Actions**. Select the **Secrets** tab, then add the following two repository secrets:
 
-4. Run **Deploy Self-Hosted Sync Worker** again. These are two additional values alongside the six required deployment values above.
-5. Open `/profile` over HTTPS and enter `ADMIN_USERNAME` and the **original password you chose**, not the hash. Use **Sign out** when finished.
+| Name | What to enter in the Secret field |
+| --- | --- |
+| `ADMIN_USERNAME` | Your chosen administrator username, for example `worker-admin` |
+| `ADMIN_PASSWORD_HASH` | The entire protected value copied from the setup page, starting with `pbkdf2$100000$` |
 
-Never save the plain administrator password as a Worker secret or in source code. If the administrator secrets are absent, the portal displays a setup message and rejects administrative requests; existing app login and sync continue to work. For manual deployment, apply the schema, set `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` using `npx wrangler secret put <NAME> --config wrangler.self-hosted.toml --name <your-worker-name>`, and redeploy to that same Worker.
+For each row, select **New repository secret**, fill in **Name** and **Secret**, then select **Add secret**. Use lowercase letters, numbers, dots, dashes, or underscores for the administrator username; it must be 3–32 characters and start and end with a letter or number. These two values are additional to the six deployment values in Section 5. See [GitHub's instructions for repository secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
 
-The dashboard supports desktop and mobile browsers, light/dark/system appearance, keyboard-accessible dialogs, and reduced motion. It lets you:
+Keep the original administrator password in your password manager. Paste only the generated protected value into `ADMIN_PASSWORD_HASH`.
 
-- See the total registered account count and browse accounts in pages of 50, with usernames, creation dates, and status. **Invited** means the account has never signed in; **Active** means it has signed in at least once, not that it is currently online.
-- Create an account with an 8–256 character password. Share that password privately with the intended account holder; they use **Login** in Koinly with your Worker URL. They can generate their own recovery key after signing in.
-- Change/reset a password without knowing or displaying the old one. Resetting immediately invalidates existing access and refresh sessions and the old recovery key. The account holder must sign in again and create a replacement recovery key.
-- Delete an account after confirming the dialog. Deletion permanently removes its synchronized cloud data, device/session records, and Telegram backup settings. Copies already on devices or sent to Telegram remain. Other accounts and the separate administrator login are preserved.
+#### 6.3.3 Deploy using GitHub's website
 
-The server checks administrator authentication on every account request. Sessions expire after one hour, use Secure/HttpOnly/SameSite cookies, and are revoked on sign-out. Requests that change accounts must come from the same portal origin. Login attempts are limited to eight per IP and fifty across the Worker per fifteen minutes. Passwords are salted hashes and are never returned by account APIs; the browser does not store credentials or session tokens in local storage.
+1. Make sure your repository contains the updated Koinly project files, including the new dashboard and `admin-password.html`.
+2. Open the **Actions** tab in your repository.
+3. Select **Deploy Self-Hosted Sync Worker**.
+4. Select **Run workflow**, choose the branch containing your updated files, then select **Run workflow** to start it.
+5. Open the new run and wait for it to finish successfully.
+6. Copy the **Worker URL** from the run summary.
 
-To reset the **administrator** password, run `npm run admin:password` again, replace the `ADMIN_PASSWORD_HASH` repository secret, and redeploy. Changing either administrator secret invalidates previous portal sessions. Do not rotate `JWT_SECRET` just to reset the administrator password: it also protects existing Worker data and credentials.
+The workflow updates the database structure while preserving existing accounts and cloud data, saves the Worker settings, and deploys the dashboard. You do not need to edit database tables or run commands yourself. GitHub documents these controls in [Manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow?tool=webui).
 
-Invalid logins, duplicate usernames, failed requests, and database errors produce visible messages. A **Server/database error** usually requires checking Turso credentials/connectivity and rerunning the current schema/deployment workflow. A `/profile` 404 from an older Worker means the new code has not been deployed. See [Worker documentation](cloud/worker/README.md) for the API and manual setup details.
+#### 6.3.4 Open the dashboard and sign in
+
+1. Open your Worker URL in a browser and add `/profile` to the end. For example:
+
+   ```text
+   https://koinly-test.sweets-4c4.workers.dev/profile
+   ```
+
+2. Enter the administrator username saved in `ADMIN_USERNAME`.
+3. Enter the original administrator password you chose on the setup page.
+4. Select **Sign in**.
+
+The dashboard shows the total number of registered accounts and a list of their usernames, creation dates, and status. **Invited** means an account has not signed in yet. **Active** means it has signed in at least once; it does not indicate that the person is online. Use **Previous** and **Next** to browse lists larger than 50 accounts.
+
+#### 6.3.5 Create an account from the website
+
+1. In the dashboard, select **+ Create account**.
+2. Enter the new account's **Username**.
+3. Enter an 8–256 character password in **New password** and repeat it in **Confirm password**.
+4. Select **Create account**.
+5. Wait for **Account created**. The account will appear in the list.
+6. Give the account holder the Worker URL, username, and password through a private channel. They can now select **Login** in Koinly and create their own recovery key after signing in.
+
+Each account keeps its own synchronized data. Creating an account here does not grant administrator access.
+
+#### 6.3.6 Change or reset an account password
+
+1. Find the account in the list and select **Change password**.
+2. Enter and confirm the new password.
+3. Select **Change password** and wait for the success message.
+4. Give the account holder their new password privately.
+
+You do not need the old password. The reset signs out the account's devices and invalidates its previous recovery key. The account holder must sign in again and generate a replacement recovery key.
+
+#### 6.3.7 Delete an account
+
+1. Find the account and select **Delete**.
+2. Check the username in the confirmation dialog and read what will be removed.
+3. Select **Cancel** to keep the account, or **Delete account** to remove it permanently.
+4. Wait for **Account deleted** and confirm that the account is no longer listed.
+
+Deletion removes that account's synchronized cloud data, device and session records, and Telegram backup settings. It cannot be undone. Copies already saved on devices or sent to Telegram remain. Other accounts and the separate administrator login are preserved.
+
+#### 6.3.8 Change the administrator password
+
+1. Open the included **admin-password.html** setup page again.
+2. Enter and confirm your new administrator password, then select **Generate protected value**.
+3. On GitHub, open **Settings > Secrets and variables > Actions** and edit `ADMIN_PASSWORD_HASH`.
+4. Replace its value with the newly generated protected value and save the change.
+5. Run **Deploy Self-Hosted Sync Worker** again, then sign in to `/profile` with your new password.
+
+Changing either administrator setting signs out existing dashboard sessions. Keep `JWT_SECRET` unchanged; it also protects other Worker credentials and encrypted data.
+
+#### 6.3.9 Common messages
+
+| Message or problem | What to do |
+| --- | --- |
+| Administrator login is not configured | Add both administrator secrets on GitHub, then run the deployment workflow again. |
+| Invalid administrator username or password | Check the username and use your original password, not the generated protected value. |
+| Duplicate username | Choose a different username, or find the existing account and change its password. |
+| Session expired | Sign in again. Dashboard sessions last one hour. |
+| Too many attempts | Wait fifteen minutes before trying again. |
+| Server/database error | Open the latest GitHub Actions run and check the failed step. Confirm the Turso settings in Section 5, then rerun the deployment workflow. |
+| `/profile` is not found | Confirm that the workflow deployed the updated files to the Worker URL you are opening. |
+
+Use **Sign out** when finished. The dashboard supports desktop and mobile browsers, light/dark/system appearance, and reduced-motion preferences. Account information and administrative actions require a signed-in administrator; passwords are stored as hashes and are never displayed in account lists.
+
+Optional command-line instructions and implementation details are in the [Worker developer reference](cloud/worker/README.md#optional-command-line-setup).
 
 ---
 
@@ -597,7 +654,9 @@ Windows code signing is optional. Without a signing certificate, the installer c
 ---
 
 <a id="worker-development"></a>
-## 11. Worker development
+## 11. Worker development (optional)
+
+This section is for developers. For normal setup and account management, use the website steps in Sections 5 and 6.
 
 ```bash
 cd cloud/worker
@@ -614,7 +673,7 @@ export TURSO_AUTH_TOKEN='your-token'
 npm run schema:apply
 ```
 
-Manual deployment:
+Optional command-line deployment:
 
 ```bash
 wrangler secret put TURSO_DATABASE_URL
@@ -696,7 +755,7 @@ Confirm that `TURSO_DATABASE_URL` is your Turso `libsql://...turso.io` URL, not 
 
 ## 12.6 I cannot create another Koinly account
 
-That is expected after the first owner account is created on a Worker. Use **Login** with the original username on additional devices.
+To create a separate account, sign in to your Worker's `/profile` website and select **+ Create account**. If administrator access is not configured, follow [the portal setup guide](#worker-administration-portal). To use an existing account on another device, choose **Login** in Koinly with that account's username and password.
 
 ## 12.7 Telegram backup is empty or fails
 

@@ -26,7 +26,7 @@ JWT_SECRET
 
 `CLOUDFLARE_NAME` may be a GitHub repository variable or secret. The other five values should be repository secrets. `JWT_SECRET` must contain at least 32 characters.
 
-To enable `/profile`, also add the repository secrets `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH`. Supply both together; generate the hash with `npm run admin:password`. The workflow validates and uploads them without printing them. They are optional for existing app-only sync deployments.
+To enable `/profile`, also add the repository secrets `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH`. Supply both together; generate the hash by opening the included **admin-password.html** file in your browser and selecting **Generate protected value**. The workflow validates and uploads them without printing them. They are optional for existing app-only sync deployments.
 
 At Worker runtime, Cloudflare receives only the secrets needed by the service:
 
@@ -38,54 +38,24 @@ JWT_SECRET
 
 The Worker also receives `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` when those administrator secrets are supplied. An administrator password is never stored in plaintext.
 
-## Local development
-
-Use Node.js 22.13 or newer.
-
-```bash
-npm ci
-npm run typecheck
-npm test
-```
-
-Apply the schema:
-
-```bash
-export TURSO_DATABASE_URL='libsql://your-db.turso.io'
-export TURSO_AUTH_TOKEN='your-token'
-npm run schema:apply
-```
-
-Deploy manually:
-
-```bash
-wrangler secret put TURSO_DATABASE_URL
-wrangler secret put TURSO_AUTH_TOKEN
-wrangler secret put JWT_SECRET
-npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
-```
-
-`schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` also migrates older `users.email` schemas to `users.username` and adds the recovery-key column.
-
 ## Administration portal
 
 **Existing self-hosted Worker owners MUST redeploy after updating to receive `/profile` and account management.** Apply the latest schema first (the GitHub workflow does this automatically). The migration adds `users.session_version` and `admin_sessions` while preserving existing users and cloud data. App updates alone do not update a deployed Worker.
 
 Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
 
-The portal uses a dedicated administrator identity, not a regular sync account. Setup:
+The portal uses a dedicated administrator login. The recommended setup is through forms and buttons; no terminal or Node.js installation is required.
 
-1. Run `npm run admin:password` in an interactive terminal. Choose and confirm a unique 12–256 character password. Input is hidden and only the salted hash is printed.
-2. Choose a lowercase `ADMIN_USERNAME` (3–32 characters, letters/numbers/dots/dashes/underscores, starting and ending with a letter or number).
-3. Add both repository secrets and redeploy using the GitHub workflow, or upload them manually to the **same Worker name**:
+1. Extract the updated project ZIP and open **cloud > worker > admin-password.html** in your browser.
+2. Enter and confirm a strong administrator password, then select **Generate protected value**. The page works locally without sending the password anywhere.
+3. In your GitHub repository, open **Settings > Secrets and variables > Actions**. Select **New repository secret** to add `ADMIN_USERNAME` with your chosen lowercase administrator username, and `ADMIN_PASSWORD_HASH` with the complete generated protected value.
+4. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch containing the updated project, start the workflow, and wait for success.
+5. Open your Worker's `/profile` address. Enter the administrator username and original password, then select **Sign in**.
+6. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. The account holder can use **Login** in Koinly afterward.
 
-   ```bash
-   npx wrangler secret put ADMIN_USERNAME --config wrangler.self-hosted.toml --name my-koinly-sync
-   npx wrangler secret put ADMIN_PASSWORD_HASH --config wrangler.self-hosted.toml --name my-koinly-sync
-   npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
-   ```
+Use **Change password** beside an account to reset its password. Use **Delete** to open the confirmation dialog; check the username before selecting **Delete account**. Use **Sign out** when finished.
 
-4. Sign in at `/profile` using the configured username and original password, not its hash. For local development only, put the username and generated hash alongside your other development secrets in the ignored `.dev.vars` file and run `npm run dev`; use `http://localhost:8787/profile`. Use HTTPS for deployed Workers.
+For detailed steps, password changes, and troubleshooting, see [the main README's administration guide](../../README.md#worker-administration-portal). The [optional command-line setup](#optional-command-line-setup) below is for developers.
 
 Account lists expose only IDs, usernames, creation/update timestamps, and status, with an exact total and 50 accounts per page. **Invited** means no device has signed in; **Active** means at least one has signed in historically, not that a session is online. The administrator is separate and excluded from this count.
 
@@ -100,7 +70,7 @@ Security details:
 - New passwords use random 16-byte salts and PBKDF2-HMAC-SHA256 (100,000 iterations). This uses the existing verifier's format and [Cloudflare's native Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/), subject to the runtime's [PBKDF2 iteration limit](https://github.com/cloudflare/workerd/issues/1346). Legacy salted hashes remain usable; changing/resetting a password writes the new format. No password/hash is sent back in account API responses, embedded in HTML, or saved in browser storage.
 - Existing access tokens remain compatible until their account's session version changes. Every authenticated app request checks that version and account existence. Resets increment it and revoke refresh tokens; deletion removes the account.
 
-To recover administrator access, regenerate `ADMIN_PASSWORD_HASH`, replace the saved deployment secret, and redeploy. Do not change `JWT_SECRET` for a routine administrator password reset, because it also protects existing Worker credentials and encrypted data. Missing administrator settings show a setup message and block the portal without disabling ordinary app sync.
+To recover administrator access, open **admin-password.html**, generate a protected value for your new password, update `ADMIN_PASSWORD_HASH` in GitHub's repository settings, and run **Deploy Self-Hosted Sync Worker** again. Do not change `JWT_SECRET` for a routine administrator password reset, because it also protects existing Worker credentials and encrypted data. Missing administrator settings show a setup message and block the portal without disabling ordinary app sync.
 
 ## Administration API
 
@@ -185,17 +155,11 @@ For channels, the bot must be an administrator with permission to post messages.
 
 ### Schema is not ready
 
-Run:
-
-```bash
-npm run schema:apply
-```
-
-Then redeploy or recheck `/health`.
+On GitHub, open **Actions > Deploy Self-Hosted Sync Worker > Run workflow** and run it with the latest project files. The workflow applies the database update automatically. When it succeeds, reopen `/health` in your browser.
 
 ### Registration is closed
 
-This is expected after the first owner account exists. Use **Login** from additional devices. If an older deployment used email login, redeploy the latest Worker first; the schema migration converts the old email local-part into the username.
+Create additional accounts from the `/profile` website using **+ Create account**. For another device using an existing account, select **Login** in Koinly. If an older deployment used email login, redeploy the latest Worker first; the schema migration converts the old email local-part into the username.
 
 
 ### Password recovery
@@ -203,3 +167,49 @@ This is expected after the first owner account exists. Use **Login** from additi
 New registrations return a recovery key once. The Worker stores only a keyed hash of that recovery key. `POST /v1/auth/recover` accepts the username, recovery key, and new password, rate-limits failed attempts, revokes existing refresh tokens after a successful reset, and issues a new session.
 
 An authenticated user can call `POST /v1/auth/recovery-key` to rotate the recovery key. Only the newly generated key remains valid.
+
+## Optional command-line setup
+
+Use Node.js 22.13 or newer.
+
+```bash
+npm ci
+npm run typecheck
+npm test
+```
+
+Apply the schema:
+
+```bash
+export TURSO_DATABASE_URL='libsql://your-db.turso.io'
+export TURSO_AUTH_TOKEN='your-token'
+npm run schema:apply
+```
+
+Deploy from a terminal:
+
+```bash
+wrangler secret put TURSO_DATABASE_URL
+wrangler secret put TURSO_AUTH_TOKEN
+wrangler secret put JWT_SECRET
+npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
+```
+
+`schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` also migrates older `users.email` schemas to `users.username` and adds the recovery-key column.
+
+
+To generate an administrator password hash from a terminal instead of using the browser setup page:
+
+```bash
+npm run admin:password
+```
+
+To save administrator settings directly to an existing Worker:
+
+```bash
+npx wrangler secret put ADMIN_USERNAME --config wrangler.self-hosted.toml --name my-koinly-sync
+npx wrangler secret put ADMIN_PASSWORD_HASH --config wrangler.self-hosted.toml --name my-koinly-sync
+npx wrangler deploy --config wrangler.self-hosted.toml --name my-koinly-sync
+```
+
+For local development, put your generated hash and username alongside the other development secrets in the ignored `.dev.vars` file. Run `npm run dev`, then open `http://localhost:8787/profile`. Deployed Workers must use HTTPS.
