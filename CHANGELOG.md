@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.1089] - 2026-09-11
+
+### Fixed
+
+- Reworked Slidable quick actions to eliminate the Android partial-swipe artifacts shown in the latest recording. Transaction, planned-purchase, and loan rows now use native `SlidableAction` surfaces with `ScrollMotion`, stable snap thresholds, and clipping to the row radius.
+- Removed opposite-side action panes from the same row. All quick actions now live in one trailing pane, preventing cross-direction drags from leaving red/green edge remnants or briefly collapsing an action into a thin strip.
+- Disabled drag-dismiss behavior for quick-action panes so an overswipe cannot push a card beyond its intended action extent.
+- Kept per-list auto-close behavior so opening one row cleanly closes any previously open row.
+
+### Changed
+
+- Regular transactions reveal **Copy, Edit, Delete** together; loan-generated transactions reveal **Edit, Delete**. Planned purchases reveal **Buy, Edit, Delete**, and active loans reveal **Payment, Edit**.
+- Bumped application metadata to `1.0.1089+133`.
+
 ## [1.0.1088] - 2026-09-11
 
 ### Fixed

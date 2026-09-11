@@ -5949,43 +5949,21 @@ class _KoinlySlidableAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomSlidableAction(
+    // Use flutter_slidable's native action surface rather than nesting a
+    // rounded box inside a transparent CustomSlidableAction. The nested
+    // version could be clipped to a colored sliver while a drag was between
+    // snap points. Native actions keep a stable action width throughout the
+    // gesture and clip their own content correctly.
+    return SlidableAction(
       autoClose: true,
-      backgroundColor: Colors.transparent,
-      padding: const EdgeInsets.all(4),
       onPressed: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: foregroundColor.withOpacity(.10)),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 20, color: foregroundColor),
-                  const SizedBox(height: 3),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: TextStyle(
-                      color: foregroundColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+      backgroundColor: backgroundColor,
+      foregroundColor: foregroundColor,
+      icon: icon,
+      label: label,
+      spacing: 4,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      borderRadius: BorderRadius.circular(18),
     );
   }
 }
@@ -10396,44 +10374,45 @@ class PlannedPurchaseTile extends StatelessWidget {
       ),
     );
 
-    return Slidable(
-      key: ValueKey('planned-${item.id}'),
-      groupTag: 'planned-purchases',
-      closeOnScroll: true,
-      startActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: .26,
-        children: [
-          _KoinlySlidableAction(
-            onPressed: (_) => showPurchasePlannedItemDialog(context, item),
-            backgroundColor: kSleekAccent,
-            foregroundColor: Colors.white,
-            icon: Icons.shopping_cart_checkout_rounded,
-            label: 'Buy',
-          ),
-        ],
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Slidable(
+        key: ValueKey('planned-${item.id}'),
+        groupTag: 'planned-purchases',
+        closeOnScroll: true,
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: .66,
+          dragDismissible: false,
+          openThreshold: .34,
+          closeThreshold: .16,
+          children: [
+            _KoinlySlidableAction(
+              onPressed: (_) => showPurchasePlannedItemDialog(context, item),
+              backgroundColor: kSleekAccent,
+              foregroundColor: Colors.white,
+              icon: Icons.shopping_cart_checkout_rounded,
+              label: 'Buy',
+            ),
+            _KoinlySlidableAction(
+              onPressed: (_) => showPlannedPurchaseEditor(context, item: item),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              icon: Icons.edit_rounded,
+              label: 'Edit',
+            ),
+            _KoinlySlidableAction(
+              onPressed: (_) => _confirmDeletePlannedPurchase(context, item),
+              backgroundColor: kSleekExpense,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete',
+            ),
+          ],
+        ),
+        child: card,
       ),
-      endActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: .48,
-        children: [
-          _KoinlySlidableAction(
-            onPressed: (_) => showPlannedPurchaseEditor(context, item: item),
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            icon: Icons.edit_rounded,
-            label: 'Edit',
-          ),
-          _KoinlySlidableAction(
-            onPressed: (_) => _confirmDeletePlannedPurchase(context, item),
-            backgroundColor: kSleekExpense,
-            foregroundColor: Colors.white,
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete',
-          ),
-        ],
-      ),
-      child: card,
     );
   }
 }
@@ -10931,46 +10910,51 @@ class TransactionTile extends StatelessWidget {
       ),
     );
 
-    return Slidable(
-      key: ValueKey('transaction-${tx.id}'),
-      groupTag: 'transactions',
-      closeOnScroll: true,
-      startActionPane: tx.isLoanTransaction
-          ? null
-          : ActionPane(
-              motion: const BehindMotion(),
-              extentRatio: .26,
-              children: [
-                _KoinlySlidableAction(
-                  onPressed: (_) => _duplicateTransaction(context, tx),
-                  backgroundColor: kSleekAccent,
-                  foregroundColor: Colors.white,
-                  icon: Icons.copy_rounded,
-                  label: 'Copy',
-                ),
-              ],
+    final actionCount = tx.isLoanTransaction ? 2 : 3;
+    final actionExtent = actionCount == 3 ? .66 : .48;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Slidable(
+        key: ValueKey('transaction-${tx.id}'),
+        groupTag: 'transactions',
+        closeOnScroll: true,
+        // Keep all quick actions on one side. Switching directly between a
+        // start and end pane during the same gesture could leave one-frame
+        // red/green remnants at the row edge on Android.
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: actionExtent,
+          dragDismissible: false,
+          openThreshold: .34,
+          closeThreshold: .16,
+          children: [
+            if (!tx.isLoanTransaction)
+              _KoinlySlidableAction(
+                onPressed: (_) => _duplicateTransaction(context, tx),
+                backgroundColor: kSleekAccent,
+                foregroundColor: Colors.white,
+                icon: Icons.copy_rounded,
+                label: 'Copy',
+              ),
+            _KoinlySlidableAction(
+              onPressed: (_) => showTransactionEditor(context, transaction: tx),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              icon: Icons.edit_rounded,
+              label: 'Edit',
             ),
-      endActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: .48,
-        children: [
-          _KoinlySlidableAction(
-            onPressed: (_) => showTransactionEditor(context, transaction: tx),
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            icon: Icons.edit_rounded,
-            label: 'Edit',
-          ),
-          _KoinlySlidableAction(
-            onPressed: (_) => _confirmDeleteTransaction(context, tx),
-            backgroundColor: kSleekExpense,
-            foregroundColor: Colors.white,
-            icon: Icons.delete_outline_rounded,
-            label: 'Delete',
-          ),
-        ],
+            _KoinlySlidableAction(
+              onPressed: (_) => _confirmDeleteTransaction(context, tx),
+              backgroundColor: kSleekExpense,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete',
+            ),
+          ],
+        ),
+        child: tile,
       ),
-      child: tile,
     );
   }
 }

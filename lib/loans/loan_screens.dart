@@ -273,39 +273,40 @@ class _LoanTile extends StatelessWidget {
       ),
     );
 
-    return Slidable(
-      key: ValueKey('loan-${loan.id}'),
-      groupTag: 'loans',
-      closeOnScroll: true,
-      startActionPane: loan.status == LoanStatus.active && !computation.settled
-          ? ActionPane(
-              motion: const BehindMotion(),
-              extentRatio: .28,
-              children: [
-                _KoinlySlidableAction(
-                  onPressed: (_) => showLoanPaymentSheet(context, loan: loan),
-                  backgroundColor: kSleekAccent,
-                  foregroundColor: Colors.white,
-                  icon: Icons.add_card_rounded,
-                  label: 'Payment',
-                ),
-              ],
-            )
-          : null,
-      endActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: .28,
-        children: [
-          _KoinlySlidableAction(
-            onPressed: (_) => showLoanEditorSheet(context, loan: loan),
-            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            icon: Icons.edit_rounded,
-            label: 'Edit',
-          ),
-        ],
+    final canRecordPayment = loan.status == LoanStatus.active && !computation.settled;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Slidable(
+        key: ValueKey('loan-${loan.id}'),
+        groupTag: 'loans',
+        closeOnScroll: true,
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: canRecordPayment ? .50 : .28,
+          dragDismissible: false,
+          openThreshold: .34,
+          closeThreshold: .16,
+          children: [
+            if (canRecordPayment)
+              _KoinlySlidableAction(
+                onPressed: (_) => showLoanPaymentSheet(context, loan: loan),
+                backgroundColor: kSleekAccent,
+                foregroundColor: Colors.white,
+                icon: Icons.add_card_rounded,
+                label: 'Payment',
+              ),
+            _KoinlySlidableAction(
+              onPressed: (_) => showLoanEditorSheet(context, loan: loan),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              icon: Icons.edit_rounded,
+              label: 'Edit',
+            ),
+          ],
+        ),
+        child: tile,
       ),
-      child: tile,
     );
   }
 }

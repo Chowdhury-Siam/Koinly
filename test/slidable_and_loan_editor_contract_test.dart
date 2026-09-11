@@ -12,8 +12,16 @@ void main() {
     expect(app, contains("groupTag: 'planned-purchases'"));
     expect(loans, contains("groupTag: 'loans'"));
     expect(app, contains('class _KoinlySlidableAction extends StatelessWidget'));
-    expect(app, contains('motion: const BehindMotion()'));
-    expect(loans, contains('motion: const BehindMotion()'));
+    expect(app, contains('motion: const ScrollMotion()'));
+    expect(app, contains('dragDismissible: false'));
+    expect(app, contains('return SlidableAction('));
+    expect(app, contains('clipBehavior: Clip.antiAlias'));
+    expect(loans, contains('motion: const ScrollMotion()'));
+    expect(loans, contains('dragDismissible: false'));
+    expect(app, isNot(contains('startActionPane:')));
+    expect(loans, isNot(contains('startActionPane:')));
+    expect(app, isNot(contains('BehindMotion()')));
+    expect(loans, isNot(contains('BehindMotion()')));
 
     final switcherIndex = app.indexOf('child: AnimatedSwitcher(');
     final keyedStageIndex = app.indexOf('key: ValueKey<int>(tabIndex)', switcherIndex);
