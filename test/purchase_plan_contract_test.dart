@@ -69,6 +69,11 @@ void main() {
   test('transaction tab exposes Plan and purchase flow creates a current-time expense', () {
     final source = File('lib/main.dart').readAsStringSync();
 
+    expect(source, contains("key: ValueKey('planned-\${item.id}')"));
+    expect(source, contains('startActionPane: ActionPane('));
+    expect(source, contains("label: 'Buy'"));
+    expect(source, contains('extentRatio: .28'));
+
     expect(source, contains("heroTag: 'transactionPlanFab'"));
     expect(source, contains("label: const Text('Plan')"));
     expect(source, contains("child: const Text('Buy')"));

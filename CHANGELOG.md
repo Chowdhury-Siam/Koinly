@@ -9,10 +9,20 @@
 - Added administrator login using `ADMIN_USERNAME` and `ADMIN_PASSWORD` repository secrets, with automatic salted hashing before deployment. Ordinary sync accounts cannot access the portal. The UI displays clear success, invalid-login, duplicate-username, and server/database error messages.
 - Added revocable, one-hour administrator sessions with secure HttpOnly cookies, same-origin protection, login throttling, private responses, and a restrictive content security policy. New account passwords use salted PBKDF2 hashes; password resets revoke access/refresh sessions and the previous recovery key. Account deletion removes related cloud records atomically.
 
+### Fixed
+
+- Android Photos and videos permission is no longer requested during startup or onboarding. Koinly now asks for media access only after the user explicitly taps the profile-photo/media upload action.
+
 ### Deployment required
 
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
+
+## [1.0.1094] - 2026-09-11
+
+### Changed
+
+- Bumped application metadata to `1.0.1094+138` so the latest onboarding/profile-media UI build reports the correct new app version.
 
 ## [1.0.1093] - 2026-09-11
 

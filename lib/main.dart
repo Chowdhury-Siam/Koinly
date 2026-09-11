@@ -1730,7 +1730,6 @@ class AppController extends ChangeNotifier {
   String profileMediaOriginalName = '';
   ProfileMediaKind? profileMediaKind;
   int profileMediaSizeBytes = 0;
-  bool profileMediaPermissionPrompted = false;
   double profileMediaScale = 1.0;
   double profileMediaAlignmentX = 0.0;
   double profileMediaAlignmentY = 0.0;
@@ -1904,7 +1903,6 @@ class AppController extends ChangeNotifier {
     profileMediaPath = await prefs.getString('profileMediaPath', '');
     profileMediaOriginalName = await prefs.getString('profileMediaOriginalName', '');
     profileMediaSizeBytes = await prefs.getInt('profileMediaSizeBytes', 0);
-    profileMediaPermissionPrompted = await prefs.getBool('profileMediaPermissionPrompted', false);
     profileMediaScale = double.tryParse(await prefs.getString('profileMediaScale', '1.0')) ?? 1.0;
     profileMediaAlignmentX = double.tryParse(await prefs.getString('profileMediaAlignmentX', '0.0')) ?? 0.0;
     profileMediaAlignmentY = double.tryParse(await prefs.getString('profileMediaAlignmentY', '0.0')) ?? 0.0;
@@ -4422,12 +4420,6 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> markProfileMediaPermissionPrompted() async {
-    if (profileMediaPermissionPrompted) return;
-    profileMediaPermissionPrompted = true;
-    await prefs.setBool('profileMediaPermissionPrompted', true);
-  }
-
   Future<void> dismissFinancialHealthSummary(String key) async {
     if (!dismissedFinancialHealthSummaryKeys.contains(key)) {
       dismissedFinancialHealthSummaryKeys = [...dismissedFinancialHealthSummaryKeys, key];
@@ -5007,11 +4999,9 @@ class StartupGate extends StatelessWidget {
       (state) => (loading: state.loading, setupCompleted: state.setupCompletedForCurrentPlatform),
     );
     if (gate.loading) return const SplashScreen();
-    return ProfileMediaPermissionGate(
-      child: gate.setupCompleted
-          ? const FinancialHealthReviewGate(child: MainShell())
-          : const OnboardingScreen(),
-    );
+    return gate.setupCompleted
+        ? const FinancialHealthReviewGate(child: MainShell())
+        : const OnboardingScreen();
   }
 }
 
@@ -5537,15 +5527,14 @@ class _SideRailNavigation extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
                   children: [
-                    Container(
+                    SizedBox(
                       width: 46,
                       height: 46,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(17),
-                        gradient: LinearGradient(colors: [kSleekAccent, scheme.tertiary]),
-                        boxShadow: [BoxShadow(color: kSleekAccent.withOpacity(.20), blurRadius: 18, offset: const Offset(0, 8))],
+                      child: Image.asset(
+                        'assets/icons/koinly_mark.png',
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
                       ),
-                      child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white),
                     ),
                     if (extended) ...[
                       const SizedBox(width: 12),
@@ -8161,9 +8150,9 @@ class _OnboardingPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 112, borderRadius: 36),
+          const KoinlyAppIcon(size: 112),
           const SizedBox(height: 28),
-          Icon(icon, size: 34, color: Theme.of(context).colorScheme.primary),
+          _AnimatedOnboardingGlyph(icon: icon),
           const SizedBox(height: 16),
           Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 16),
@@ -8173,6 +8162,99 @@ class _OnboardingPane extends StatelessWidget {
             actions!,
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AnimatedOnboardingGlyph extends StatefulWidget {
+  const _AnimatedOnboardingGlyph({required this.icon});
+
+  final IconData icon;
+
+  @override
+  State<_AnimatedOnboardingGlyph> createState() => _AnimatedOnboardingGlyphState();
+}
+
+class _AnimatedOnboardingGlyphState extends State<_AnimatedOnboardingGlyph>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+
+    Widget buildIcon(double glowStrength) => Icon(
+          widget.icon,
+          size: 34,
+          color: color,
+          shadows: [
+            Shadow(
+              color: color.withOpacity(glowStrength),
+              blurRadius: 16,
+            ),
+          ],
+        );
+
+    if (reduceMotion) {
+      return SizedBox(
+        width: 48,
+        height: 48,
+        child: Center(child: buildIcon(.18)),
+      );
+    }
+
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final phase = _controller.value * math.pi * 2;
+          final lift = math.sin(phase) * -3.2;
+          final turn = math.sin(phase + .7) * .025;
+          final scale = 1 + (math.sin(phase + math.pi / 2) * .035);
+          final glow = .18 + ((math.sin(phase) + 1) * .07);
+
+          return Transform.translate(
+            offset: Offset(0, lift),
+            child: Transform.rotate(
+              angle: turn,
+              child: Transform.scale(
+                scale: scale,
+                child: Center(child: buildIcon(glow)),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -8188,7 +8270,7 @@ class CurrencySetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const KoinlyAppIcon(size: 82),
           const SizedBox(height: 24),
           Text('Currency setup', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
@@ -8212,7 +8294,7 @@ class AccountSetupPane extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const KoinlyAppIcon(size: 82, borderRadius: 26),
+          const KoinlyAppIcon(size: 82),
           const SizedBox(height: 24),
           Text('Set up your accounts', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 12),
@@ -10716,17 +10798,6 @@ class PlannedPurchaseTile extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: 'Edit item',
-            onPressed: () => showPlannedPurchaseEditor(context, item: item),
-            icon: const Icon(Icons.edit_rounded),
-          ),
-          const SizedBox(width: 4),
-          FilledButton(
-            onPressed: () => showPurchasePlannedItemDialog(context, item),
-            child: const Text('Buy'),
-          ),
         ],
       ),
     );
@@ -10738,12 +10809,12 @@ class PlannedPurchaseTile extends StatelessWidget {
         key: ValueKey('planned-${item.id}'),
         groupTag: 'planned-purchases',
         closeOnScroll: true,
-        endActionPane: ActionPane(
+        startActionPane: ActionPane(
           motion: const ScrollMotion(),
-          extentRatio: .66,
+          extentRatio: .28,
           dragDismissible: false,
-          openThreshold: .34,
-          closeThreshold: .16,
+          openThreshold: .14,
+          closeThreshold: .08,
           children: [
             _KoinlySlidableAction(
               onPressed: (_) => showPurchasePlannedItemDialog(context, item),
@@ -10752,6 +10823,15 @@ class PlannedPurchaseTile extends StatelessWidget {
               icon: Icons.shopping_cart_checkout_rounded,
               label: 'Buy',
             ),
+          ],
+        ),
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: .48,
+          dragDismissible: false,
+          openThreshold: .34,
+          closeThreshold: .16,
+          children: [
             _KoinlySlidableAction(
               onPressed: (_) => showPlannedPurchaseEditor(context, item: item),
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,

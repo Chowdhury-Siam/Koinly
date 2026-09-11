@@ -2,51 +2,16 @@ part of '../main.dart';
 
 enum _ProfilePermissionAction { retry, openSettings, cancel }
 
-class ProfileMediaPermissionGate extends StatefulWidget {
-  const ProfileMediaPermissionGate({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  State<ProfileMediaPermissionGate> createState() => _ProfileMediaPermissionGateState();
-}
-
-class _ProfileMediaPermissionGateState extends State<ProfileMediaPermissionGate> {
-  bool _scheduled = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_scheduled || !Platform.isAndroid) return;
-    final state = context.read<AppController>();
-    if (state.profileMediaPermissionPrompted) return;
-    _scheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await state.markProfileMediaPermissionPrompted();
-      if (!mounted) return;
-      await requestProfileMediaPermissionFlow(
-        context,
-        state,
-        requestImmediately: true,
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
-}
-
 Future<bool> requestProfileMediaPermissionFlow(
   BuildContext context,
-  AppController state, {
-  bool requestImmediately = false,
-}) async {
-  var permission = requestImmediately
-      ? await state.profileMediaPermissions.request()
-      : await state.profileMediaPermissions.check();
+  AppController state,
+) async {
+  // Do not request Android media access during startup or onboarding. This
+  // flow is entered only after the user explicitly taps the profile-media
+  // upload action.
+  var permission = await state.profileMediaPermissions.check();
 
-  if (!requestImmediately && permission == ProfileMediaPermissionState.denied) {
+  if (permission == ProfileMediaPermissionState.denied) {
     permission = await state.profileMediaPermissions.request();
   }
 
