@@ -7,6 +7,7 @@
     "deploy": "wrangler deploy --config wrangler.self-hosted.toml",
     "dev": "wrangler dev --config wrangler.self-hosted.toml",
     "schema:apply": "node scripts/apply-schema.mjs",
+    "admin:password": "node --experimental-transform-types scripts/admin-password.mjs",
     "test": "node --test --experimental-transform-types test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -67,6 +67,10 @@ async function migrateLegacyUsersTable(client) {
     await client.execute('ALTER TABLE users ADD COLUMN recovery_key_hash TEXT');
     console.log('Added recovery-key support to existing users table.');
   }
+  if (!columns.has('session_version')) {
+    await client.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
+    console.log('Added account session revocation support.');
+  }
 }
 
 async function userColumns(client) {

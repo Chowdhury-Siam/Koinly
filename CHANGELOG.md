@@ -1,20 +1,17 @@
 # Changelog
 
-## [Unreleased] - Web profile account management
+## [Unreleased]
 
 ### Added
 
-- Added `/profile`, a responsive username/password sign-in and owner account-management website matching the app's green theme, rounded surfaces, and light/dark appearance.
-- The first Worker account can view account totals, create additional login accounts, change passwords, and permanently delete additional accounts and their cloud data. Owner deletion is blocked and each login retains separate finance data.
-- Added confirmation for administrative changes, one-time recovery keys for new accounts, login/action rate limits, private page/API responses, and credential validation that invalidates sessions after password changes or deletion.
-- Added executable account-management and page checks alongside the existing Worker tests.
+- Added the self-hosted Worker's authenticated `/profile` administration portal: account counts, paginated account lists, usernames, creation dates, Active/Invited status, manual account creation, password resets, and confirmed account deletion. The responsive dashboard follows Koinly's emerald colors, rounded cards, inputs, buttons, light/dark themes, transitions, and reduced-motion preferences.
+- Added separate `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` configuration, a hidden-input password-hash generator, and support for those secrets in the deployment workflow. Ordinary sync accounts cannot access the portal. The UI displays clear success, invalid-login, duplicate-username, and server/database error messages.
+- Added revocable, one-hour administrator sessions with secure HttpOnly cookies, same-origin protection, login throttling, private responses, and a restrictive content security policy. New account passwords use salted PBKDF2 hashes; password resets revoke access/refresh sessions and the previous recovery key. Account deletion removes related cloud records atomically.
 
 ### Deployment required
 
-- **REDEPLOY THE CLOUDFLARE WORKER** using the existing self-hosted deployment workflow or manual Wrangler deployment. An app update alone will not enable `/profile`.
-- Keep the existing Worker name, database, and secrets. No new schema migration is required for an up-to-date deployment. Open `https://koinly-test.sweets-4c4.workers.dev/profile` after redeployment and sign in with the first owner's existing username and password.
-- Existing app sessions may refresh or require a one-time sign-in after deployment. The browser session ends on reload or access-token expiry.
-
+- **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and configure both administrator secrets as documented in the README. Manual deployments must apply the latest schema before redeploying.
+- Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 ## [1.0.1093] - 2026-09-11
 

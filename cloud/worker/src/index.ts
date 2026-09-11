@@ -1,10 +1,12 @@
 import { createClient, type Client } from '@libsql/client/web';
-import { profileResponse } from './profile.ts';
+import { profilePage } from './profile.ts';
 
 type Env = {
   TURSO_DATABASE_URL: string;
   TURSO_AUTH_TOKEN: string;
   JWT_SECRET: string;
+  ADMIN_USERNAME?: string;
+  ADMIN_PASSWORD_HASH?: string;
   ACCESS_TOKEN_TTL_SECONDS?: string;
   REFRESH_TOKEN_TTL_SECONDS?: string;
   MAX_SYNC_BATCH_SIZE?: string;
@@ -15,6 +17,7 @@ type AuthContext = {
   userId: string;
   username: string;
   deviceId: string;
+  sessionVersion?: number;
 };
 
 type SyncOperation = {
@@ -37,6 +40,7 @@ const requiredTables = [
   'processed_operations',
   'rate_limits',
   'telegram_backup_settings',
+  'admin_sessions',
 ];
 
 export default {
@@ -45,10 +49,13 @@ export default {
     let db: Client | undefined;
 
     try {
+      // The browser portal has its own cookie authentication and never uses API CORS.
+      if (url.pathname === '/profile' || url.pathname.startsWith('/profile/')) {
+        return await profile(request, env);
+      }
       if (request.method === 'OPTIONS') return cors(new Response(null, { status: 204 }));
       if (request.method === 'GET' && url.pathname === '/') return rootResponse(env);
       if (request.method === 'GET' && url.pathname === '/health') return healthResponse(env);
-      if (request.method === 'GET' && (url.pathname === '/profile' || url.pathname === '/profile/')) return profileResponse();
 
       validateWorkerConfig(env);
       db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
@@ -58,7 +65,6 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/auth/recover') return await recoverAccount(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/refresh') return await refresh(request, env, db);
       const auth = await requireAuth(request, env, db);
-      if (url.pathname === '/v1/profile/accounts') return await manageAccounts(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/initial') return await initialSync(request, db, auth);
@@ -82,7 +88,7 @@ export default {
           error: databaseErrorMessage(error),
         });
       }
-      return privateJson({ error: message }, statusCode);
+      return json({ error: message }, statusCode);
     } finally {
       db?.close();
     }
@@ -104,6 +110,167 @@ export default {
 };
 
 type TelegramBackupFrequency = 'daily' | 'weekly' | 'monthly';
+
+const adminCookie = '__Host-koinly-admin';
+const adminSessionSeconds = 3600;
+
+export async function profile(request: Request, env: Env, connect: () => Client = () => createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN })): Promise<Response> {
+  const url = new URL(request.url);
+  const page = request.method === 'GET' && (url.pathname === '/profile' || url.pathname === '/profile/');
+  const nonce = b64urlBytes(crypto.getRandomValues(new Uint8Array(18)));
+  let db: Client | undefined;
+  let response: Response;
+  try {
+    validateWorkerConfig(env);
+    if (!env.ADMIN_USERNAME || normalizeUsername(env.ADMIN_USERNAME) !== env.ADMIN_USERNAME ||
+        !/^pbkdf2\$100000\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/.test(env.ADMIN_PASSWORD_HASH ?? '')) {
+      throw new HttpError(503, 'Administrator login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD_HASH, then redeploy the Worker.');
+    }
+    if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+      throw new HttpError(400, 'Administrator access requires HTTPS.');
+    }
+    if (!['GET', 'POST', 'DELETE'].includes(request.method)) throw new HttpError(405, 'Method not allowed.');
+    if (request.method !== 'GET' && (request.headers.get('origin') !== url.origin || request.headers.get('x-profile-request') !== '1')) {
+      throw new HttpError(403, 'This action must be submitted from the administration portal.');
+    }
+    db = connect();
+    const token = (request.headers.get('cookie') ?? '').split(';').map(part => part.trim()).find(part => part.startsWith(adminCookie + '='))?.slice(adminCookie.length + 1) ?? '';
+    // Binding the hash to all credentials invalidates sessions when any administrator secret changes.
+    const sessionHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', env.ADMIN_USERNAME, env.ADMIN_PASSWORD_HASH, token]));
+    if (request.method === 'POST' && url.pathname === '/profile/api/login') {
+      await enforceRateLimit(db, `admin-login:ip:${request.headers.get('cf-connecting-ip') ?? 'local'}`, 8, 900000);
+      await enforceRateLimit(db, 'admin-login:global', 50, 900000);
+      const body = await readProfileJson(request);
+      const username = String(body.username ?? '').trim().toLowerCase();
+      const password = typeof body.password === 'string' ? body.password : '';
+      const validPassword = await verifyPassword(password, env.ADMIN_PASSWORD_HASH!);
+      if (!constantTimeEqual(username, env.ADMIN_USERNAME) || !validPassword) throw new HttpError(401, 'Invalid administrator username or password.');
+      const newToken = b64urlBytes(crypto.getRandomValues(new Uint8Array(32)));
+      const newHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', env.ADMIN_USERNAME, env.ADMIN_PASSWORD_HASH, newToken]));
+      await db.batch([
+        { sql: 'DELETE FROM admin_sessions WHERE expires_at <= ? OR token_hash = ?', args: [Date.now(), sessionHash] },
+        { sql: 'INSERT INTO admin_sessions(token_hash, expires_at) VALUES (?, ?)', args: [newHash, Date.now() + adminSessionSeconds * 1000] },
+      ], 'write');
+      response = privateJson({ ok: true });
+      response.headers.set('set-cookie', profileCookie(newToken, adminSessionSeconds));
+    } else {
+      const session = token && (await db.execute({ sql: 'SELECT token_hash FROM admin_sessions WHERE token_hash = ? AND expires_at > ?', args: [sessionHash, Date.now()] })).rows[0];
+      if (page) {
+        response = new Response(profilePage(Boolean(session), nonce), { headers: { 'content-type': 'text/html; charset=utf-8' } });
+      } else if (request.method === 'POST' && url.pathname === '/profile/api/logout') {
+        await db.execute({ sql: 'DELETE FROM admin_sessions WHERE token_hash = ?', args: [sessionHash] });
+        response = privateJson({ ok: true });
+        response.headers.set('set-cookie', profileCookie('', 0));
+      } else {
+        if (!session) throw new HttpError(401, 'Your administrator session expired. Sign in again.');
+        response = await manageAccounts(request, url, env, db);
+      }
+    }
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 503;
+    const message = error instanceof HttpError ? error.message : 'Server/database error. Try again; if it persists, check the Worker configuration and apply the latest schema.';
+    response = page
+      ? new Response(profilePage(false, nonce, message), { status, headers: { 'content-type': 'text/html; charset=utf-8' } })
+      : privateJson({ error: message }, status);
+  } finally {
+    db?.close();
+  }
+  response.headers.delete('access-control-allow-origin');
+  response.headers.delete('access-control-allow-methods');
+  response.headers.delete('access-control-allow-headers');
+  response.headers.set('cache-control', 'no-store, private');
+  response.headers.set('vary', 'Cookie');
+  response.headers.set('content-security-policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`);
+  response.headers.set('x-content-type-options', 'nosniff');
+  response.headers.set('x-frame-options', 'DENY');
+  response.headers.set('referrer-policy', 'no-referrer');
+  return response;
+}
+
+function profileCookie(token: string, maxAge: number): string {
+  return `${adminCookie}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+async function readProfileJson(request: Request): Promise<Record<string, unknown>> {
+  if (request.headers.get('content-type')?.split(';')[0].trim() !== 'application/json') throw new HttpError(415, 'Expected a JSON request.');
+  const reader = request.body?.getReader();
+  if (!reader) throw new HttpError(400, 'Invalid JSON body.');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > 8192) { await reader.cancel(); throw new HttpError(413, 'Request is too large.'); }
+    chunks.push(value);
+  }
+  try {
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    const body = JSON.parse(new TextDecoder().decode(bytes));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error();
+    return body as Record<string, unknown>;
+  } catch { throw new HttpError(400, 'Invalid JSON body.'); }
+}
+
+async function manageAccounts(request: Request, url: URL, env: Env, db: Client): Promise<Response> {
+  if (request.method === 'GET' && url.pathname === '/profile/api/accounts') {
+    const page = Math.max(1, Number(url.searchParams.get('page') ?? 1));
+    if (!Number.isSafeInteger(page) || page > 1000000) throw new HttpError(400, 'Invalid page.');
+    const [count, accounts] = await db.batch([
+      'SELECT COUNT(*) AS total FROM users',
+      { sql: `SELECT id, username, created_at, updated_at,
+                CASE WHEN EXISTS (SELECT 1 FROM devices WHERE user_id = users.id) THEN 'active' ELSE 'invited' END AS status
+              FROM users ORDER BY created_at DESC, id LIMIT 50 OFFSET ?`, args: [(page - 1) * 50] },
+    ], 'read');
+    return privateJson({ total: Number(count.rows[0].total), page, pageSize: 50, accounts: accounts.rows.map(row => ({ id: String(row.id), username: String(row.username), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), status: String(row.status) })) });
+  }
+  if (request.method === 'POST' && url.pathname === '/profile/api/accounts') {
+    const body = await readProfileJson(request);
+    const username = normalizeUsername(body.username);
+    const password = profilePassword(body.password);
+    const now = Date.now();
+    const result = await db.execute({
+      sql: `INSERT INTO users(id, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(username) DO NOTHING`,
+      args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), now, now],
+    });
+    if (!result.rowsAffected) throw new HttpError(409, 'Duplicate username. That username is already in use.');
+    return privateJson({ ok: true, message: 'Account created.' }, 201);
+  }
+  const match = /^\/profile\/api\/accounts\/([A-Za-z0-9._:-]{3,120})(\/password)?$/.exec(url.pathname);
+  if (!match) throw new HttpError(404, 'Not found.');
+  const userId = match[1];
+  if (request.method === 'POST' && match[2]) {
+    const body = await readProfileJson(request);
+    const hash = await hashPassword(profilePassword(body.password), env.JWT_SECRET);
+    const now = Date.now();
+    const [changed] = await db.batch([
+      { sql: 'UPDATE users SET password_hash = ?, recovery_key_hash = NULL, session_version = session_version + 1, updated_at = ? WHERE id = ?', args: [hash, now, userId] },
+      { sql: 'UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', args: [now, userId] },
+      { sql: 'UPDATE devices SET revoked_at = ? WHERE user_id = ?', args: [now, userId] },
+    ], 'write');
+    if (!changed.rowsAffected) throw new HttpError(404, 'Account no longer exists.');
+    return privateJson({ ok: true, message: 'Password changed. Existing sessions and recovery key revoked.' });
+  }
+  if (request.method === 'DELETE' && !match[2]) {
+    // Delete children before their parent. The batch rolls back completely on any error.
+    const results = await db.batch([
+      ...['telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
+      { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
+    ], 'write');
+    if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
+    return privateJson({ ok: true, message: 'Account deleted.' });
+  }
+  throw new HttpError(405, 'Method not allowed.');
+}
+
+function profilePassword(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 256) throw new HttpError(400, 'Password must be 8-256 characters.');
+  validatePassword(value);
+  return value;
+}
 
 type TelegramBackupSettings = {
   userId: string;
@@ -729,6 +896,7 @@ function rootResponse(env: Env): Response {
     configured: isWorkerConfigured(env),
     registrationMode: 'first-user',
     endpoints: {
+      profile: '/profile',
       health: '/health',
       register: 'POST /v1/auth/register',
       login: 'POST /v1/auth/login',
@@ -829,6 +997,7 @@ async function missingSchemaTables(db: Client): Promise<string[]> {
   const userColumns = new Set((await db.execute("PRAGMA table_info('users')")).rows.map(row => String(row.name)));
   if (!userColumns.has('username')) missing.push('users.username');
   if (!userColumns.has('recovery_key_hash')) missing.push('users.recovery_key_hash');
+  if (!userColumns.has('session_version')) missing.push('users.session_version');
   return missing;
 }
 
@@ -838,7 +1007,10 @@ function databaseErrorMessage(error: unknown): string {
   return message.replace(/\s+/g, ' ').slice(0, 240);
 }
 
-async function register(request: Request, env: Env, db: Client): Promise<Response> {
+export async function register(request: Request, env: Env, db: Client): Promise<Response> {
+  if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH) {
+    throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.');
+  }
   const body = await readJson(request);
   const username = normalizeUsername(body.username);
   const password = String(body.password ?? '');
@@ -891,16 +1063,15 @@ function privateJson(value: unknown, status = 200): Response {
   return response;
 }
 
-async function login(request: Request, env: Env, db: Client): Promise<Response> {
+export async function login(request: Request, env: Env, db: Client): Promise<Response> {
   const body = await readJson(request);
   const username = normalizeUsername(body.username);
   const password = String(body.password ?? '');
   const deviceId = normalizeId(body.deviceId, 'deviceId');
   const deviceName = cleanText(body.deviceName, 80) || 'Koinly device';
   const platform = cleanText(body.platform, 40) || 'unknown';
-  await enforceRateLimit(db, `login:${username}`, 20, 15 * 60 * 1000);
 
-  const row = (await db.execute({ sql: 'SELECT id, username, password_hash FROM users WHERE username = ?', args: [username] })).rows[0];
+  const row = (await db.execute({ sql: 'SELECT id, username, password_hash, session_version FROM users WHERE username = ?', args: [username] })).rows[0];
   if (!row || !(await verifyPassword(password, String(row.password_hash), env.JWT_SECRET))) {
     throw new HttpError(401, 'Invalid username or password.');
   }
@@ -912,10 +1083,10 @@ async function login(request: Request, env: Env, db: Client): Promise<Response> 
           ON CONFLICT(user_id, id) DO UPDATE SET name = excluded.name, platform = excluded.platform, last_seen_at = excluded.last_seen_at, revoked_at = NULL`,
     args: [deviceId, String(row.id), deviceName, platform, now, now],
   });
-  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId });
+  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId, sessionVersion: Number(row.session_version) });
 }
 
-async function recoverAccount(request: Request, env: Env, db: Client): Promise<Response> {
+export async function recoverAccount(request: Request, env: Env, db: Client): Promise<Response> {
   const body = await readJson(request);
   const username = normalizeUsername(body.username);
   const recoveryKey = normalizeRecoveryKey(body.recoveryKey);
@@ -938,11 +1109,14 @@ async function recoverAccount(request: Request, env: Env, db: Client): Promise<R
   const now = Date.now();
   const passwordHash = await hashPassword(newPassword, env.JWT_SECRET);
   const transaction = await db.transaction('write');
+  let sessionVersion = 0;
   try {
-    await transaction.execute({
-      sql: 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
-      args: [passwordHash, now, String(row.id)],
+    const changed = await transaction.execute({
+      sql: 'UPDATE users SET password_hash = ?, updated_at = ?, session_version = session_version + 1 WHERE id = ? AND recovery_key_hash = ? RETURNING session_version',
+      args: [passwordHash, now, String(row.id), storedRecoveryHash],
     });
+    if (!changed.rows[0]) throw new HttpError(401, 'Account or recovery key is no longer valid.');
+    sessionVersion = Number(changed.rows[0].session_version);
     await transaction.execute({
       sql: 'UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL',
       args: [now, String(row.id)],
@@ -957,20 +1131,21 @@ async function recoverAccount(request: Request, env: Env, db: Client): Promise<R
   } finally {
     transaction.close();
   }
-  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId });
+  return issueTokens(env, db, { userId: String(row.id), username: String(row.username), deviceId, sessionVersion });
 }
 
-async function rotateRecoveryKey(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+export async function rotateRecoveryKey(env: Env, db: Client, auth: AuthContext): Promise<Response> {
   const recoveryKey = generateRecoveryKey();
   const recoveryKeyHash = await hashRecoveryKey(recoveryKey, env.JWT_SECRET);
-  await db.execute({
-    sql: 'UPDATE users SET recovery_key_hash = ?, updated_at = ? WHERE id = ?',
-    args: [recoveryKeyHash, Date.now(), auth.userId],
+  const changed = await db.execute({
+    sql: 'UPDATE users SET recovery_key_hash = ?, updated_at = ? WHERE id = ? AND session_version = ?',
+    args: [recoveryKeyHash, Date.now(), auth.userId, auth.sessionVersion ?? 0],
   });
+  if (!changed.rowsAffected) throw new HttpError(401, 'Account session was revoked. Sign in again.');
   return privateJson({ ok: true, recoveryKey });
 }
 
-async function refresh(request: Request, env: Env, db: Client): Promise<Response> {
+export async function refresh(request: Request, env: Env, db: Client): Promise<Response> {
   const body = await readJson(request);
   const refreshToken = String(body.refreshToken ?? '');
   const deviceId = normalizeId(body.deviceId, 'deviceId');
@@ -978,7 +1153,7 @@ async function refresh(request: Request, env: Env, db: Client): Promise<Response
 
   const tokenHash = await sha256(refreshToken);
   const row = (await db.execute({
-    sql: `SELECT rt.id, rt.user_id, u.username
+    sql: `SELECT rt.id, rt.user_id, u.username, u.session_version
           FROM refresh_tokens rt
           JOIN users u ON u.id = rt.user_id
           WHERE rt.token_hash = ? AND rt.device_id = ? AND rt.revoked_at IS NULL AND rt.expires_at > ?`,
@@ -987,7 +1162,7 @@ async function refresh(request: Request, env: Env, db: Client): Promise<Response
   if (!row) throw new HttpError(401, 'Refresh token is invalid or expired.');
 
   await db.execute({ sql: 'UPDATE refresh_tokens SET revoked_at = ?, rotated_at = ? WHERE id = ?', args: [Date.now(), Date.now(), String(row.id)] });
-  return issueTokens(env, db, { userId: String(row.user_id), username: String(row.username), deviceId });
+  return issueTokens(env, db, { userId: String(row.user_id), username: String(row.username), deviceId, sessionVersion: Number(row.session_version) });
 }
 
 async function logout(request: Request, db: Client, auth: AuthContext): Promise<Response> {
@@ -1291,15 +1466,14 @@ async function issueTokens(env: Env, db: Client, auth: AuthContext, recoveryKey?
   const now = Date.now();
   const accessExpiresAt = now + numberEnv(env.ACCESS_TOKEN_TTL_SECONDS, 900) * 1000;
   const refreshExpiresAt = now + numberEnv(env.REFRESH_TOKEN_TTL_SECONDS, 2592000) * 1000;
-  const user = (await db.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [auth.userId] })).rows[0];
-  if (!user) throw new HttpError(401, 'Account no longer exists.');
-  const credential = await sha256(String(user.password_hash));
-  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, username: auth.username, deviceId: auth.deviceId, credential, exp: Math.floor(accessExpiresAt / 1000) });
+  const accessToken = await signToken(env.JWT_SECRET, { sub: auth.userId, username: auth.username, deviceId: auth.deviceId, ver: auth.sessionVersion ?? 0, exp: Math.floor(accessExpiresAt / 1000) });
   const refreshToken = crypto.randomUUID() + '.' + crypto.randomUUID();
-  await db.execute({
-    sql: 'INSERT INTO refresh_tokens(id, user_id, token_hash, device_id, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [crypto.randomUUID(), auth.userId, await sha256(refreshToken), auth.deviceId, refreshExpiresAt, now],
+  const inserted = await db.execute({
+    sql: `INSERT INTO refresh_tokens(id, user_id, token_hash, device_id, expires_at, created_at)
+          SELECT ?, ?, ?, ?, ?, ? FROM users WHERE id = ? AND session_version = ?`,
+    args: [crypto.randomUUID(), auth.userId, await sha256(refreshToken), auth.deviceId, refreshExpiresAt, now, auth.userId, auth.sessionVersion ?? 0],
   });
+  if (!inserted.rowsAffected) throw new HttpError(401, 'Account session was revoked. Sign in again.');
   return privateJson({
     accessToken,
     refreshToken,
@@ -1311,17 +1485,17 @@ async function issueTokens(env: Env, db: Client, auth: AuthContext, recoveryKey?
   });
 }
 
-async function requireAuth(request: Request, env: Env, db: Client): Promise<AuthContext> {
+export async function requireAuth(request: Request, env: Env, db: Client): Promise<AuthContext> {
   const header = request.headers.get('authorization') ?? '';
   const token = header.toLowerCase().startsWith('bearer ') ? header.slice(7) : '';
   if (!token) throw new HttpError(401, 'Missing access token.');
   const payload = await verifyToken(env.JWT_SECRET, token);
-  const user = (await db.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [String(payload.sub)] })).rows[0];
-  if (!user || payload.credential !== await sha256(String(user.password_hash))) {
-    throw new HttpError(401, 'Session expired. Sign in again.');
+  const row = (await db.execute({ sql: 'SELECT session_version FROM users WHERE id = ?', args: [String(payload.sub)] })).rows[0];
+  if (!row || Number(payload.ver ?? 0) !== Number(row.session_version)) {
+    throw new HttpError(401, 'Account session was revoked. Sign in again.');
   }
   const username = String(payload.username ?? payload.email ?? '');
-  return { userId: String(payload.sub), username, deviceId: String(payload.deviceId) };
+  return { userId: String(payload.sub), username, deviceId: String(payload.deviceId), sessionVersion: Number(row.session_version) };
 }
 
 async function signToken(secret: string, payload: Record<string, unknown>): Promise<string> {
@@ -1336,9 +1510,10 @@ async function verifyToken(secret: string, token: string): Promise<Record<string
   const parts = token.split('.');
   if (parts.length !== 3) throw new HttpError(401, 'Invalid access token.');
   const expected = await signDetached(secret, `${parts[0]}.${parts[1]}`);
-  if (expected !== parts[2]) throw new HttpError(401, 'Invalid access token signature.');
-  const payload = JSON.parse(atobUrl(parts[1])) as Record<string, unknown>;
-  if (Number(payload.exp ?? 0) < Math.floor(Date.now() / 1000)) throw new HttpError(401, 'Access token expired.');
+  if (!constantTimeEqual(expected, parts[2])) throw new HttpError(401, 'Invalid access token signature.');
+  let payload: Record<string, unknown>;
+  try { payload = JSON.parse(atobUrl(parts[1])); } catch { throw new HttpError(401, 'Invalid access token.'); }
+  if (!payload || typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) throw new HttpError(401, 'Access token expired.');
   return payload;
 }
 
@@ -1347,16 +1522,18 @@ async function signDetached(secret: string, value: string): Promise<string> {
   return b64urlBytes(await crypto.subtle.sign('HMAC', key, enc.encode(value)));
 }
 
-async function hashPassword(password: string, pepper: string): Promise<string> {
+export async function hashPassword(password: string, _pepper = ''): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const saltRaw = b64urlBytes(salt);
-  return `s256$${saltRaw}$${await sha256(`${saltRaw}.${pepper}.${password}`)}`;
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  // ponytail: Workers caps Web Crypto PBKDF2 at 100,000 iterations; use a memory-hard KDF when the runtime supports it natively.
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256);
+  return `pbkdf2$100000$${b64urlBytes(salt)}$${b64urlBytes(bits)}`;
 }
 
-async function verifyPassword(password: string, stored: string, pepper: string): Promise<boolean> {
+export async function verifyPassword(password: string, stored: string, pepper = ''): Promise<boolean> {
   const [scheme, first, second, third] = stored.split('$');
   if (scheme === 's256') {
-    return await sha256(`${first}.${pepper}.${password}`) === second;
+    return constantTimeEqual(await sha256(`${first}.${pepper}.${password}`), second ?? '');
   }
   if (scheme !== 'pbkdf2') return false;
   const iterationsRaw = first;
@@ -1366,7 +1543,7 @@ async function verifyPassword(password: string, stored: string, pepper: string):
   const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
   const salt = bytesFromB64Url(saltRaw);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: Number(iterationsRaw) }, key, 256);
-  return b64urlBytes(bits) === hashRaw;
+  return constantTimeEqual(b64urlBytes(bits), hashRaw);
 }
 
 function generateRecoveryKey(): string {
@@ -1393,12 +1570,12 @@ async function enforceRateLimit(db: Client, key: string, maxAttempts: number, wi
   const row = (await db.execute({
     sql: `INSERT INTO rate_limits(key, window_start, count) VALUES (?, ?, 1)
           ON CONFLICT(key) DO UPDATE SET
-            count = CASE WHEN rate_limits.window_start <= ? THEN 1 ELSE rate_limits.count + 1 END,
-            window_start = CASE WHEN rate_limits.window_start <= ? THEN excluded.window_start ELSE rate_limits.window_start END
+            count = CASE WHEN window_start <= ? THEN 1 ELSE count + 1 END,
+            window_start = CASE WHEN window_start <= ? THEN excluded.window_start ELSE window_start END
           RETURNING count`,
     args: [key, now, now - windowMs, now - windowMs],
   })).rows[0];
-  if (Number(row.count) > maxAttempts) throw new HttpError(429, 'Too many attempts. Try again later.');
+  if (Number(row.count) > maxAttempts) throw new HttpError(429, 'Too many attempts. Try again in 15 minutes.');
 }
 
 async function sha256(value: string): Promise<string> {
@@ -1422,7 +1599,7 @@ function validateOperation(raw: unknown): SyncOperation {
 
 function normalizeUsername(value: unknown): string {
   const username = String(value ?? '').trim().toLowerCase();
-  if (!/^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/.test(username)) {
+  if (!/^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$/.test(username)) {
     throw new HttpError(400, 'Username must be 3-32 characters using letters, numbers, dots, dashes, or underscores.');
   }
   return username;
@@ -1435,7 +1612,6 @@ function normalizeRecoveryKey(value: unknown): string {
 }
 
 function validatePassword(password: string): void {
-  if (password.length > 1024) throw new HttpError(400, 'Password must be at most 1024 characters.');
   if (password.length < 8) throw new HttpError(400, 'Password must be at least 8 characters.');
 }
 
@@ -1457,9 +1633,7 @@ function cleanText(value: unknown, max: number): string {
 
 async function readJson(request: Request): Promise<Record<string, unknown>> {
   try {
-    const body: unknown = await request.json();
-    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Expected an object.');
-    return body as Record<string, unknown>;
+    return await request.json() as Record<string, unknown>;
   } catch {
     throw new HttpError(400, 'Invalid JSON body.');
   }
@@ -1512,65 +1686,5 @@ function cors(response: Response): Response {
 class HttpError extends Error {
   constructor(readonly status: number, message: string) {
     super(message);
-  }
-}
-
-// The first account owns this self-hosted Worker and cannot be deleted.
-async function manageAccounts(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
-  if (request.method === 'POST') await enforceRateLimit(db, `profile:${auth.userId}`, 30, 15 * 60 * 1000);
-  const transaction = await db.transaction('write');
-  try {
-    const owner = (await transaction.execute('SELECT id FROM users ORDER BY created_at, rowid LIMIT 1')).rows[0];
-    if (String(owner?.id) !== auth.userId) throw new HttpError(403, 'Only the Worker owner can manage accounts.');
-    if (request.method === 'GET') {
-      const accounts = (await transaction.execute('SELECT id, username, created_at FROM users ORDER BY created_at, rowid')).rows;
-      await transaction.commit();
-      return privateJson({ accounts, count: accounts.length, ownerId: auth.userId });
-    }
-    if (request.method !== 'POST') throw new HttpError(405, 'Method not allowed.');
-    const body = await readJson(request);
-    // Recheck the owner's password for every destructive or administrative action.
-    const ownerRow = (await transaction.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [auth.userId] })).rows[0];
-    if (!await verifyPassword(String(body.currentPassword ?? ''), String(ownerRow.password_hash), env.JWT_SECRET)) {
-      throw new HttpError(403, 'Owner password is incorrect.');
-    }
-    const now = Date.now();
-    if (body.action === 'create') {
-      const username = normalizeUsername(body.username);
-      const password = String(body.password ?? '');
-      validatePassword(password);
-      if ((await transaction.execute({ sql: 'SELECT id FROM users WHERE username = ?', args: [username] })).rows.length) {
-        throw new HttpError(409, 'That username is already in use.');
-      }
-      const recoveryKey = generateRecoveryKey();
-      await transaction.execute({
-        sql: 'INSERT INTO users(id, username, password_hash, recovery_key_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), await hashRecoveryKey(recoveryKey, env.JWT_SECRET), now, now],
-      });
-      await transaction.commit();
-      return privateJson({ ok: true, recoveryKey }, 201);
-    }
-    const id = normalizeId(body.id, 'account ID');
-    const target = (await transaction.execute({ sql: 'SELECT username FROM users WHERE id = ?', args: [id] })).rows[0];
-    if (!target) throw new HttpError(404, 'Account not found.');
-    if (body.action === 'password') {
-      const password = String(body.password ?? '');
-      validatePassword(password);
-      await transaction.execute({ sql: 'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?', args: [await hashPassword(password, env.JWT_SECRET), now, id] });
-      await transaction.execute({ sql: 'DELETE FROM refresh_tokens WHERE user_id = ?', args: [id] });
-    } else if (body.action === 'delete') {
-      if (id === auth.userId) throw new HttpError(400, 'The owner account cannot be deleted.');
-      if (body.confirmUsername !== target.username) throw new HttpError(400, 'Type the account username to confirm deletion.');
-      for (const table of ['telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices']) {
-        await transaction.execute({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [id] });
-      }
-      await transaction.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] });
-    } else {
-      throw new HttpError(400, 'Invalid account action.');
-    }
-    await transaction.commit();
-    return privateJson({ ok: true });
-  } finally {
-    transaction.close();
   }
 }

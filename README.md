@@ -16,23 +16,6 @@
   Use it completely offline, or connect your own Cloudflare Worker for optional multi-device sync.
 </p>
 
-## Web profile and account management
-
-**Redeploy the Cloudflare Worker to enable this update. Updating the Android or Windows app alone does not publish the website.** Run your existing self-hosted Worker deployment workflow, or follow the manual deployment commands in [`cloud/worker/README.md`](cloud/worker/README.md). Keep the same Worker name, Turso database, and secrets.
-
-After deployment, open **https://koinly-test.sweets-4c4.workers.dev/profile** (or append `/profile` to your own Worker URL). Sign in with the username and password of the **first account created on that Worker**. That account remains the owner; there is no separate default admin password. On a fresh Worker, create the first account from the Koinly app first.
-
-The website follows Koinly's green palette, rounded cards, and system light/dark appearance, with a responsive layout for phones and desktops. The owner can:
-
-- See the total number of login accounts and their usernames and creation dates.
-- Add accounts with a username and password. Save the recovery key shown once after creation and give it to the account holder securely.
-- Change any account's password, including the owner's, by confirming the current owner password. Existing access and refresh sessions for that account become invalid; sign in again on its devices.
-- Delete an additional account after typing its username and confirming the owner password. This permanently removes its cloud finance data, sessions, devices, and Telegram backup settings. Local device data and already-delivered backups remain. The owner cannot be deleted.
-
-These are **sync login accounts**, not the bank/cash accounts inside a finance profile. Each login keeps its own finance data. Only the first owner can access the management API; added accounts use the app's normal **Login** flow. Public registration stays closed after the first owner is created.
-
-No new secrets or schema migration are required for an up-to-date Worker. Existing app sessions may refresh or require sign-in once after redeployment because access tokens now validate the current account credentials. The web page keeps tokens in memory only: reloading the page or reaching the access-token expiry requires signing in again (15 minutes by default). No separate frontend hosting or build is needed.
-
 ## Quick navigation
 
 | Start here | Self-hosted sync | App & backups | Developers |
@@ -437,7 +420,9 @@ After deployment:
 6. After the account is created, Koinly shows a one-time **recovery key**. Copy it and store it somewhere safe before closing the popup.
 7. On another device, use the same Worker URL and choose **Login** with the same username and password.
 
-A fresh Worker accepts one owner account. After that account is created, additional devices use **Login**. The owner can create separate login accounts from `/profile`. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
+A fresh Worker accepts one owner account. After that account is created, additional devices use **Login** rather than creating another account. Usernames are 3–32 characters and may contain letters, numbers, dots, dashes, and underscores.
+
+If you enable the administrator portal below, public registration closes and the administrator creates any new accounts from `/profile`. Existing accounts can still sign in normally.
 
 ### 6.1 Forgot your password?
 
@@ -453,6 +438,47 @@ While signed in, **Settings > Account & sync > Recovery key** creates a replacem
 - **Restore cloud copy** downloads the Worker copy and merges it into the device.
 
 Both are merge-based. Matching records are reconciled rather than blindly duplicated, while local-only and cloud-only records are preserved.
+
+### 6.3 Worker administration portal (`/profile`)
+
+**Existing self-hosted Worker owners must redeploy their Worker after updating. Updating the Koinly app alone does not install the new `/profile` dashboard or account-management functionality.** Run the latest **Deploy Self-Hosted Sync Worker** workflow; it applies the non-destructive database migration and deploys the new Worker code. Keep the same Worker name, database, and `JWT_SECRET`.
+
+Open your Worker URL with `/profile` appended, for example:
+
+```text
+https://koinly-test.sweets-4c4.workers.dev/profile
+```
+
+The portal has its own administrator login. This release adds that configuration; an ordinary Koinly account (including the first owner account) does **not** automatically receive administrator access. The administrator identity is separate from registered sync accounts and is not included in the account count.
+
+To enable it:
+
+1. Download your updated repository and open a terminal in `cloud/worker`. Install Node.js 22.13 or newer if needed.
+2. Run `npm ci`, then `npm run admin:password`. Enter and confirm a strong, unique administrator password of 12–256 characters. Input is hidden; the command prints only a salted password hash.
+3. In your fork's **Settings > Secrets and variables > Actions**, add **both** repository secrets:
+
+   | Secret | Value |
+   | --- | --- |
+   | `ADMIN_USERNAME` | Your chosen lowercase username, 3–32 characters; use letters, numbers, dots, dashes, or underscores and start/end with a letter or number |
+   | `ADMIN_PASSWORD_HASH` | The complete `pbkdf2$100000$...$...` value printed by the command |
+
+4. Run **Deploy Self-Hosted Sync Worker** again. These are two additional values alongside the six required deployment values above.
+5. Open `/profile` over HTTPS and enter `ADMIN_USERNAME` and the **original password you chose**, not the hash. Use **Sign out** when finished.
+
+Never save the plain administrator password as a Worker secret or in source code. If the administrator secrets are absent, the portal displays a setup message and rejects administrative requests; existing app login and sync continue to work. For manual deployment, apply the schema, set `ADMIN_USERNAME` and `ADMIN_PASSWORD_HASH` using `npx wrangler secret put <NAME> --config wrangler.self-hosted.toml --name <your-worker-name>`, and redeploy to that same Worker.
+
+The dashboard supports desktop and mobile browsers, light/dark/system appearance, keyboard-accessible dialogs, and reduced motion. It lets you:
+
+- See the total registered account count and browse accounts in pages of 50, with usernames, creation dates, and status. **Invited** means the account has never signed in; **Active** means it has signed in at least once, not that it is currently online.
+- Create an account with an 8–256 character password. Share that password privately with the intended account holder; they use **Login** in Koinly with your Worker URL. They can generate their own recovery key after signing in.
+- Change/reset a password without knowing or displaying the old one. Resetting immediately invalidates existing access and refresh sessions and the old recovery key. The account holder must sign in again and create a replacement recovery key.
+- Delete an account after confirming the dialog. Deletion permanently removes its synchronized cloud data, device/session records, and Telegram backup settings. Copies already on devices or sent to Telegram remain. Other accounts and the separate administrator login are preserved.
+
+The server checks administrator authentication on every account request. Sessions expire after one hour, use Secure/HttpOnly/SameSite cookies, and are revoked on sign-out. Requests that change accounts must come from the same portal origin. Login attempts are limited to eight per IP and fifty across the Worker per fifteen minutes. Passwords are salted hashes and are never returned by account APIs; the browser does not store credentials or session tokens in local storage.
+
+To reset the **administrator** password, run `npm run admin:password` again, replace the `ADMIN_PASSWORD_HASH` repository secret, and redeploy. Changing either administrator secret invalidates previous portal sessions. Do not rotate `JWT_SECRET` just to reset the administrator password: it also protects existing Worker data and credentials.
+
+Invalid logins, duplicate usernames, failed requests, and database errors produce visible messages. A **Server/database error** usually requires checking Turso credentials/connectivity and rerunning the current schema/deployment workflow. A `/profile` 404 from an older Worker means the new code has not been deployed. See [Worker documentation](cloud/worker/README.md) for the API and manual setup details.
 
 ---
 
