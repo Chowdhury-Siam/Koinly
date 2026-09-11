@@ -27,14 +27,14 @@ class LoanDueReminder {
 class ReminderService {
   static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
-  static Future<void> ensureInitialized() async {
+  static Future<void> ensureInitialized({bool requestPermission = true}) async {
     if (!kSupportsLocalNotifications) return;
     tzdata.initializeTimeZones();
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: android);
     await _notifications.initialize(settings);
     final androidPlugin = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.requestNotificationsPermission();
+    if (requestPermission) await androidPlugin?.requestNotificationsPermission();
   }
 
   static Future<void> scheduleDaily(TimeOfDay time) async {
@@ -126,5 +126,35 @@ class ReminderService {
     for (final request in pending.where((item) => item.payload?.startsWith('loan:') == true)) {
       await _notifications.cancel(request.id);
     }
+  }
+
+  static Future<void> showUpdateAvailableNotification({
+    required String version,
+    String? releaseName,
+  }) async {
+    if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'koinly_app_updates',
+        'Koinly updates',
+        channelDescription: 'Notifications when a newer Koinly release is available.',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    );
+    final name = releaseName?.trim() ?? '';
+    await _notifications.show(
+      902,
+      'Koinly $version is available',
+      name.isEmpty ? 'A new update is ready. Open Koinly to review what changed.' : '$name is ready. Open Koinly to review what changed.',
+      details,
+      payload: 'update:$version',
+    );
+  }
+
+  static Future<void> cancelUpdateAvailableNotification() async {
+    if (!kSupportsLocalNotifications) return;
+    await _notifications.cancel(902);
   }
 }

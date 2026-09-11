@@ -49,6 +49,7 @@ import 'sync_models.dart';
 import 'sync_services.dart';
 import 'ui_foundation.dart';
 import 'update_service.dart';
+import 'update_background_service.dart';
 
 part 'loans/loan_controller_part.dart';
 part 'loans/loan_screens.dart';
@@ -102,6 +103,7 @@ Future<void> main() async {
   }
 
   await ReminderService.ensureInitialized();
+  await UpdateBackgroundService.initialize();
 
   runApp(
     ChangeNotifierProvider(
@@ -2681,6 +2683,7 @@ class AppController extends ChangeNotifier {
     if (automaticUpdatePopupEnabled == enabled) return;
     automaticUpdatePopupEnabled = enabled;
     await prefs.setBool('automaticUpdatePopupEnabled', enabled);
+    await UpdateBackgroundService.setEnabled(enabled);
     notifyListeners();
   }
 
@@ -5323,6 +5326,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       final result = await state.checkForUpdates();
       if (!mounted) return;
       if (result.hasUpdate && result.release != null) {
+        if (state.automaticUpdatePopupEnabled) {
+          await UpdateBackgroundService.notifyReleaseIfNeeded(result.release!);
+        }
         await _showAutomaticUpdateDialogIfReady(state, result.release!);
       } else if (_shouldRetryAutomaticUpdateCheck(result.outcome)) {
         _scheduleAutomaticUpdateCheck(delay: _automaticUpdateRetryDelay);
@@ -7139,29 +7145,37 @@ _KoinlySnackKind _snackKindFor(String message) {
 void _showRichSnack(BuildContext context, String message, _KoinlySnackKind kind) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
+  _activeKoinlySnackEntry?.remove();
+  _activeKoinlySnackEntry = null;
   final (title, contentType, color) = switch (kind) {
     _KoinlySnackKind.success => ('Done', ContentType.success, kSleekAccent),
     _KoinlySnackKind.failure => ('Something went wrong', ContentType.failure, kSleekExpense),
     _KoinlySnackKind.warning => ('Please note', ContentType.warning, kSleekWarning),
     _KoinlySnackKind.info => ('Koinly', ContentType.help, kSleekAccent),
   };
-  final snackBar = SnackBar(
+  final materialBanner = MaterialBanner(
     elevation: 0,
-    behavior: SnackBarBehavior.floating,
     backgroundColor: Colors.transparent,
-    duration: kind == _KoinlySnackKind.failure ? const Duration(seconds: 5) : const Duration(milliseconds: 3600),
+    forceActionsBelow: true,
+    padding: EdgeInsets.zero,
     content: AwesomeSnackbarContent(
       title: title,
       message: message,
       contentType: contentType,
       color: color,
+      inMaterialBanner: true,
       titleTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
       messageTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
     ),
+    actions: const [SizedBox.shrink()],
   );
-  messenger
-    ..hideCurrentSnackBar()
-    ..showSnackBar(snackBar);
+  messenger.hideCurrentSnackBar();
+  messenger.hideCurrentMaterialBanner();
+  final controller = messenger.showMaterialBanner(materialBanner);
+  final duration = kind == _KoinlySnackKind.failure
+      ? const Duration(seconds: 5)
+      : const Duration(milliseconds: 3600);
+  Future<void>.delayed(duration, controller.close);
 }
 
 void showSnack(BuildContext context, String message) {
@@ -7174,6 +7188,7 @@ void showSnack(BuildContext context, String message) {
     return;
   }
 
+  ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) {
     _showRichSnack(context, trimmedMessage, kind);
@@ -8528,53 +8543,93 @@ class BalanceHeroCard extends StatelessWidget {
   }
 }
 
-class _DecorativeSparkline extends StatelessWidget {
+class _DecorativeSparkline extends StatefulWidget {
   const _DecorativeSparkline();
 
   @override
+  State<_DecorativeSparkline> createState() => _DecorativeSparklineState();
+}
+
+class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  static const _baseValues = <double>[1.2, 1.7, 1.4, 2.4, 2.1, 3.2, 2.9, 4.0];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<FlSpot> _spots(double animationValue) {
+    final phase = animationValue * math.pi * 2;
+    return List<FlSpot>.generate(_baseValues.length, (index) {
+      final bob = math.sin(phase + index * .9) * .12;
+      final secondary = math.sin(phase * .55 + index * .48) * .045;
+      return FlSpot(index.toDouble(), _baseValues[index] + bob + secondary);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final spots = const [
-      FlSpot(0, 1.2),
-      FlSpot(1, 1.7),
-      FlSpot(2, 1.4),
-      FlSpot(3, 2.4),
-      FlSpot(4, 2.1),
-      FlSpot(5, 3.2),
-      FlSpot(6, 2.9),
-      FlSpot(7, 4.0),
-    ];
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     return RepaintBoundary(
       child: SizedBox(
         height: 54,
-        child: LineChart(
-        LineChartData(
-          minX: 0,
-          maxX: 7,
-          minY: 0,
-          maxY: 4.5,
-          gridData: const FlGridData(show: false),
-          borderData: FlBorderData(show: false),
-          titlesData: const FlTitlesData(show: false),
-          lineTouchData: const LineTouchData(enabled: false),
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              preventCurveOverShooting: true,
-              color: kSleekAccent,
-              barWidth: 3,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [kSleekAccent.withOpacity(.25), kSleekAccent.withOpacity(0)],
-                ),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final animationValue = reduceMotion ? 0.0 : _controller.value;
+            final glow = .20 + math.sin(animationValue * math.pi * 2) * .04;
+            return LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: 7,
+                minY: 0,
+                maxY: 4.5,
+                gridData: const FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: _spots(animationValue),
+                    isCurved: true,
+                    preventCurveOverShooting: true,
+                    color: kSleekAccent,
+                    barWidth: 3,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [kSleekAccent.withOpacity(glow), kSleekAccent.withOpacity(0)],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
+              duration: Duration.zero,
+            );
+          },
         ),
       ),
     );
@@ -8612,6 +8667,100 @@ class KoinlyPageLoader extends StatelessWidget {
   }
 }
 
+class _AnimatedEmptyStateIcon extends StatefulWidget {
+  const _AnimatedEmptyStateIcon({required this.icon, this.color = kSleekAccent});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  State<_AnimatedEmptyStateIcon> createState() => _AnimatedEmptyStateIconState();
+}
+
+class _AnimatedEmptyStateIconState extends State<_AnimatedEmptyStateIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.of(context).disableAnimations) {
+      _controller
+        ..stop()
+        ..value = 0;
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final scheme = Theme.of(context).colorScheme;
+    final iconBubble = Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        color: widget.color.withOpacity(.14),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: widget.color.withOpacity(.42)),
+        boxShadow: [BoxShadow(color: widget.color.withOpacity(.12), blurRadius: 20, spreadRadius: 1)],
+      ),
+      child: Icon(widget.icon, color: widget.color, size: 29),
+    );
+
+    if (reduceMotion) return SizedBox(width: 92, height: 92, child: Center(child: iconBubble));
+    return SizedBox(
+      width: 92,
+      height: 92,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Opacity(
+            opacity: Theme.of(context).brightness == Brightness.dark ? .78 : .58,
+            child: ColorFiltered(
+              colorFilter: ColorFilter.mode(widget.color, BlendMode.srcATop),
+              child: Lottie.asset('assets/lottie/empty_state.json', repeat: true, fit: BoxFit.contain),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _controller,
+            child: iconBubble,
+            builder: (context, child) {
+              final phase = _controller.value * math.pi * 2;
+              return Transform.translate(
+                offset: Offset(0, math.sin(phase) * -3.2),
+                child: Transform.rotate(angle: math.sin(phase + .6) * .018, child: child),
+              );
+            },
+          ),
+          IgnorePointer(
+            child: Container(
+              width: 68,
+              height: 68,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: scheme.outline.withOpacity(.08)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class EmptyCard extends StatelessWidget {
   const EmptyCard({
     super.key,
@@ -8621,6 +8770,7 @@ class EmptyCard extends StatelessWidget {
     this.action,
     this.actionLabel,
     this.animated = false,
+    this.iconColor,
   });
 
   final IconData icon;
@@ -8629,25 +8779,18 @@ class EmptyCard extends StatelessWidget {
   final VoidCallback? action;
   final String? actionLabel;
   final bool animated;
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final color = iconColor ?? kSleekAccent;
     return ExpressiveCard(
       child: Column(
         children: [
-          if (animated && !reduceMotion)
-            SizedBox(
-              width: 92,
-              height: 92,
-              child: Lottie.asset(
-                'assets/lottie/empty_state.json',
-                repeat: true,
-                fit: BoxFit.contain,
-              ),
-            )
+          if (animated)
+            _AnimatedEmptyStateIcon(icon: icon, color: color)
           else
-            Icon(icon, size: 42, color: kSleekAccent),
+            Icon(icon, size: 42, color: color),
           const SizedBox(height: 12),
           Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
@@ -10910,8 +11053,6 @@ class TransactionTile extends StatelessWidget {
       ),
     );
 
-    final actionCount = tx.isLoanTransaction ? 2 : 3;
-    final actionExtent = actionCount == 3 ? .66 : .48;
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       clipBehavior: Clip.antiAlias,
@@ -10919,24 +11060,31 @@ class TransactionTile extends StatelessWidget {
         key: ValueKey('transaction-${tx.id}'),
         groupTag: 'transactions',
         closeOnScroll: true,
-        // Keep all quick actions on one side. Switching directly between a
-        // start and end pane during the same gesture could leave one-frame
-        // red/green remnants at the row edge on Android.
+        startActionPane: tx.isLoanTransaction
+            ? null
+            : ActionPane(
+                motion: const ScrollMotion(),
+                extentRatio: .28,
+                dragDismissible: false,
+                openThreshold: .34,
+                closeThreshold: .16,
+                children: [
+                  _KoinlySlidableAction(
+                    onPressed: (_) => _duplicateTransaction(context, tx),
+                    backgroundColor: kSleekAccent,
+                    foregroundColor: Colors.white,
+                    icon: Icons.content_copy_rounded,
+                    label: 'Duplicate',
+                  ),
+                ],
+              ),
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
-          extentRatio: actionExtent,
+          extentRatio: .48,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,
           children: [
-            if (!tx.isLoanTransaction)
-              _KoinlySlidableAction(
-                onPressed: (_) => _duplicateTransaction(context, tx),
-                backgroundColor: kSleekAccent,
-                foregroundColor: Colors.white,
-                icon: Icons.copy_rounded,
-                label: 'Copy',
-              ),
             _KoinlySlidableAction(
               onPressed: (_) => showTransactionEditor(context, transaction: tx),
               backgroundColor: Theme.of(context).colorScheme.primaryContainer,
@@ -14161,7 +14309,7 @@ class UpdatesScreen extends StatelessWidget {
                     onChanged: (value) => context.read<AppController>().setAutomaticUpdatePopupEnabled(value),
                     title: const Text('Automatic update pop-ups', style: TextStyle(fontWeight: FontWeight.w900)),
                     subtitle: Text(
-                      'Show update details automatically when a newer version is found. Manual update checks still work when this is off.',
+                      'Show update details automatically and send a notification when a newer Koinly release is found. Manual update checks still work when this is off.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                     ),
                   ),

@@ -18,7 +18,9 @@ void main() {
     expect(app, contains('clipBehavior: Clip.antiAlias'));
     expect(loans, contains('motion: const ScrollMotion()'));
     expect(loans, contains('dragDismissible: false'));
-    expect(app, isNot(contains('startActionPane:')));
+    expect(app, contains('startActionPane: tx.isLoanTransaction'));
+    expect(app, contains("label: 'Duplicate'"));
+    expect(app, contains('extentRatio: .28'));
     expect(loans, isNot(contains('startActionPane:')));
     expect(app, isNot(contains('BehindMotion()')));
     expect(loans, isNot(contains('BehindMotion()')));

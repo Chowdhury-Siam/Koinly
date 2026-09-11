@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1090] - 2026-09-11
+
+### Added
+
+- Added Android background update monitoring when **Automatic update pop-ups** is enabled. Android WorkManager performs a battery-aware network check every few hours and Koinly posts one deduplicated local notification per newly detected release, including when the app is not currently open. Turning the setting off cancels the worker and its update notification.
+- Added a continuously animated Home balance wave using `fl_chart`. The motion is subtle, looped, and automatically stops when Reduce Motion / disabled animations is active.
+- Reworked animated empty states so the Lottie pulse remains as ambient motion while the foreground icon now matches the actual section (budget, category spending, transactions, plans, loans, and other empty cards).
+
+### Changed
+
+- Renamed the transaction **Copy** quick action to **Duplicate** and moved it to the leading/left action pane. **Edit** and **Delete** remain on the trailing/right pane. Loan-generated transactions still omit duplication.
+- Moved Awesome Snackbar success/error/warning feedback from the bottom SnackBar position to a top MaterialBanner presentation, so messages such as **Done → Transaction deleted** no longer cover the bottom navigation and Add/Plan controls.
+- Updated the automatic-update setting description to make its notification behavior explicit.
+- Bumped application metadata to `1.0.1090+134`.
+
 ## [1.0.1089] - 2026-09-11
 
 ### Fixed

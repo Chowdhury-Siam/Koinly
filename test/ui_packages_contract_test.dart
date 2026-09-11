@@ -15,6 +15,7 @@ void main() {
     expect(pubspec, contains('awesome_snackbar_content: ^0.1.8'));
     expect(pubspec, contains('intl: ^0.20.3'));
     expect(pubspec, contains('flutter_slidable: ^4.0.3'));
+    expect(pubspec, contains('workmanager: ^0.10.10'));
     expect(pubspec, contains('- assets/lottie/'));
 
     expect(app, contains("import 'package:lottie/lottie.dart';"));

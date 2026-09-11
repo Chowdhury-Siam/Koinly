@@ -34,7 +34,7 @@ const String kSleekAccentHex = '#10B981';
 const String kLegacyStarterCashIconHex = '#78D8E8';
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1089');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1090');
 const kLowEndFriendlyUi = true;
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';
