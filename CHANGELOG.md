@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.1092] - 2026-09-11
+
+### Fixed
+
+- Fixed the remaining transaction Slidable snap bug where the **Duplicate** pane revealed by a left-to-right swipe immediately returned to the closed position on release. The leading pane is 28% of the row width, but its previous `.34` open threshold was larger than the pane's maximum extent, making the open state unreachable. The leading-pane thresholds are now sized to that pane (`openThreshold: .14`, `closeThreshold: .08`) so it stays open after a deliberate swipe, matching the right-to-left Edit/Delete behavior.
+- No banner, navigation, loan, chart, update-notification, or other UI behavior was changed in this release.
+
+### Changed
+
+- Bumped application metadata to `1.0.1092+136`.
+
 ## [1.0.1091] - 2026-09-11
 
 ### Fixed

@@ -11280,8 +11280,12 @@ class TransactionTile extends StatelessWidget {
                 motion: const ScrollMotion(),
                 extentRatio: .28,
                 dragDismissible: false,
-                openThreshold: .34,
-                closeThreshold: .16,
+                // The start pane is only 28% wide. Its snap-open threshold must
+                // stay below that maximum extent; the old .34 threshold could
+                // never be reached, so a left-to-right Duplicate swipe always
+                // snapped closed as soon as the finger was released.
+                openThreshold: .14,
+                closeThreshold: .08,
                 children: [
                   _KoinlySlidableAction(
                     onPressed: (_) => _duplicateTransaction(context, tx),
