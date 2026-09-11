@@ -42,7 +42,7 @@ test('profile owner manages accounts, isolated data, credentials and deletion', 
     const ownerAuth = await handlers.requireAuth(request(null, owner.accessToken), env, db);
     const manage = async (body: unknown, auth = ownerAuth) => handlers.manageAccounts(request(body), env, db, auth);
     assert.equal((await (await manage(null)).json()).count, 1);
-    await assert.rejects(manage({ action:'create', username:'alice', password:'password-two', currentPassword:'wrong' }), /password is incorrect/);
+    await assert.rejects(manage({ action:'create', username:'alice', password:'password-two', currentPassword:'wrong' }), {status:403, message:'Owner password is incorrect.'});
     const created = await (await manage({ action:'create', username:'alice', password:'password-two', currentPassword:'password-one' })).json();
     assert.match(created.recoveryKey, /^KLY-/);
     await assert.rejects(manage({ action:'create', username:'ALICE', password:'password-two', currentPassword:'password-one' }), /already in use/);
@@ -88,6 +88,18 @@ test('profile is a private standalone page with a nonce policy and valid browser
   assert.doesNotMatch(html, /__NONCE__|localStorage|innerHTML/);
   const script = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)![1];
   new Function(script);
+  const elements = new Map();
+  const document = { getElementById(id: string) {
+    if (!elements.has(id)) elements.set(id, { hidden:false, value:'secret', textContent:'recovery key', close() { this.closed = true; }, reset() { this.resetCalled = true; }, replaceChildren() { this.cleared = true; } });
+    return elements.get(id);
+  } };
+  new Function('document', script + '\nsignedOut();')(document);
+  assert.equal(document.getElementById('editor').closed, true);
+  assert.equal(document.getElementById('editForm').resetCalled, true);
+  assert.equal(document.getElementById('notice').textContent, '');
+  assert.equal(document.getElementById('password').value, '');
+  assert.equal(document.getElementById('dashboard').hidden, true);
+  assert.equal(document.getElementById('login').hidden, false);
   assert.match(html, /autocomplete="current-password"/);
 });
 

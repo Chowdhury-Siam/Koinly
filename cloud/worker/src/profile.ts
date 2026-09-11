@@ -23,7 +23,7 @@ const page = String.raw`<!doctype html>
 </main><script nonce="__NONCE__">
 const $ = id => document.getElementById(id);
 let session = null, ownerId = '', selected = null, action = '';
-function signedOut() { session = null; $('dashboard').hidden = true; $('logout').hidden = true; $('login').hidden = false; $('accounts').replaceChildren(); }
+function signedOut() { session = null; $('editor').close(); $('editForm').reset(); $('password').value = ''; $('notice').textContent = ''; $('dashboard').hidden = true; $('logout').hidden = true; $('login').hidden = false; $('accounts').replaceChildren(); }
 async function api(path, body) {
   const response = await fetch(path, {method:body ? 'POST':'GET', headers:{'content-type':'application/json', ...(session ? {authorization:'Bearer '+session.accessToken}:{})}, ...(body ? {body:JSON.stringify(body)}:{})});
   const data = await response.json();
@@ -65,5 +65,5 @@ $('editForm').onsubmit = event => { event.preventDefault(); busy(event.target,as
   if (action === 'password' && selected.id === ownerId) { signedOut(); $('notice').textContent = 'Password changed. Sign in with your new password.'; return; }
   $('notice').textContent = data.recoveryKey ? 'Account created. Save this recovery key now; it is shown only once:\n'+data.recoveryKey : action === 'delete' ? 'Account and cloud data deleted.' : 'Password changed. Existing sessions have been signed out.';
   await load();
-} catch(error) { $('editError').textContent = error.message; } }); };
+} catch(error) { $(session ? 'editError' : 'notice').textContent = error.message; } }); };
 </script></body></html>`;

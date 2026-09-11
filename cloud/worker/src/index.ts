@@ -1532,7 +1532,7 @@ async function manageAccounts(request: Request, env: Env, db: Client, auth: Auth
     // Recheck the owner's password for every destructive or administrative action.
     const ownerRow = (await transaction.execute({ sql: 'SELECT password_hash FROM users WHERE id = ?', args: [auth.userId] })).rows[0];
     if (!await verifyPassword(String(body.currentPassword ?? ''), String(ownerRow.password_hash), env.JWT_SECRET)) {
-      throw new HttpError(401, 'Owner password is incorrect.');
+      throw new HttpError(403, 'Owner password is incorrect.');
     }
     const now = Date.now();
     if (body.action === 'create') {
