@@ -130,6 +130,11 @@ class CloudSyncService {
 class KoinlySyncApi {
   KoinlySyncApi({required this.baseUrl});
 
+  // Reuse the HTTP connection across rapid background sync requests. Creating
+  // a fresh top-level http.get/http.post client for every 3-second poll forces
+  // avoidable connection/TLS setup and makes cross-device propagation slower.
+  static final http.Client _client = http.Client();
+
   final String baseUrl;
 
   Uri _uri(String path, [Map<String, String>? query]) => Uri.parse('${CloudSyncService.normalizeApiBaseUrl(baseUrl)}$path').replace(queryParameters: query);
@@ -137,7 +142,7 @@ class KoinlySyncApi {
   Future<void> validateBackend() async {
     final validatedBaseUrl = CloudSyncService.validateApiBaseUrl(baseUrl);
     try {
-      final response = await http
+      final response = await _client
           .get(
             Uri.parse('$validatedBaseUrl/health'),
             headers: const {'accept': 'application/json'},
@@ -312,7 +317,7 @@ class KoinlySyncApi {
 
   Future<Map<String, dynamic>> _get(String path, {String? accessToken, Map<String, String>? query}) async {
     try {
-      final response = await http
+      final response = await _client
           .get(
             _uri(path, query),
             headers: {
@@ -336,7 +341,7 @@ class KoinlySyncApi {
     Duration timeout = const Duration(seconds: 30),
   }) async {
     try {
-      final response = await http
+      final response = await _client
           .post(
             _uri(path),
             headers: {

@@ -1795,6 +1795,13 @@ class AppController extends ChangeNotifier {
   Timer? _cloudSyncRetryTimer;
   Timer? _cloudSyncAutoPullTimer;
   DateTime? _lastCloudAutoPullAt;
+  // Keep cross-device changes feeling near-real-time without hammering the
+  // self-hosted Worker. Local writes are pushed almost immediately and an
+  // open second device polls often enough to normally converge in ~1-3 s.
+  static const Duration _cloudSyncPushDebounce = Duration(milliseconds: 350);
+  static const Duration _cloudSyncAutoPullInterval = Duration(seconds: 3);
+  static const Duration _cloudSyncAutoPullMinimumGap = Duration(milliseconds: 2500);
+  static const Duration _cloudSyncRetryInterval = Duration(seconds: 10);
   String syncAccountUsername = '';
   String syncAccessToken = '';
   String syncRefreshToken = '';
@@ -4040,7 +4047,7 @@ class AppController extends ChangeNotifier {
     if (immediate && cloudSyncPending && !cloudSyncBusy) {
       unawaited(syncToCloud(silent: true));
     }
-    _cloudSyncRetryTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+    _cloudSyncRetryTimer ??= Timer.periodic(_cloudSyncRetryInterval, (_) {
       if (!cloudSyncPending) {
         _cloudSyncRetryTimer?.cancel();
         _cloudSyncRetryTimer = null;
@@ -4057,7 +4064,7 @@ class AppController extends ChangeNotifier {
       _stopCloudAutoPull();
       return;
     }
-    _cloudSyncAutoPullTimer ??= Timer.periodic(const Duration(seconds: 15), (_) {
+    _cloudSyncAutoPullTimer ??= Timer.periodic(_cloudSyncAutoPullInterval, (_) {
       unawaited(syncCloudChangesIfIdle());
     });
     unawaited(syncCloudChangesIfIdle(force: true));
@@ -4073,7 +4080,7 @@ class AppController extends ChangeNotifier {
     if (!_hasConfiguredSyncTarget() || syncAuthBusy || updateDownloadBusy) return;
     if (_syncInProgress || cloudSyncBusy) return;
     final now = DateTime.now();
-    if (!force && _lastCloudAutoPullAt != null && now.difference(_lastCloudAutoPullAt!) < const Duration(seconds: 12)) return;
+    if (!force && _lastCloudAutoPullAt != null && now.difference(_lastCloudAutoPullAt!) < _cloudSyncAutoPullMinimumGap) return;
     _lastCloudAutoPullAt = now;
     await syncToCloud(silent: true);
   }
@@ -4085,7 +4092,7 @@ class AppController extends ChangeNotifier {
     unawaited(_setCloudSyncPending(true));
     _schedulePendingSyncRetry();
     _cloudSyncDebounce?.cancel();
-    _cloudSyncDebounce = Timer(const Duration(seconds: 3), () {
+    _cloudSyncDebounce = Timer(_cloudSyncPushDebounce, () {
       unawaited(syncToCloud(silent: true));
     });
   }

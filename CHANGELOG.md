@@ -18,6 +18,15 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+## [1.0.1095] - 2026-09-11
+
+### Changed
+- Reduced multi-device sync latency: local edits now queue an upload after a 350 ms debounce instead of 3 seconds.
+- Reduced foreground cloud pull cadence from 15 seconds to 3 seconds, with a 2.5-second minimum pull gap.
+- Reduced retry cadence for pending sync work from 30 seconds to 10 seconds.
+- Reused the sync HTTP client across background push/pull requests to avoid repeated connection and TLS setup.
+- Bumped application metadata to `1.0.1095+139`.
+
 ## [1.0.1094] - 2026-09-11
 
 ### Changed
