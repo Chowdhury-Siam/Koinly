@@ -32,10 +32,16 @@ void main() {
     expect(lottie, isNot(contains('Wallet')));
   });
 
-  test('semantic Awesome Snackbar feedback is presented from the top', () {
+  test('semantic feedback uses the compact safe-area top overlay', () {
     final app = File('lib/main.dart').readAsStringSync();
-    expect(app, contains('final materialBanner = MaterialBanner('));
-    expect(app, contains('inMaterialBanner: true'));
-    expect(app, contains('messenger.showMaterialBanner(materialBanner)'));
+    expect(app, contains('class _KoinlyTopFeedback extends StatefulWidget'));
+    expect(app, contains('Overlay.maybeOf(context, rootOverlay: true)'));
+    expect(app, contains('topInset = media.padding.top'));
+    expect(app, contains("tooltip: 'Dismiss'"));
+    expect(app, contains('noticeHeight = widget.message.length > 88 ? 86.0 : 74.0'));
+    // awesome_snackbar_content remains wired as a fallback for contexts where
+    // no root Overlay exists, while normal feedback stays compact.
+    expect(app, contains('AwesomeSnackbarContent('));
+    expect(app, contains('if (overlay == null)'));
   });
 }

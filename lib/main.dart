@@ -5955,11 +5955,10 @@ class _KoinlySlidableAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use flutter_slidable's native action surface rather than nesting a
-    // rounded box inside a transparent CustomSlidableAction. The nested
-    // version could be clipped to a colored sliver while a drag was between
-    // snap points. Native actions keep a stable action width throughout the
-    // gesture and clip their own content correctly.
+    // Keep action surfaces flush with each other and let the Slidable's
+    // outer ClipRRect provide the row radius. Giving every action its own
+    // rounded rectangle creates visible green/red slivers while the pane is
+    // between snap points, especially when changing swipe direction.
     return SlidableAction(
       autoClose: true,
       onPressed: onPressed,
@@ -5969,7 +5968,7 @@ class _KoinlySlidableAction extends StatelessWidget {
       label: label,
       spacing: 4,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.zero,
     );
   }
 }
@@ -7143,10 +7142,10 @@ _KoinlySnackKind _snackKindFor(String message) {
 }
 
 void _showRichSnack(BuildContext context, String message, _KoinlySnackKind kind) {
+  // Fallback for unusual contexts that do not expose a root Overlay. Normal
+  // in-app feedback uses the compact floating top notice below.
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
-  _activeKoinlySnackEntry?.remove();
-  _activeKoinlySnackEntry = null;
   final (title, contentType, color) = switch (kind) {
     _KoinlySnackKind.success => ('Done', ContentType.success, kSleekAccent),
     _KoinlySnackKind.failure => ('Something went wrong', ContentType.failure, kSleekExpense),
@@ -7183,12 +7182,10 @@ void showSnack(BuildContext context, String message) {
   if (trimmedMessage.isEmpty) return;
 
   final kind = _snackKindFor(trimmedMessage);
-  if (kind != _KoinlySnackKind.info && ScaffoldMessenger.maybeOf(context) != null) {
-    _showRichSnack(context, trimmedMessage, kind);
-    return;
-  }
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  messenger?.hideCurrentSnackBar();
+  messenger?.hideCurrentMaterialBanner();
 
-  ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) {
     _showRichSnack(context, trimmedMessage, kind);
@@ -7200,8 +7197,9 @@ void showSnack(BuildContext context, String message) {
 
   late final OverlayEntry entry;
   entry = OverlayEntry(
-    builder: (overlayContext) => _KoinlyDynamicIslandSnack(
+    builder: (overlayContext) => _KoinlyTopFeedback(
       message: trimmedMessage,
+      kind: kind,
       onDismissed: () {
         if (_activeKoinlySnackEntry == entry) {
           _activeKoinlySnackEntry = null;
@@ -7215,43 +7213,69 @@ void showSnack(BuildContext context, String message) {
   overlay.insert(entry);
 }
 
-class _KoinlyDynamicIslandSnack extends StatefulWidget {
-  const _KoinlyDynamicIslandSnack({required this.message, required this.onDismissed});
+class _KoinlyTopFeedback extends StatefulWidget {
+  const _KoinlyTopFeedback({
+    required this.message,
+    required this.kind,
+    required this.onDismissed,
+  });
 
   final String message;
+  final _KoinlySnackKind kind;
   final VoidCallback onDismissed;
 
   @override
-  State<_KoinlyDynamicIslandSnack> createState() => _KoinlyDynamicIslandSnackState();
+  State<_KoinlyTopFeedback> createState() => _KoinlyTopFeedbackState();
 }
 
-class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> with SingleTickerProviderStateMixin {
+class _KoinlyTopFeedbackState extends State<_KoinlyTopFeedback> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   Timer? _hideTimer;
+  bool _dismissing = false;
 
-  bool get _isProblemMessage {
-    final lower = widget.message.toLowerCase();
-    return lower.contains('failed') ||
-        lower.contains('error') ||
-        lower.contains('invalid') ||
-        lower.contains('check') ||
-        lower.contains('missing');
-  }
+  String get _title => switch (widget.kind) {
+        _KoinlySnackKind.success => 'Done',
+        _KoinlySnackKind.failure => 'Something went wrong',
+        _KoinlySnackKind.warning => 'Please note',
+        _KoinlySnackKind.info => 'Koinly',
+      };
+
+  IconData get _icon => switch (widget.kind) {
+        _KoinlySnackKind.success => Icons.check_rounded,
+        _KoinlySnackKind.failure => Icons.close_rounded,
+        _KoinlySnackKind.warning => Icons.priority_high_rounded,
+        _KoinlySnackKind.info => Icons.info_outline_rounded,
+      };
+
+  Color get _accent => switch (widget.kind) {
+        _KoinlySnackKind.success => kSleekAccent,
+        _KoinlySnackKind.failure => kSleekExpense,
+        _KoinlySnackKind.warning => kSleekWarning,
+        _KoinlySnackKind.info => kSleekAccent,
+      };
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 620),
-      reverseDuration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 360),
+      reverseDuration: const Duration(milliseconds: 210),
+    )..forward();
+    _hideTimer = Timer(
+      widget.kind == _KoinlySnackKind.failure ? const Duration(seconds: 5) : const Duration(milliseconds: 3600),
+      _dismiss,
     );
-    _controller.forward();
-    _hideTimer = Timer(const Duration(milliseconds: 3400), () async {
-      if (!mounted) return;
+  }
+
+  Future<void> _dismiss() async {
+    if (_dismissing || !mounted) return;
+    _dismissing = true;
+    _hideTimer?.cancel();
+    if (!MediaQuery.of(context).disableAnimations) {
       await _controller.reverse();
-      if (mounted) widget.onDismissed();
-    });
+    }
+    if (mounted) widget.onDismissed();
   }
 
   @override
@@ -7266,107 +7290,112 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
     final media = MediaQuery.of(context);
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final maxWidth = math.min(kIsDesktopApp ? 520.0 : 560.0, math.max(280.0, media.size.width - 28));
-    final expandedHeight = widget.message.length > 96 ? 108.0 : widget.message.length > 54 ? 86.0 : 64.0;
+    final reduceMotion = media.disableAnimations;
+    final maxWidth = math.min(kIsDesktopApp ? 500.0 : 520.0, math.max(280.0, media.size.width - 24));
+    final noticeHeight = widget.message.length > 88 ? 86.0 : 74.0;
     final topInset = media.padding.top + (kIsDesktopApp ? 14.0 : 8.0);
+    final foreground = dark ? Colors.white : const Color(0xFF10241D);
+    final muted = dark ? const Color(0xFFB8C9C3) : const Color(0xFF536A61);
+    final surface = dark ? const Color(0xFA0B211A) : const Color(0xFAF5FFF9);
 
-    return IgnorePointer(
-      child: Material(
-        type: MaterialType.transparency,
-        child: Stack(
-          children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                final raw = _controller.value;
-                final t = AppMotion.emphasized.transform(raw);
-                final contentT = (((t - .34) / .66).clamp(0.0, 1.0)).toDouble();
-                final width = ui.lerpDouble(92, maxWidth, t)!;
-                final height = ui.lerpDouble(38, expandedHeight, t)!;
-                final radius = ui.lerpDouble(999, 28, t)!;
-                final y = ui.lerpDouble(-52, 0, t)!;
-                final compactScale = ui.lerpDouble(.72, 1, t)!;
-                final borderOpacity = ui.lerpDouble(.16, .09, t)!;
-                final icon = _isProblemMessage ? Icons.error_rounded : Icons.check_circle_rounded;
-                final iconColor = _isProblemMessage ? kSleekWarning : kSleekAccent;
+    return Material(
+      type: MaterialType.transparency,
+      child: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              final raw = reduceMotion ? 1.0 : _controller.value;
+              final t = AppMotion.emphasized.transform(raw);
+              final opacity = Curves.easeOut.transform(t);
+              final y = ui.lerpDouble(-18, 0, t)!;
+              final scale = ui.lerpDouble(.975, 1, t)!;
 
-                return Positioned(
-                  top: topInset + y,
-                  left: 0,
-                  right: 0,
-                  child: Center(
+              return Positioned(
+                top: topInset + y,
+                left: 12,
+                right: 12,
+                child: Center(
+                  child: Opacity(
+                    opacity: opacity,
                     child: Transform.scale(
-                      scale: compactScale,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(radius),
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 80),
-                            curve: Curves.linear,
-                            width: width,
-                            height: height,
-                            decoration: BoxDecoration(
-                              color: dark ? const Color(0xF20A1518) : const Color(0xF20F172A),
-                              borderRadius: BorderRadius.circular(radius),
-                              border: Border.all(color: Colors.white.withOpacity(borderOpacity)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(dark ? .42 : .24),
-                                  blurRadius: 34,
-                                  offset: const Offset(0, 16),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(radius),
-                              child: Stack(
-                                fit: StackFit.expand,
+                      scale: scale,
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: BackdropFilter(
+                            filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                            child: Container(
+                              height: noticeHeight,
+                              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                              decoration: BoxDecoration(
+                                color: surface,
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(color: _accent.withOpacity(dark ? .28 : .22)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(dark ? .30 : .12),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
                                 children: [
-                                  Align(
+                                  Container(
+                                    width: 38,
+                                    height: 38,
+                                    decoration: BoxDecoration(
+                                      color: _accent.withOpacity(.17),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: _accent.withOpacity(.26)),
+                                    ),
                                     alignment: Alignment.center,
-                                    child: Container(
-                                      width: ui.lerpDouble(34, 0, contentT)!,
-                                      height: ui.lerpDouble(6, 0, contentT)!,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(ui.lerpDouble(.72, 0, contentT)!),
-                                        borderRadius: AppShapes.full,
-                                      ),
+                                    child: Icon(_icon, color: _accent, size: 21),
+                                  ),
+                                  const SizedBox(width: 11),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _title,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.labelLarge?.copyWith(
+                                            color: foreground,
+                                            fontWeight: FontWeight.w900,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          widget.message,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: muted,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.16,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  Opacity(
-                                    opacity: contentT,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 38,
-                                            height: 38,
-                                            decoration: BoxDecoration(
-                                              color: iconColor.withOpacity(.18),
-                                              borderRadius: BorderRadius.circular(18),
-                                              border: Border.all(color: iconColor.withOpacity(.22)),
-                                            ),
-                                            child: Icon(icon, color: iconColor, size: 21),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              widget.message,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w900,
-                                                height: 1.14,
-                                                letterSpacing: -.1,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                  const SizedBox(width: 6),
+                                  IconButton(
+                                    tooltip: 'Dismiss',
+                                    onPressed: _dismiss,
+                                    visualDensity: VisualDensity.compact,
+                                    constraints: const BoxConstraints.tightFor(width: 38, height: 38),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: foreground.withOpacity(dark ? .08 : .06),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                                     ),
+                                    icon: Icon(Icons.close_rounded, size: 20, color: foreground),
                                   ),
                                 ],
                               ),
@@ -7376,11 +7405,11 @@ class _KoinlyDynamicIslandSnackState extends State<_KoinlyDynamicIslandSnack> wi
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ],
-        ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -10525,8 +10554,8 @@ class PlannedPurchaseTile extends StatelessWidget {
         groupTag: 'planned-purchases',
         closeOnScroll: true,
         endActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          extentRatio: .66,
+          motion: const BehindMotion(),
+          extentRatio: .60,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,
@@ -11063,8 +11092,8 @@ class TransactionTile extends StatelessWidget {
         startActionPane: tx.isLoanTransaction
             ? null
             : ActionPane(
-                motion: const ScrollMotion(),
-                extentRatio: .28,
+                motion: const BehindMotion(),
+                extentRatio: .24,
                 dragDismissible: false,
                 openThreshold: .34,
                 closeThreshold: .16,
@@ -11079,8 +11108,8 @@ class TransactionTile extends StatelessWidget {
                 ],
               ),
         endActionPane: ActionPane(
-          motion: const ScrollMotion(),
-          extentRatio: .48,
+          motion: const BehindMotion(),
+          extentRatio: .42,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,
