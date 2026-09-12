@@ -28,6 +28,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
   late DateTime startDate;
   DateTime? dueDate;
   String? contactId;
+  String? accountId;
   bool busy = false;
   late final TextEditingController amount;
   late final TextEditingController rate;
@@ -58,6 +59,13 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
     if (defaultsLoaded) return;
     final state = context.read<AppController>();
     contactId ??= state.loanContacts.where((contact) => !contact.archived).firstOrNull?.id ?? '__new__';
+    if (editing && widget.loan?.disbursalTransactionId != null) {
+      final linked = state.transactions
+          .where((item) => item.id == widget.loan!.disbursalTransactionId)
+          .firstOrNull;
+      accountId ??= linked?.fromAccountId;
+    }
+    accountId ??= state.defaultAccountId ?? state.accounts.firstOrNull?.id;
     defaultsLoaded = true;
   }
 
@@ -99,11 +107,15 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
     if (!principal.isFinite || principal <= 0) return showSnack(context, 'Enter a valid amount.');
     if (!annualRate.isFinite || annualRate < 0 || annualRate > 1000) return showSnack(context, 'Enter a valid annual rate.');
     if (dueDate != null && dueDate!.isBefore(startDate)) return showSnack(context, 'Due date cannot be before the start date.');
-    final movementAccountId = state.defaultAccountId ?? state.accounts.firstOrNull?.id;
+    final movementAccountId = accountId;
     final recordDisbursal = !editing &&
         state.loanRecordTransactionsByDefault &&
         movementAccountId != null &&
         movementAccountId.isNotEmpty;
+    if (!editing && state.loanRecordTransactionsByDefault &&
+        (movementAccountId == null || movementAccountId.isEmpty)) {
+      return showSnack(context, 'Select an account.');
+    }
     setState(() => busy = true);
     try {
       var selectedContactId = contactId;
@@ -194,6 +206,27 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
             decoration: InputDecoration(labelText: 'Amount', prefixText: state.currencyPosition == CurrencyPosition.prefix ? state.currencySymbol : null, suffixText: state.currencyPosition == CurrencyPosition.suffix ? state.currencySymbol : null),
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
+          if ((!editing && state.loanRecordTransactionsByDefault) ||
+              (editing && widget.loan?.disbursalTransactionId != null)) ...[
+            const SizedBox(height: 12),
+            AppleSelectionField(
+              label: direction == LoanDirection.lent ? 'Give from account' : 'Receive into account',
+              option: state.accountOf(accountId ?? '') == null
+                  ? null
+                  : optionFromAccount(state.accountOf(accountId ?? '')!, state),
+              onTap: () async {
+                final selected = await showAppleWheelSelectionSheet(
+                  context,
+                  title: direction == LoanDirection.lent
+                      ? 'Choose the account to give from'
+                      : 'Choose the account to receive into',
+                  options: state.accounts.map((item) => optionFromAccount(item, state)).toList(),
+                  selectedId: accountId,
+                );
+                if (selected != null && mounted) setState(() => accountId = selected);
+              },
+            ),
+          ],
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () async {

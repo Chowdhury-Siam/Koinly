@@ -5119,9 +5119,25 @@ class KoinlyApp extends StatelessWidget {
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(color: kSleekAccent, linearTrackColor: Color(0x3310B981)),
       switchTheme: SwitchThemeData(
-        thumbColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? Colors.white : scheme.outline),
-        trackColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent : scheme.surfaceContainerHighest),
-        trackOutlineColor: WidgetStatePropertyAll(scheme.outlineVariant),
+        // Keep switches crisp and flat. Material 3's default track outline
+        // reads as a heavy stroke in our compact dark UI, especially on
+        // Windows and high-density Android screens.
+        thumbColor: WidgetStateProperty.resolveWith(
+          (state) => state.contains(WidgetState.selected)
+              ? Colors.white
+              : scheme.onSurfaceVariant.withOpacity(.72),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (state) => state.contains(WidgetState.selected)
+              ? kSleekAccent
+              : scheme.surfaceContainerHighest.withOpacity(isDark ? .82 : .92),
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        overlayColor: WidgetStateProperty.resolveWith(
+          (state) => state.contains(WidgetState.pressed)
+              ? kSleekAccent.withOpacity(.12)
+              : Colors.transparent,
+        ),
       ),
     );
   }
@@ -7783,10 +7799,17 @@ class _KoinlyPopupFrame extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final horizontalInset = media.size.width < 420 ? 12.0 : 20.0;
     final verticalInset = media.size.height < 720 ? 10.0 : 20.0;
+    final keyboardVisible = media.viewInsets.bottom > 0;
     final availableWidth = math.max(280.0, media.size.width - (horizontalInset * 2));
+
+    // Keep center popups at the same physical size when the IME opens.
+    // The keyboard is an occlusion, not a smaller device viewport: subtracting
+    // viewInsets here made every popup (transaction editor included) scale down
+    // as soon as a text field received focus. Size only against the real safe
+    // viewport, then move the unchanged popup toward the top while typing.
     final availableHeight = math.max(
       300.0,
-      media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom - (verticalInset * 2),
+      media.size.height - media.padding.top - media.padding.bottom - (verticalInset * 2),
     );
     final resolvedWidth = math.min(maxWidth, availableWidth);
     final resolvedHeight = math.min(maxHeight, availableHeight);
@@ -7798,9 +7821,11 @@ class _KoinlyPopupFrame extends StatelessWidget {
           child: AnimatedPadding(
             duration: AppMotion.fast,
             curve: AppMotion.emphasized,
-            padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset + media.viewInsets.bottom),
-            child: Align(
-              alignment: Alignment.center,
+            padding: EdgeInsets.fromLTRB(horizontalInset, verticalInset, horizontalInset, verticalInset),
+            child: AnimatedAlign(
+              duration: AppMotion.fast,
+              curve: AppMotion.emphasized,
+              alignment: keyboardVisible ? Alignment.topCenter : Alignment.center,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: resolvedWidth, maxHeight: resolvedHeight),
                 child: Material(
@@ -7830,9 +7855,10 @@ class _KoinlyPopupFrame extends StatelessWidget {
 /// Fixed-size popup body used by center dialogs.
 ///
 /// Center popups intentionally do not become full-card scroll views. The body
-/// keeps its natural size and, only when the available viewport is shorter
-/// than the content (for example on a small phone or while the keyboard is
-/// open), scales down as one unit so every action remains visible.
+/// keeps its natural size and scales down only when the device's real safe
+/// viewport is genuinely shorter than the content. Opening the keyboard does
+/// not reduce the popup's sizing viewport, so focused fields no longer make
+/// the entire popup shrink.
 class KoinlyPopupContent extends StatelessWidget {
   const KoinlyPopupContent({
     super.key,

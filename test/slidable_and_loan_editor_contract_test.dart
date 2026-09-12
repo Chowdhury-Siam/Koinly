@@ -41,7 +41,7 @@ void main() {
     expect(dockIndex, greaterThan(planIndex));
   });
 
-  test('loan editor no longer exposes Plan or Account movement controls', () {
+  test('loan editor keeps Plan removed and exposes an account selector for money movement', () {
     final file = File('lib/loans/loan_sheets.dart').readAsStringSync();
     final start = file.indexOf('class _LoanEditorSheetState');
     final end = file.indexOf('Future<void> showLoanPaymentSheet', start);
@@ -54,7 +54,8 @@ void main() {
     expect(editor, isNot(contains("SectionHeader('Account movement')")));
     expect(editor, isNot(contains('Record this in an account')));
     expect(editor, contains('state.loanRecordTransactionsByDefault'));
-    expect(editor, contains('state.defaultAccountId ?? state.accounts.firstOrNull?.id'));
+    expect(editor, contains("label: direction == LoanDirection.lent ? 'Give from account' : 'Receive into account'"));
+    expect(editor, contains('accountId ??= state.defaultAccountId ?? state.accounts.firstOrNull?.id'));
     expect(editor, contains('installmentCount: old?.installmentCount'));
   });
 }

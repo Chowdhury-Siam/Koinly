@@ -197,7 +197,7 @@ extension LoanControllerActions on AppController {
           payment: false,
           amount: saved.principal,
           title: category.name,
-          accountId: linked.fromAccountId,
+          accountId: accountId == null || accountId.isEmpty ? linked.fromAccountId : accountId,
           categoryId: category.id,
           linkedEntityType: 'loans',
           linkedEntityId: saved.id,

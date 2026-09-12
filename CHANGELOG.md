@@ -18,6 +18,30 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+## [1.0.1100] - 2026-09-12
+
+### Changed
+- Refined the shared switch theme so on/off toggles no longer render with a harsh outline around the track.
+- Improved inactive thumb/track contrast and kept pressed feedback subtle while preserving the existing Koinly green active state.
+- Bumped application metadata to `1.0.1100+144`.
+
+## [1.0.1099] - 2026-09-12
+
+### Changed
+- Added an account selector to the loan editor so users can choose which account provides lent money or receives borrowed money.
+- Existing loan disbursal records can now move to a different account when the loan is edited, with account balances recalculated correctly.
+- Bumped application metadata to `1.0.1099+143`.
+
+## [1.0.1098] - 2026-09-12
+
+### Fixed
+- Center popups no longer shrink when the on-screen keyboard opens. Popup sizing now ignores IME insets and stays based on the real safe viewport.
+- While typing, popups move toward the top of the screen instead of scaling down, keeping text and controls at their normal readable size.
+- The behavior is shared by the transaction editor and every popup using the common Koinly popup frame.
+
+### Changed
+- Bumped application metadata to `1.0.1098+142`.
+
 ## [1.0.1097] - 2026-09-11
 
 ### Changed
