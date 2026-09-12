@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.0.1118] - 2026-09-13
+
+### Fixed
+
+- Fixed the misleading `Sync pending • Waiting for internet` state. A pending
+  outbox no longer claims that the device has no internet; Koinly now
+  distinguishes Worker timeouts, Worker reachability/transport failures, Worker
+  errors, and ordinary queued retries.
+- Made background sync preserve the real failure message and error code so the
+  Account & sync screen and diagnostics can explain why changes are still
+  queued instead of hiding silent retry failures.
+- Reset the shared HTTP client after Android socket/client/timeout failures so a
+  stale pooled connection after Wi-Fi/mobile-network changes cannot keep sync
+  stuck while other apps still have internet access.
+- Reduced finance upload batches from 100 to 25 operations per Worker request.
+  This keeps Turso write transactions smaller and lets large local backlogs
+  drain reliably on higher-latency self-hosted deployments while preserving
+  idempotent operation IDs.
+- Improved Data health backlog findings to show the last sync failure when one
+  exists, and made profile-media transfer failures visible instead of reducing
+  them to a generic pending state.
+- Bumped application metadata to `1.0.1118+162`.
+
+
+## [1.0.1117] - 2026-09-13
+
+### Fixed
+
+- Restricted Android, Windows, Linux, and macOS release build jobs to the
+  canonical `Chowdhury-Siam/Koinly` repository for both push and manual
+  workflow runs, so fork repositories cannot build application release
+  packages with the inherited workflow.
+- Kept the separate Self-Hosted Sync Worker workflow unchanged so fork owners
+  can still deploy their own sync Worker.
+- Bumped application metadata to `1.0.1117+161`.
+
 
 ## [1.0.1116] - 2026-09-13
 

@@ -44,13 +44,35 @@ void main() {
     expect(workflow, contains('pattern: koinly-macos-*'));
   });
 
+
+  test('release package jobs never build in fork repositories', () {
+    final workflow =
+        File('.github/workflows/build-android-apks.yml').readAsStringSync();
+
+    expect(
+      workflow,
+      isNot(
+        contains(
+          "github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'",
+        ),
+      ),
+    );
+    expect(
+      RegExp(
+        r"^    if: github\.repository == 'Chowdhury-Siam/Koinly'\s*$",
+        multiLine: true,
+      ).allMatches(workflow).length,
+      4,
+    );
+  });
+
   test('desktop platform metadata stays versioned and documented', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final config = File('lib/app_config.dart').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1116+160'));
-    expect(config, contains("defaultValue: '1.0.1116'"));
+    expect(pubspec, contains('version: 1.0.1118+162'));
+    expect(config, contains("defaultValue: '1.0.1118'"));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);

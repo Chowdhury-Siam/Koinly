@@ -131,10 +131,18 @@ class CloudSyncService {
 class KoinlySyncApi {
   KoinlySyncApi({required this.baseUrl});
 
-  // Reuse the HTTP connection across rapid background sync requests. Creating
-  // a fresh top-level http.get/http.post client for every 3-second poll forces
-  // avoidable connection/TLS setup and makes cross-device propagation slower.
-  static final http.Client _client = http.Client();
+  // Reuse the HTTP connection across rapid background sync requests, but keep
+  // it replaceable. Android can keep a stale pooled socket after Wi-Fi/mobile
+  // hand-offs; resetting the client after a transport failure lets the next
+  // automatic retry establish a fresh DNS/TLS connection instead of remaining
+  // stuck in the pending state while the rest of the device is online.
+  static http.Client _client = http.Client();
+
+  static void _resetHttpClient() {
+    final staleClient = _client;
+    _client = http.Client();
+    staleClient.close();
+  }
 
   final String baseUrl;
 
@@ -170,11 +178,14 @@ class KoinlySyncApi {
         throw const CloudSyncException('This Worker is outdated and cannot sync profile media. Redeploy the latest self-hosted Worker.');
       }
     } on TimeoutException {
-      throw const CloudSyncException('Worker validation timed out. Check the URL and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('Worker validation timed out. The Worker did not answer in time.', code: 'NETWORK_TIMEOUT');
     } on SocketException {
-      throw const CloudSyncException('The Worker could not be reached. Check the URL and network.');
+      _resetHttpClient();
+      throw const CloudSyncException('The Worker could not be reached. Your internet may still be working.', code: 'NETWORK_UNREACHABLE');
     } on http.ClientException {
-      throw const CloudSyncException('The Worker could not be reached. Check the URL and network.');
+      _resetHttpClient();
+      throw const CloudSyncException('The connection to the Worker was interrupted. Koinly will retry with a fresh connection.', code: 'NETWORK_TRANSPORT');
     } on FormatException {
       throw const CloudSyncException('The Worker returned an invalid health response.');
     }
@@ -480,9 +491,14 @@ class KoinlySyncApi {
           .timeout(timeout);
       return _decodeResponse(response);
     } on TimeoutException {
-      throw const CloudSyncException('Sync request timed out. Check your connection and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('Sync request to the Worker timed out.', code: 'NETWORK_TIMEOUT');
     } on SocketException {
-      throw const CloudSyncException('No internet connection. Check your network and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('The Worker could not be reached. Your internet may still be working.', code: 'NETWORK_UNREACHABLE');
+    } on http.ClientException {
+      _resetHttpClient();
+      throw const CloudSyncException('The connection to the Worker was interrupted. Koinly will retry with a fresh connection.', code: 'NETWORK_TRANSPORT');
     }
   }
 
@@ -503,9 +519,14 @@ class KoinlySyncApi {
           .timeout(timeout);
       return _decodeResponse(response);
     } on TimeoutException {
-      throw const CloudSyncException('Request timed out. Check your connection and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('Request to the Worker timed out.', code: 'NETWORK_TIMEOUT');
     } on SocketException {
-      throw const CloudSyncException('No internet connection. Check your network and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('The Worker could not be reached. Your internet may still be working.', code: 'NETWORK_UNREACHABLE');
+    } on http.ClientException {
+      _resetHttpClient();
+      throw const CloudSyncException('The connection to the Worker was interrupted. Koinly will retry with a fresh connection.', code: 'NETWORK_TRANSPORT');
     }
   }
 
@@ -529,9 +550,14 @@ class KoinlySyncApi {
           .timeout(timeout);
       return _decodeResponse(response);
     } on TimeoutException {
-      throw const CloudSyncException('Upload timed out. Keep Koinly open on a stronger connection and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('Upload to the Worker timed out. Koinly will retry automatically.', code: 'NETWORK_TIMEOUT');
     } on SocketException {
-      throw const CloudSyncException('No internet connection. Check your network and try again.');
+      _resetHttpClient();
+      throw const CloudSyncException('The Worker could not be reached. Your internet may still be working.', code: 'NETWORK_UNREACHABLE');
+    } on http.ClientException {
+      _resetHttpClient();
+      throw const CloudSyncException('The connection to the Worker was interrupted. Koinly will retry with a fresh connection.', code: 'NETWORK_TRANSPORT');
     }
   }
 

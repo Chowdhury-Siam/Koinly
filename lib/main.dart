@@ -1880,6 +1880,10 @@ class AppController extends ChangeNotifier {
   static const Duration _cloudSyncDisconnectedFallbackInterval = Duration(seconds: 3);
   static const Duration _cloudSyncAutoPullMinimumGap = Duration(milliseconds: 750);
   static const Duration _cloudSyncRetryInterval = Duration(seconds: 5);
+  // Keep each Turso write transaction modest. Large 100-operation pushes can
+  // time out on higher-latency self-hosted deployments and leave the entire
+  // outbox untouched; operation IDs make these smaller retries idempotent.
+  static const int _cloudSyncPushBatchSize = 25;
   String syncAccountUsername = '';
   String syncAccessToken = '';
   String syncRefreshToken = '';
@@ -2525,10 +2529,13 @@ class AppController extends ChangeNotifier {
         ));
       }
       if (pendingSyncOperations > 0) {
+        final lastSyncFailure = cloudSyncError?.trim() ?? '';
         items.add(DataHealthItem(
-          severity: DataHealthSeverity.info,
+          severity: lastSyncFailure.isEmpty ? DataHealthSeverity.info : DataHealthSeverity.warning,
           title: 'Cloud upload backlog',
-          body: '$pendingSyncOperations local change${pendingSyncOperations == 1 ? '' : 's'} are waiting to sync when the backend is reachable.',
+          body: lastSyncFailure.isEmpty
+              ? '$pendingSyncOperations local change${pendingSyncOperations == 1 ? '' : 's'} are queued and Koinly will retry automatically.'
+              : '$pendingSyncOperations local change${pendingSyncOperations == 1 ? '' : 's'} are queued. Last sync attempt: ${redactSyncSecrets(lastSyncFailure)}',
         ));
       }
       if (skippedStarterPlaceholdersVisible) {
@@ -2605,13 +2612,14 @@ class AppController extends ChangeNotifier {
       ..writeln('- Signed in: $cloudSyncEnabled')
       ..writeln('- Account: ${_maskedSyncUsername()}')
       ..writeln('- New account setup choice pending: $newSyncAccountAwaitingSetupChoice')
-      ..writeln('- Status: $syncStatus')
+      ..writeln('- Status: $cloudSyncStatusText')
       ..writeln('- Pending upload operations: ${report.pendingSyncOperations}')
       ..writeln('- Open sync conflicts: ${report.openSyncConflicts}')
       ..writeln('- Last successful sync: ${cloudSyncLastAt?.toIso8601String() ?? 'none'}')
       ..writeln('- Sync pending retry: $cloudSyncPending');
     if (cloudSyncError != null && cloudSyncError!.trim().isNotEmpty) {
       buffer.writeln('- Last sync error: ${redactSyncSecrets(cloudSyncError!)}');
+      buffer.writeln('- Last sync error code: ${cloudSyncErrorCode ?? 'unclassified'}');
     }
     buffer
       ..writeln('')
@@ -2731,9 +2739,21 @@ class AppController extends ChangeNotifier {
     if (cloudSyncBusy) return syncStatus.trim().isEmpty ? 'Online sync • Syncing...' : syncStatus;
     if (newSyncAccountAwaitingSetupChoice) return 'Account created • Setup choice required';
     if (authoritativeCloudUploadPending) return 'Restore merge pending';
-    if (cloudSyncPending) return 'Sync pending • Waiting for internet';
     if (cloudSyncErrorCode == 'SYNC_APPROVAL_REQUIRED') return 'Online sync • Admin approval required';
-    if (cloudSyncError != null && cloudSyncError!.trim().isNotEmpty) return 'Sync error • $cloudSyncError';
+    final error = cloudSyncError?.trim() ?? '';
+    if (cloudSyncPending && error.isNotEmpty) {
+      switch (cloudSyncErrorCode) {
+        case 'NETWORK_TIMEOUT':
+          return 'Sync pending • Worker timed out';
+        case 'NETWORK_UNREACHABLE':
+        case 'NETWORK_TRANSPORT':
+          return 'Sync pending • Can’t reach Worker';
+        default:
+          return 'Sync pending • Worker error';
+      }
+    }
+    if (cloudSyncPending) return 'Sync pending • Retrying';
+    if (error.isNotEmpty) return 'Sync error • $error';
     if (!cloudSyncEnabled) return 'Sign in required';
     if (cloudSyncLastAt == null) return 'Signed in • Not synced yet';
     return 'Synced • ${DateFormat('yyyy-MM-dd HH:mm').format(cloudSyncLastAt!.toLocal())}';
@@ -3804,6 +3824,9 @@ class AppController extends ChangeNotifier {
       }
       return;
     }
+    final pendingBeforeSync = cloudSyncPending;
+    final errorBeforeSync = cloudSyncError;
+    final errorCodeBeforeSync = cloudSyncErrorCode;
     _syncInProgress = true;
     cloudSyncBusy = !silent;
     if (!silent) {
@@ -3823,7 +3846,7 @@ class AppController extends ChangeNotifier {
         var uploadPass = 0;
         while (uploadPass < 100) {
           uploadPass += 1;
-          final pending = await database.pendingSyncOperations(limit: 100);
+          final pending = await database.pendingSyncOperations(limit: _cloudSyncPushBatchSize);
           if (pending.isEmpty) break;
           final operations = pending.map(_operationFromOutboxRow).toList();
           final operationsById = {for (final operation in operations) operation['operationId']?.toString() ?? '': operation};
@@ -3942,25 +3965,35 @@ class AppController extends ChangeNotifier {
       // change log. This pass also picks up media changed on another device.
       await _syncProfileMediaCloudState(api: api);
     } catch (error) {
-      final text = _cleanSyncError(error);
+      Object failure = error;
+      var text = _cleanSyncError(failure);
       if (text.toLowerCase().contains('expired') || text.toLowerCase().contains('access token')) {
-        await _refreshSyncSession();
-        _syncInProgress = false;
-        cloudSyncBusy = false;
-        await performMultiDeviceSync(silent: silent, pushLocalChanges: pushLocalChanges, pullFullCloudCopy: pullFullCloudCopy);
-        return;
+        try {
+          await _refreshSyncSession();
+          _syncInProgress = false;
+          cloudSyncBusy = false;
+          await performMultiDeviceSync(silent: silent, pushLocalChanges: pushLocalChanges, pullFullCloudCopy: pullFullCloudCopy);
+          return;
+        } catch (refreshError) {
+          // Do not let a failed token refresh escape an unawaited background
+          // retry. Record the real failure so the Account & sync screen and
+          // diagnostics explain why the outbox is still pending.
+          failure = refreshError;
+          text = _cleanSyncError(refreshError);
+        }
       }
       await _setCloudSyncPending(true);
       _schedulePendingSyncRetry();
-      if (!silent) {
-        cloudSyncError = text;
-        cloudSyncErrorCode = error is CloudSyncException ? error.code : null;
-      }
+      cloudSyncError = text;
+      cloudSyncErrorCode = failure is CloudSyncException ? failure.code : null;
       syncStatus = 'Sync error';
     } finally {
       _syncInProgress = false;
       cloudSyncBusy = false;
-      if (!silent) {
+      final syncProblemChanged = pendingBeforeSync != cloudSyncPending ||
+          errorBeforeSync != cloudSyncError ||
+          errorCodeBeforeSync != cloudSyncErrorCode;
+      if (!silent || syncProblemChanged) {
         notifyListeners();
       }
       if (_cloudRealtimePullPending && _hasConfiguredSyncTarget()) {
@@ -4721,14 +4754,20 @@ class AppController extends ChangeNotifier {
       if (error.code == 'HTTP_404') {
         cloudSyncError = 'Profile media sync needs the latest self-hosted Worker. Redeploy the Worker, then keep Koinly open briefly on both devices.';
         cloudSyncErrorCode = 'PROFILE_MEDIA_WORKER_UPDATE_REQUIRED';
-        notifyListeners();
+      } else {
+        cloudSyncError = 'Profile media sync: ${_cleanSyncError(error)}';
+        cloudSyncErrorCode = error.code;
       }
-    } catch (_) {
+      notifyListeners();
+    } catch (error) {
       // Finance sync remains usable when a large media transfer is interrupted.
       // Keep retry state alive so a transient network/database failure cannot
       // strand profile media on only one device.
       await _setCloudSyncPending(true);
       _schedulePendingSyncRetry();
+      cloudSyncError = 'Profile media sync: ${_cleanSyncError(error)}';
+      cloudSyncErrorCode = null;
+      notifyListeners();
     } finally {
       _profileMediaCloudSyncInFlight = false;
     }
@@ -16027,7 +16066,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
             SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: kSleekAccentHex, onTap: () => showCurrencySheet(context)),
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.syncStatus} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
@@ -16985,7 +17024,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(state.syncStatus, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            Text(state.cloudSyncStatusText, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                             const SizedBox(height: 4),
                             Text(
                               state.cloudSyncLastAt == null ? 'Not synced yet' : 'Last synced ${DateFormat('MMM d, yyyy HH:mm').format(state.cloudSyncLastAt!.toLocal())}',

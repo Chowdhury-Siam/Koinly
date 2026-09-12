@@ -24,9 +24,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # GitHub copies workflow triggers into forks. Keep every release build job
+  # restricted to the canonical repository so fork pushes and manual runs
+  # cannot spend Actions minutes building Koinly application packages.
   build-apks:
     name: Build ARM32, ARM64, and universal APKs
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    if: github.repository == 'Chowdhury-Siam/Koinly'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -250,7 +253,7 @@ jobs:
 
   build-windows:
     name: Build Windows x64 installer EXE
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    if: github.repository == 'Chowdhury-Siam/Koinly'
     runs-on: windows-2022
     permissions:
       contents: read
@@ -583,7 +586,7 @@ jobs:
 
   build-linux:
     name: Build Linux ${{ matrix.arch }} AppImage and portable archive
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    if: github.repository == 'Chowdhury-Siam/Koinly'
     strategy:
       fail-fast: false
       matrix:
@@ -769,7 +772,7 @@ jobs:
 
   build-macos:
     name: Build macOS universal DMG and app archive
-    if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
+    if: github.repository == 'Chowdhury-Siam/Koinly'
     # Apple Silicon is substantially faster for Flutter/Xcode release compilation than
     # the legacy Intel image. Flutter release builds remain universal when the ARM64-only
     # feature is disabled, so this single job still emits both arm64 and x86_64 slices.
