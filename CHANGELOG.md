@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1119] - 2026-09-13
+
+### Fixed
+
+- Restored automatic Self-Hosted Sync Worker deployment for fork repositories on every push to `main` or `master`, including app-only updates that can change the client/Worker API contract. Canonical repository pushes remain excluded by the existing job guard, while manual deployment remains available.
+- Fixed a deployment race where the health check stopped at the first reachable HTTP 200 and could validate Cloudflare's previous Worker version during propagation. It now waits for the complete current capability contract, including `profileMediaSyncAvailable=true`, before passing.
+- Improved the final deployment error so a genuinely stale/outdated Worker is distinguished from temporary Cloudflare propagation.
+- Bumped application metadata to `1.0.1119+163`.
+
+
 ## [1.0.1118] - 2026-09-13
 
 ### Fixed
