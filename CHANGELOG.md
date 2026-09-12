@@ -19,6 +19,34 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
+## [1.0.1108] - 2026-09-12
+
+### Fixed
+
+- Fixed desktop text fields sliding horizontally while selecting text with the mouse. The app-wide scroll behavior no longer claims mouse drag gestures that belong to text selection.
+- Prevented Koinly's elastic/always-scrollable page physics from leaking into `EditableText`'s internal caret scrollable, so short field values stay anchored instead of overscrolling or appearing to disappear.
+- Kept mouse-wheel and trackpad scrolling for pages/lists while preserving normal mouse selection, copy, cut, paste, and caret behavior in every text field.
+- Bumped application metadata to `1.0.1108+152`.
+
+## [1.0.1107] - 2026-09-12
+
+### Added
+
+- Added a centered subscription recurrence picker for Daily, Weekly, Monthly, and Yearly schedules instead of the inline dropdown menu.
+- Added an **Auto pay** switch to every subscription. Turning it off keeps the recurring item and its next scheduled date without automatically creating a transaction.
+- Expanded **Add now** into a confirmation popup where the user chooses the transaction date, time, and spending account before recording the payment.
+- Added database-backed profile media synchronization through the self-hosted Worker. Profile photos, GIFs, and videos now follow the signed-in account to other synced devices, including crop/framing metadata.
+
+### Changed
+
+- Increased the profile photo/video upload limit to **50 MB** and changed local profile-media writes to stream large files instead of loading the full file into memory.
+- Profile media uses chunked authenticated Worker uploads and downloads, with realtime sync notifications and retry-safe pending state so finance sync remains available if a large media transfer is interrupted.
+- Bumped application metadata to `1.0.1107+151`.
+
+### Deployment required
+
+- **Self-hosted sync users must redeploy the latest Cloudflare Worker** so the new `profile_media` and `profile_media_chunks` database tables and media endpoints are available. The deployment workflow applies the schema automatically before redeploying.
+
 ## [1.0.1106] - 2026-09-12
 
 ### Changed

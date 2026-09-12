@@ -106,3 +106,33 @@ CREATE TABLE IF NOT EXISTS telegram_backup_settings (
 
 CREATE INDEX IF NOT EXISTS idx_telegram_backup_due
   ON telegram_backup_settings(enabled, next_due_at);
+
+-- Profile media is stored separately from finance sync rows so large photos,
+-- GIFs, and short videos never inflate the realtime sync change log. Uploads
+-- are chunked and the active metadata row is switched only after all chunks
+-- have arrived successfully.
+CREATE TABLE IF NOT EXISTS profile_media (
+  user_id TEXT PRIMARY KEY,
+  version TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  media_kind TEXT NOT NULL CHECK(media_kind IN ('photo', 'gif', 'video')),
+  size_bytes INTEGER NOT NULL CHECK(size_bytes > 0 AND size_bytes <= 52428800),
+  chunk_count INTEGER NOT NULL CHECK(chunk_count > 0 AND chunk_count <= 128),
+  scale REAL NOT NULL DEFAULT 1.0,
+  alignment_x REAL NOT NULL DEFAULT 0.0,
+  alignment_y REAL NOT NULL DEFAULT 0.0,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS profile_media_chunks (
+  user_id TEXT NOT NULL,
+  version TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL CHECK(chunk_index >= 0 AND chunk_index < 128),
+  data_base64 TEXT NOT NULL,
+  PRIMARY KEY(user_id, version, chunk_index),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_media_chunks_user_version
+  ON profile_media_chunks(user_id, version, chunk_index);

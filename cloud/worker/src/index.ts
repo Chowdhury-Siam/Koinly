@@ -41,6 +41,8 @@ const requiredTables = [
   'processed_operations',
   'rate_limits',
   'telegram_backup_settings',
+  'profile_media',
+  'profile_media_chunks',
   'admin_sessions',
 ];
 
@@ -136,6 +138,25 @@ export default {
       }
       if (request.method === 'GET' && url.pathname === '/v1/sync/pull') return await pull(url, env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/sync/status') return await status(db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/profile-media/begin') return await beginProfileMediaUpload(request, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/profile-media/chunk') return await uploadProfileMediaChunk(request, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/profile-media/complete') {
+        const response = await completeProfileMediaUpload(request, db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
+      if (request.method === 'GET' && url.pathname === '/v1/profile-media/meta') return await profileMediaMetadata(db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/profile-media/chunk') return await downloadProfileMediaChunk(url, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/profile-media/framing') {
+        const response = await updateProfileMediaFraming(request, db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
+      if (request.method === 'DELETE' && url.pathname === '/v1/profile-media') {
+        const response = await deleteProfileMedia(db, auth);
+        context.waitUntil(notifySyncHub(env, auth));
+        return response;
+      }
       if (request.method === 'GET' && url.pathname === '/v1/telegram-backup/settings') return await telegramBackupSettings(env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/settings') return await saveTelegramBackupSettings(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/test') return await testTelegramBackup(request, env, db, auth);
@@ -321,7 +342,7 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
   if (request.method === 'DELETE' && !match[2]) {
     // Delete children before their parent. The batch rolls back completely on any error.
     const results = await db.batch([
-      ...['telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
+      ...['profile_media_chunks', 'profile_media', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
@@ -1273,6 +1294,205 @@ async function notifySyncHub(env: Env, auth: AuthContext): Promise<void> {
   }
 }
 
+
+const profileMediaMaxBytes = 50 * 1024 * 1024;
+const profileMediaMaxChunks = 128;
+const profileMediaMaxEncodedChunkLength = 1_500_000;
+
+function profileMediaVersion(value: unknown): string {
+  return normalizeId(value, 'profile media version');
+}
+
+function profileMediaKind(value: unknown): 'photo' | 'gif' | 'video' {
+  const kind = String(value ?? '').trim();
+  if (kind !== 'photo' && kind !== 'gif' && kind !== 'video') {
+    throw new HttpError(400, 'Invalid profile media type.');
+  }
+  return kind;
+}
+
+function profileMediaSize(value: unknown): number {
+  const size = Number(value);
+  if (!Number.isSafeInteger(size) || size <= 0 || size > profileMediaMaxBytes) {
+    throw new HttpError(400, 'Profile media must be 50 MB or smaller.');
+  }
+  return size;
+}
+
+function profileMediaChunkCount(value: unknown): number {
+  const count = Number(value);
+  if (!Number.isSafeInteger(count) || count <= 0 || count > profileMediaMaxChunks) {
+    throw new HttpError(400, 'Invalid profile media chunk count.');
+  }
+  return count;
+}
+
+function profileMediaScale(value: unknown, fallback = 1): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(3, Math.max(1, parsed));
+}
+
+function profileMediaAlignment(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.min(1, Math.max(-1, parsed));
+}
+
+async function beginProfileMediaUpload(request: Request, db: Client, auth: AuthContext): Promise<Response> {
+  const body = await readJson(request);
+  const version = profileMediaVersion(body.version);
+  profileMediaSize(body.sizeBytes);
+  profileMediaChunkCount(body.chunkCount);
+  const current = (await db.execute({
+    sql: 'SELECT version FROM profile_media WHERE user_id = ?',
+    args: [auth.userId],
+  })).rows[0];
+  const currentVersion = current ? String(current.version) : '';
+  if (currentVersion) {
+    await db.execute({
+      sql: 'DELETE FROM profile_media_chunks WHERE user_id = ? AND version <> ?',
+      args: [auth.userId, currentVersion],
+    });
+  } else {
+    await db.execute({ sql: 'DELETE FROM profile_media_chunks WHERE user_id = ?', args: [auth.userId] });
+  }
+  if (version !== currentVersion) {
+    await db.execute({
+      sql: 'DELETE FROM profile_media_chunks WHERE user_id = ? AND version = ?',
+      args: [auth.userId, version],
+    });
+  }
+  return json({ ok: true, version });
+}
+
+async function uploadProfileMediaChunk(request: Request, db: Client, auth: AuthContext): Promise<Response> {
+  const body = await readJson(request);
+  const version = profileMediaVersion(body.version);
+  const index = Number(body.index);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= profileMediaMaxChunks) {
+    throw new HttpError(400, 'Invalid profile media chunk index.');
+  }
+  const data = typeof body.data === 'string' ? body.data : '';
+  if (!data || data.length > profileMediaMaxEncodedChunkLength || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw new HttpError(400, 'Invalid profile media chunk.');
+  }
+  await db.execute({
+    sql: `INSERT INTO profile_media_chunks(user_id, version, chunk_index, data_base64)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(user_id, version, chunk_index) DO UPDATE SET data_base64 = excluded.data_base64`,
+    args: [auth.userId, version, index, data],
+  });
+  return json({ ok: true, index });
+}
+
+async function completeProfileMediaUpload(request: Request, db: Client, auth: AuthContext): Promise<Response> {
+  const body = await readJson(request);
+  const version = profileMediaVersion(body.version);
+  const originalName = cleanText(body.originalName, 240);
+  if (!originalName) throw new HttpError(400, 'Profile media file name is required.');
+  const kind = profileMediaKind(body.kind);
+  const sizeBytes = profileMediaSize(body.sizeBytes);
+  const chunkCount = profileMediaChunkCount(body.chunkCount);
+  const scale = profileMediaScale(body.scale);
+  const alignmentX = profileMediaAlignment(body.alignmentX);
+  const alignmentY = profileMediaAlignment(body.alignmentY);
+  const uploaded = (await db.execute({
+    sql: 'SELECT COUNT(*) AS count FROM profile_media_chunks WHERE user_id = ? AND version = ?',
+    args: [auth.userId, version],
+  })).rows[0];
+  if (Number(uploaded?.count ?? 0) !== chunkCount) {
+    throw new HttpError(409, 'Profile media upload is incomplete. Retry the upload.');
+  }
+  const now = Date.now();
+  await db.batch([
+    {
+      sql: `INSERT INTO profile_media(user_id, version, original_name, media_kind, size_bytes, chunk_count, scale, alignment_x, alignment_y, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              version = excluded.version,
+              original_name = excluded.original_name,
+              media_kind = excluded.media_kind,
+              size_bytes = excluded.size_bytes,
+              chunk_count = excluded.chunk_count,
+              scale = excluded.scale,
+              alignment_x = excluded.alignment_x,
+              alignment_y = excluded.alignment_y,
+              updated_at = excluded.updated_at`,
+      args: [auth.userId, version, originalName, kind, sizeBytes, chunkCount, scale, alignmentX, alignmentY, now],
+    },
+    {
+      sql: 'DELETE FROM profile_media_chunks WHERE user_id = ? AND version <> ?',
+      args: [auth.userId, version],
+    },
+  ], 'write');
+  return json({ ok: true, version, updatedAt: now });
+}
+
+async function profileMediaMetadata(db: Client, auth: AuthContext): Promise<Response> {
+  const row = (await db.execute({
+    sql: `SELECT version, original_name, media_kind, size_bytes, chunk_count, scale, alignment_x, alignment_y, updated_at
+          FROM profile_media WHERE user_id = ?`,
+    args: [auth.userId],
+  })).rows[0];
+  if (!row) return privateJson({ media: null });
+  return privateJson({
+    media: {
+      version: String(row.version),
+      originalName: String(row.original_name),
+      kind: String(row.media_kind),
+      sizeBytes: Number(row.size_bytes),
+      chunkCount: Number(row.chunk_count),
+      scale: Number(row.scale),
+      alignmentX: Number(row.alignment_x),
+      alignmentY: Number(row.alignment_y),
+      updatedAt: Number(row.updated_at),
+    },
+  });
+}
+
+async function downloadProfileMediaChunk(url: URL, db: Client, auth: AuthContext): Promise<Response> {
+  const version = profileMediaVersion(url.searchParams.get('version'));
+  const index = Number(url.searchParams.get('index') ?? '-1');
+  if (!Number.isSafeInteger(index) || index < 0 || index >= profileMediaMaxChunks) {
+    throw new HttpError(400, 'Invalid profile media chunk index.');
+  }
+  const row = (await db.execute({
+    sql: `SELECT c.data_base64
+          FROM profile_media_chunks c
+          JOIN profile_media m ON m.user_id = c.user_id AND m.version = c.version
+          WHERE c.user_id = ? AND c.version = ? AND c.chunk_index = ?`,
+    args: [auth.userId, version, index],
+  })).rows[0];
+  if (!row) throw new HttpError(404, 'Profile media chunk was not found.');
+  return privateJson({ data: String(row.data_base64), index });
+}
+
+async function updateProfileMediaFraming(request: Request, db: Client, auth: AuthContext): Promise<Response> {
+  const body = await readJson(request);
+  const version = profileMediaVersion(body.version);
+  const scale = profileMediaScale(body.scale);
+  const alignmentX = profileMediaAlignment(body.alignmentX);
+  const alignmentY = profileMediaAlignment(body.alignmentY);
+  const now = Date.now();
+  const result = await db.execute({
+    sql: `UPDATE profile_media
+          SET scale = ?, alignment_x = ?, alignment_y = ?, updated_at = ?
+          WHERE user_id = ? AND version = ?`,
+    args: [scale, alignmentX, alignmentY, now, auth.userId, version],
+  });
+  if (!result.rowsAffected) throw new HttpError(409, 'Profile media changed on another device. Sync and try again.');
+  return json({ ok: true, version, updatedAt: now });
+}
+
+async function deleteProfileMedia(db: Client, auth: AuthContext): Promise<Response> {
+  await db.batch([
+    { sql: 'DELETE FROM profile_media_chunks WHERE user_id = ?', args: [auth.userId] },
+    { sql: 'DELETE FROM profile_media WHERE user_id = ?', args: [auth.userId] },
+  ], 'write');
+  return json({ ok: true });
+}
+
 async function initialSync(request: Request, db: Client, auth: AuthContext): Promise<Response> {
   const body = await readJson(request);
   const adoptLocal = Boolean(body.adoptLocal);
@@ -1774,7 +1994,7 @@ function json(value: unknown, status = 200): Response {
 
 function cors(response: Response): Response {
   response.headers.set('access-control-allow-origin', '*');
-  response.headers.set('access-control-allow-methods', 'GET,POST,OPTIONS');
+  response.headers.set('access-control-allow-methods', 'GET,POST,DELETE,OPTIONS');
   response.headers.set('access-control-allow-headers', 'authorization,content-type');
   return response;
 }

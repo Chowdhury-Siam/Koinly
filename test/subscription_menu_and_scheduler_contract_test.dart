@@ -27,8 +27,13 @@ void main() {
     expect(app, contains("label: 'Category'"));
     expect(app, contains("labelText: 'Price'"));
     expect(app, contains("labelText: 'Repeat'"));
+    expect(app, contains('showSubscriptionFrequencyPopup(context, frequency)'));
+    expect(app, contains("Text('Auto pay'"));
+    expect(app, contains('auto_pay INTEGER NOT NULL DEFAULT 1'));
     expect(app, contains("label: Text(recording ? 'Adding…' : 'Add now')"));
-    expect(app, contains('await SubscriptionBackgroundService.recordNow(item.id)'));
+    expect(app, contains('await SubscriptionBackgroundService.recordNow('));
+    expect(app, contains('showSubscriptionManualEntryPopup(context, item)'));
+    expect(app, contains("label: 'Spend from account'"));
     expect(app, isNot(contains("await txn.delete('subscriptions'")));
   });
 
@@ -86,6 +91,9 @@ void main() {
     expect(service, contains("'subscription:\$subscriptionId:\${occurrence.millisecondsSinceEpoch}'"));
     expect(service, contains("linked_entity_type': 'subscription'"));
     expect(service, contains('while (!due.isAfter(now)'));
+    expect(service, contains('if (!subscription.autoPay'));
+    expect(service, contains('String? accountId'));
+    expect(service, contains('DateTime? occurredOn'));
     expect(service, contains("UPDATE accounts SET amount = amount - ?"));
   });
 }

@@ -165,7 +165,7 @@ class KoinlyDatabase {
     final path = p.join(dir, 'koinly_flutter.db');
     _db = await sql.openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seed(database);
@@ -173,10 +173,12 @@ class KoinlyDatabase {
       onUpgrade: (database, oldVersion, newVersion) async {
         await _createSchema(database);
         await _ensureTransactionMetadataColumns(database);
+        await _ensureSubscriptionColumns(database);
       },
       onOpen: (database) async {
         await _createSchema(database);
         await _ensureTransactionMetadataColumns(database);
+        await _ensureSubscriptionColumns(database);
       },
     );
     return _db!;
@@ -228,6 +230,7 @@ class KoinlyDatabase {
         next_due_on INTEGER NOT NULL,
         frequency TEXT NOT NULL DEFAULT 'monthly',
         notes TEXT NOT NULL DEFAULT '',
+        auto_pay INTEGER NOT NULL DEFAULT 1,
         last_processed_on INTEGER,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
@@ -377,6 +380,15 @@ class KoinlyDatabase {
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loan_contacts_name ON loan_contacts(name COLLATE NOCASE)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_transactions_linked_entity ON transactions(linked_entity_type, linked_entity_id)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_next_due ON subscriptions(next_due_on)');
+  }
+
+  Future<void> _ensureSubscriptionColumns(sql.Database database) async {
+    final columns = (await database.rawQuery('PRAGMA table_info(subscriptions)'))
+        .map((row) => row['name']?.toString() ?? '')
+        .toSet();
+    if (!columns.contains('auto_pay')) {
+      await database.execute('ALTER TABLE subscriptions ADD COLUMN auto_pay INTEGER NOT NULL DEFAULT 1');
+    }
   }
 
   Future<void> _ensureTransactionMetadataColumns(sql.Database database) async {
@@ -1783,6 +1795,12 @@ class AppController extends ChangeNotifier {
   double profileMediaScale = 1.0;
   double profileMediaAlignmentX = 0.0;
   double profileMediaAlignmentY = 0.0;
+  String profileMediaRemoteVersion = '';
+  int profileMediaRemoteUpdatedAt = 0;
+  bool profileMediaCloudUploadPending = false;
+  bool profileMediaCloudFramingPending = false;
+  bool profileMediaCloudDeletePending = false;
+  bool _profileMediaCloudSyncInFlight = false;
   List<String> dismissedFinancialHealthSummaryKeys = [];
   Map<String, Account> _accountsById = {};
   Map<String, Category> _categoriesById = {};
@@ -1974,6 +1992,11 @@ class AppController extends ChangeNotifier {
     profileMediaScale = double.tryParse(await prefs.getString('profileMediaScale', '1.0')) ?? 1.0;
     profileMediaAlignmentX = double.tryParse(await prefs.getString('profileMediaAlignmentX', '0.0')) ?? 0.0;
     profileMediaAlignmentY = double.tryParse(await prefs.getString('profileMediaAlignmentY', '0.0')) ?? 0.0;
+    profileMediaRemoteVersion = await prefs.getString('profileMediaRemoteVersion', '');
+    profileMediaRemoteUpdatedAt = await prefs.getInt('profileMediaRemoteUpdatedAt', 0);
+    profileMediaCloudUploadPending = await prefs.getBool('profileMediaCloudUploadPending', false);
+    profileMediaCloudFramingPending = await prefs.getBool('profileMediaCloudFramingPending', false);
+    profileMediaCloudDeletePending = await prefs.getBool('profileMediaCloudDeletePending', false);
     profileMediaScale = profileMediaScale.clamp(1.0, 3.0).toDouble();
     profileMediaAlignmentX = profileMediaAlignmentX.clamp(-1.0, 1.0).toDouble();
     profileMediaAlignmentY = profileMediaAlignmentY.clamp(-1.0, 1.0).toDouble();
@@ -3914,6 +3937,10 @@ class AppController extends ChangeNotifier {
       if (mergedRemoteChanges.isNotEmpty || preservedNewerLocal || rebased || repair.hasChanges) {
         await reload(queueSync: false);
       }
+      // Profile media is transferred through its own chunked database API so
+      // files up to 50 MB do not bloat finance sync operations or the realtime
+      // change log. This pass also picks up media changed on another device.
+      await _syncProfileMediaCloudState(api: api);
     } catch (error) {
       final text = _cleanSyncError(error);
       if (text.toLowerCase().contains('expired') || text.toLowerCase().contains('access token')) {
@@ -4552,17 +4579,24 @@ class AppController extends ChangeNotifier {
     profileMediaOriginalName = stored.originalName;
     profileMediaKind = stored.kind;
     profileMediaSizeBytes = stored.sizeBytes;
+    profileMediaScale = 1.0;
+    profileMediaAlignmentX = 0.0;
+    profileMediaAlignmentY = 0.0;
+    profileMediaRemoteVersion = _uuid.v4();
+    profileMediaRemoteUpdatedAt = 0;
+    profileMediaCloudUploadPending = true;
+    profileMediaCloudFramingPending = false;
+    profileMediaCloudDeletePending = false;
     await prefs.setString('profileMediaPath', profileMediaPath);
     await prefs.setString('profileMediaOriginalName', profileMediaOriginalName);
     await prefs.setString('profileMediaKind', profileMediaKind!.name);
     await prefs.setInt('profileMediaSizeBytes', profileMediaSizeBytes);
-    profileMediaScale = 1.0;
-    profileMediaAlignmentX = 0.0;
-    profileMediaAlignmentY = 0.0;
     await prefs.setString('profileMediaScale', '1.0');
     await prefs.setString('profileMediaAlignmentX', '0.0');
     await prefs.setString('profileMediaAlignmentY', '0.0');
+    await _persistProfileMediaCloudState();
     notifyListeners();
+    if (_hasConfiguredSyncTarget()) unawaited(_syncProfileMediaCloudState());
   }
 
   Future<void> saveProfileMediaFraming({
@@ -4574,13 +4608,34 @@ class AppController extends ChangeNotifier {
     profileMediaScale = scale.clamp(1.0, 3.0).toDouble();
     profileMediaAlignmentX = alignmentX.clamp(-1.0, 1.0).toDouble();
     profileMediaAlignmentY = alignmentY.clamp(-1.0, 1.0).toDouble();
+    profileMediaCloudFramingPending = profileMediaRemoteVersion.isNotEmpty;
     await prefs.setString('profileMediaScale', profileMediaScale.toStringAsFixed(4));
     await prefs.setString('profileMediaAlignmentX', profileMediaAlignmentX.toStringAsFixed(4));
     await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
+    await _persistProfileMediaCloudState();
     notifyListeners();
+    if (_hasConfiguredSyncTarget()) unawaited(_syncProfileMediaCloudState());
   }
 
   Future<void> removeProfileMedia() async {
+    final hadRemoteMedia = profileMediaRemoteVersion.isNotEmpty;
+    profileMediaCloudUploadPending = false;
+    profileMediaCloudFramingPending = false;
+    profileMediaCloudDeletePending = hadRemoteMedia;
+    await _clearLocalProfileMedia(clearRemoteTracking: !hadRemoteMedia);
+    await _persistProfileMediaCloudState();
+    if (_hasConfiguredSyncTarget() && hadRemoteMedia) unawaited(_syncProfileMediaCloudState());
+  }
+
+  Future<void> _persistProfileMediaCloudState() async {
+    await prefs.setString('profileMediaRemoteVersion', profileMediaRemoteVersion);
+    await prefs.setInt('profileMediaRemoteUpdatedAt', profileMediaRemoteUpdatedAt);
+    await prefs.setBool('profileMediaCloudUploadPending', profileMediaCloudUploadPending);
+    await prefs.setBool('profileMediaCloudFramingPending', profileMediaCloudFramingPending);
+    await prefs.setBool('profileMediaCloudDeletePending', profileMediaCloudDeletePending);
+  }
+
+  Future<void> _clearLocalProfileMedia({required bool clearRemoteTracking}) async {
     final previousPath = profileMediaPath;
     profileMediaPath = '';
     profileMediaOriginalName = '';
@@ -4589,6 +4644,13 @@ class AppController extends ChangeNotifier {
     profileMediaScale = 1.0;
     profileMediaAlignmentX = 0.0;
     profileMediaAlignmentY = 0.0;
+    if (clearRemoteTracking) {
+      profileMediaRemoteVersion = '';
+      profileMediaRemoteUpdatedAt = 0;
+      profileMediaCloudUploadPending = false;
+      profileMediaCloudFramingPending = false;
+      profileMediaCloudDeletePending = false;
+    }
     final sharedPreferences = await prefs.prefs;
     await sharedPreferences.remove('profileMediaPath');
     await sharedPreferences.remove('profileMediaOriginalName');
@@ -4597,13 +4659,214 @@ class AppController extends ChangeNotifier {
     await sharedPreferences.remove('profileMediaScale');
     await sharedPreferences.remove('profileMediaAlignmentX');
     await sharedPreferences.remove('profileMediaAlignmentY');
+    await _persistProfileMediaCloudState();
     notifyListeners();
     try {
       await WidgetsBinding.instance.endOfFrame;
       await profileMediaStorage.remove(previousPath);
     } catch (_) {
-      // The profile is already cleared. A locked stale file is removed during
-      // the next media replacement.
+      // A stale preview can remain locked briefly on desktop. The next media
+      // replacement cleans the old file from the profile media directory.
+    }
+  }
+
+  Future<void> _syncProfileMediaCloudState({KoinlySyncApi? api}) async {
+    if (_profileMediaCloudSyncInFlight || !_hasConfiguredSyncTarget()) return;
+    _profileMediaCloudSyncInFlight = true;
+    final syncApi = api ?? KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
+    try {
+      if (profileMediaCloudDeletePending) {
+        await syncApi.deleteProfileMedia(accessToken: syncAccessToken);
+        profileMediaCloudDeletePending = false;
+        profileMediaRemoteVersion = '';
+        profileMediaRemoteUpdatedAt = 0;
+        await _persistProfileMediaCloudState();
+      }
+
+      if (profileMediaCloudUploadPending && hasProfileMedia) {
+        await _uploadProfileMediaToCloud(syncApi);
+      }
+
+      if (profileMediaCloudFramingPending && hasProfileMedia && profileMediaRemoteVersion.isNotEmpty) {
+        profileMediaRemoteUpdatedAt = await syncApi.updateProfileMediaFraming(
+          accessToken: syncAccessToken,
+          version: profileMediaRemoteVersion,
+          scale: profileMediaScale,
+          alignmentX: profileMediaAlignmentX,
+          alignmentY: profileMediaAlignmentY,
+        );
+        profileMediaCloudFramingPending = false;
+        await _persistProfileMediaCloudState();
+      }
+
+      await _pullProfileMediaFromCloud(syncApi);
+    } catch (_) {
+      // Finance sync remains usable when a large media transfer is interrupted.
+      // Pending upload/framing/delete state is persisted and retried on the next
+      // foreground, realtime, or fallback sync pass.
+    } finally {
+      _profileMediaCloudSyncInFlight = false;
+    }
+  }
+
+  Future<void> _uploadProfileMediaToCloud(KoinlySyncApi api) async {
+    if (!hasProfileMedia) return;
+    final file = File(profileMediaPath);
+    final fileSize = await file.length();
+    ProfileMediaStorage.validateSelection(name: profileMediaOriginalName, sizeBytes: fileSize);
+    var version = profileMediaRemoteVersion.trim();
+    if (version.isEmpty) {
+      version = _uuid.v4();
+      profileMediaRemoteVersion = version;
+      await _persistProfileMediaCloudState();
+    }
+    const chunkSize = 1024 * 1024;
+    final chunkCount = (fileSize / chunkSize).ceil();
+    if (chunkCount <= 0 || chunkCount > 128) {
+      throw const ProfileMediaException(kProfileMediaSizeMessage);
+    }
+    final uploadPath = profileMediaPath;
+    await api.beginProfileMediaUpload(
+      accessToken: syncAccessToken,
+      version: version,
+      sizeBytes: fileSize,
+      chunkCount: chunkCount,
+    );
+    final handle = await file.open();
+    try {
+      for (var index = 0; index < chunkCount; index += 1) {
+        if (profileMediaRemoteVersion != version || profileMediaPath != uploadPath || profileMediaCloudDeletePending) {
+          return;
+        }
+        final remaining = fileSize - index * chunkSize;
+        final bytes = await handle.read(math.min(chunkSize, remaining));
+        if (bytes.isEmpty) throw const CloudSyncException('Profile media changed while it was uploading.');
+        await api.uploadProfileMediaChunk(
+          accessToken: syncAccessToken,
+          version: version,
+          index: index,
+          bytes: Uint8List.fromList(bytes),
+        );
+      }
+    } finally {
+      await handle.close();
+    }
+    if (profileMediaRemoteVersion != version || profileMediaPath != uploadPath || profileMediaCloudDeletePending) return;
+    profileMediaRemoteUpdatedAt = await api.completeProfileMediaUpload(
+      accessToken: syncAccessToken,
+      version: version,
+      originalName: profileMediaOriginalName,
+      kind: profileMediaKind!.name,
+      sizeBytes: fileSize,
+      chunkCount: chunkCount,
+      scale: profileMediaScale,
+      alignmentX: profileMediaAlignmentX,
+      alignmentY: profileMediaAlignmentY,
+    );
+    profileMediaCloudUploadPending = false;
+    profileMediaCloudFramingPending = false;
+    await _persistProfileMediaCloudState();
+  }
+
+  Future<void> _pullProfileMediaFromCloud(KoinlySyncApi api) async {
+    if (profileMediaCloudUploadPending || profileMediaCloudDeletePending) return;
+    final remote = await api.profileMediaMetadata(accessToken: syncAccessToken);
+    if (remote == null) {
+      if (profileMediaRemoteVersion.isNotEmpty) {
+        await _clearLocalProfileMedia(clearRemoteTracking: true);
+        return;
+      }
+      // Existing installations can have local profile media created before
+      // database-backed media sync existed. Adopt it only when the cloud has no
+      // profile media, preserving merge-first semantics for a fresh Worker.
+      if (hasProfileMedia) {
+        profileMediaRemoteVersion = _uuid.v4();
+        profileMediaCloudUploadPending = true;
+        await _persistProfileMediaCloudState();
+        await _uploadProfileMediaToCloud(api);
+      }
+      return;
+    }
+
+    if (remote.version == profileMediaRemoteVersion && hasProfileMedia) {
+      if (remote.updatedAt > profileMediaRemoteUpdatedAt && !profileMediaCloudFramingPending) {
+        profileMediaScale = remote.scale;
+        profileMediaAlignmentX = remote.alignmentX;
+        profileMediaAlignmentY = remote.alignmentY;
+        profileMediaRemoteUpdatedAt = remote.updatedAt;
+        await prefs.setString('profileMediaScale', profileMediaScale.toStringAsFixed(4));
+        await prefs.setString('profileMediaAlignmentX', profileMediaAlignmentX.toStringAsFixed(4));
+        await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
+        await _persistProfileMediaCloudState();
+        notifyListeners();
+      }
+      return;
+    }
+
+    if (remote.sizeBytes <= 0 || remote.sizeBytes > kProfileMediaMaxBytes || remote.chunkCount <= 0 || remote.chunkCount > 128) {
+      throw const CloudSyncException('Cloud profile media metadata is invalid.');
+    }
+    final remoteKind = ProfileMediaStorage.kindForFileName(remote.originalName);
+    if (remoteKind == null || remoteKind.name != remote.kind) {
+      throw const CloudSyncException('Cloud profile media type does not match its file name.');
+    }
+
+    final temporaryDirectory = await getTemporaryDirectory();
+    final temporaryFile = File(p.join(temporaryDirectory.path, 'koinly_profile_${remote.version}.part'));
+    IOSink? sink;
+    try {
+      if (await temporaryFile.exists()) await temporaryFile.delete();
+      sink = temporaryFile.openWrite();
+      var received = 0;
+      for (var index = 0; index < remote.chunkCount; index += 1) {
+        final bytes = await api.downloadProfileMediaChunk(
+          accessToken: syncAccessToken,
+          version: remote.version,
+          index: index,
+        );
+        received += bytes.length;
+        if (received > remote.sizeBytes || received > kProfileMediaMaxBytes) {
+          throw const CloudSyncException('Cloud profile media is larger than its declared size.');
+        }
+        sink.add(bytes);
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+      final downloadedSize = await temporaryFile.length();
+      if (downloadedSize != remote.sizeBytes) {
+        throw const CloudSyncException('Cloud profile media download is incomplete.');
+      }
+      final stored = await profileMediaStorage.save(
+        originalName: remote.originalName,
+        sourcePath: temporaryFile.path,
+      );
+      profileMediaPath = stored.path;
+      profileMediaOriginalName = stored.originalName;
+      profileMediaKind = stored.kind;
+      profileMediaSizeBytes = stored.sizeBytes;
+      profileMediaScale = remote.scale;
+      profileMediaAlignmentX = remote.alignmentX;
+      profileMediaAlignmentY = remote.alignmentY;
+      profileMediaRemoteVersion = remote.version;
+      profileMediaRemoteUpdatedAt = remote.updatedAt;
+      profileMediaCloudUploadPending = false;
+      profileMediaCloudFramingPending = false;
+      profileMediaCloudDeletePending = false;
+      await prefs.setString('profileMediaPath', profileMediaPath);
+      await prefs.setString('profileMediaOriginalName', profileMediaOriginalName);
+      await prefs.setString('profileMediaKind', profileMediaKind!.name);
+      await prefs.setInt('profileMediaSizeBytes', profileMediaSizeBytes);
+      await prefs.setString('profileMediaScale', profileMediaScale.toStringAsFixed(4));
+      await prefs.setString('profileMediaAlignmentX', profileMediaAlignmentX.toStringAsFixed(4));
+      await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
+      await _persistProfileMediaCloudState();
+      notifyListeners();
+    } finally {
+      if (sink != null) await sink.close();
+      try {
+        if (await temporaryFile.exists()) await temporaryFile.delete();
+      } catch (_) {}
     }
   }
 
@@ -4851,8 +5114,16 @@ class AppController extends ChangeNotifier {
     await reload(queueSync: true);
   }
 
-  Future<void> recordSubscriptionNow(RecurringSubscription item) async {
-    await SubscriptionBackgroundService.recordNow(item.id);
+  Future<void> recordSubscriptionNow(
+    RecurringSubscription item, {
+    DateTime? occurredOn,
+    String? accountId,
+  }) async {
+    await SubscriptionBackgroundService.recordNow(
+      item.id,
+      occurredOn: occurredOn,
+      accountId: accountId,
+    );
     await reload(queueSync: true);
   }
 
@@ -11662,11 +11933,11 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.schedule_rounded, size: 19, color: kSleekAccent),
+                Icon(item.autoPay ? Icons.schedule_rounded : Icons.pause_circle_outline_rounded, size: 19, color: kSleekAccent),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Next • $due',
+                    item.autoPay ? 'Next • $due' : 'Auto pay off • Next • $due',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -11694,9 +11965,15 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
                 onPressed: recording
                     ? null
                     : () async {
+                        final choice = await showSubscriptionManualEntryPopup(context, item);
+                        if (choice == null || !mounted) return;
                         setState(() => recording = true);
                         try {
-                          await state.recordSubscriptionNow(item);
+                          await state.recordSubscriptionNow(
+                            item,
+                            occurredOn: choice.occurredOn,
+                            accountId: choice.accountId,
+                          );
                           if (context.mounted) showSnack(context, '${item.name} added to transactions.');
                         } on StateError catch (error) {
                           if (context.mounted) showSnack(context, error.message);
@@ -11719,6 +11996,197 @@ class _SubscriptionTileState extends State<SubscriptionTile> {
   }
 }
 
+
+class SubscriptionManualEntryChoice {
+  const SubscriptionManualEntryChoice({required this.occurredOn, required this.accountId});
+
+  final DateTime occurredOn;
+  final String accountId;
+}
+
+Future<SubscriptionManualEntryChoice?> showSubscriptionManualEntryPopup(
+  BuildContext context,
+  RecurringSubscription item,
+) {
+  return showKoinlyPopup<SubscriptionManualEntryChoice>(
+    context,
+    maxWidth: 520,
+    maxHeight: 560,
+    child: _SubscriptionManualEntryPopup(item: item),
+  );
+}
+
+class _SubscriptionManualEntryPopup extends StatefulWidget {
+  const _SubscriptionManualEntryPopup({required this.item});
+
+  final RecurringSubscription item;
+
+  @override
+  State<_SubscriptionManualEntryPopup> createState() => _SubscriptionManualEntryPopupState();
+}
+
+class _SubscriptionManualEntryPopupState extends State<_SubscriptionManualEntryPopup> {
+  late DateTime occurredOn;
+  String? accountId;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    occurredOn = DateTime.now();
+    accountId = state.accounts.any((account) => account.id == widget.item.accountId)
+        ? widget.item.accountId
+        : state.defaultAccountId ?? state.accounts.firstOrNull?.id;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await pickDate(context, occurredOn);
+    if (picked == null || !mounted) return;
+    setState(() => occurredOn = DateTime(picked.year, picked.month, picked.day, occurredOn.hour, occurredOn.minute));
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await pickTime(context, TimeOfDay.fromDateTime(occurredOn));
+    if (picked == null || !mounted) return;
+    setState(() => occurredOn = DateTime(occurredOn.year, occurredOn.month, occurredOn.day, picked.hour, picked.minute));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final selectedAccount = state.accounts.where((account) => account.id == accountId).firstOrNull;
+    return KoinlyPopupContent(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Add ${widget.item.name}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Choose when this payment happened and which account paid it.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 16),
+          AppleSelectionField(
+            label: 'Spend from account',
+            option: selectedAccount == null ? null : optionFromAccount(selectedAccount, state),
+            emptyText: 'Choose account',
+            onTap: () async {
+              final selected = await showAppleWheelSelectionSheet(
+                context,
+                title: 'Choose Account',
+                selectedId: accountId,
+                options: state.accounts.map((account) => optionFromAccount(account, state)).toList(),
+                addActionLabel: 'Add account',
+                onAdd: () => showAccountEditor(context, allowedTypes: AccountType.values),
+              );
+              if (selected != null && mounted) setState(() => accountId = selected);
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: Text(DateFormat('MMM d, yyyy').format(occurredOn)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickTime,
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: Text(DateFormat('h:mm a').format(occurredOn)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: accountId == null
+                ? null
+                : () => Navigator.pop(
+                      context,
+                      SubscriptionManualEntryChoice(occurredOn: occurredOn, accountId: accountId!),
+                    ),
+            icon: const Icon(Icons.add_task_rounded),
+            label: const Text('Add to transactions'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<SubscriptionFrequency?> showSubscriptionFrequencyPopup(
+  BuildContext context,
+  SubscriptionFrequency selected,
+) {
+  return showKoinlyPopup<SubscriptionFrequency>(
+    context,
+    maxWidth: 420,
+    maxHeight: 430,
+    child: KoinlyPopupContent(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Repeat',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final value in SubscriptionFrequency.values) ...[
+            ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              tileColor: value == selected
+                  ? Theme.of(context).colorScheme.primary.withOpacity(.14)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.34),
+              leading: Icon(
+                Icons.repeat_rounded,
+                color: value == selected ? Theme.of(context).colorScheme.primary : null,
+              ),
+              title: Text(
+                subscriptionFrequencyLabel(value),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: value == selected ? const Icon(Icons.check_rounded, color: kSleekAccent) : null,
+              onTap: () => Navigator.pop(context, value),
+            ),
+            if (value != SubscriptionFrequency.values.last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 Future<void> showSubscriptionEditor(
   BuildContext context, {
   RecurringSubscription? item,
@@ -11726,7 +12194,7 @@ Future<void> showSubscriptionEditor(
   await showKoinlyPopup<void>(
     context,
     maxWidth: 580,
-    maxHeight: 760,
+    maxHeight: 820,
     child: SubscriptionEditor(item: item),
   );
 }
@@ -11748,6 +12216,7 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
   String? accountId;
   late DateTime dueAt;
   SubscriptionFrequency frequency = SubscriptionFrequency.monthly;
+  bool autoPay = true;
   bool saving = false;
 
   @override
@@ -11761,6 +12230,7 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
     categoryId = existing?.categoryId ?? state.defaultExpenseCategoryId ?? state.categories.where((c) => c.type == CategoryType.expense).firstOrNull?.id;
     accountId = existing?.accountId ?? state.defaultAccountId ?? state.accounts.firstOrNull?.id;
     frequency = existing?.frequency ?? SubscriptionFrequency.monthly;
+    autoPay = existing?.autoPay ?? true;
     dueAt = existing?.nextDueOn ?? nextSubscriptionOccurrence(DateTime.now(), SubscriptionFrequency.monthly);
   }
 
@@ -11827,8 +12297,8 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
     if (accountId == null || !state.accounts.any((account) => account.id == accountId)) {
       return showSnack(context, 'Choose an account to spend from.');
     }
-    if (!dueAt.isAfter(DateTime.now())) {
-      return showSnack(context, 'Choose a future date and time.');
+    if (autoPay && !dueAt.isAfter(DateTime.now())) {
+      return showSnack(context, 'Choose a future date and time before turning Auto pay on.');
     }
     setState(() => saving = true);
     final now = DateTime.now();
@@ -11841,6 +12311,7 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
       nextDueOn: dueAt,
       frequency: frequency,
       notes: notes.text.trim(),
+      autoPay: autoPay,
       lastProcessedOn: widget.item?.lastProcessedOn,
       createdOn: widget.item?.createdOn ?? now,
       updatedOn: now,
@@ -11959,21 +12430,60 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
             ],
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<SubscriptionFrequency>(
-            value: frequency,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.repeat_rounded),
-              labelText: 'Repeat',
+          InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: saving
+                ? null
+                : () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    final selected = await showSubscriptionFrequencyPopup(context, frequency);
+                    if (selected != null && mounted) setState(() => frequency = selected);
+                  },
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.repeat_rounded),
+                labelText: 'Repeat',
+                suffixIcon: Icon(Icons.keyboard_arrow_down_rounded),
+              ),
+              child: Text(
+                subscriptionFrequencyLabel(frequency),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
             ),
-            items: SubscriptionFrequency.values
-                .map((value) => DropdownMenuItem<SubscriptionFrequency>(
-                      value: value,
-                      child: Text(subscriptionFrequencyLabel(value)),
-                    ))
-                .toList(),
-            onChanged: saving ? null : (value) {
-              if (value != null) setState(() => frequency = value);
-            },
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.34),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.autorenew_rounded, color: kSleekAccent),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Auto pay', style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
+                      Text(
+                        autoPay ? 'Automatically add the payment when it is due.' : 'Keep the schedule without creating automatic transactions.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: autoPay,
+                  onChanged: saving ? null : (value) => setState(() => autoPay = value),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           TextField(

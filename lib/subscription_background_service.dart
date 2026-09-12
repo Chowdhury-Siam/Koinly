@@ -62,7 +62,7 @@ class SubscriptionBackgroundService {
     RecurringSubscription subscription,
     DateTime now,
   ) async {
-    if (subscription.amount <= 0 || subscription.accountId.isEmpty || subscription.categoryId.isEmpty) {
+    if (!subscription.autoPay || subscription.amount <= 0 || subscription.accountId.isEmpty || subscription.categoryId.isEmpty) {
       return 0;
     }
     final accountRows = await database.query(
@@ -169,8 +169,12 @@ class SubscriptionBackgroundService {
     return created;
   }
 
-  static Future<String> recordNow(String subscriptionId, {DateTime? now}) async {
-    final effectiveNow = now ?? DateTime.now();
+  static Future<String> recordNow(
+    String subscriptionId, {
+    DateTime? occurredOn,
+    String? accountId,
+  }) async {
+    final effectiveOn = occurredOn ?? DateTime.now();
     final database = await _openDatabase();
     try {
       final rows = await database.query(
@@ -182,7 +186,8 @@ class SubscriptionBackgroundService {
       if (rows.isEmpty) throw StateError('This subscription no longer exists.');
       final subscription = RecurringSubscription.fromMap(rows.first);
       if (subscription.amount <= 0) throw StateError('This subscription has an invalid price.');
-      final accountRows = await database.query('accounts', columns: ['id'], where: 'id = ?', whereArgs: [subscription.accountId], limit: 1);
+      final selectedAccountId = (accountId ?? subscription.accountId).trim();
+      final accountRows = await database.query('accounts', columns: ['id'], where: 'id = ?', whereArgs: [selectedAccountId], limit: 1);
       if (accountRows.isEmpty) throw StateError('Choose a valid account for this subscription.');
       final categoryRows = await database.query('categories', columns: ['id', 'type'], where: 'id = ?', whereArgs: [subscription.categoryId], limit: 1);
       if (categoryRows.isEmpty || categoryRows.first['type'] != 'expense') {
@@ -190,9 +195,13 @@ class SubscriptionBackgroundService {
       }
 
       final transactionId = _uuid.v4();
-      var nextDue = nextSubscriptionOccurrence(subscription.nextDueOn, subscription.frequency);
-      while (!nextDue.isAfter(effectiveNow)) {
-        nextDue = nextSubscriptionOccurrence(nextDue, subscription.frequency);
+      var nextDue = subscription.nextDueOn;
+      var lastProcessedOn = subscription.lastProcessedOn;
+      if (!effectiveOn.isBefore(subscription.nextDueOn)) {
+        do {
+          nextDue = nextSubscriptionOccurrence(nextDue, subscription.frequency);
+        } while (!nextDue.isAfter(effectiveOn));
+        lastProcessedOn = effectiveOn;
       }
       await database.transaction((txn) async {
         await txn.insert('transactions', <String, Object?>{
@@ -202,33 +211,35 @@ class SubscriptionBackgroundService {
           'title': subscription.name,
           'notes': subscription.notes,
           'category_id': subscription.categoryId,
-          'from_account_id': subscription.accountId,
+          'from_account_id': selectedAccountId,
           'to_account_id': null,
           'image_path': '',
           'exclude_from_reports': 0,
           'linked_entity_type': 'subscription',
           'linked_entity_id': subscription.id,
-          'created_on': dateToDb(effectiveNow),
+          'created_on': dateToDb(effectiveOn),
           'end_on': null,
-          'updated_on': dateToDb(effectiveNow),
+          'updated_on': dateToDb(DateTime.now()),
         });
         await txn.rawUpdate(
           'UPDATE accounts SET amount = amount - ?, updated_on = ? WHERE id = ?',
-          [subscription.amount, dateToDb(effectiveNow), subscription.accountId],
+          [subscription.amount, dateToDb(DateTime.now()), selectedAccountId],
         );
-        await txn.update(
-          'subscriptions',
-          {
-            'next_due_on': dateToDb(nextDue),
-            'last_processed_on': dateToDb(effectiveNow),
-            'updated_on': dateToDb(effectiveNow),
-          },
-          where: 'id = ?',
-          whereArgs: [subscription.id],
-        );
+        if (nextDue != subscription.nextDueOn || lastProcessedOn != subscription.lastProcessedOn) {
+          await txn.update(
+            'subscriptions',
+            {
+              'next_due_on': dateToDb(nextDue),
+              'last_processed_on': lastProcessedOn == null ? null : dateToDb(lastProcessedOn),
+              'updated_on': dateToDb(DateTime.now()),
+            },
+            where: 'id = ?',
+            whereArgs: [subscription.id],
+          );
+          await _enqueueRow(txn, 'subscriptions', subscription.id);
+        }
         await _enqueueRow(txn, 'transactions', transactionId);
-        await _enqueueRow(txn, 'subscriptions', subscription.id);
-        await _enqueueRow(txn, 'accounts', subscription.accountId);
+        await _enqueueRow(txn, 'accounts', selectedAccountId);
       });
       return transactionId;
     } finally {

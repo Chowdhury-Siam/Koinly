@@ -320,6 +320,7 @@ class RecurringSubscription {
     required this.nextDueOn,
     required this.frequency,
     this.notes = '',
+    this.autoPay = true,
     this.lastProcessedOn,
     required this.createdOn,
     required this.updatedOn,
@@ -333,6 +334,7 @@ class RecurringSubscription {
   final DateTime nextDueOn;
   final SubscriptionFrequency frequency;
   final String notes;
+  final bool autoPay;
   final DateTime? lastProcessedOn;
   final DateTime createdOn;
   final DateTime updatedOn;
@@ -346,6 +348,7 @@ class RecurringSubscription {
     DateTime? nextDueOn,
     SubscriptionFrequency? frequency,
     String? notes,
+    bool? autoPay,
     DateTime? lastProcessedOn,
     DateTime? createdOn,
     DateTime? updatedOn,
@@ -358,6 +361,7 @@ class RecurringSubscription {
         nextDueOn: nextDueOn ?? this.nextDueOn,
         frequency: frequency ?? this.frequency,
         notes: notes ?? this.notes,
+        autoPay: autoPay ?? this.autoPay,
         lastProcessedOn: lastProcessedOn ?? this.lastProcessedOn,
         createdOn: createdOn ?? this.createdOn,
         updatedOn: updatedOn ?? this.updatedOn,
@@ -372,6 +376,7 @@ class RecurringSubscription {
         'next_due_on': dateToDb(nextDueOn),
         'frequency': enumName(frequency),
         'notes': notes,
+        'auto_pay': autoPay ? 1 : 0,
         'last_processed_on': lastProcessedOn == null ? null : dateToDb(lastProcessedOn!),
         'created_on': dateToDb(createdOn),
         'updated_on': dateToDb(updatedOn),
@@ -390,6 +395,7 @@ class RecurringSubscription {
           SubscriptionFrequency.monthly,
         ),
         notes: map['notes'] as String? ?? '',
+        autoPay: (map['auto_pay'] as num? ?? 1).toInt() != 0,
         lastProcessedOn: nullableDateFromDb(map['last_processed_on']),
         createdOn: dateFromDb(map['created_on']),
         updatedOn: dateFromDb(map['updated_on']),

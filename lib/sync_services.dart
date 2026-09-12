@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:mongo_dart/mongo_dart.dart' as mongo;
@@ -259,6 +260,126 @@ class KoinlySyncApi {
     return _get('/v1/sync/status', accessToken: accessToken);
   }
 
+  Future<void> beginProfileMediaUpload({
+    required String accessToken,
+    required String version,
+    required int sizeBytes,
+    required int chunkCount,
+  }) async {
+    await _post(
+      '/v1/profile-media/begin',
+      {
+        'version': version,
+        'sizeBytes': sizeBytes,
+        'chunkCount': chunkCount,
+      },
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 45),
+    );
+  }
+
+  Future<void> uploadProfileMediaChunk({
+    required String accessToken,
+    required String version,
+    required int index,
+    required Uint8List bytes,
+  }) async {
+    await _post(
+      '/v1/profile-media/chunk',
+      {
+        'version': version,
+        'index': index,
+        'data': base64Encode(bytes),
+      },
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 60),
+    );
+  }
+
+  Future<int> completeProfileMediaUpload({
+    required String accessToken,
+    required String version,
+    required String originalName,
+    required String kind,
+    required int sizeBytes,
+    required int chunkCount,
+    required double scale,
+    required double alignmentX,
+    required double alignmentY,
+  }) async {
+    final data = await _post(
+      '/v1/profile-media/complete',
+      {
+        'version': version,
+        'originalName': originalName,
+        'kind': kind,
+        'sizeBytes': sizeBytes,
+        'chunkCount': chunkCount,
+        'scale': scale,
+        'alignmentX': alignmentX,
+        'alignmentY': alignmentY,
+      },
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 45),
+    );
+    return (data['updatedAt'] as num? ?? 0).toInt();
+  }
+
+  Future<RemoteProfileMediaMetadata?> profileMediaMetadata({required String accessToken}) async {
+    final data = await _get('/v1/profile-media/meta', accessToken: accessToken);
+    final media = data['media'];
+    if (media is! Map) return null;
+    final parsed = RemoteProfileMediaMetadata.fromJson(media.cast<String, dynamic>());
+    if (parsed.version.isEmpty || parsed.originalName.isEmpty || parsed.chunkCount <= 0 || parsed.sizeBytes <= 0) {
+      throw const CloudSyncException('Cloud profile media metadata is incomplete.');
+    }
+    return parsed;
+  }
+
+  Future<Uint8List> downloadProfileMediaChunk({
+    required String accessToken,
+    required String version,
+    required int index,
+  }) async {
+    final data = await _get(
+      '/v1/profile-media/chunk',
+      accessToken: accessToken,
+      query: {'version': version, 'index': '$index'},
+      timeout: const Duration(seconds: 60),
+    );
+    final encoded = data['data']?.toString() ?? '';
+    if (encoded.isEmpty) throw const CloudSyncException('A cloud profile media chunk is missing.');
+    try {
+      return base64Decode(encoded);
+    } on FormatException {
+      throw const CloudSyncException('A cloud profile media chunk is damaged.');
+    }
+  }
+
+  Future<int> updateProfileMediaFraming({
+    required String accessToken,
+    required String version,
+    required double scale,
+    required double alignmentX,
+    required double alignmentY,
+  }) async {
+    final data = await _post(
+      '/v1/profile-media/framing',
+      {
+        'version': version,
+        'scale': scale,
+        'alignmentX': alignmentX,
+        'alignmentY': alignmentY,
+      },
+      accessToken: accessToken,
+    );
+    return (data['updatedAt'] as num? ?? 0).toInt();
+  }
+
+  Future<void> deleteProfileMedia({required String accessToken}) async {
+    await _delete('/v1/profile-media', accessToken: accessToken);
+  }
+
   Future<WebSocket> connectLive({required String accessToken}) async {
     final validatedBaseUrl = CloudSyncService.validateApiBaseUrl(baseUrl);
     final httpUri = Uri.parse('$validatedBaseUrl/v1/sync/live');
@@ -338,7 +459,12 @@ class KoinlySyncApi {
     );
   }
 
-  Future<Map<String, dynamic>> _get(String path, {String? accessToken, Map<String, String>? query}) async {
+  Future<Map<String, dynamic>> _get(
+    String path, {
+    String? accessToken,
+    Map<String, String>? query,
+    Duration timeout = const Duration(seconds: 25),
+  }) async {
     try {
       final response = await _client
           .get(
@@ -348,10 +474,33 @@ class KoinlySyncApi {
               if (accessToken != null && accessToken.isNotEmpty) 'authorization': 'Bearer $accessToken',
             },
           )
-          .timeout(const Duration(seconds: 25));
+          .timeout(timeout);
       return _decodeResponse(response);
     } on TimeoutException {
       throw const CloudSyncException('Sync request timed out. Check your connection and try again.');
+    } on SocketException {
+      throw const CloudSyncException('No internet connection. Check your network and try again.');
+    }
+  }
+
+  Future<Map<String, dynamic>> _delete(
+    String path, {
+    required String accessToken,
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    try {
+      final response = await _client
+          .delete(
+            _uri(path),
+            headers: {
+              'accept': 'application/json',
+              'authorization': 'Bearer $accessToken',
+            },
+          )
+          .timeout(timeout);
+      return _decodeResponse(response);
+    } on TimeoutException {
+      throw const CloudSyncException('Request timed out. Check your connection and try again.');
     } on SocketException {
       throw const CloudSyncException('No internet connection. Check your network and try again.');
     }

@@ -430,7 +430,7 @@ class _ProfileMediaCard extends StatelessWidget {
           if (!hasMedia) ...[
             const SizedBox(height: 12),
             Text(
-              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 1000 KB',
+              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 50 MB',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
             ),

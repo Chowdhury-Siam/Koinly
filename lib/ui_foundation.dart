@@ -484,14 +484,28 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<ui.PointerDeviceKind> get dragDevices => const {
         ui.PointerDeviceKind.touch,
-        ui.PointerDeviceKind.mouse,
+        // Do not register the desktop mouse as a scroll-drag device. EditableText
+        // uses mouse drags for caret/selection gestures, and allowing the global
+        // ScrollBehavior to claim that gesture makes single-line fields slide
+        // horizontally while the user is trying to select/copy text. Mouse-wheel
+        // and trackpad scrolling still work normally for app lists and pages.
         ui.PointerDeviceKind.trackpad,
         ui.PointerDeviceKind.stylus,
         ui.PointerDeviceKind.unknown,
       };
 
+  bool _insideEditableText(BuildContext context) =>
+      context.findAncestorStateOfType<EditableTextState>() != null ||
+      context.findAncestorWidgetOfExactType<EditableText>() != null;
+
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
+    // TextField/EditableText owns a private Scrollable for caret visibility.
+    // Giving that Scrollable Koinly's AlwaysScrollable+Bouncing physics lets a
+    // short value overscroll even when it already fits in the field, which is
+    // the desktop "text sliding/disappearing" bug. Keep editing scrollables
+    // clamped and only scrollable when their content actually overflows.
+    if (_insideEditableText(context)) return const ClampingScrollPhysics();
     if (kIsDesktopApp) return const KoinlyDesktopScrollPhysics(parent: AlwaysScrollableScrollPhysics());
     return const KoinlyMobileScrollPhysics(parent: AlwaysScrollableScrollPhysics());
   }
@@ -503,6 +517,10 @@ class KoinlyScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    // EditableText's internal Scrollable must stay pixel-stable while selecting
+    // text. The decorative desktop edge spring is only for page/list scrolling.
+    if (_insideEditableText(context)) return child;
+
     // Keep the actual desktop scroll offset fully native. A lightweight visual
     // edge spring is layered on top so mouse-wheel input also feels elastic at
     // the top/bottom without queuing animateTo calls or altering wheel deltas.

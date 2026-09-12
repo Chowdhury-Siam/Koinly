@@ -597,7 +597,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1106
+  --dart-define=KOINLY_APP_VERSION=1.0.1108
 ```
 
 ## 10.4 Windows build
@@ -607,7 +607,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1106
+  --dart-define=KOINLY_APP_VERSION=1.0.1108
 ```
 
 ## 10.5 Linux build
@@ -624,7 +624,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1106
+  --dart-define=KOINLY_APP_VERSION=1.0.1108
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -643,12 +643,16 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1106
+  --dart-define=KOINLY_APP_VERSION=1.0.1108
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.
+
+### Profile media sync
+
+When a signed-in user chooses a profile photo, animated GIF, or profile video, Koinly can synchronize that media through the user's own self-hosted Worker. Media is stored in the Worker database in authenticated chunks rather than inside the normal finance sync payload, so another signed-in device can download the same profile media without bloating transaction sync. The maximum profile-media size is **50 MB**. Existing Worker deployments must be redeployed after upgrading to a version that includes this feature so the new media tables and endpoints are created.
 
 ## 10.7 GitHub Actions
 

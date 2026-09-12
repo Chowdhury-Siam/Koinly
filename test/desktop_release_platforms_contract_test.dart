@@ -49,8 +49,8 @@ void main() {
     final config = File('lib/app_config.dart').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1106+150'));
-    expect(config, contains("defaultValue: '1.0.1106'"));
+    expect(pubspec, contains('version: 1.0.1107+151'));
+    expect(config, contains("defaultValue: '1.0.1107'"));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);

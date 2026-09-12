@@ -105,3 +105,41 @@ class TelegramBackupSettings {
     );
   }
 }
+
+class RemoteProfileMediaMetadata {
+  const RemoteProfileMediaMetadata({
+    required this.version,
+    required this.originalName,
+    required this.kind,
+    required this.sizeBytes,
+    required this.chunkCount,
+    required this.scale,
+    required this.alignmentX,
+    required this.alignmentY,
+    required this.updatedAt,
+  });
+
+  final String version;
+  final String originalName;
+  final String kind;
+  final int sizeBytes;
+  final int chunkCount;
+  final double scale;
+  final double alignmentX;
+  final double alignmentY;
+  final int updatedAt;
+
+  factory RemoteProfileMediaMetadata.fromJson(Map<String, dynamic> data) {
+    return RemoteProfileMediaMetadata(
+      version: data['version']?.toString() ?? '',
+      originalName: data['originalName']?.toString() ?? '',
+      kind: data['kind']?.toString() ?? '',
+      sizeBytes: (data['sizeBytes'] as num? ?? 0).toInt(),
+      chunkCount: (data['chunkCount'] as num? ?? 0).toInt(),
+      scale: (data['scale'] as num? ?? 1).toDouble().clamp(1.0, 3.0).toDouble(),
+      alignmentX: (data['alignmentX'] as num? ?? 0).toDouble().clamp(-1.0, 1.0).toDouble(),
+      alignmentY: (data['alignmentY'] as num? ?? 0).toDouble().clamp(-1.0, 1.0).toDouble(),
+      updatedAt: (data['updatedAt'] as num? ?? 0).toInt(),
+    );
+  }
+}

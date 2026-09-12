@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-const int kProfileMediaMaxBytes = 1000 * 1024;
-const String kProfileMediaSizeMessage = 'Profile media must be 1000 KB or smaller.';
+const int kProfileMediaMaxBytes = 50 * 1024 * 1024;
+const String kProfileMediaSizeMessage = 'Profile media must be 50 MB or smaller.';
 
 enum ProfileMediaKind { photo, gif, video }
 
@@ -98,33 +98,35 @@ class ProfileMediaStorage {
       throw const ProfileMediaException('The selected profile media could not be read.');
     }
 
-    final sourceFile = sourcePath == null || sourcePath.trim().isEmpty ? null : File(sourcePath);
-    late final Uint8List actualBytes;
-    if (bytes != null) {
-      validateSelection(name: originalName, sizeBytes: bytes.length);
-      actualBytes = bytes;
-    } else {
-      if (sourceFile == null || !await sourceFile.exists()) {
-        throw const ProfileMediaException('The selected profile media could not be read.');
-      }
-      final sourceSize = await sourceFile.length();
-      validateSelection(name: originalName, sizeBytes: sourceSize);
-      actualBytes = await sourceFile.readAsBytes();
+    final kind = kindForFileName(originalName);
+    if (kind == null) {
+      throw const ProfileMediaException('Choose a JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM file.');
     }
-    validateSelection(name: originalName, sizeBytes: actualBytes.length);
-    final kind = kindForFileName(originalName)!;
     final extension = p.extension(originalName).replaceFirst('.', '').toLowerCase();
     final supportDirectory = await getApplicationSupportDirectory();
     final mediaDirectory = Directory(p.join(supportDirectory.path, 'profile_media'));
     await mediaDirectory.create(recursive: true);
-
     final target = File(
       p.join(
         mediaDirectory.path,
         'profile_${DateTime.now().microsecondsSinceEpoch}.$extension',
       ),
     );
-    await target.writeAsBytes(actualBytes, flush: true);
+
+    late final int sizeBytes;
+    if (bytes != null) {
+      validateSelection(name: originalName, sizeBytes: bytes.length);
+      sizeBytes = bytes.length;
+      await target.writeAsBytes(bytes, flush: true);
+    } else {
+      final sourceFile = File(sourcePath!);
+      if (!await sourceFile.exists()) {
+        throw const ProfileMediaException('The selected profile media could not be read.');
+      }
+      sizeBytes = await sourceFile.length();
+      validateSelection(name: originalName, sizeBytes: sizeBytes);
+      await sourceFile.openRead().pipe(target.openWrite());
+    }
 
     await for (final entity in mediaDirectory.list()) {
       if (entity is File && entity.path != target.path) {
@@ -141,7 +143,7 @@ class ProfileMediaStorage {
       path: target.path,
       originalName: originalName,
       kind: kind,
-      sizeBytes: actualBytes.length,
+      sizeBytes: sizeBytes,
     );
   }
 
@@ -221,5 +223,8 @@ String profileMediaKindLabel(ProfileMediaKind kind) {
 
 String formatProfileMediaSize(int bytes) {
   if (bytes <= 0) return 'Unknown size';
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB';
+  }
   return '${(bytes / 1024).toStringAsFixed(bytes < 10 * 1024 ? 1 : 0)} KB';
 }
