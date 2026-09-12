@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1122] - 2026-09-13
+
+- Fixed category-breakdown bubble dragging so each percentage bubble moves completely independently. Dragging one bubble no longer checks, follows, slides around, or reacts to neighboring bubbles.
+- Kept the initial automatic collision-free layout from `1.0.1120`, while manual drag movement is now constrained only by the breakdown chart bounds.
+- Bumped application metadata to `1.0.1122+166`.
+
+
 ## [1.0.1121] - 2026-09-13
 
 ### Changed

@@ -15478,81 +15478,16 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                       return clampBadgeCenter(candidate, currentBadgeWidth, currentBadgeHeight);
                     }
 
-                    bool badgeCenterCollides(
-                      int movingIndex,
-                      Offset candidate,
-                      double movingWidth,
-                      double movingHeight,
-                    ) {
-                      final movingRect = badgeCollisionRect(candidate, movingWidth, movingHeight);
-                      for (var otherIndex = 0; otherIndex < slices.length; otherIndex++) {
-                        if (otherIndex == movingIndex) continue;
-                        final otherSelected = selectedBadgeIndex == otherIndex;
-                        final otherWidth = otherSelected ? badgeWidth + 12 : badgeWidth;
-                        final otherHeight = otherSelected ? badgeHeight + 4 : badgeHeight;
-                        final otherCenter = resolvedBadgeCenter(otherIndex, otherWidth, otherHeight);
-                        if (movingRect.overlaps(badgeCollisionRect(otherCenter, otherWidth, otherHeight))) {
-                          return true;
-                        }
-                      }
-                      return false;
-                    }
-
-                    Offset furthestFreeBadgeCenter(
-                      int index,
-                      Offset current,
-                      double currentBadgeWidth,
-                      double currentBadgeHeight,
-                      Offset delta,
-                    ) {
-                      var low = 0.0;
-                      var high = 1.0;
-                      var best = current;
-                      for (var step = 0; step < 10; step++) {
-                        final fraction = (low + high) / 2;
-                        final candidate = clampBadgeCenter(
-                          current + Offset(delta.dx * fraction, delta.dy * fraction),
-                          currentBadgeWidth,
-                          currentBadgeHeight,
-                        );
-                        if (badgeCenterCollides(index, candidate, currentBadgeWidth, currentBadgeHeight)) {
-                          high = fraction;
-                        } else {
-                          low = fraction;
-                          best = candidate;
-                        }
-                      }
-                      return best;
-                    }
-
                     void moveBadge(int index, double currentBadgeWidth, double currentBadgeHeight, Offset delta) {
                       final current = resolvedBadgeCenter(index, currentBadgeWidth, currentBadgeHeight);
-                      final target = clampBadgeCenter(current + delta, currentBadgeWidth, currentBadgeHeight);
-                      var next = target;
-
-                      if (badgeCenterCollides(index, target, currentBadgeWidth, currentBadgeHeight)) {
-                        final candidates = <Offset>[
-                          furthestFreeBadgeCenter(index, current, currentBadgeWidth, currentBadgeHeight, delta),
-                          furthestFreeBadgeCenter(
-                            index,
-                            current,
-                            currentBadgeWidth,
-                            currentBadgeHeight,
-                            Offset(delta.dx, 0),
-                          ),
-                          furthestFreeBadgeCenter(
-                            index,
-                            current,
-                            currentBadgeWidth,
-                            currentBadgeHeight,
-                            Offset(0, delta.dy),
-                          ),
-                        ];
-                        next = candidates.reduce(
-                          (best, candidate) =>
-                              (candidate - current).distanceSquared > (best - current).distanceSquared ? candidate : best,
-                        );
-                      }
+                      // Every badge owns its own drag state. Do not inspect, push,
+                      // slide around, or otherwise react to neighboring badges while
+                      // dragging; only keep the active badge inside the chart surface.
+                      final next = clampBadgeCenter(
+                        current + delta,
+                        currentBadgeWidth,
+                        currentBadgeHeight,
+                      );
 
                       _badgeCenterFractions[slices[index].categoryId] = Offset(
                         (next.dx / canvasWidth).clamp(0.0, 1.0).toDouble(),
