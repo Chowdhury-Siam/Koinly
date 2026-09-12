@@ -19,6 +19,20 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
+## [1.0.1106] - 2026-09-12
+
+### Changed
+
+- Moved the macOS release job from the legacy Intel GitHub runner to the standard Apple Silicon `macos-15` runner while keeping Flutter's universal release mode enabled, so the published app still contains both `arm64` and `x86_64` slices.
+- Replaced the macOS `subosito/flutter-action` setup with a pinned Flutter `3.47.4` source checkout cached between runs. This avoids ARM64 SDK archive resolution failures and removes repeated SDK setup work after the first run.
+- Added reusable macOS CocoaPods and incremental `build/macos` caches so later release builds can reuse Xcode/Flutter compilation work instead of rebuilding every dependency from scratch.
+- Disabled CocoaPods statistics during CI to remove unnecessary network/analytics overhead.
+- Bumped application metadata to `1.0.1106+150`.
+
+### Performance
+
+- The macOS job was the release pipeline bottleneck, spending most of its time inside `flutter build macos` on `macos-15-intel`. The release workflow now targets Apple Silicon and keeps incremental build state, substantially reducing repeat-build wall time.
+
 ## [1.0.1105] - 2026-09-12
 
 ### Fixed

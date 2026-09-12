@@ -29,3 +29,6 @@ android/app/*.jks
 android/app/*.keystore
 android/key.properties
 android/local.properties
+
+# CI-only cached SDK/build state
+.ci-cache/

@@ -770,37 +770,49 @@ jobs:
   build-macos:
     name: Build macOS universal DMG and app archive
     if: github.event_name == 'workflow_dispatch' || github.repository == 'Chowdhury-Siam/Koinly'
-    runs-on: macos-15-intel
+    # Apple Silicon is substantially faster for Flutter/Xcode release compilation than
+    # the legacy Intel image. Flutter release builds remain universal when the ARM64-only
+    # feature is disabled, so this single job still emits both arm64 and x86_64 slices.
+    runs-on: macos-15
     permissions:
       contents: read
     env:
       PUB_CACHE: ${{ github.workspace }}/.pub-cache
+      FLUTTER_VERSION: "3.47.4"
+      FLUTTER_SDK_DIR: ${{ github.workspace }}/.ci-cache/flutter-macos-arm64
       # Release builds are explicitly universal so one package supports Intel and Apple Silicon.
       FLUTTER_MACOS_ARM64_ONLY: "false"
+      COCOAPODS_DISABLE_STATS: "true"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.47.4
-          cache: true
-
-      - name: Restore macOS dependency cache
+      - name: Restore pinned Flutter SDK cache
+        id: flutter-sdk-cache
         uses: actions/cache@v4
         with:
-          path: |
-            .pub-cache
-            ~/Library/Caches/CocoaPods
-          key: koinly-${{ runner.os }}-universal-deps-${{ hashFiles('pubspec.lock') }}
-          restore-keys: |
-            koinly-${{ runner.os }}-universal-deps-
+          path: .ci-cache/flutter-macos-arm64
+          key: koinly-flutter-${{ runner.os }}-${{ runner.arch }}-3.47.4-v1
 
-      - name: Show Flutter version
-        run: flutter --version
+      - name: Set up pinned Flutter on Apple Silicon
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x "$FLUTTER_SDK_DIR/bin/flutter" ]; then
+            rm -rf "$FLUTTER_SDK_DIR"
+            mkdir -p "$(dirname "$FLUTTER_SDK_DIR")"
+            git clone --filter=blob:none --single-branch --depth 1 \
+              --branch "$FLUTTER_VERSION" \
+              https://github.com/flutter/flutter.git "$FLUTTER_SDK_DIR"
+          fi
+          echo "FLUTTER_ROOT=$FLUTTER_SDK_DIR" >> "$GITHUB_ENV"
+          echo "$FLUTTER_SDK_DIR/bin" >> "$GITHUB_PATH"
+          "$FLUTTER_SDK_DIR/bin/flutter" config --no-analytics
+          if [ "${{ steps.flutter-sdk-cache.outputs.cache-hit }}" != "true" ]; then
+            "$FLUTTER_SDK_DIR/bin/flutter" precache --macos
+          fi
+          "$FLUTTER_SDK_DIR/bin/flutter" --version
 
       - name: Enable macOS desktop support
         run: |
@@ -809,6 +821,22 @@ jobs:
 
       - name: Generate macOS platform files
         run: flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
+
+      - name: Restore macOS dependency and incremental build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .pub-cache
+            ~/Library/Caches/CocoaPods
+            macos/Pods
+            build/macos
+          key: koinly-macos-arm64-build-${{ hashFiles('pubspec.lock') }}-${{ github.sha }}
+          restore-keys: |
+            koinly-macos-arm64-build-${{ hashFiles('pubspec.lock') }}-
+            koinly-macos-arm64-build-
+
+      - name: Show Flutter version
+        run: flutter --version
 
       - name: Apply Koinly macOS identity, permissions, and icon
         shell: bash

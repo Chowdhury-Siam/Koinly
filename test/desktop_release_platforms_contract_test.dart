@@ -26,8 +26,13 @@ void main() {
     );
 
     expect(workflow, contains('build-macos:'));
-    expect(workflow, contains('runs-on: macos-15-intel'));
-    expect(workflow, isNot(contains('runner: macos-15')));
+    expect(workflow, contains('runs-on: macos-15'));
+    expect(workflow, isNot(contains('runs-on: macos-15-intel')));
+    expect(workflow, contains('Restore pinned Flutter SDK cache'));
+    expect(workflow, contains('Set up pinned Flutter on Apple Silicon'));
+    expect(workflow, contains('--filter=blob:none --single-branch --depth 1'));
+    expect(workflow, contains('Restore macOS dependency and incremental build caches'));
+    expect(workflow, contains('build/macos'));
     expect(workflow, contains('FLUTTER_MACOS_ARM64_ONLY: "false"'));
     expect(workflow, contains('flutter build macos --release'));
     expect(workflow, contains('lipo -archs'));
@@ -44,8 +49,8 @@ void main() {
     final config = File('lib/app_config.dart').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1105+149'));
-    expect(config, contains("defaultValue: '1.0.1105'"));
+    expect(pubspec, contains('version: 1.0.1106+150'));
+    expect(config, contains("defaultValue: '1.0.1106'"));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);
