@@ -159,7 +159,11 @@ class _MotionPressableState extends State<MotionPressable> with SingleTickerProv
   bool _pressed = false;
   bool _hovered = false;
 
-  double get _restScale => kIsDesktopApp && _hovered ? 1.008 : 1.0;
+  // Do not grow generic desktop controls on hover. A Transform can paint
+  // outside its layout/hit-test bounds, leaving a thin visible edge that the
+  // pointer cannot actually hit. That mismatch is what made the app feel as if
+  // an invisible hover field only covered part of a control.
+  double get _restScale => 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
 
   void _animateTo(double target, {Duration duration = const Duration(milliseconds: 72)}) {
@@ -269,7 +273,11 @@ class _MotionTouchFeedbackState extends State<MotionTouchFeedback> with SingleTi
   int? _pointer;
   bool _hovered = false;
 
-  double get _restScale => kIsDesktopApp && _hovered ? 1.008 : 1.0;
+  // Do not grow generic desktop controls on hover. A Transform can paint
+  // outside its layout/hit-test bounds, leaving a thin visible edge that the
+  // pointer cannot actually hit. That mismatch is what made the app feel as if
+  // an invisible hover field only covered part of a control.
+  double get _restScale => 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
 
   void _down(PointerDownEvent event) {
@@ -376,7 +384,9 @@ class _MotionInkWellState extends State<MotionInkWell> with SingleTickerProvider
   int? _pointer;
   bool _hovered = false;
 
-  double get _restScale => kIsDesktopApp && _hovered ? 1.006 : 1.0;
+  // Keep hover feedback inside the real hit target; press compression remains
+  // animated, but hover never paints beyond the widget's interactive bounds.
+  double get _restScale => 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .968) : widget.scale;
 
   void _press() {

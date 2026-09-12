@@ -19,6 +19,16 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
+## [1.0.1109] - 2026-09-12
+
+### Fixed
+
+- Removed the malformed desktop hover wash that could appear as a partial rectangular/invisible field over rounded controls such as list rows, switches, buttons, and menu items.
+- Kept generic hover visuals inside their real interactive bounds by removing hover-only upscaling; press animations, click cursors, keyboard focus, and touch feedback remain intact.
+- Changed common Material button overlays so hover stays clean while pressed/focused states still receive intentional feedback.
+- Bumped application metadata to `1.0.1109+153`.
+
+
 ## [1.0.1108] - 2026-09-12
 
 ### Fixed

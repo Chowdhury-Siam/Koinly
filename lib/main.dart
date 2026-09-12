@@ -5301,6 +5301,12 @@ class KoinlyApp extends StatelessWidget {
       canvasColor: scheme.background,
       visualDensity: VisualDensity.standard,
       dividerColor: Colors.transparent,
+      // Desktop Material widgets add a translucent rectangular hover wash by
+      // default. On rounded Koinly controls that overlay can look like an
+      // invisible/partial field that does not match the visual surface. Keep
+      // hover feedback in our motion/cursor layer instead and reserve overlays
+      // for actual presses/focus.
+      hoverColor: Colors.transparent,
       splashFactory: InkSparkle.splashFactory,
       textTheme: textTheme.copyWith(
         displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2),
@@ -5401,7 +5407,13 @@ class KoinlyApp extends StatelessWidget {
         style: ButtonStyle(
           backgroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
           foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
-          overlayColor: WidgetStatePropertyAll(Colors.white.withOpacity(.10)),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? Colors.white.withOpacity(.10)
+                : state.contains(WidgetState.focused)
+                    ? Colors.white.withOpacity(.06)
+                    : Colors.transparent,
+          ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
           minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
@@ -5412,6 +5424,11 @@ class KoinlyApp extends StatelessWidget {
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
           foregroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.75)),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? kSleekAccent.withOpacity(.10)
+                : Colors.transparent,
+          ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
           textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
@@ -5425,6 +5442,11 @@ class KoinlyApp extends StatelessWidget {
             pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.3),
             disabled: BorderSide(color: scheme.onSurface.withOpacity(.12), width: 1),
           ),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? kSleekAccent.withOpacity(.08)
+                : Colors.transparent,
+          ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
           minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
@@ -5436,6 +5458,11 @@ class KoinlyApp extends StatelessWidget {
           backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent.withOpacity(isDark ? .42 : .22) : scheme.surfaceContainerHigh.withOpacity(isDark ? .58 : .72)),
           foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? (isDark ? Colors.white : const Color(0xFF003033)) : scheme.onSurfaceVariant),
           side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.9), width: 1.1)),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? kSleekAccent.withOpacity(.10)
+                : Colors.transparent,
+          ),
           shape: WidgetStatePropertyAll(AppShapes.squircle(22)),
           textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 16)),
@@ -5452,6 +5479,11 @@ class KoinlyApp extends StatelessWidget {
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent.withOpacity(.16) : (isDark ? scheme.surfaceContainerHigh.withOpacity(.72) : Colors.white.withOpacity(.92))),
           foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface),
+          overlayColor: WidgetStateProperty.resolveWith(
+            (state) => state.contains(WidgetState.pressed)
+                ? kSleekAccent.withOpacity(.10)
+                : Colors.transparent,
+          ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
         ),
