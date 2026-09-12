@@ -5235,13 +5235,7 @@ class KoinlyApp extends StatelessWidget {
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
             disableAnimations: media.disableAnimations,
           ),
-          child: DefaultTextStyle.merge(
-            style: const TextStyle(
-              fontFamily: kAppFontFamily,
-              fontFamilyFallback: kAppFontFamilyFallback,
-            ),
-            child: child ?? const SizedBox.shrink(),
-          ),
+          child: child ?? const SizedBox.shrink(),
         );
       },
     );
@@ -5284,18 +5278,29 @@ class KoinlyApp extends StatelessWidget {
           );
 
     final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
-          fontFamily: kAppFontFamily,
-          fontFamilyFallback: kAppFontFamilyFallback,
+          fontFamily: '.SF Pro Display',
+          fontFamilyFallback: const <String>[
+            'SF Pro Display',
+            '.SF Pro Text',
+            '.SF UI Display',
+            '.SF UI Text',
+            'SF Pro Text',
+            'Helvetica Neue',
+            'Segoe UI',
+            'Roboto',
+            'sans-serif',
+          ],
           displayColor: scheme.onSurface,
           bodyColor: scheme.onSurface,
         );
 
     final pageTransitionBuilder = const KoinlyPageTransitionsBuilder();
 
-    WidgetStateProperty<T> states<T>({required T normal, T? selected, T? pressed, T? disabled}) {
+    WidgetStateProperty<T> states<T>({required T normal, T? selected, T? hovered, T? pressed, T? disabled}) {
       return WidgetStateProperty.resolveWith((state) {
         if (state.contains(WidgetState.disabled)) return disabled ?? normal;
-        if (state.contains(WidgetState.pressed)) return pressed ?? selected ?? normal;
+        if (state.contains(WidgetState.pressed)) return pressed ?? hovered ?? selected ?? normal;
+        if (state.contains(WidgetState.hovered)) return hovered ?? selected ?? normal;
         if (state.contains(WidgetState.selected)) return selected ?? normal;
         return normal;
       });
@@ -5303,18 +5308,28 @@ class KoinlyApp extends StatelessWidget {
 
     return ThemeData(
       useMaterial3: true,
-      fontFamily: kAppFontFamily,
+      fontFamily: '.SF Pro Display',
+      fontFamilyFallback: const <String>[
+        'SF Pro Display',
+        '.SF Pro Text',
+        '.SF UI Display',
+        '.SF UI Text',
+        'SF Pro Text',
+        'Helvetica Neue',
+        'Segoe UI',
+        'Roboto',
+        'sans-serif',
+      ],
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.background,
       canvasColor: scheme.background,
       visualDensity: VisualDensity.standard,
       dividerColor: Colors.transparent,
-      // Desktop Material widgets add a translucent rectangular hover wash by
-      // default. On rounded Koinly controls that overlay can look like an
-      // invisible/partial field that does not match the visual surface. Keep
-      // hover feedback in our motion/cursor layer instead and reserve overlays
-      // for actual presses/focus.
-      hoverColor: Colors.transparent,
+      // One consistent desktop hover state layer for InkWell-based controls.
+      // Individual widgets keep their own shape/customBorder, so the field
+      // fills the complete interactive surface instead of stopping short.
+      hoverColor: kSleekAccent.withOpacity(isDark ? .085 : .065),
+      focusColor: kSleekAccent.withOpacity(isDark ? .10 : .07),
       splashFactory: InkSparkle.splashFactory,
       textTheme: textTheme.copyWith(
         displaySmall: textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -1.2),
@@ -5415,13 +5430,12 @@ class KoinlyApp extends StatelessWidget {
         style: ButtonStyle(
           backgroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.88), disabled: scheme.onSurface.withOpacity(.12)),
           foregroundColor: states(normal: Colors.white, disabled: scheme.onSurface.withOpacity(.38)),
-          overlayColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? Colors.white.withOpacity(.10)
-                : state.contains(WidgetState.focused)
-                    ? Colors.white.withOpacity(.06)
-                    : Colors.transparent,
-          ),
+          overlayColor: WidgetStateProperty.resolveWith((state) {
+            if (state.contains(WidgetState.pressed)) return Colors.white.withOpacity(.14);
+            if (state.contains(WidgetState.hovered)) return Colors.white.withOpacity(.09);
+            if (state.contains(WidgetState.focused)) return Colors.white.withOpacity(.07);
+            return Colors.transparent;
+          }),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
           minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
@@ -5431,11 +5445,11 @@ class KoinlyApp extends StatelessWidget {
       ),
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: states(normal: kSleekAccent, pressed: kSleekAccent.withOpacity(.75)),
-          overlayColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? kSleekAccent.withOpacity(.10)
-                : Colors.transparent,
+          foregroundColor: states(normal: kSleekAccent, hovered: kSleekAccent, pressed: kSleekAccent.withOpacity(.75)),
+          overlayColor: states(
+            normal: Colors.transparent,
+            hovered: kSleekAccent.withOpacity(isDark ? .10 : .07),
+            pressed: kSleekAccent.withOpacity(.14),
           ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
@@ -5444,16 +5458,16 @@ class KoinlyApp extends StatelessWidget {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: ButtonStyle(
-          foregroundColor: states(normal: scheme.onSurface, pressed: kSleekAccent, disabled: scheme.onSurface.withOpacity(.38)),
+          foregroundColor: states(normal: scheme.onSurface, hovered: kSleekAccent, pressed: kSleekAccent, disabled: scheme.onSurface.withOpacity(.38)),
+          overlayColor: states(
+            normal: Colors.transparent,
+            hovered: kSleekAccent.withOpacity(isDark ? .09 : .06),
+            pressed: kSleekAccent.withOpacity(.13),
+          ),
           side: states(
             normal: BorderSide(color: scheme.outlineVariant.withOpacity(.95), width: 1.2),
             pressed: BorderSide(color: kSleekAccent.withOpacity(.72), width: 1.3),
             disabled: BorderSide(color: scheme.onSurface.withOpacity(.12), width: 1),
-          ),
-          overlayColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? kSleekAccent.withOpacity(.08)
-                : Colors.transparent,
           ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
@@ -5463,14 +5477,14 @@ class KoinlyApp extends StatelessWidget {
       ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? kSleekAccent.withOpacity(isDark ? .42 : .22) : scheme.surfaceContainerHigh.withOpacity(isDark ? .58 : .72)),
+          backgroundColor: WidgetStateProperty.resolveWith((state) {
+            if (state.contains(WidgetState.selected)) return kSleekAccent.withOpacity(isDark ? .42 : .22);
+            if (state.contains(WidgetState.hovered)) return kSleekAccent.withOpacity(isDark ? .10 : .07);
+            return scheme.surfaceContainerHigh.withOpacity(isDark ? .58 : .72);
+          }),
           foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.selected) ? (isDark ? Colors.white : const Color(0xFF003033)) : scheme.onSurfaceVariant),
+          overlayColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent.withOpacity(.12) : Colors.transparent),
           side: WidgetStatePropertyAll(BorderSide(color: scheme.outlineVariant.withOpacity(.9), width: 1.1)),
-          overlayColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? kSleekAccent.withOpacity(.10)
-                : Colors.transparent,
-          ),
           shape: WidgetStatePropertyAll(AppShapes.squircle(22)),
           textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 14, horizontal: 16)),
@@ -5479,19 +5493,20 @@ class KoinlyApp extends StatelessWidget {
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: kSleekAccent,
         foregroundColor: Colors.white,
+        hoverColor: Colors.white.withOpacity(.10),
         elevation: 6,
         highlightElevation: 2,
         shape: AppShapes.squircle(22),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent.withOpacity(.16) : (isDark ? scheme.surfaceContainerHigh.withOpacity(.72) : Colors.white.withOpacity(.92))),
-          foregroundColor: WidgetStateProperty.resolveWith((state) => state.contains(WidgetState.pressed) ? kSleekAccent : scheme.onSurface),
-          overlayColor: WidgetStateProperty.resolveWith(
-            (state) => state.contains(WidgetState.pressed)
-                ? kSleekAccent.withOpacity(.10)
-                : Colors.transparent,
-          ),
+          backgroundColor: WidgetStateProperty.resolveWith((state) {
+            if (state.contains(WidgetState.pressed)) return kSleekAccent.withOpacity(.16);
+            if (state.contains(WidgetState.hovered)) return kSleekAccent.withOpacity(isDark ? .10 : .07);
+            return isDark ? scheme.surfaceContainerHigh.withOpacity(.72) : Colors.white.withOpacity(.92);
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith((state) => (state.contains(WidgetState.pressed) || state.contains(WidgetState.hovered)) ? kSleekAccent : scheme.onSurface),
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           minimumSize: const WidgetStatePropertyAll(Size(44, 44)),
         ),
@@ -5531,11 +5546,11 @@ class KoinlyApp extends StatelessWidget {
               : scheme.surfaceContainerHighest.withOpacity(isDark ? .82 : .92),
         ),
         trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
-        overlayColor: WidgetStateProperty.resolveWith(
-          (state) => state.contains(WidgetState.pressed)
-              ? kSleekAccent.withOpacity(.12)
-              : Colors.transparent,
-        ),
+        overlayColor: WidgetStateProperty.resolveWith((state) {
+          if (state.contains(WidgetState.pressed)) return kSleekAccent.withOpacity(.12);
+          if (state.contains(WidgetState.hovered)) return kSleekAccent.withOpacity(.07);
+          return Colors.transparent;
+        }),
       ),
     );
   }
@@ -6066,39 +6081,31 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                               builder: (context, child) {
                                 final raw = _transactionMenuController.value;
 
-                                // Open in a deliberate sequence: Plan first, then Subscription.
-                                // Reversing the same controller naturally closes them in reverse:
-                                // Subscription disappears first, then Plan.
-                                final planProgress = Curves.easeOutBack.transform(
-                                  ((raw - .06) / .54).clamp(0.0, 1.0).toDouble(),
-                                );
-                                final subscriptionProgress = Curves.easeOutBack.transform(
-                                  ((raw - .46) / .54).clamp(0.0, 1.0).toDouble(),
-                                );
-
-                                Widget menuAction({
-                                  required double progress,
-                                  required String heroTag,
-                                  required VoidCallback onPressed,
-                                  required IconData icon,
-                                  required String label,
+                                // The quick menu intentionally uses two non-overlapping stages.
+                                // Opening: Plan appears first, then Subscription above it.
+                                // Closing reverses the same controller, so Subscription leaves
+                                // first and Plan follows. Keep this order/spacing in sync with
+                                // subscription_menu_and_scheduler_contract_test.dart.
+                                Widget stagedButton({
+                                  required double start,
+                                  required double end,
+                                  required Widget child,
                                 }) {
-                                  final opacity = progress.clamp(0.0, 1.0).toDouble();
+                                  final progress = ((raw - start) / (end - start))
+                                      .clamp(0.0, 1.0)
+                                      .toDouble();
+                                  final easedOpacity = Curves.easeOutCubic.transform(progress);
+                                  final easedMotion = Curves.easeOutBack.transform(progress);
                                   return IgnorePointer(
-                                    ignoring: opacity < .85,
+                                    ignoring: progress < .72,
                                     child: Opacity(
-                                      opacity: opacity,
+                                      opacity: easedOpacity,
                                       child: Transform.translate(
-                                        offset: Offset(0, 18 * (1 - progress)),
+                                        offset: Offset(0, 18 * (1 - easedMotion)),
                                         child: Transform.scale(
-                                          scale: .9 + (.1 * progress),
+                                          scale: .90 + (.10 * easedMotion),
                                           alignment: Alignment.bottomLeft,
-                                          child: FloatingActionButton.extended(
-                                            heroTag: heroTag,
-                                            onPressed: onPressed,
-                                            icon: Icon(icon),
-                                            label: Text(label),
-                                          ),
+                                          child: child,
                                         ),
                                       ),
                                     ),
@@ -6109,20 +6116,26 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    menuAction(
-                                      progress: subscriptionProgress,
-                                      heroTag: 'transactionSubscriptionFab',
-                                      onPressed: _openSubscriptionsFromMenu,
-                                      icon: Icons.autorenew_rounded,
-                                      label: 'Subscription',
+                                    stagedButton(
+                                      start: .55,
+                                      end: .95,
+                                      child: FloatingActionButton.extended(
+                                        heroTag: 'transactionSubscriptionFab',
+                                        onPressed: _openSubscriptionsFromMenu,
+                                        icon: const Icon(Icons.autorenew_rounded),
+                                        label: const Text('Subscription'),
+                                      ),
                                     ),
-                                    SizedBox(height: 10 * subscriptionProgress),
-                                    menuAction(
-                                      progress: planProgress,
-                                      heroTag: 'transactionPlanFab',
-                                      onPressed: _openPlanFromMenu,
-                                      icon: Icons.event_note_rounded,
-                                      label: 'Plan',
+                                    const SizedBox(height: 10),
+                                    stagedButton(
+                                      start: .08,
+                                      end: .50,
+                                      child: FloatingActionButton.extended(
+                                        heroTag: 'transactionPlanFab',
+                                        onPressed: _openPlanFromMenu,
+                                        icon: const Icon(Icons.event_note_rounded),
+                                        label: const Text('Plan'),
+                                      ),
                                     ),
                                   ],
                                 );
@@ -9577,7 +9590,7 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 3600));
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 2400));
   }
 
   @override
@@ -9601,9 +9614,12 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
   List<FlSpot> _spots(double animationValue) {
     final phase = animationValue * math.pi * 2;
     return List<FlSpot>.generate(_baseValues.length, (index) {
-      final bob = math.sin(phase + index * .9) * .12;
-      final secondary = math.sin(phase * .55 + index * .48) * .045;
-      return FlSpot(index.toDouble(), _baseValues[index] + bob + secondary);
+      // Use two travelling waves so the line visibly breathes instead of only
+      // shifting by a few pixels. The movement stays small enough to preserve the
+      // original trend while being obvious on both phone and desktop screens.
+      final primaryWave = math.sin(phase + index * .78) * .30;
+      final secondaryWave = math.sin(phase * 1.55 - index * .44) * .10;
+      return FlSpot(index.toDouble(), _baseValues[index] + primaryWave + secondaryWave);
     });
   }
 
@@ -9617,7 +9633,12 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
           animation: _controller,
           builder: (context, _) {
             final animationValue = reduceMotion ? 0.0 : _controller.value;
-            final glow = .20 + math.sin(animationValue * math.pi * 2) * .04;
+            final pulse = reduceMotion
+                ? 0.0
+                : (math.sin(animationValue * math.pi * 2) + 1) / 2;
+            final glow = reduceMotion ? .20 : .26 + pulse * .16;
+            final lineOpacity = reduceMotion ? 1.0 : .78 + pulse * .22;
+            final lineWidth = reduceMotion ? 3.0 : 3.1 + pulse * .9;
             return LineChart(
               LineChartData(
                 minX: 0,
@@ -9633,8 +9654,8 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
                     spots: _spots(animationValue),
                     isCurved: true,
                     preventCurveOverShooting: true,
-                    color: kSleekAccent,
-                    barWidth: 3,
+                    color: kSleekAccent.withOpacity(lineOpacity),
+                    barWidth: lineWidth,
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
@@ -15088,10 +15109,20 @@ class ManageCategoriesScreen extends StatelessWidget {
 }
 
 
-class CategoryBreakdownCard extends StatelessWidget {
+class CategoryBreakdownCard extends StatefulWidget {
   const CategoryBreakdownCard({super.key, required this.type, this.interactive = false});
   final CategoryType type;
   final bool interactive;
+
+  @override
+  State<CategoryBreakdownCard> createState() => _CategoryBreakdownCardState();
+}
+
+class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
+  final Map<String, Offset> _badgeCenterFractions = <String, Offset>{};
+
+  CategoryType get type => widget.type;
+  bool get interactive => widget.interactive;
 
   Color _fallbackColor(int index) {
     const palette = [
@@ -15240,6 +15271,50 @@ class CategoryBreakdownCard extends StatelessWidget {
                     spreadDenseSide(false);
 
                     int? selectedBadgeIndex;
+                    int? draggingBadgeIndex;
+
+                    Offset resolvedBadgeCenter(int index, double currentBadgeWidth, double currentBadgeHeight) {
+                      final saved = _badgeCenterFractions[slices[index].categoryId];
+                      Offset candidate;
+                      if (saved != null) {
+                        candidate = Offset(saved.dx * canvasWidth, saved.dy * canvasHeight);
+                      } else {
+                        final radians = badgeAngles[index] * (math.pi / 180);
+                        candidate = Offset(
+                          (canvasWidth / 2) + math.cos(radians) * badgeOrbit,
+                          (canvasHeight / 2) + math.sin(radians) * badgeOrbit + badgeNudges[index],
+                        );
+                      }
+
+                      final halfWidth = currentBadgeWidth / 2;
+                      final halfHeight = currentBadgeHeight / 2;
+                      final minX = halfWidth;
+                      final maxX = math.max(minX, canvasWidth - halfWidth);
+                      final minY = halfHeight;
+                      final maxY = math.max(minY, canvasHeight - halfHeight);
+                      return Offset(
+                        candidate.dx.clamp(minX, maxX).toDouble(),
+                        candidate.dy.clamp(minY, maxY).toDouble(),
+                      );
+                    }
+
+                    void moveBadge(int index, double currentBadgeWidth, double currentBadgeHeight, Offset delta) {
+                      final current = resolvedBadgeCenter(index, currentBadgeWidth, currentBadgeHeight);
+                      final halfWidth = currentBadgeWidth / 2;
+                      final halfHeight = currentBadgeHeight / 2;
+                      final minX = halfWidth;
+                      final maxX = math.max(minX, canvasWidth - halfWidth);
+                      final minY = halfHeight;
+                      final maxY = math.max(minY, canvasHeight - halfHeight);
+                      final next = Offset(
+                        (current.dx + delta.dx).clamp(minX, maxX).toDouble(),
+                        (current.dy + delta.dy).clamp(minY, maxY).toDouble(),
+                      );
+                      _badgeCenterFractions[slices[index].categoryId] = Offset(
+                        (next.dx / canvasWidth).clamp(0.0, 1.0).toDouble(),
+                        (next.dy / canvasHeight).clamp(0.0, 1.0).toDouble(),
+                      );
+                    }
 
                     return StatefulBuilder(
                       builder: (context, setBadgeState) {
@@ -15256,6 +15331,11 @@ class CategoryBreakdownCard extends StatelessWidget {
                           badgeOrder
                             ..remove(selectedBadgeIndex)
                             ..add(selectedBadgeIndex!);
+                        }
+                        if (draggingBadgeIndex != null && draggingBadgeIndex! >= 0 && draggingBadgeIndex! < slices.length) {
+                          badgeOrder
+                            ..remove(draggingBadgeIndex)
+                            ..add(draggingBadgeIndex!);
                         }
 
                         return Stack(
@@ -15314,35 +15394,70 @@ class CategoryBreakdownCard extends StatelessWidget {
                               ),
                             ),
                             for (final i in badgeOrder)
-                              _DonutBadgePositioned(
-                                key: ValueKey('breakdown-badge-${slices[i].categoryId}'),
-                                angleDegrees: badgeAngles[i],
-                                orbit: badgeOrbit,
-                                canvasWidth: canvasWidth,
-                                canvasHeight: canvasHeight,
-                                badgeWidth: selectedBadgeIndex == i ? badgeWidth + 12 : badgeWidth,
-                                badgeHeight: selectedBadgeIndex == i ? badgeHeight + 4 : badgeHeight,
-                                verticalNudge: badgeNudges[i],
-                                draggable: interactive,
-                                onTap: () {
-                                  setBadgeState(() {
-                                    selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
-                                  });
-                                },
-                                child: Opacity(
-                                  opacity: badgeProgress,
-                                  child: Transform.scale(
-                                    scale: (.86 + (.14 * badgeProgress)) * (selectedBadgeIndex == i ? 1.08 : 1.0),
-                                    child: _DonutPercentBadge(
-                                      color: slices[i].color,
-                                      iconName: slices[i].iconName,
-                                      label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
-                                      leadingText: _badgeTag(slices[i]),
-                                      useTextBadge: _useTextBadge(slices[i]),
-                                      selected: selectedBadgeIndex == i,
+                              Builder(
+                                builder: (context) {
+                                  final isSelected = selectedBadgeIndex == i;
+                                  final isDragging = draggingBadgeIndex == i;
+                                  final currentBadgeWidth = isSelected ? badgeWidth + 12 : badgeWidth;
+                                  final currentBadgeHeight = isSelected ? badgeHeight + 4 : badgeHeight;
+                                  final center = resolvedBadgeCenter(i, currentBadgeWidth, currentBadgeHeight);
+                                  return _DonutBadgePositioned(
+                                    angleDegrees: badgeAngles[i],
+                                    orbit: badgeOrbit,
+                                    canvasWidth: canvasWidth,
+                                    canvasHeight: canvasHeight,
+                                    badgeWidth: currentBadgeWidth,
+                                    badgeHeight: currentBadgeHeight,
+                                    verticalNudge: badgeNudges[i],
+                                    centerOverride: center,
+                                    child: MouseRegion(
+                                      cursor: isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () {
+                                          setBadgeState(() {
+                                            selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
+                                          });
+                                        },
+                                        onPanStart: (_) {
+                                          setBadgeState(() {
+                                            draggingBadgeIndex = i;
+                                          });
+                                        },
+                                        onPanUpdate: (details) {
+                                          setBadgeState(() {
+                                            draggingBadgeIndex = i;
+                                            moveBadge(i, currentBadgeWidth, currentBadgeHeight, details.delta);
+                                          });
+                                        },
+                                        onPanEnd: (_) {
+                                          setBadgeState(() {
+                                            draggingBadgeIndex = null;
+                                          });
+                                        },
+                                        onPanCancel: () {
+                                          setBadgeState(() {
+                                            draggingBadgeIndex = null;
+                                          });
+                                        },
+                                        child: Opacity(
+                                          opacity: badgeProgress,
+                                          child: Transform.scale(
+                                            scale: (.86 + (.14 * badgeProgress)) * (isDragging ? 1.11 : (isSelected ? 1.08 : 1.0)),
+                                            child: _DonutPercentBadge(
+                                              color: slices[i].color,
+                                              iconName: slices[i].iconName,
+                                              label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
+                                              leadingText: _badgeTag(slices[i]),
+                                              useTextBadge: _useTextBadge(slices[i]),
+                                              selected: isSelected || isDragging,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             Center(
                               child: Opacity(
@@ -15522,9 +15637,8 @@ class _BreakdownSlice {
   String get iconName => iconNameOverride ?? category?.iconName ?? 'category';
 }
 
-class _DonutBadgePositioned extends StatefulWidget {
+class _DonutBadgePositioned extends StatelessWidget {
   const _DonutBadgePositioned({
-    super.key,
     required this.angleDegrees,
     required this.orbit,
     required this.canvasWidth,
@@ -15532,8 +15646,7 @@ class _DonutBadgePositioned extends StatefulWidget {
     required this.badgeWidth,
     required this.badgeHeight,
     this.verticalNudge = 0,
-    this.draggable = false,
-    this.onTap,
+    this.centerOverride,
     required this.child,
   });
 
@@ -15544,87 +15657,29 @@ class _DonutBadgePositioned extends StatefulWidget {
   final double badgeWidth;
   final double badgeHeight;
   final double verticalNudge;
-  final bool draggable;
-  final VoidCallback? onTap;
+  final Offset? centerOverride;
   final Widget child;
 
   @override
-  State<_DonutBadgePositioned> createState() => _DonutBadgePositionedState();
-}
-
-class _DonutBadgePositionedState extends State<_DonutBadgePositioned> {
-  static const double _edgeInset = 6.0;
-  Offset? _draggedPosition;
-
-  Offset _defaultPosition() {
-    final radians = widget.angleDegrees * (math.pi / 180);
-    final center = Offset(widget.canvasWidth / 2, widget.canvasHeight / 2);
-    return Offset(
-      center.dx + math.cos(radians) * widget.orbit - (widget.badgeWidth / 2),
-      center.dy + math.sin(radians) * widget.orbit - (widget.badgeHeight / 2) + widget.verticalNudge,
-    );
-  }
-
-  Offset _clampPosition(Offset candidate) {
-    final minLeft = math.min(_edgeInset, math.max(0.0, widget.canvasWidth - widget.badgeWidth));
-    final minTop = math.min(_edgeInset, math.max(0.0, widget.canvasHeight - widget.badgeHeight));
-    final maxLeft = math.max(minLeft, widget.canvasWidth - widget.badgeWidth - _edgeInset);
-    final maxTop = math.max(minTop, widget.canvasHeight - widget.badgeHeight - _edgeInset);
-
-    return Offset(
-      candidate.dx.clamp(minLeft, maxLeft).toDouble(),
-      candidate.dy.clamp(minTop, maxTop).toDouble(),
-    );
-  }
-
-  Offset get _position => _clampPosition(_draggedPosition ?? _defaultPosition());
-
-  @override
-  void didUpdateWidget(covariant _DonutBadgePositioned oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_draggedPosition != null &&
-        (oldWidget.canvasWidth != widget.canvasWidth ||
-            oldWidget.canvasHeight != widget.canvasHeight ||
-            oldWidget.badgeWidth != widget.badgeWidth ||
-            oldWidget.badgeHeight != widget.badgeHeight)) {
-      _draggedPosition = _clampPosition(_draggedPosition!);
-    }
-  }
-
-  void _startDrag(DragStartDetails details) {
-    if (!widget.draggable) return;
-    _draggedPosition ??= _position;
-  }
-
-  void _updateDrag(DragUpdateDetails details) {
-    if (!widget.draggable) return;
-    setState(() {
-      _draggedPosition = _clampPosition((_draggedPosition ?? _position) + details.delta);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final position = _position;
-    final content = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onTap,
-      onPanStart: widget.draggable ? _startDrag : null,
-      onPanUpdate: widget.draggable ? _updateDrag : null,
-      child: widget.child,
-    );
+    final radians = angleDegrees * (math.pi / 180);
+    final chartCenter = Offset(canvasWidth / 2, canvasHeight / 2);
+    final targetCenter = centerOverride ??
+        Offset(
+          chartCenter.dx + math.cos(radians) * orbit,
+          chartCenter.dy + math.sin(radians) * orbit + verticalNudge,
+        );
+    final rawLeft = targetCenter.dx - (badgeWidth / 2);
+    final rawTop = targetCenter.dy - (badgeHeight / 2);
+    final left = rawLeft.clamp(0.0, math.max(0.0, canvasWidth - badgeWidth)).toDouble();
+    final top = rawTop.clamp(0.0, math.max(0.0, canvasHeight - badgeHeight)).toDouble();
 
     return Positioned(
-      left: position.dx,
-      top: position.dy,
-      width: widget.badgeWidth,
-      height: widget.badgeHeight,
-      child: widget.draggable
-          ? MouseRegion(
-              cursor: SystemMouseCursors.move,
-              child: content,
-            )
-          : content,
+      left: left,
+      top: top,
+      width: badgeWidth,
+      height: badgeHeight,
+      child: child,
     );
   }
 }

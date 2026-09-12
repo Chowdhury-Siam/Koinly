@@ -1,5 +1,35 @@
 # Changelog
 
+
+## [1.0.1113] - 2026-09-13
+
+### Changed
+- Made the Home Net Balance sparkline animation substantially more noticeable with a faster travelling wave, stronger vertical motion, and a synchronized line/fill pulse while preserving reduced-motion behavior.
+- Bumped application metadata to `1.0.1113+157`.
+
+## [1.0.1112] - 2026-09-13
+
+- Reworked the Transaction quick menu into a vertical stack with Subscription above Plan.
+- Added a staged opening sequence: Plan appears first, then Subscription; closing runs in exact reverse order.
+- Preserved the blurred backdrop, menu/close morph, touch targets, desktop hover behavior, and existing navigation actions.
+- Bumped application metadata to `1.0.1112+156`.
+
+## [1.0.1111] - 2026-09-13
+
+### Changed
+- Category breakdown percentage bubbles can now be dragged freely with mouse or touch while remaining fully constrained inside the breakdown chart surface.
+- Dragged bubbles are raised visually during movement and keep their custom position while the breakdown view remains mounted.
+- Bumped application metadata to `1.0.1111+155`.
+
+
+## [1.0.1110] - 2026-09-13
+
+### Changed
+- Switched the Flutter app typography to an Apple-style SF Pro Display font stack across the full UI.
+- Switched the self-hosted Worker administration website to the same SF Pro Display/SF Pro Text system font stack.
+- Preserved platform fallbacks for systems where Apple's SF fonts are not installed.
+- Bumped application metadata to `1.0.1110+154`.
+
 ## [Unreleased]
 
 ### Added
@@ -19,42 +49,13 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
-## [1.0.1112] - 2026-09-13
-
-### Changed
-
-- Switched Koinly's app-wide typography preference from Roboto to **SF Pro Display** for Material text, component text, inherited custom text, and third-party widgets that honor Flutter's default text style.
-- Added **SF Pro Text** and Apple's native `.SF UI Display` / `.SF UI Text` family names as fallbacks, followed by the platform sans-serif fallback when SF Pro is not installed on the operating system.
-- Kept the existing Koinly font sizes, weights, line heights, and spacing overrides so this is a typography-family change rather than a layout redesign.
-- Bumped application metadata to `1.0.1112+156`.
-
-
-## [1.0.1111] - 2026-09-13
-
-### Changed
-
-- Made the floating category percentage bubbles in the Expense/Income breakdown chart draggable on the interactive Categories screen.
-- Dragged bubbles are clamped to the breakdown chart area with a small edge inset, so they cannot be moved outside the card or clipped beyond its bounds.
-- Preserved tap-to-highlight behavior while adding touch drag and desktop move-cursor support.
-- Bumped application metadata to `1.0.1111+155`.
-
-
-## [1.0.1110] - 2026-09-13
-
-### Changed
-
-- Reworked the transaction quick-action menu into a vertical stack with **Subscription above Plan**.
-- Added a staggered open animation: **Plan appears first, then Subscription**. Closing uses the exact reverse sequence, so **Subscription retracts first, then Plan**.
-- Bumped application metadata to `1.0.1110+154`.
-
-
-## [1.0.1109] - 2026-09-12
+## [1.0.1109] - 2026-09-13
 
 ### Fixed
 
-- Removed the malformed desktop hover wash that could appear as a partial rectangular/invisible field over rounded controls such as list rows, switches, buttons, and menu items.
-- Kept generic hover visuals inside their real interactive bounds by removing hover-only upscaling; press animations, click cursors, keyboard focus, and touch feedback remain intact.
-- Changed common Material button overlays so hover stays clean while pressed/focused states still receive intentional feedback.
+- Fixed desktop hover state layers that could visually extend beyond their pointer hit region or stop short of the rendered control edge. Hover motion now stays entirely inside the control's actual hit bounds instead of scaling past them.
+- Standard list tiles, buttons, icon buttons, switches, and custom animated surfaces now use consistent shape-aware hover fills so the hover field covers the complete interactive surface without removing hover feedback.
+- Preserved the existing hover animation by animating desktop surfaces from a tiny inset rest scale back to their full 1.0 layout size, preventing edge flicker and hover dead strips.
 - Bumped application metadata to `1.0.1109+153`.
 
 

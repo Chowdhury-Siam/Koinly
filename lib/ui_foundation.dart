@@ -153,17 +153,17 @@ class MotionPressable extends StatefulWidget {
 class _MotionPressableState extends State<MotionPressable> with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController = AnimationController.unbounded(
     vsync: this,
-    value: 1,
+    value: kIsDesktopApp ? .994 : 1,
   );
 
   bool _pressed = false;
   bool _hovered = false;
 
-  // Do not grow generic desktop controls on hover. A Transform can paint
-  // outside its layout/hit-test bounds, leaving a thin visible edge that the
-  // pointer cannot actually hit. That mismatch is what made the app feel as if
-  // an invisible hover field only covered part of a control.
-  double get _restScale => 1.0;
+  // Desktop hover motion must stay inside the widget's layout/hit bounds.
+  // Scaling above 1.0 paints outside the MouseRegion, leaving a thin visual
+  // edge that is no longer hovered and can flicker as the pointer crosses it.
+  // Keep the idle surface microscopically inset and animate back to 1.0.
+  double get _restScale => kIsDesktopApp ? (_hovered ? 1.0 : .994) : 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
 
   void _animateTo(double target, {Duration duration = const Duration(milliseconds: 72)}) {
@@ -269,15 +269,11 @@ class MotionTouchFeedback extends StatefulWidget {
 }
 
 class _MotionTouchFeedbackState extends State<MotionTouchFeedback> with SingleTickerProviderStateMixin {
-  late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: 1);
+  late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: kIsDesktopApp ? .994 : 1);
   int? _pointer;
   bool _hovered = false;
 
-  // Do not grow generic desktop controls on hover. A Transform can paint
-  // outside its layout/hit-test bounds, leaving a thin visible edge that the
-  // pointer cannot actually hit. That mismatch is what made the app feel as if
-  // an invisible hover field only covered part of a control.
-  double get _restScale => 1.0;
+  double get _restScale => kIsDesktopApp ? (_hovered ? 1.0 : .994) : 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .962) : widget.scale;
 
   void _down(PointerDownEvent event) {
@@ -380,13 +376,11 @@ class MotionInkWell extends StatefulWidget {
 }
 
 class _MotionInkWellState extends State<MotionInkWell> with SingleTickerProviderStateMixin {
-  late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: 1);
+  late final AnimationController _scaleController = AnimationController.unbounded(vsync: this, value: kIsDesktopApp ? .996 : 1);
   int? _pointer;
   bool _hovered = false;
 
-  // Keep hover feedback inside the real hit target; press compression remains
-  // animated, but hover never paints beyond the widget's interactive bounds.
-  double get _restScale => 1.0;
+  double get _restScale => kIsDesktopApp ? (_hovered ? 1.0 : .996) : 1.0;
   double get _pressedScale => kIsDesktopApp ? math.min(widget.scale, .968) : widget.scale;
 
   void _press() {

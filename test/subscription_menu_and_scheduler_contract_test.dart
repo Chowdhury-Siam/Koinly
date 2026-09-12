@@ -14,6 +14,15 @@ void main() {
     expect(app, contains("heroTag: 'transactionSubscriptionFab'"));
     expect(app, contains("label: const Text('Subscription')"));
     expect(app, contains('MaterialPageRoute(builder: (_) => const SubscriptionScreen())'));
+    expect(app, contains('Opening: Plan appears first, then Subscription above it.'));
+    expect(app, contains('start: .55'));
+    expect(app, contains('end: .95'));
+    expect(app, contains('start: .08'));
+    expect(app, contains('end: .50'));
+    final subscriptionIndex = app.indexOf("heroTag: 'transactionSubscriptionFab'");
+    final planIndex = app.indexOf("heroTag: 'transactionPlanFab'");
+    expect(subscriptionIndex, greaterThanOrEqualTo(0));
+    expect(planIndex, greaterThan(subscriptionIndex));
   });
 
   test('subscriptions persist, select account/category, and can record manually', () {

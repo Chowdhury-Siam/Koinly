@@ -3,16 +3,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('the app uses SF Pro Display as the global UI font', () {
-    final config = File('lib/app_config.dart').readAsStringSync();
+  test('app and worker website use the SF Pro font stack', () {
     final main = File('lib/main.dart').readAsStringSync();
+    final worker = File('cloud/worker/src/profile.ts').readAsStringSync();
+    final pubspec = File('pubspec.yaml').readAsStringSync();
 
-    expect(config, contains("const String kAppFontFamily = 'SF Pro Display';"));
-    expect(config, contains("'SF Pro Text'"));
-    expect(config, contains("'.SF UI Display'"));
-    expect(main, contains('fontFamily: kAppFontFamily'));
-    expect(main, contains('fontFamilyFallback: kAppFontFamilyFallback'));
-    expect(main, contains('DefaultTextStyle.merge('));
-    expect(main, isNot(contains("fontFamily: 'Roboto'")));
+    expect(main, contains("fontFamily: '.SF Pro Display'"));
+    expect(main, contains("'.SF Pro Display'"));
+    expect(main, contains("'SF Pro Text'"));
+    expect(worker, contains('"SF Pro Display","SF Pro Text",-apple-system,BlinkMacSystemFont'));
+    expect(pubspec, contains('version: 1.0.1113+157'));
   });
 }
