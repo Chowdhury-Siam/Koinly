@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Koinly
+Comment=Private, local-first personal finance tracker
+Exec=koinly
+Icon=koinly
+Terminal=false
+Categories=Office;Finance;
+StartupNotify=true
+StartupWMClass=koinly

@@ -18,6 +18,31 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+
+## [1.0.1104] - 2026-09-12
+
+### Added
+
+- Added first-class Linux desktop release builds for both x64 and ARM64. GitHub Actions now publishes a broad-distro AppImage plus a portable `.tar.gz` bundle for each architecture.
+- Added macOS release builds for Apple Silicon ARM64 and Intel x64, publishing both DMG installers and zipped `.app` bundles.
+- Added optional Developer ID signing and Apple notarization support for macOS GitHub releases.
+- Added Linux desktop launcher metadata and Koinly branding for packaged AppImages.
+
+### Changed
+
+- Stable GitHub Releases now collect Android, Windows, Linux, and macOS artifacts into the same versioned release and update manifest.
+- Updated project documentation and platform metadata for Android, Windows, Linux, and macOS distribution.
+- Bumped application metadata to `1.0.1104+148`.
+
+## [1.0.1103] - 2026-09-12
+
+### Fixed
+- Fixed the subscription scheduler release-build failure caused by passing a captured nullable `DateTime?` to `dateToDb(DateTime)`. The scheduler now snapshots the processed timestamp into an immutable local before serializing it.
+- This fixes both Windows and Android builds that previously failed in `subscription_background_service.dart`.
+
+### Changed
+- Bumped application metadata to `1.0.1103+147`.
+
 ## [1.0.1102] - 2026-09-12
 
 ### Added

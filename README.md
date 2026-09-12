@@ -7,12 +7,12 @@
 <p align="center">
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-Material%203-02569B?logo=flutter&logoColor=white" alt="Flutter"></a>
   <a href="https://github.com/Chowdhury-Siam/Koinly/actions/workflows/build-android-apks.yml"><img src="https://github.com/Chowdhury-Siam/Koinly/actions/workflows/build-android-apks.yml/badge.svg" alt="Build status"></a>
-  <img src="https://img.shields.io/badge/platform-Android%20%7C%20Windows-00B8C8" alt="Android and Windows">
+  <img src="https://img.shields.io/badge/platform-Android%20%7C%20Windows%20%7C%20Linux%20%7C%20macOS-00B8C8" alt="Android, Windows, Linux and macOS">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Apache 2.0 license"></a>
 </p>
 
 <p align="center">
-  A private, local-first personal finance app for Android and Windows.<br>
+  A private, local-first personal finance app for Android, Windows, Linux, and macOS.<br>
   Use it completely offline, or connect your own Cloudflare Worker for optional multi-device sync.
 </p>
 
@@ -75,7 +75,7 @@ You do not need to write Cloudflare or Turso code yourself.
 
 - Material 3 design
 - Light, dark, and system themes
-- Android and Windows layouts
+- Adaptive Android, Windows, Linux, and macOS layouts
 - Spring-based touch feedback and restrained elastic motion
 - Interactive FL Chart cash-flow, balance, and category visualizations
 - Swipe/slide quick actions for transactions, planned purchases, and loans
@@ -574,9 +574,11 @@ Most users do not need this section. It is for developers or people building Koi
 
 ## 10.1 Requirements
 
-- Flutter with Dart `>=3.5.0 <4.0.0`
+- Flutter with Dart `>=3.12.0 <4.0.0`
 - Android Studio / Android SDK 36 / Java 17 for Android
 - Visual Studio with **Desktop development with C++** for Windows
+- Linux desktop build packages (`clang`, `cmake`, `ninja-build`, `pkg-config`, GTK 3, libsecret and SQLite development libraries) for Linux
+- Xcode + CocoaPods on a supported Mac for macOS
 - Node.js 22 for Worker development
 
 ## 10.2 Run locally
@@ -595,32 +597,86 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1102
+  --dart-define=KOINLY_APP_VERSION=1.0.1104
 ```
 
 ## 10.4 Windows build
 
 ```bash
+flutter config --enable-windows-desktop
+flutter create --platforms=windows --project-name koinly --no-pub .
+flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1102
+  --dart-define=KOINLY_APP_VERSION=1.0.1104
 ```
+
+## 10.5 Linux build
+
+For Debian/Ubuntu development machines, install Flutter's Linux requirements plus the libraries used by Koinly's secure storage, SQLite, and desktop notifications:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  clang cmake ninja-build pkg-config \
+  libgtk-3-dev liblzma-dev libsecret-1-dev libsqlite3-dev libnotify-dev
+
+flutter config --enable-linux-desktop
+flutter create --platforms=linux --project-name koinly --no-pub .
+flutter pub get
+flutter build linux --release \
+  --dart-define=KOINLY_APP_VERSION=1.0.1104
+```
+
+The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. Each architecture gets:
+
+- `Koinly-v<version>-linux-<arch>.AppImage` — the recommended broad-distro package.
+- `Koinly-v<version>-linux-<arch>.tar.gz` — the raw Flutter portable bundle.
+
+The AppImage is intended for broad compatibility across mainstream **glibc-based** distributions. Distros with materially different userspaces, such as musl-only systems, may need compatibility packages or a source build.
+
+## 10.6 macOS build
+
+Run this on macOS with Xcode installed:
+
+```bash
+flutter config --enable-macos-desktop
+flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
+flutter pub get
+flutter build macos --release \
+  --dart-define=KOINLY_APP_VERSION=1.0.1104
+```
+
+The release workflow builds separate packages for **Apple Silicon (ARM64)** and **Intel (x64)** Macs. Each architecture gets a `.dmg` installer and a `.zip` containing `Koinly.app`. The CI-generated runner uses Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.
 
-### 10.4.1 GitHub Actions
+## 10.7 GitHub Actions
 
 | Workflow | Purpose |
 | --- | --- |
-| `build-android-apks.yml` | Tests/builds Android APKs and Windows release artifacts |
+| `build-android-apks.yml` | Builds Android APKs, the Windows installer, Linux AppImage/portable archives, macOS DMG/ZIP packages, and publishes the stable GitHub Release |
 | `deploy-sync-worker.yml` | Deploys a fork owner's self-hosted Cloudflare Worker |
 
-### 10.4.2 Android signing
+### 10.7.1 Android signing
 
 Release APK builds expect a permanent signing key through repository secrets. Keep the keystore and passwords outside the repository.
 
-### 10.4.3 Windows signing
+### 10.7.2 Windows signing
 
 Windows code signing is optional. Without a signing certificate, the installer can still be generated, but Windows SmartScreen may show an unrecognized-publisher warning.
+
+### 10.7.3 macOS signing and notarization
+
+For public distribution outside the Mac App Store, configure these optional GitHub Actions secrets:
+
+- `MACOS_CERTIFICATE_BASE64` — Base64-encoded Developer ID Application `.p12`.
+- `MACOS_CERTIFICATE_PASSWORD` — password for the `.p12`.
+- `MACOS_SIGNING_IDENTITY` — optional exact Developer ID Application identity; CI auto-detects it when omitted.
+- `APPLE_ID` — Apple ID used for notarization.
+- `APPLE_APP_SPECIFIC_PASSWORD` — app-specific password for the Apple ID.
+- `APPLE_TEAM_ID` — Apple Developer Team ID.
+
+When these are present, CI signs the app with hardened runtime, submits the signed app to Apple for notarization, staples the notarization ticket to `Koinly.app`, and then packages the stapled app into the DMG and ZIP. If they are omitted, CI still produces DMG/ZIP artifacts, but macOS can show normal Gatekeeper warnings for an unnotarized application.
 
 ---
 
@@ -746,7 +802,9 @@ Koinly/
 ├── lib/loans/                   # Lending/borrowing domain
 ├── lib/profile/                 # Profile media handling and UI
 ├── android/                     # Android runner and platform integration
-├── windows/                     # Windows runner
+├── windows/                     # Windows runner (generated in CI/local Flutter create)
+├── linux/                       # Linux runner (generated in CI/local Flutter create)
+├── macos/                       # macOS runner (generated in CI/local Flutter create)
 ├── cloud/worker/                # Self-hosted Cloudflare Worker + Turso schema
 ├── test/                        # Flutter/unit/source-contract tests
 ├── .github/workflows/

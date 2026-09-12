@@ -34,7 +34,7 @@ const String kSleekAccentHex = '#10B981';
 const String kLegacyStarterCashIconHex = '#78D8E8';
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1102');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1104');
 const kLowEndFriendlyUi = true;
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';
@@ -48,7 +48,7 @@ bool get kUsesDesktopSqlite => !kIsWeb && (Platform.isWindows || Platform.isLinu
 bool get kIsDesktopApp => !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 bool get kSupportsLocalNotifications => !kIsWeb && Platform.isAndroid;
 
-// Desktop builds store SharedPreferences separately from Android. Older Windows
+// Desktop builds store SharedPreferences separately from Android. Older desktop
 // builds could inherit `onboardingCompleted=true` and skip the setup flow.
 // Bumping this desktop setup marker forces the setup pages to appear once on PC
 // without resetting mobile users or deleting any finance data. Revision 20260621 also

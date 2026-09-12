@@ -147,11 +147,15 @@ class SubscriptionBackgroundService {
       // due point at the first unprocessed occurrence. Subsequent WorkManager or
       // foreground sweeps continue catching up without creating an unbounded
       // transaction burst in a single isolate run.
+      // [lastProcessed] is captured and mutated by this transaction closure, so
+      // Dart cannot promote it from DateTime? to DateTime in a conditional
+      // expression. Snapshot it into an immutable local before serialization.
+      final processedOn = lastProcessed;
       await txn.update(
         'subscriptions',
         {
           'next_due_on': dateToDb(due),
-          'last_processed_on': lastProcessed == null ? null : dateToDb(lastProcessed),
+          'last_processed_on': processedOn == null ? null : dateToDb(processedOn),
           'updated_on': dateToDb(now),
         },
         where: 'id = ?',
