@@ -359,6 +359,7 @@ const telegramBackupEntityTables = [
   'accounts',
   'categories',
   'planned_purchases',
+  'subscriptions',
   'transactions',
   'budgets',
   'budget_accounts',

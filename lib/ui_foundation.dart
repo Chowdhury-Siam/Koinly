@@ -8,6 +8,16 @@ import 'package:flutter/services.dart';
 
 import 'app_config.dart';
 
+Widget koinlyTextFieldContextMenu(
+  BuildContext context,
+  EditableTextState editableTextState,
+) {
+  return AdaptiveTextSelectionToolbar.buttonItems(
+    anchors: editableTextState.contextMenuAnchors,
+    buttonItems: editableTextState.contextMenuButtonItems,
+  );
+}
+
 class AppBreakpoints {
   const AppBreakpoints._();
 

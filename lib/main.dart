@@ -47,6 +47,7 @@ import 'profile/profile_media.dart';
 import 'reminder_service.dart';
 import 'sync_models.dart';
 import 'sync_services.dart';
+import 'subscription_background_service.dart';
 import 'ui_foundation.dart';
 import 'update_service.dart';
 import 'update_background_service.dart';
@@ -134,6 +135,7 @@ class CategoryDatabaseMergeResult {
     required this.plan,
     required this.updatedTransactionIds,
     required this.updatedPlannedPurchaseIds,
+    required this.updatedSubscriptionIds,
     required this.updatedBudgetReferences,
   });
 
@@ -141,12 +143,14 @@ class CategoryDatabaseMergeResult {
     plan: CategoryMergePlan.empty,
     updatedTransactionIds: <String>{},
     updatedPlannedPurchaseIds: <String>{},
+    updatedSubscriptionIds: <String>{},
     updatedBudgetReferences: <BudgetCategoryReferenceMerge>[],
   );
 
   final CategoryMergePlan plan;
   final Set<String> updatedTransactionIds;
   final Set<String> updatedPlannedPurchaseIds;
+  final Set<String> updatedSubscriptionIds;
   final List<BudgetCategoryReferenceMerge> updatedBudgetReferences;
 
   bool get hasChanges => plan.hasChanges;
@@ -161,7 +165,7 @@ class KoinlyDatabase {
     final path = p.join(dir, 'koinly_flutter.db');
     _db = await sql.openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seed(database);
@@ -210,6 +214,21 @@ class KoinlyDatabase {
         name TEXT NOT NULL,
         amount REAL NOT NULL,
         category_id TEXT NOT NULL,
+        created_on INTEGER NOT NULL,
+        updated_on INTEGER NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS subscriptions(
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category_id TEXT NOT NULL,
+        account_id TEXT NOT NULL,
+        next_due_on INTEGER NOT NULL,
+        frequency TEXT NOT NULL DEFAULT 'monthly',
+        notes TEXT NOT NULL DEFAULT '',
+        last_processed_on INTEGER,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
       )
@@ -357,6 +376,7 @@ class KoinlyDatabase {
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loan_payments_loan ON loan_payments(loan_id, paid_on)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loan_contacts_name ON loan_contacts(name COLLATE NOCASE)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_transactions_linked_entity ON transactions(linked_entity_type, linked_entity_id)');
+    await database.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_next_due ON subscriptions(next_due_on)');
   }
 
   Future<void> _ensureTransactionMetadataColumns(sql.Database database) async {
@@ -642,6 +662,7 @@ class KoinlyDatabase {
 
     final updatedTransactionIds = <String>{};
     final updatedPlannedPurchaseIds = <String>{};
+    final updatedSubscriptionIds = <String>{};
     final updatedBudgetReferences = <BudgetCategoryReferenceMerge>[];
     final budgetReferenceKeys = <String>{};
     await database.transaction((txn) async {
@@ -664,6 +685,10 @@ class KoinlyDatabase {
         final plannedRows = await txn.query('planned_purchases', columns: ['id'], where: 'category_id = ?', whereArgs: [duplicateId]);
         updatedPlannedPurchaseIds.addAll(plannedRows.map((row) => row['id']?.toString() ?? '').where((id) => id.isNotEmpty));
         await txn.update('planned_purchases', {'category_id': canonicalId, 'updated_on': now}, where: 'category_id = ?', whereArgs: [duplicateId]);
+
+        final subscriptionRows = await txn.query('subscriptions', columns: ['id'], where: 'category_id = ?', whereArgs: [duplicateId]);
+        updatedSubscriptionIds.addAll(subscriptionRows.map((row) => row['id']?.toString() ?? '').where((id) => id.isNotEmpty));
+        await txn.update('subscriptions', {'category_id': canonicalId, 'updated_on': now}, where: 'category_id = ?', whereArgs: [duplicateId]);
 
         final budgetRows = await txn.query('budget_categories', columns: ['budget_id'], where: 'category_id = ?', whereArgs: [duplicateId]);
         for (final row in budgetRows) {
@@ -692,6 +717,7 @@ class KoinlyDatabase {
       plan: plan,
       updatedTransactionIds: Set.unmodifiable(updatedTransactionIds),
       updatedPlannedPurchaseIds: Set.unmodifiable(updatedPlannedPurchaseIds),
+      updatedSubscriptionIds: Set.unmodifiable(updatedSubscriptionIds),
       updatedBudgetReferences: List.unmodifiable(updatedBudgetReferences),
     );
   }
@@ -714,6 +740,26 @@ class KoinlyDatabase {
 
   Future<void> deletePlannedPurchase(String id) async {
     await (await db).delete('planned_purchases', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<RecurringSubscription>> subscriptions() async {
+    final maps = await (await db).query(
+      'subscriptions',
+      orderBy: 'next_due_on ASC, updated_on DESC',
+    );
+    return maps.map(RecurringSubscription.fromMap).toList();
+  }
+
+  Future<void> upsertSubscription(RecurringSubscription item) async {
+    await (await db).insert(
+      'subscriptions',
+      item.toMap(),
+      conflictAlgorithm: sql.ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteSubscription(String id) async {
+    await (await db).delete('subscriptions', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<MoneyTransaction> purchasePlannedItem(
@@ -871,7 +917,7 @@ class KoinlyDatabase {
 
   Future<Map<String, dynamic>> exportAll() async {
     final database = await db;
-    final tables = ['accounts', 'categories', 'planned_purchases', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
+    final tables = ['accounts', 'categories', 'planned_purchases', 'subscriptions', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
     final data = <String, dynamic>{};
     for (final table in tables) {
       data[table] = await database.query(table);
@@ -882,7 +928,7 @@ class KoinlyDatabase {
   Future<CategoryMergePlan> importAll(Map<String, dynamic> data) async {
     final database = await db;
     final normalized = normalizeCategoryDatabasePayload(data);
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'planned_purchases', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -907,7 +953,7 @@ class KoinlyDatabase {
 
   Future<bool> hasLocalUserActivity() async {
     final database = await db;
-    for (final table in ['planned_purchases', 'transactions', 'budgets', 'loans']) {
+    for (final table in ['planned_purchases', 'subscriptions', 'transactions', 'budgets', 'loans']) {
       final rows = await database.query(table, columns: ['COUNT(*) AS count']);
       if ((rows.first['count'] as num? ?? 0).toInt() > 0) return true;
     }
@@ -916,7 +962,7 @@ class KoinlyDatabase {
 
   Future<void> clearFinanceDataForRemoteLogin() async {
     final database = await db;
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'planned_purchases', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -931,6 +977,7 @@ class KoinlyDatabase {
     'accounts',
     'categories',
     'planned_purchases',
+    'subscriptions',
     'transactions',
     'budgets',
     'budget_accounts',
@@ -1498,6 +1545,7 @@ class BackupService {
     'accounts',
     'categories',
     'planned_purchases',
+    'subscriptions',
     'transactions',
     'budgets',
     'budget_accounts',
@@ -1711,6 +1759,7 @@ class AppController extends ChangeNotifier {
   static final NumberFormat _plainAmountFormatter = NumberFormat('0.##');
 
   bool loading = true;
+  bool _subscriptionSweepInFlight = false;
   bool onboardingCompleted = false;
   bool starterAccountsSkipped = false;
   int desktopSetupVersionCompleted = 0;
@@ -1719,6 +1768,7 @@ class AppController extends ChangeNotifier {
   List<Account> accounts = [];
   List<Category> categories = [];
   List<PlannedPurchase> plannedPurchases = [];
+  List<RecurringSubscription> subscriptions = [];
   List<MoneyTransaction> transactions = [];
   List<Budget> budgets = [];
   LoanRepository? _loanRepository;
@@ -1884,6 +1934,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> initialize() async {
     await database.db;
+    await SubscriptionBackgroundService.processDueNow();
     await _loadPreferences();
     await reload();
     // v1.0.1065-1067 could merge a restored account set on top of the old
@@ -4285,6 +4336,10 @@ class AppController extends ChangeNotifier {
       for (final plannedPurchaseId in plannedPurchaseIds) {
         await database.enqueueTableRow('planned_purchases', plannedPurchaseId);
       }
+      final subscriptionIds = result.updatedSubscriptionIds.toList()..sort();
+      for (final subscriptionId in subscriptionIds) {
+        await database.enqueueTableRow('subscriptions', subscriptionId);
+      }
       final budgetReferences = result.updatedBudgetReferences.toList()
         ..sort((first, second) {
           final byBudget = first.budgetId.compareTo(second.budgetId);
@@ -4338,6 +4393,7 @@ class AppController extends ChangeNotifier {
     accounts = await database.accounts();
     categories = await database.categories();
     plannedPurchases = await database.plannedPurchases();
+    subscriptions = await database.subscriptions();
     transactions = await database.transactions();
     budgets = await database.budgets();
     loanContacts = await loanRepository.contacts(includeArchived: true);
@@ -4781,6 +4837,37 @@ class AppController extends ChangeNotifier {
     await database.enqueueDelete('planned_purchases', id);
     await database.deletePlannedPurchase(id);
     await reload(queueSync: true);
+  }
+
+  Future<void> saveSubscription(RecurringSubscription item) async {
+    await database.upsertSubscription(item);
+    await database.enqueueTableRow('subscriptions', item.id);
+    await reload(queueSync: true);
+  }
+
+  Future<void> deleteSubscription(String id) async {
+    await database.enqueueDelete('subscriptions', id);
+    await database.deleteSubscription(id);
+    await reload(queueSync: true);
+  }
+
+  Future<void> recordSubscriptionNow(RecurringSubscription item) async {
+    await SubscriptionBackgroundService.recordNow(item.id);
+    await reload(queueSync: true);
+  }
+
+  Future<int> processDueSubscriptions() async {
+    if (_subscriptionSweepInFlight) return 0;
+    _subscriptionSweepInFlight = true;
+    try {
+      final created = await SubscriptionBackgroundService.processDueNow();
+      if (created > 0) {
+        await reload(queueSync: true);
+      }
+      return created;
+    } finally {
+      _subscriptionSweepInFlight = false;
+    }
   }
 
   Future<void> purchasePlannedItem(PlannedPurchase item, String accountId) async {
@@ -5401,7 +5488,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   static const Duration _startupUpdateCheckDelay = Duration(milliseconds: 1400);
   static const Duration _automaticUpdateCheckInterval = Duration(minutes: 15);
   static const Duration _automaticUpdateRetryDelay = Duration(seconds: 30);
@@ -5409,19 +5496,33 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   bool _automaticUpdateCheckInFlight = false;
   Timer? _automaticUpdateRetryTimer;
+  Timer? _subscriptionSweepTimer;
+  late final AnimationController _transactionMenuController;
 
   @override
   void initState() {
     super.initState();
+    _transactionMenuController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+      reverseDuration: const Duration(milliseconds: 260),
+    );
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduleAutomaticUpdateCheck(delay: _startupUpdateCheckDelay);
+      unawaited(context.read<AppController>().processDueSubscriptions());
+    });
+    _subscriptionSweepTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      if (!mounted) return;
+      unawaited(context.read<AppController>().processDueSubscriptions());
     });
   }
 
   @override
   void dispose() {
     _automaticUpdateRetryTimer?.cancel();
+    _subscriptionSweepTimer?.cancel();
+    _transactionMenuController.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -5434,6 +5535,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       unawaited(controller.syncCloudChangesIfIdle(force: true));
       unawaited(controller.refreshLoanReminders());
       unawaited(controller.runAutomaticBackupIfDue());
+      unawaited(controller.processDueSubscriptions());
       _scheduleAutomaticUpdateCheck();
     }
   }
@@ -5497,6 +5599,38 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     await showUpdateBottomSheet(context);
   }
 
+  void _toggleTransactionMenu() {
+    AppMotion.actionHaptic(context);
+    final opening = !(_transactionMenuController.status == AnimationStatus.completed ||
+        _transactionMenuController.value > .5);
+    if (MediaQuery.of(context).disableAnimations) {
+      _transactionMenuController.value = opening ? 1 : 0;
+    } else if (opening) {
+      _transactionMenuController.forward();
+    } else {
+      _transactionMenuController.reverse();
+    }
+  }
+
+  void _closeTransactionMenu() {
+    if (_transactionMenuController.value <= 0) return;
+    if (MediaQuery.of(context).disableAnimations) {
+      _transactionMenuController.value = 0;
+    } else {
+      _transactionMenuController.reverse();
+    }
+  }
+
+  Future<void> _openPlanFromMenu() async {
+    _closeTransactionMenu();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasePlanScreen()));
+  }
+
+  Future<void> _openSubscriptionsFromMenu() async {
+    _closeTransactionMenu();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final requestedTabIndex = context.select<AppController, int>((state) => state.tabIndex);
@@ -5529,26 +5663,23 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
           )
         : null;
-    final Widget? planButton = tabIndex == kTransactionTabIndex
+    final Widget? transactionMenuButton = tabIndex == kTransactionTabIndex
         ? SizedBox(
-            width: 128,
-            child: MotionTouchFeedback(
-              scale: .958,
-              child: FloatingActionButton.extended(
-              heroTag: 'transactionPlanFab',
-              onPressed: () {
-                AppMotion.actionHaptic(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PurchasePlanScreen()),
-                );
-              },
-              icon: const Icon(Icons.event_note_rounded),
-                label: const Text('Plan'),
+            width: 70,
+            height: 64,
+            child: FloatingActionButton(
+              heroTag: 'transactionMenuFab',
+              onPressed: _toggleTransactionMenu,
+              tooltip: 'Plan and subscriptions',
+              child: AnimatedIcon(
+                icon: AnimatedIcons.menu_close,
+                progress: _transactionMenuController,
+                size: 30,
               ),
             ),
           )
         : null;
+
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -5557,6 +5688,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
         void selectTab(int index) {
           if (index == tabIndex) return;
+          _closeTransactionMenu();
           AppMotion.selectionHaptic(context);
           state.selectTabIndex(index);
         }
@@ -5588,28 +5720,118 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     child: Stack(
                       children: [
                         Positioned.fill(child: pages[tabIndex]),
-                        if (planButton != null)
+                        if (transactionMenuButton != null) ...[
+                          Positioned.fill(
+                            child: AnimatedBuilder(
+                              animation: _transactionMenuController,
+                              builder: (context, child) {
+                                final t = Curves.easeOutCubic.transform(_transactionMenuController.value);
+                                return IgnorePointer(
+                                  ignoring: t < .02,
+                                  child: Opacity(
+                                    opacity: t,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _closeTransactionMenu,
+                                      child: BackdropFilter(
+                                        filter: ui.ImageFilter.blur(sigmaX: 14 * t, sigmaY: 14 * t),
+                                        child: ColoredBox(
+                                          color: Theme.of(context).colorScheme.scrim.withOpacity(.16 * t),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          Positioned(
+                            left: useDesktopNavigation
+                                ? 34
+                                : math.max(20.0, constraints.maxWidth * .247 - 64.0),
+                            bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 104 : 178),
+                            child: AnimatedBuilder(
+                              animation: _transactionMenuController,
+                              builder: (context, child) {
+                                final raw = _transactionMenuController.value;
+                                final normalized = ((raw - .12) / .88).clamp(0.0, 1.0).toDouble();
+                                final t = Curves.easeOutBack.transform(normalized);
+                                return IgnorePointer(
+                                  ignoring: raw < .4,
+                                  child: Opacity(
+                                    opacity: raw.clamp(0.0, 1.0).toDouble(),
+                                    child: Transform.translate(
+                                      offset: Offset(0, 22 * (1 - t)),
+                                      child: Transform.scale(
+                                        scale: .88 + (.12 * t),
+                                        alignment: Alignment.bottomLeft,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            FloatingActionButton.extended(
+                                              heroTag: 'transactionPlanFab',
+                                              onPressed: _openPlanFromMenu,
+                                              icon: const Icon(Icons.event_note_rounded),
+                                              label: const Text('Plan'),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            FloatingActionButton.extended(
+                                              heroTag: 'transactionSubscriptionFab',
+                                              onPressed: _openSubscriptionsFromMenu,
+                                              icon: const Icon(Icons.autorenew_rounded),
+                                              label: const Text('Subscription'),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                           Positioned(
                             left: useDesktopNavigation
                                 ? 34
                                 : math.max(20.0, constraints.maxWidth * .247 - 64.0),
                             bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
-                            child: planButton,
+                            child: transactionMenuButton,
                           ),
+                        ],
                         if (actionButton != null)
                           Positioned(
                             right: useDesktopNavigation ? 34 : 28,
                             bottom: MediaQuery.of(context).padding.bottom + (useDesktopNavigation ? 30 : 102),
-                            child: actionButton,
+                            child: AnimatedBuilder(
+                              animation: _transactionMenuController,
+                              child: actionButton,
+                              builder: (context, child) {
+                                final t = _transactionMenuController.value;
+                                return IgnorePointer(
+                                  ignoring: t > .08,
+                                  child: Opacity(opacity: 1 - (.78 * t), child: child),
+                                );
+                              },
+                            ),
                           ),
                         if (!useDesktopNavigation)
                           Positioned(
                             left: 0,
                             right: 0,
                             bottom: 0,
-                            child: _FloatingDockNavigation(
-                              selectedIndex: tabIndex,
-                              onSelected: selectTab,
+                            child: AnimatedBuilder(
+                              animation: _transactionMenuController,
+                              child: _FloatingDockNavigation(
+                                selectedIndex: tabIndex,
+                                onSelected: selectTab,
+                              ),
+                              builder: (context, child) {
+                                final t = _transactionMenuController.value;
+                                return IgnorePointer(
+                                  ignoring: t > .08,
+                                  child: Opacity(opacity: 1 - (.62 * t), child: child),
+                                );
+                              },
                             ),
                           ),
                       ],
@@ -9538,7 +9760,7 @@ class _AccountEditorState extends State<AccountEditor> {
           children: [
             Text(widget.account == null ? 'Create account' : 'Edit account', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 18),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: name, decoration: const InputDecoration(labelText: 'Account name')),
             const SizedBox(height: 12),
@@ -9554,7 +9776,7 @@ class _AccountEditorState extends State<AccountEditor> {
               }),
             ),
             const SizedBox(height: 12),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Balance')),
             if (type == AccountType.savings) ...[
@@ -9566,7 +9788,7 @@ class _AccountEditorState extends State<AccountEditor> {
             ],
             if (type == AccountType.credit) ...[
               const SizedBox(height: 12),
-              TextField(
+              TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: creditLimit, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Credit limit')),
             ],
@@ -10129,7 +10351,7 @@ class _ColorWheelPickerPageState extends State<ColorWheelPickerPage> {
               ),
             ),
             const SizedBox(height: 14),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: hexController,
               textAlign: TextAlign.center,
@@ -10763,7 +10985,7 @@ class _CategoryEditorState extends State<CategoryEditor> {
           children: [
             Text(widget.category == null ? 'Create category' : 'Edit category', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 18),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: name, decoration: const InputDecoration(labelText: 'Category name')),
             const SizedBox(height: 12),
@@ -11085,7 +11307,7 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 16),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: name,
               textInputAction: TextInputAction.next,
@@ -11099,7 +11321,7 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -11329,6 +11551,471 @@ class _PurchasePlannedItemDialogState extends State<PurchasePlannedItemDialog> {
     );
   }
 }
+
+// -----------------------------------------------------------------------------
+// Subscriptions
+// -----------------------------------------------------------------------------
+
+class SubscriptionScreen extends StatelessWidget {
+  const SubscriptionScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final items = state.subscriptions;
+    return PageScaffold(
+      title: 'Subscriptions',
+      subtitle: '${items.length} recurring ${items.length == 1 ? 'item' : 'items'}',
+      actions: [
+        IconButton(
+          tooltip: 'Add subscription',
+          onPressed: () => showSubscriptionEditor(context),
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
+      child: ResponsiveListContent(
+        itemCount: items.length,
+        empty: EmptyCard(
+          icon: Icons.autorenew_rounded,
+          title: 'No subscriptions yet',
+          body: 'Save a recurring expense with its price, account, category, date and time. Koinly will record it automatically when it is due.',
+          action: () => showSubscriptionEditor(context),
+          actionLabel: 'Add subscription',
+          animated: true,
+        ),
+        itemBuilder: (context, index) => SubscriptionTile(item: items[index]),
+      ),
+    );
+  }
+}
+
+class SubscriptionTile extends StatefulWidget {
+  const SubscriptionTile({super.key, required this.item});
+
+  final RecurringSubscription item;
+
+  @override
+  State<SubscriptionTile> createState() => _SubscriptionTileState();
+}
+
+class _SubscriptionTileState extends State<SubscriptionTile> {
+  bool recording = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final item = widget.item;
+    final category = state.categoryOf(item.categoryId);
+    final account = state.accountOf(item.accountId);
+    final due = DateFormat('MMM d, yyyy • h:mm a').format(item.nextDueOn);
+    final scheme = Theme.of(context).colorScheme;
+
+    return ExpressiveCard(
+      padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              iconBubble(
+                context,
+                category?.iconName ?? 'calendar',
+                category?.iconColor ?? kSleekAccentHex,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${state.format(item.amount)} • ${subscriptionFrequencyLabel(item.frequency)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Edit subscription',
+                onPressed: () => showSubscriptionEditor(context, item: item),
+                icon: const Icon(Icons.edit_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest.withOpacity(.38),
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.schedule_rounded, size: 19, color: kSleekAccent),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Next • $due',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  account == null ? 'Missing account' : 'From ${account.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: account == null ? kSleekExpense : scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              TextButton.icon(
+                onPressed: recording
+                    ? null
+                    : () async {
+                        setState(() => recording = true);
+                        try {
+                          await state.recordSubscriptionNow(item);
+                          if (context.mounted) showSnack(context, '${item.name} added to transactions.');
+                        } on StateError catch (error) {
+                          if (context.mounted) showSnack(context, error.message);
+                        } catch (_) {
+                          if (context.mounted) showSnack(context, 'Could not record this subscription.');
+                        } finally {
+                          if (mounted) setState(() => recording = false);
+                        }
+                      },
+                icon: recording
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.add_task_rounded),
+                label: Text(recording ? 'Adding…' : 'Add now'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> showSubscriptionEditor(
+  BuildContext context, {
+  RecurringSubscription? item,
+}) async {
+  await showKoinlyPopup<void>(
+    context,
+    maxWidth: 580,
+    maxHeight: 760,
+    child: SubscriptionEditor(item: item),
+  );
+}
+
+class SubscriptionEditor extends StatefulWidget {
+  const SubscriptionEditor({super.key, this.item});
+
+  final RecurringSubscription? item;
+
+  @override
+  State<SubscriptionEditor> createState() => _SubscriptionEditorState();
+}
+
+class _SubscriptionEditorState extends State<SubscriptionEditor> {
+  late final TextEditingController name;
+  late final TextEditingController amount;
+  late final TextEditingController notes;
+  String? categoryId;
+  String? accountId;
+  late DateTime dueAt;
+  SubscriptionFrequency frequency = SubscriptionFrequency.monthly;
+  bool saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = context.read<AppController>();
+    final existing = widget.item;
+    name = TextEditingController(text: existing?.name ?? '');
+    amount = TextEditingController(text: existing == null ? '' : existing.amount.toStringAsFixed(existing.amount % 1 == 0 ? 0 : 2));
+    notes = TextEditingController(text: existing?.notes ?? '');
+    categoryId = existing?.categoryId ?? state.defaultExpenseCategoryId ?? state.categories.where((c) => c.type == CategoryType.expense).firstOrNull?.id;
+    accountId = existing?.accountId ?? state.defaultAccountId ?? state.accounts.firstOrNull?.id;
+    frequency = existing?.frequency ?? SubscriptionFrequency.monthly;
+    dueAt = existing?.nextDueOn ?? nextSubscriptionOccurrence(DateTime.now(), SubscriptionFrequency.monthly);
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    amount.dispose();
+    notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDueDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await pickDate(context, dueAt);
+    if (picked == null || !mounted) return;
+    setState(() {
+      dueAt = DateTime(picked.year, picked.month, picked.day, dueAt.hour, dueAt.minute);
+    });
+  }
+
+  Future<void> _pickDueTime() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await pickTime(context, TimeOfDay.fromDateTime(dueAt));
+    if (picked == null || !mounted) return;
+    setState(() {
+      dueAt = DateTime(dueAt.year, dueAt.month, dueAt.day, picked.hour, picked.minute);
+    });
+  }
+
+  Future<void> _delete() async {
+    final existing = widget.item;
+    if (existing == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete subscription?'),
+        content: Text('“${existing.name}” will stop creating future transactions. Existing transactions stay in your history.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: kSleekExpense),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await context.read<AppController>().deleteSubscription(existing.id);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _save() async {
+    if (saving) return;
+    final state = context.read<AppController>();
+    final itemName = name.text.trim();
+    final price = double.tryParse(amount.text.trim()) ?? 0;
+    final expenseCategories = state.categories.where((c) => c.type == CategoryType.expense).toList();
+    if (itemName.isEmpty) return showSnack(context, 'Enter a subscription name.');
+    if (price <= 0) return showSnack(context, 'Enter a valid price.');
+    if (categoryId == null || !expenseCategories.any((category) => category.id == categoryId)) {
+      return showSnack(context, 'Choose an expense category.');
+    }
+    if (accountId == null || !state.accounts.any((account) => account.id == accountId)) {
+      return showSnack(context, 'Choose an account to spend from.');
+    }
+    if (!dueAt.isAfter(DateTime.now())) {
+      return showSnack(context, 'Choose a future date and time.');
+    }
+    setState(() => saving = true);
+    final now = DateTime.now();
+    final subscription = RecurringSubscription(
+      id: widget.item?.id ?? _uuid.v4(),
+      name: itemName,
+      amount: price,
+      categoryId: categoryId!,
+      accountId: accountId!,
+      nextDueOn: dueAt,
+      frequency: frequency,
+      notes: notes.text.trim(),
+      lastProcessedOn: widget.item?.lastProcessedOn,
+      createdOn: widget.item?.createdOn ?? now,
+      updatedOn: now,
+    );
+    try {
+      await state.saveSubscription(subscription);
+      if (mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final expenseCategories = state.categories.where((category) => category.type == CategoryType.expense).toList();
+    final selectedCategory = expenseCategories.where((category) => category.id == categoryId).firstOrNull;
+    final selectedAccount = state.accounts.where((account) => account.id == accountId).firstOrNull;
+
+    return KoinlyPopupContent(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.item == null ? 'Add subscription' : 'Edit subscription',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(onPressed: saving ? null : () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            contextMenuBuilder: koinlyTextFieldContextMenu,
+            enableInteractiveSelection: true,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            controller: name,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.autorenew_rounded), labelText: 'Subscription name'),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            contextMenuBuilder: koinlyTextFieldContextMenu,
+            enableInteractiveSelection: true,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            controller: amount,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                final value = newValue.text;
+                if (value.isEmpty || RegExp(r'^\d*\.?\d*$').hasMatch(value)) return newValue;
+                return oldValue;
+              }),
+            ],
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.payments_rounded), labelText: 'Price'),
+          ),
+          const SizedBox(height: 10),
+          AppleSelectionField(
+            label: 'Category',
+            option: selectedCategory == null ? null : optionFromCategory(selectedCategory),
+            emptyText: 'Choose expense category',
+            onTap: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              final selected = await showAppleWheelSelectionSheet(
+                context,
+                title: 'Choose Category',
+                selectedId: categoryId,
+                options: expenseCategories.map(optionFromCategory).toList(),
+                addActionLabel: 'Add category',
+                onAdd: () => showCategoryEditor(context, initialType: CategoryType.expense, fixedType: CategoryType.expense),
+              );
+              if (selected != null && mounted) setState(() => categoryId = selected);
+            },
+          ),
+          const SizedBox(height: 10),
+          AppleSelectionField(
+            label: 'Spend from account',
+            option: selectedAccount == null ? null : optionFromAccount(selectedAccount, state),
+            emptyText: 'Choose account',
+            onTap: () async {
+              FocusManager.instance.primaryFocus?.unfocus();
+              final selected = await showAppleWheelSelectionSheet(
+                context,
+                title: 'Choose Account',
+                selectedId: accountId,
+                options: state.accounts.map((account) => optionFromAccount(account, state)).toList(),
+                addActionLabel: 'Add account',
+                onAdd: () => showAccountEditor(context, allowedTypes: AccountType.values),
+              );
+              if (selected != null && mounted) setState(() => accountId = selected);
+            },
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickDueDate,
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: Text(DateFormat('MMM d, yyyy').format(dueAt)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickDueTime,
+                  icon: const Icon(Icons.schedule_rounded),
+                  label: Text(DateFormat('h:mm a').format(dueAt)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<SubscriptionFrequency>(
+            value: frequency,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.repeat_rounded),
+              labelText: 'Repeat',
+            ),
+            items: SubscriptionFrequency.values
+                .map((value) => DropdownMenuItem<SubscriptionFrequency>(
+                      value: value,
+                      child: Text(subscriptionFrequencyLabel(value)),
+                    ))
+                .toList(),
+            onChanged: saving ? null : (value) {
+              if (value != null) setState(() => frequency = value);
+            },
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            contextMenuBuilder: koinlyTextFieldContextMenu,
+            enableInteractiveSelection: true,
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+            controller: notes,
+            textCapitalization: TextCapitalization.sentences,
+            maxLines: 2,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.notes_rounded), labelText: 'Note (optional)'),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (widget.item != null) ...[
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: saving ? null : _delete,
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('Delete'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                flex: 2,
+                child: FilledButton.icon(
+                  onPressed: saving ? null : _save,
+                  icon: saving
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.check_rounded),
+                  label: Text(saving ? 'Saving…' : 'Save subscription'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 
 // -----------------------------------------------------------------------------
 // Transactions and filters
@@ -11718,7 +12405,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               ),
             const SizedBox(height: 12),
             if (type != MoneyTransactionType.transfer) ...[
-              TextField(
+              TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: title,
                 readOnly: isLoanTransaction,
@@ -11734,7 +12421,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               ),
               const SizedBox(height: 12),
             ],
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount,
               focusNode: amountFocus,
@@ -11949,7 +12636,7 @@ class _TransactionEditorState extends State<TransactionEditor> {
               label: Text(transactionTimeSpanLabel(selectedDate, selectedEndDate, forceRange: timeRangeEnabled)),
             ),
             const SizedBox(height: 12),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: notes, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Notes')),
             const SizedBox(height: 18),
@@ -14568,7 +15255,7 @@ class _BudgetEditorState extends State<BudgetEditor> {
           children: [
             Text(widget.budget == null ? 'Create budget' : 'Edit budget', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 16),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: amount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Budget amount')),
             const SizedBox(height: 12),
@@ -15520,10 +16207,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                     controller: _workerUrlController,
-                    enabled: !busy,
+                    readOnly: busy,
                     keyboardType: TextInputType.url,
                     autocorrect: false,
                     enableSuggestions: false,
@@ -15593,10 +16280,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _usernameController,
-              enabled: !busy && !signedIn,
+              readOnly: busy || signedIn,
               keyboardType: TextInputType.text,
               autocorrect: false,
               enableSuggestions: false,
@@ -15605,10 +16292,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             ),
             const SizedBox(height: 12),
             if (!signedIn)
-              TextField(
+              TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 controller: _passwordController,
-                enabled: !busy,
+                readOnly: busy,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   labelText: 'Password',
@@ -15868,30 +16555,30 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
           const SizedBox(height: 6),
           Text('Enter your username, saved recovery key, and a new password.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
           const SizedBox(height: 14),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: username,
-            enabled: !busy,
+            readOnly: busy,
             autocorrect: false,
             enableSuggestions: false,
             textCapitalization: TextCapitalization.none,
             decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_rounded)),
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: recoveryKey,
-            enabled: !busy,
+            readOnly: busy,
             autocorrect: false,
             enableSuggestions: false,
             textCapitalization: TextCapitalization.characters,
             decoration: const InputDecoration(labelText: 'Recovery key', prefixIcon: Icon(Icons.key_rounded)),
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: password,
-            enabled: !busy,
+            readOnly: busy,
             obscureText: obscurePassword,
             decoration: InputDecoration(
               labelText: 'New password',
@@ -15903,10 +16590,10 @@ class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: confirmPassword,
-            enabled: !busy,
+            readOnly: busy,
             obscureText: obscurePassword,
             onSubmitted: (_) => _recover(),
             decoration: const InputDecoration(labelText: 'Confirm new password', prefixIcon: Icon(Icons.lock_outline_rounded)),
@@ -16168,10 +16855,10 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                 children: [
                   Text('Telegram bot', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 12),
-                  TextField(
+                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                     controller: _botTokenController,
-                    enabled: !_busy,
+                    readOnly: _busy,
                     obscureText: _obscureToken,
                     autocorrect: false,
                     enableSuggestions: false,
@@ -16186,10 +16873,10 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                     controller: _chatIdController,
-                    enabled: !_busy,
+                    readOnly: _busy,
                     autocorrect: false,
                     enableSuggestions: false,
                     decoration: const InputDecoration(
@@ -16457,7 +17144,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _syncIdController,
               textInputAction: TextInputAction.next,
@@ -16468,7 +17155,7 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
               ),
             ),
             const SizedBox(height: 10),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _pinController,
               obscureText: _obscurePin,
@@ -16837,7 +17524,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
       key: ValueKey('${enumName(provider)}-method-page'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
+        TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
           onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           controller: _apiBaseUrlController,
           decoration: InputDecoration(
@@ -16880,7 +17567,7 @@ class _SyncDatabaseProviderConfigScreenState extends State<SyncDatabaseProviderC
           key: const ValueKey('mongodb-method-page'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _mongoUrlController,
               obscureText: _obscureMongoUrl,
@@ -17135,7 +17822,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
       key: ValueKey('${enumName(provider)}-advanced'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(
+        TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
           onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
           controller: _apiBaseUrlController,
           decoration: InputDecoration(
@@ -17177,7 +17864,7 @@ class _SyncAdvancedDatabasePopupState extends State<SyncAdvancedDatabasePopup> {
           key: const ValueKey('mongodb'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _mongoUrlController,
               obscureText: _obscureMongoUrl,
@@ -17591,11 +18278,11 @@ class _CurrencyFormState extends State<CurrencyForm> {
         ),
         const SizedBox(height: 14),
         Row(children: [
-          Expanded(child: TextField(
+          Expanded(child: TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: symbol, decoration: const InputDecoration(labelText: 'Symbol'))),
           const SizedBox(width: 10),
-          Expanded(child: TextField(
+          Expanded(child: TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: code, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Code'))),
         ]),
@@ -17765,7 +18452,7 @@ Future<List<String>?> showCurrencyWheelPickerSheet(
                 style: Theme.of(dialogContext).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 12),
-              TextField(
+              TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                 onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
                 autofocus: false,
                 decoration: const InputDecoration(

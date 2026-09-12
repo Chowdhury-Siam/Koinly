@@ -469,7 +469,7 @@ class _ProfileInformationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: displayName,
             maxLength: 60,

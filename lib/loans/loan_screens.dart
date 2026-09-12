@@ -113,7 +113,7 @@ class _LoansScreenState extends State<LoansScreen> {
           _LoanSummaryHero(summary: state.loanSummary),
           const SizedBox(height: 14),
           if (searching) ...[
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: search,
               autofocus: true,

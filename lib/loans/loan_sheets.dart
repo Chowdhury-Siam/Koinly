@@ -194,12 +194,12 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
           AppleSelectionField(label: 'Person', option: contactOption, onTap: () => _pickContact(state)),
           if (contactId == '__new__') ...[
             const SizedBox(height: 10),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: newPerson, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Person name', prefixIcon: Icon(Icons.person_add_rounded))),
           ],
           const SizedBox(height: 12),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -278,7 +278,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
           ),
           if (interestType != LoanInterestType.none) ...[
             const SizedBox(height: 12),
-            TextField(
+            TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: rate,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -349,7 +349,7 @@ class _LoanEditorSheetState extends State<_LoanEditorSheet> {
             ),
           ],
           const SizedBox(height: 12),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: note, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
           const SizedBox(height: 20),
@@ -480,7 +480,7 @@ class _LoanPaymentSheetState extends State<_LoanPaymentSheet> {
           const SizedBox(height: 8),
           Text('Remaining ${state.format(remaining)}', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w900)),
           const SizedBox(height: 14),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: amount,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -573,7 +573,7 @@ class _LoanPaymentSheetState extends State<_LoanPaymentSheet> {
               },
             ),
           const SizedBox(height: 12),
-          TextField(
+          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             controller: note, minLines: 1, maxLines: 3, decoration: const InputDecoration(labelText: 'Note (optional)')),
           const SizedBox(height: 20),

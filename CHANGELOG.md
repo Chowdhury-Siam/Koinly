@@ -18,6 +18,26 @@
 - **Users who already have a self-hosted Cloudflare Worker MUST redeploy their Worker after updating to receive the new `/profile` dashboard and account-management functionality. Updating the app alone is not enough.** Run the latest **Deploy Self-Hosted Sync Worker** workflow, which safely applies the schema migration, and provide all eight setup values documented in the README. Manual deployments must apply the latest schema before redeploying.
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
+## [1.0.1102] - 2026-09-12
+
+### Added
+- Added a new Subscriptions page for recurring expenses with configurable price, expense category, spending account, date/time, and daily/weekly/monthly/yearly cadence.
+- Added manual “Add now” recording for subscriptions without removing the saved subscription.
+- Added automatic due-subscription processing in the foreground and through Android WorkManager while the app is closed. Automatic occurrence IDs are deterministic to prevent duplicate cross-device charges.
+- Replaced the Transaction Plan FAB with a three-line quick-action menu that expands into Plan and Subscription actions over a blurred animated backdrop.
+
+### Changed
+- Subscription data is included in local/cloud merge sync, category remapping, backups, and the self-hosted Worker Telegram backup payload.
+- Bumped application metadata to `1.0.1102+146`.
+
+## [1.0.1101] - 2026-09-12
+
+### Fixed
+
+- Restored standard text selection and adaptive copy/cut/paste/select-all context menus for every text field on desktop and mobile.
+- Read-only/signed-in fields remain selectable and copyable instead of becoming disabled, including Account & sync username and temporarily locked sync setup fields.
+- Bumped application metadata to `1.0.1101+145`.
+
 ## [1.0.1100] - 2026-09-12
 
 ### Changed

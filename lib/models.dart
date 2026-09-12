@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 enum AccountType { regular, credit, savings }
 enum CategoryType { income, expense }
 enum MoneyTransactionType { income, expense, transfer }
+enum SubscriptionFrequency { daily, weekly, monthly, yearly }
 enum DateRangeType { today, thisWeek, thisMonth, thisYear, allTime, custom }
 enum FinancialHealthPeriod { monthly, yearly }
 enum CurrencyPosition { prefix, suffix }
@@ -307,6 +308,141 @@ class PlannedPurchase {
         createdOn: dateFromDb(map['created_on']),
         updatedOn: dateFromDb(map['updated_on']),
       );
+}
+
+class RecurringSubscription {
+  RecurringSubscription({
+    required this.id,
+    required this.name,
+    required this.amount,
+    required this.categoryId,
+    required this.accountId,
+    required this.nextDueOn,
+    required this.frequency,
+    this.notes = '',
+    this.lastProcessedOn,
+    required this.createdOn,
+    required this.updatedOn,
+  });
+
+  final String id;
+  final String name;
+  final double amount;
+  final String categoryId;
+  final String accountId;
+  final DateTime nextDueOn;
+  final SubscriptionFrequency frequency;
+  final String notes;
+  final DateTime? lastProcessedOn;
+  final DateTime createdOn;
+  final DateTime updatedOn;
+
+  RecurringSubscription copyWith({
+    String? id,
+    String? name,
+    double? amount,
+    String? categoryId,
+    String? accountId,
+    DateTime? nextDueOn,
+    SubscriptionFrequency? frequency,
+    String? notes,
+    DateTime? lastProcessedOn,
+    DateTime? createdOn,
+    DateTime? updatedOn,
+  }) => RecurringSubscription(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        amount: amount ?? this.amount,
+        categoryId: categoryId ?? this.categoryId,
+        accountId: accountId ?? this.accountId,
+        nextDueOn: nextDueOn ?? this.nextDueOn,
+        frequency: frequency ?? this.frequency,
+        notes: notes ?? this.notes,
+        lastProcessedOn: lastProcessedOn ?? this.lastProcessedOn,
+        createdOn: createdOn ?? this.createdOn,
+        updatedOn: updatedOn ?? this.updatedOn,
+      );
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'name': name,
+        'amount': amount,
+        'category_id': categoryId,
+        'account_id': accountId,
+        'next_due_on': dateToDb(nextDueOn),
+        'frequency': enumName(frequency),
+        'notes': notes,
+        'last_processed_on': lastProcessedOn == null ? null : dateToDb(lastProcessedOn!),
+        'created_on': dateToDb(createdOn),
+        'updated_on': dateToDb(updatedOn),
+      };
+
+  static RecurringSubscription fromMap(Map<String, Object?> map) => RecurringSubscription(
+        id: map['id'] as String,
+        name: map['name'] as String? ?? '',
+        amount: (map['amount'] as num? ?? 0).toDouble(),
+        categoryId: map['category_id'] as String? ?? '',
+        accountId: map['account_id'] as String? ?? '',
+        nextDueOn: dateFromDb(map['next_due_on']),
+        frequency: enumByName(
+          SubscriptionFrequency.values,
+          map['frequency'] as String?,
+          SubscriptionFrequency.monthly,
+        ),
+        notes: map['notes'] as String? ?? '',
+        lastProcessedOn: nullableDateFromDb(map['last_processed_on']),
+        createdOn: dateFromDb(map['created_on']),
+        updatedOn: dateFromDb(map['updated_on']),
+      );
+}
+
+DateTime nextSubscriptionOccurrence(DateTime from, SubscriptionFrequency frequency) {
+  switch (frequency) {
+    case SubscriptionFrequency.daily:
+      return from.add(const Duration(days: 1));
+    case SubscriptionFrequency.weekly:
+      return from.add(const Duration(days: 7));
+    case SubscriptionFrequency.monthly:
+      final targetMonth = from.month == 12 ? 1 : from.month + 1;
+      final targetYear = from.month == 12 ? from.year + 1 : from.year;
+      final lastDay = DateTime(targetYear, targetMonth + 1, 0).day;
+      return DateTime(
+        targetYear,
+        targetMonth,
+        from.day.clamp(1, lastDay).toInt(),
+        from.hour,
+        from.minute,
+        from.second,
+        from.millisecond,
+        from.microsecond,
+      );
+    case SubscriptionFrequency.yearly:
+      final targetYear = from.year + 1;
+      final lastDay = DateTime(targetYear, from.month + 1, 0).day;
+      return DateTime(
+        targetYear,
+        from.month,
+        from.day.clamp(1, lastDay).toInt(),
+        from.hour,
+        from.minute,
+        from.second,
+        from.millisecond,
+        from.microsecond,
+      );
+  }
+}
+
+String subscriptionFrequencyLabel(SubscriptionFrequency frequency) {
+  switch (frequency) {
+    case SubscriptionFrequency.daily:
+      return 'Daily';
+    case SubscriptionFrequency.weekly:
+      return 'Weekly';
+    case SubscriptionFrequency.monthly:
+      return 'Monthly';
+    case SubscriptionFrequency.yearly:
+      return 'Yearly';
+  }
 }
 
 class MoneyTransaction {

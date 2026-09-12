@@ -14,6 +14,7 @@ const _entityTables = <String>[
   'accounts',
   'categories',
   'planned_purchases',
+  'subscriptions',
   'transactions',
   'budgets',
   'loan_contacts',

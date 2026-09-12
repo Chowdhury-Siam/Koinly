@@ -28,7 +28,7 @@
 ## 1. What is Koinly?
 
 Koinly is a personal finance tracker designed to keep your data under your control.
-Your accounts, transactions, categories, budgets, loans, plans, and other finance data are saved to a local SQLite database first.
+Your accounts, transactions, categories, budgets, loans, plans, subscriptions, and other finance data are saved to a local SQLite database first.
 
 You **do not need an account or server to use Koinly**. Install the app, choose **Use offline**, and start tracking your money.
 
@@ -55,6 +55,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Monthly budgets and progress tracking
 - Lending and borrowing with repayments, interest, due dates, and timestamps
 - Purchase planning with item name, expected price, category, total planned cost, editing, and one-tap purchase conversion
+- Recurring subscriptions with scheduled date/time, price, category, spending account, daily/weekly/monthly/yearly repeat, automatic transaction recording, and manual “Add now”
 - Cash-flow trends, category analysis, balances, and net results
 - Search and filters for account, category, type, and date
 - Quick account/category creation from transaction pickers
@@ -594,14 +595,14 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1100
+  --dart-define=KOINLY_APP_VERSION=1.0.1102
 ```
 
 ## 10.4 Windows build
 
 ```bash
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1100
+  --dart-define=KOINLY_APP_VERSION=1.0.1102
 ```
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.

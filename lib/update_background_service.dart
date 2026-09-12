@@ -6,10 +6,13 @@ import 'package:workmanager/workmanager.dart';
 
 import 'app_config.dart';
 import 'reminder_service.dart';
+import 'subscription_background_service.dart';
 import 'update_service.dart';
 
 const _backgroundUpdateUniqueName = 'koinly-periodic-update-check';
 const _backgroundUpdateTaskName = 'koinlyUpdateCheck';
+const _backgroundSubscriptionUniqueName = 'koinly-periodic-subscription-check';
+const _backgroundSubscriptionTaskName = 'koinlySubscriptionCheck';
 const _backgroundUpdateFrequency = Duration(minutes: 15);
 const _automaticUpdatePreferenceKey = 'automaticUpdatePopupEnabled';
 const _lastNotifiedUpdateVersionKey = 'lastNotifiedUpdateVersion';
@@ -18,8 +21,14 @@ const _lastNotifiedUpdateVersionKey = 'lastNotifiedUpdateVersion';
 void koinlyBackgroundUpdateDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     WidgetsFlutterBinding.ensureInitialized();
-    if (taskName != _backgroundUpdateTaskName) return true;
-    return UpdateBackgroundService.runBackgroundCheck();
+    if (taskName == _backgroundUpdateTaskName) {
+      return UpdateBackgroundService.runBackgroundCheck();
+    }
+    if (taskName == _backgroundSubscriptionTaskName) {
+      await SubscriptionBackgroundService.processDueNow();
+      return true;
+    }
+    return true;
   });
 }
 
@@ -32,6 +41,13 @@ class UpdateBackgroundService {
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_automaticUpdatePreferenceKey) ?? true;
     await setEnabled(enabled);
+    await Workmanager().registerPeriodicTask(
+      _backgroundSubscriptionUniqueName,
+      _backgroundSubscriptionTaskName,
+      frequency: const Duration(minutes: 15),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
+      tag: 'koinly-subscriptions',
+    );
   }
 
   static Future<void> setEnabled(bool enabled) async {

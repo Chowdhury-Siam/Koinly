@@ -106,6 +106,13 @@ NormalizedCategoryDatabasePayload normalizeCategoryDatabasePayload(Map<String, d
     return normalized;
   }).toList();
 
+  database['subscriptions'] = _payloadRows(source['subscriptions']).map((row) {
+    final normalized = Map<String, Object?>.from(row);
+    final categoryId = normalized['category_id']?.toString() ?? '';
+    if (categoryId.isNotEmpty) normalized['category_id'] = plan.remapCategoryId(categoryId);
+    return normalized;
+  }).toList();
+
   database['transactions'] = _payloadRows(source['transactions']).map((row) {
     final normalized = Map<String, Object?>.from(row);
     final categoryId = normalized['category_id']?.toString() ?? '';
