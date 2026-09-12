@@ -5235,7 +5235,13 @@ class KoinlyApp extends StatelessWidget {
             textScaler: media.textScaler.clamp(minScaleFactor: .90, maxScaleFactor: maxScale),
             disableAnimations: media.disableAnimations,
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: DefaultTextStyle.merge(
+            style: const TextStyle(
+              fontFamily: kAppFontFamily,
+              fontFamilyFallback: kAppFontFamilyFallback,
+            ),
+            child: child ?? const SizedBox.shrink(),
+          ),
         );
       },
     );
@@ -5278,7 +5284,8 @@ class KoinlyApp extends StatelessWidget {
           );
 
     final textTheme = Typography.material2021(platform: TargetPlatform.android).black.apply(
-          fontFamily: 'Roboto',
+          fontFamily: kAppFontFamily,
+          fontFamilyFallback: kAppFontFamilyFallback,
           displayColor: scheme.onSurface,
           bodyColor: scheme.onSurface,
         );
@@ -5296,6 +5303,7 @@ class KoinlyApp extends StatelessWidget {
 
     return ThemeData(
       useMaterial3: true,
+      fontFamily: kAppFontFamily,
       colorScheme: scheme,
       scaffoldBackgroundColor: scheme.background,
       canvasColor: scheme.background,
@@ -6057,38 +6065,66 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                               animation: _transactionMenuController,
                               builder: (context, child) {
                                 final raw = _transactionMenuController.value;
-                                final normalized = ((raw - .12) / .88).clamp(0.0, 1.0).toDouble();
-                                final t = Curves.easeOutBack.transform(normalized);
-                                return IgnorePointer(
-                                  ignoring: raw < .4,
-                                  child: Opacity(
-                                    opacity: raw.clamp(0.0, 1.0).toDouble(),
-                                    child: Transform.translate(
-                                      offset: Offset(0, 22 * (1 - t)),
-                                      child: Transform.scale(
-                                        scale: .88 + (.12 * t),
-                                        alignment: Alignment.bottomLeft,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            FloatingActionButton.extended(
-                                              heroTag: 'transactionPlanFab',
-                                              onPressed: _openPlanFromMenu,
-                                              icon: const Icon(Icons.event_note_rounded),
-                                              label: const Text('Plan'),
-                                            ),
-                                            const SizedBox(width: 10),
-                                            FloatingActionButton.extended(
-                                              heroTag: 'transactionSubscriptionFab',
-                                              onPressed: _openSubscriptionsFromMenu,
-                                              icon: const Icon(Icons.autorenew_rounded),
-                                              label: const Text('Subscription'),
-                                            ),
-                                          ],
+
+                                // Open in a deliberate sequence: Plan first, then Subscription.
+                                // Reversing the same controller naturally closes them in reverse:
+                                // Subscription disappears first, then Plan.
+                                final planProgress = Curves.easeOutBack.transform(
+                                  ((raw - .06) / .54).clamp(0.0, 1.0).toDouble(),
+                                );
+                                final subscriptionProgress = Curves.easeOutBack.transform(
+                                  ((raw - .46) / .54).clamp(0.0, 1.0).toDouble(),
+                                );
+
+                                Widget menuAction({
+                                  required double progress,
+                                  required String heroTag,
+                                  required VoidCallback onPressed,
+                                  required IconData icon,
+                                  required String label,
+                                }) {
+                                  final opacity = progress.clamp(0.0, 1.0).toDouble();
+                                  return IgnorePointer(
+                                    ignoring: opacity < .85,
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: Transform.translate(
+                                        offset: Offset(0, 18 * (1 - progress)),
+                                        child: Transform.scale(
+                                          scale: .9 + (.1 * progress),
+                                          alignment: Alignment.bottomLeft,
+                                          child: FloatingActionButton.extended(
+                                            heroTag: heroTag,
+                                            onPressed: onPressed,
+                                            icon: Icon(icon),
+                                            label: Text(label),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  );
+                                }
+
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    menuAction(
+                                      progress: subscriptionProgress,
+                                      heroTag: 'transactionSubscriptionFab',
+                                      onPressed: _openSubscriptionsFromMenu,
+                                      icon: Icons.autorenew_rounded,
+                                      label: 'Subscription',
+                                    ),
+                                    SizedBox(height: 10 * subscriptionProgress),
+                                    menuAction(
+                                      progress: planProgress,
+                                      heroTag: 'transactionPlanFab',
+                                      onPressed: _openPlanFromMenu,
+                                      icon: Icons.event_note_rounded,
+                                      label: 'Plan',
+                                    ),
+                                  ],
                                 );
                               },
                             ),
@@ -15279,6 +15315,7 @@ class CategoryBreakdownCard extends StatelessWidget {
                             ),
                             for (final i in badgeOrder)
                               _DonutBadgePositioned(
+                                key: ValueKey('breakdown-badge-${slices[i].categoryId}'),
                                 angleDegrees: badgeAngles[i],
                                 orbit: badgeOrbit,
                                 canvasWidth: canvasWidth,
@@ -15286,25 +15323,23 @@ class CategoryBreakdownCard extends StatelessWidget {
                                 badgeWidth: selectedBadgeIndex == i ? badgeWidth + 12 : badgeWidth,
                                 badgeHeight: selectedBadgeIndex == i ? badgeHeight + 4 : badgeHeight,
                                 verticalNudge: badgeNudges[i],
-                                child: GestureDetector(
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () {
-                                    setBadgeState(() {
-                                      selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
-                                    });
-                                  },
-                                  child: Opacity(
-                                    opacity: badgeProgress,
-                                    child: Transform.scale(
-                                      scale: (.86 + (.14 * badgeProgress)) * (selectedBadgeIndex == i ? 1.08 : 1.0),
-                                      child: _DonutPercentBadge(
-                                        color: slices[i].color,
-                                        iconName: slices[i].iconName,
-                                        label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
-                                        leadingText: _badgeTag(slices[i]),
-                                        useTextBadge: _useTextBadge(slices[i]),
-                                        selected: selectedBadgeIndex == i,
-                                      ),
+                                draggable: interactive,
+                                onTap: () {
+                                  setBadgeState(() {
+                                    selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
+                                  });
+                                },
+                                child: Opacity(
+                                  opacity: badgeProgress,
+                                  child: Transform.scale(
+                                    scale: (.86 + (.14 * badgeProgress)) * (selectedBadgeIndex == i ? 1.08 : 1.0),
+                                    child: _DonutPercentBadge(
+                                      color: slices[i].color,
+                                      iconName: slices[i].iconName,
+                                      label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
+                                      leadingText: _badgeTag(slices[i]),
+                                      useTextBadge: _useTextBadge(slices[i]),
+                                      selected: selectedBadgeIndex == i,
                                     ),
                                   ),
                                 ),
@@ -15487,8 +15522,9 @@ class _BreakdownSlice {
   String get iconName => iconNameOverride ?? category?.iconName ?? 'category';
 }
 
-class _DonutBadgePositioned extends StatelessWidget {
+class _DonutBadgePositioned extends StatefulWidget {
   const _DonutBadgePositioned({
+    super.key,
     required this.angleDegrees,
     required this.orbit,
     required this.canvasWidth,
@@ -15496,6 +15532,8 @@ class _DonutBadgePositioned extends StatelessWidget {
     required this.badgeWidth,
     required this.badgeHeight,
     this.verticalNudge = 0,
+    this.draggable = false,
+    this.onTap,
     required this.child,
   });
 
@@ -15506,23 +15544,87 @@ class _DonutBadgePositioned extends StatelessWidget {
   final double badgeWidth;
   final double badgeHeight;
   final double verticalNudge;
+  final bool draggable;
+  final VoidCallback? onTap;
   final Widget child;
 
   @override
+  State<_DonutBadgePositioned> createState() => _DonutBadgePositionedState();
+}
+
+class _DonutBadgePositionedState extends State<_DonutBadgePositioned> {
+  static const double _edgeInset = 6.0;
+  Offset? _draggedPosition;
+
+  Offset _defaultPosition() {
+    final radians = widget.angleDegrees * (math.pi / 180);
+    final center = Offset(widget.canvasWidth / 2, widget.canvasHeight / 2);
+    return Offset(
+      center.dx + math.cos(radians) * widget.orbit - (widget.badgeWidth / 2),
+      center.dy + math.sin(radians) * widget.orbit - (widget.badgeHeight / 2) + widget.verticalNudge,
+    );
+  }
+
+  Offset _clampPosition(Offset candidate) {
+    final minLeft = math.min(_edgeInset, math.max(0.0, widget.canvasWidth - widget.badgeWidth));
+    final minTop = math.min(_edgeInset, math.max(0.0, widget.canvasHeight - widget.badgeHeight));
+    final maxLeft = math.max(minLeft, widget.canvasWidth - widget.badgeWidth - _edgeInset);
+    final maxTop = math.max(minTop, widget.canvasHeight - widget.badgeHeight - _edgeInset);
+
+    return Offset(
+      candidate.dx.clamp(minLeft, maxLeft).toDouble(),
+      candidate.dy.clamp(minTop, maxTop).toDouble(),
+    );
+  }
+
+  Offset get _position => _clampPosition(_draggedPosition ?? _defaultPosition());
+
+  @override
+  void didUpdateWidget(covariant _DonutBadgePositioned oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_draggedPosition != null &&
+        (oldWidget.canvasWidth != widget.canvasWidth ||
+            oldWidget.canvasHeight != widget.canvasHeight ||
+            oldWidget.badgeWidth != widget.badgeWidth ||
+            oldWidget.badgeHeight != widget.badgeHeight)) {
+      _draggedPosition = _clampPosition(_draggedPosition!);
+    }
+  }
+
+  void _startDrag(DragStartDetails details) {
+    if (!widget.draggable) return;
+    _draggedPosition ??= _position;
+  }
+
+  void _updateDrag(DragUpdateDetails details) {
+    if (!widget.draggable) return;
+    setState(() {
+      _draggedPosition = _clampPosition((_draggedPosition ?? _position) + details.delta);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final radians = angleDegrees * (math.pi / 180);
-    final center = Offset(canvasWidth / 2, canvasHeight / 2);
-    final rawLeft = center.dx + math.cos(radians) * orbit - (badgeWidth / 2);
-    final rawTop = center.dy + math.sin(radians) * orbit - (badgeHeight / 2) + verticalNudge;
-    final left = rawLeft.clamp(0.0, math.max(0.0, canvasWidth - badgeWidth)).toDouble();
-    final top = rawTop.clamp(0.0, math.max(0.0, canvasHeight - badgeHeight)).toDouble();
+    final position = _position;
+    final content = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onPanStart: widget.draggable ? _startDrag : null,
+      onPanUpdate: widget.draggable ? _updateDrag : null,
+      child: widget.child,
+    );
 
     return Positioned(
-      left: left,
-      top: top,
-      width: badgeWidth,
-      height: badgeHeight,
-      child: child,
+      left: position.dx,
+      top: position.dy,
+      width: widget.badgeWidth,
+      height: widget.badgeHeight,
+      child: widget.draggable
+          ? MouseRegion(
+              cursor: SystemMouseCursors.move,
+              child: content,
+            )
+          : content,
     );
   }
 }

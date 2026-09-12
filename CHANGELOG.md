@@ -19,6 +19,35 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
+## [1.0.1112] - 2026-09-13
+
+### Changed
+
+- Switched Koinly's app-wide typography preference from Roboto to **SF Pro Display** for Material text, component text, inherited custom text, and third-party widgets that honor Flutter's default text style.
+- Added **SF Pro Text** and Apple's native `.SF UI Display` / `.SF UI Text` family names as fallbacks, followed by the platform sans-serif fallback when SF Pro is not installed on the operating system.
+- Kept the existing Koinly font sizes, weights, line heights, and spacing overrides so this is a typography-family change rather than a layout redesign.
+- Bumped application metadata to `1.0.1112+156`.
+
+
+## [1.0.1111] - 2026-09-13
+
+### Changed
+
+- Made the floating category percentage bubbles in the Expense/Income breakdown chart draggable on the interactive Categories screen.
+- Dragged bubbles are clamped to the breakdown chart area with a small edge inset, so they cannot be moved outside the card or clipped beyond its bounds.
+- Preserved tap-to-highlight behavior while adding touch drag and desktop move-cursor support.
+- Bumped application metadata to `1.0.1111+155`.
+
+
+## [1.0.1110] - 2026-09-13
+
+### Changed
+
+- Reworked the transaction quick-action menu into a vertical stack with **Subscription above Plan**.
+- Added a staggered open animation: **Plan appears first, then Subscription**. Closing uses the exact reverse sequence, so **Subscription retracts first, then Plan**.
+- Bumped application metadata to `1.0.1110+154`.
+
+
 ## [1.0.1109] - 2026-09-12
 
 ### Fixed
