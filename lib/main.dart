@@ -6576,15 +6576,8 @@ class KoinlyAtmosphere extends StatelessWidget {
       );
     }
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: kSleekBackground,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF071711), kSleekBackground, Color(0xFF091914)],
-        ),
-      ),
+    return ColoredBox(
+      color: kSleekBackground,
       child: child,
     );
   }
@@ -15334,22 +15327,11 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                     spreadDenseSide(true);
                     spreadDenseSide(false);
 
+                    const badgeCollisionGap = 8.0;
                     int? selectedBadgeIndex;
                     int? draggingBadgeIndex;
 
-                    Offset resolvedBadgeCenter(int index, double currentBadgeWidth, double currentBadgeHeight) {
-                      final saved = _badgeCenterFractions[slices[index].categoryId];
-                      Offset candidate;
-                      if (saved != null) {
-                        candidate = Offset(saved.dx * canvasWidth, saved.dy * canvasHeight);
-                      } else {
-                        final radians = badgeAngles[index] * (math.pi / 180);
-                        candidate = Offset(
-                          (canvasWidth / 2) + math.cos(radians) * badgeOrbit,
-                          (canvasHeight / 2) + math.sin(radians) * badgeOrbit + badgeNudges[index],
-                        );
-                      }
-
+                    Offset clampBadgeCenter(Offset candidate, double currentBadgeWidth, double currentBadgeHeight) {
                       final halfWidth = currentBadgeWidth / 2;
                       final halfHeight = currentBadgeHeight / 2;
                       final minX = halfWidth;
@@ -15362,18 +15344,216 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                       );
                     }
 
+                    Rect badgeCollisionRect(Offset center, double currentBadgeWidth, double currentBadgeHeight) {
+                      return Rect.fromCenter(
+                        center: center,
+                        width: currentBadgeWidth + badgeCollisionGap,
+                        height: currentBadgeHeight + badgeCollisionGap,
+                      );
+                    }
+
+                    List<Offset> buildPackedBadgeCenters() {
+                      final centers = List<Offset>.generate(slices.length, (index) {
+                        final saved = _badgeCenterFractions[slices[index].categoryId];
+                        if (saved != null) {
+                          return clampBadgeCenter(
+                            Offset(saved.dx * canvasWidth, saved.dy * canvasHeight),
+                            badgeWidth,
+                            badgeHeight,
+                          );
+                        }
+                        final radians = badgeAngles[index] * (math.pi / 180);
+                        return clampBadgeCenter(
+                          Offset(
+                            (canvasWidth / 2) + math.cos(radians) * badgeOrbit,
+                            (canvasHeight / 2) + math.sin(radians) * badgeOrbit + badgeNudges[index],
+                          ),
+                          badgeWidth,
+                          badgeHeight,
+                        );
+                      });
+
+                      // Tiny slices can share almost the same angle. Pack their badges
+                      // apart before painting so the initial chart never renders a
+                      // stack of unreadable percentage bubbles. Existing user-dragged
+                      // centers are treated as fixed anchors.
+                      for (var pass = 0; pass < 32; pass++) {
+                        var moved = false;
+                        for (var i = 0; i < centers.length; i++) {
+                          for (var j = i + 1; j < centers.length; j++) {
+                            final firstRect = badgeCollisionRect(centers[i], badgeWidth, badgeHeight);
+                            final secondRect = badgeCollisionRect(centers[j], badgeWidth, badgeHeight);
+                            if (!firstRect.overlaps(secondRect)) continue;
+
+                            final fixedI = _badgeCenterFractions.containsKey(slices[i].categoryId);
+                            final fixedJ = _badgeCenterFractions.containsKey(slices[j].categoryId);
+                            if (fixedI && fixedJ) continue;
+
+                            final overlap = firstRect.intersect(secondRect);
+                            if (overlap.isEmpty) continue;
+                            final delta = centers[j] - centers[i];
+                            final nearTopOrBottom =
+                                math.min(centers[i].dy, centers[j].dy) <= (badgeHeight / 2) + (badgeCollisionGap * 2) ||
+                                    math.max(centers[i].dy, centers[j].dy) >=
+                                        canvasHeight - (badgeHeight / 2) - (badgeCollisionGap * 2);
+                            final nearSideEdge =
+                                math.min(centers[i].dx, centers[j].dx) <= (badgeWidth / 2) + (badgeCollisionGap * 2) ||
+                                    math.max(centers[i].dx, centers[j].dx) >=
+                                        canvasWidth - (badgeWidth / 2) - (badgeCollisionGap * 2);
+                            final separateHorizontally = nearTopOrBottom || (!nearSideEdge && overlap.width <= overlap.height);
+
+                            if (separateHorizontally) {
+                              final direction = delta.dx.abs() < .01 ? 1.0 : (delta.dx > 0 ? 1.0 : -1.0);
+                              final amount = overlap.width + .5;
+                              if (fixedI) {
+                                centers[j] = clampBadgeCenter(
+                                  centers[j] + Offset(direction * amount, 0),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              } else if (fixedJ) {
+                                centers[i] = clampBadgeCenter(
+                                  centers[i] - Offset(direction * amount, 0),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              } else {
+                                final half = amount / 2;
+                                centers[i] = clampBadgeCenter(
+                                  centers[i] - Offset(direction * half, 0),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                                centers[j] = clampBadgeCenter(
+                                  centers[j] + Offset(direction * half, 0),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              }
+                            } else {
+                              final direction = delta.dy.abs() < .01 ? 1.0 : (delta.dy > 0 ? 1.0 : -1.0);
+                              final amount = overlap.height + .5;
+                              if (fixedI) {
+                                centers[j] = clampBadgeCenter(
+                                  centers[j] + Offset(0, direction * amount),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              } else if (fixedJ) {
+                                centers[i] = clampBadgeCenter(
+                                  centers[i] - Offset(0, direction * amount),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              } else {
+                                final half = amount / 2;
+                                centers[i] = clampBadgeCenter(
+                                  centers[i] - Offset(0, direction * half),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                                centers[j] = clampBadgeCenter(
+                                  centers[j] + Offset(0, direction * half),
+                                  badgeWidth,
+                                  badgeHeight,
+                                );
+                              }
+                            }
+                            moved = true;
+                          }
+                        }
+                        if (!moved) break;
+                      }
+
+                      return centers;
+                    }
+
+                    final packedBadgeCenters = buildPackedBadgeCenters();
+
+                    Offset resolvedBadgeCenter(int index, double currentBadgeWidth, double currentBadgeHeight) {
+                      final saved = _badgeCenterFractions[slices[index].categoryId];
+                      final candidate = saved == null
+                          ? packedBadgeCenters[index]
+                          : Offset(saved.dx * canvasWidth, saved.dy * canvasHeight);
+                      return clampBadgeCenter(candidate, currentBadgeWidth, currentBadgeHeight);
+                    }
+
+                    bool badgeCenterCollides(
+                      int movingIndex,
+                      Offset candidate,
+                      double movingWidth,
+                      double movingHeight,
+                    ) {
+                      final movingRect = badgeCollisionRect(candidate, movingWidth, movingHeight);
+                      for (var otherIndex = 0; otherIndex < slices.length; otherIndex++) {
+                        if (otherIndex == movingIndex) continue;
+                        final otherSelected = selectedBadgeIndex == otherIndex;
+                        final otherWidth = otherSelected ? badgeWidth + 12 : badgeWidth;
+                        final otherHeight = otherSelected ? badgeHeight + 4 : badgeHeight;
+                        final otherCenter = resolvedBadgeCenter(otherIndex, otherWidth, otherHeight);
+                        if (movingRect.overlaps(badgeCollisionRect(otherCenter, otherWidth, otherHeight))) {
+                          return true;
+                        }
+                      }
+                      return false;
+                    }
+
+                    Offset furthestFreeBadgeCenter(
+                      int index,
+                      Offset current,
+                      double currentBadgeWidth,
+                      double currentBadgeHeight,
+                      Offset delta,
+                    ) {
+                      var low = 0.0;
+                      var high = 1.0;
+                      var best = current;
+                      for (var step = 0; step < 10; step++) {
+                        final fraction = (low + high) / 2;
+                        final candidate = clampBadgeCenter(
+                          current + Offset(delta.dx * fraction, delta.dy * fraction),
+                          currentBadgeWidth,
+                          currentBadgeHeight,
+                        );
+                        if (badgeCenterCollides(index, candidate, currentBadgeWidth, currentBadgeHeight)) {
+                          high = fraction;
+                        } else {
+                          low = fraction;
+                          best = candidate;
+                        }
+                      }
+                      return best;
+                    }
+
                     void moveBadge(int index, double currentBadgeWidth, double currentBadgeHeight, Offset delta) {
                       final current = resolvedBadgeCenter(index, currentBadgeWidth, currentBadgeHeight);
-                      final halfWidth = currentBadgeWidth / 2;
-                      final halfHeight = currentBadgeHeight / 2;
-                      final minX = halfWidth;
-                      final maxX = math.max(minX, canvasWidth - halfWidth);
-                      final minY = halfHeight;
-                      final maxY = math.max(minY, canvasHeight - halfHeight);
-                      final next = Offset(
-                        (current.dx + delta.dx).clamp(minX, maxX).toDouble(),
-                        (current.dy + delta.dy).clamp(minY, maxY).toDouble(),
-                      );
+                      final target = clampBadgeCenter(current + delta, currentBadgeWidth, currentBadgeHeight);
+                      var next = target;
+
+                      if (badgeCenterCollides(index, target, currentBadgeWidth, currentBadgeHeight)) {
+                        final candidates = <Offset>[
+                          furthestFreeBadgeCenter(index, current, currentBadgeWidth, currentBadgeHeight, delta),
+                          furthestFreeBadgeCenter(
+                            index,
+                            current,
+                            currentBadgeWidth,
+                            currentBadgeHeight,
+                            Offset(delta.dx, 0),
+                          ),
+                          furthestFreeBadgeCenter(
+                            index,
+                            current,
+                            currentBadgeWidth,
+                            currentBadgeHeight,
+                            Offset(0, delta.dy),
+                          ),
+                        ];
+                        next = candidates.reduce(
+                          (best, candidate) =>
+                              (candidate - current).distanceSquared > (best - current).distanceSquared ? candidate : best,
+                        );
+                      }
+
                       _badgeCenterFractions[slices[index].categoryId] = Offset(
                         (next.dx / canvasWidth).clamp(0.0, 1.0).toDouble(),
                         (next.dy / canvasHeight).clamp(0.0, 1.0).toDouble(),

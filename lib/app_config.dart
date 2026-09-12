@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-// Koinly's visual system uses an emerald-on-ink palette. Keep app-wide
-// surfaces here so screens, popups, charts and navigation all inherit the
-// same green cast instead of drifting back toward blue/cyan.
-const Color kSleekBackground = Color(0xFF06110D);
+// Koinly's visual system keeps emerald accents and green-tinted surfaces on
+// a neutral near-black page background. Keep card/surface colors independent
+// so changing the page canvas never alters cards, controls, or navigation.
+const Color kSleekBackground = Color(0xFF0F1217);
 const Color kSleekSurfaceLow = Color(0xFF081510);
 const Color kSleekSurface = Color(0xFF0B1914);
 const Color kSleekSurfaceContainer = Color(0xFF0E1E18);
@@ -34,7 +34,7 @@ const String kSleekAccentHex = '#10B981';
 const String kLegacyStarterCashIconHex = '#78D8E8';
 
 const appTitle = 'Koinly';
-const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1119');
+const appVersion = String.fromEnvironment('KOINLY_APP_VERSION', defaultValue: '1.0.1121');
 const kLowEndFriendlyUi = true;
 const backupPassword = 'YOUR_SECRET_PASSWORD';
 const kSyncAdminTelegramUrl = 'https://t.me/Ch0wdhury_Siam';

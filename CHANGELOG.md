@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.1121] - 2026-09-13
+
+### Changed
+
+- Replaced the dark-mode app/page background gradient with a single neutral near-black `#0F1217` canvas, matching the flatter desktop reference while preserving all existing card, surface, navigation, control, chart, and content styling.
+- Applied the same solid dark canvas through the shared theme background so splash, setup, main pages, and routed screens no longer fall back to the previous green gradient.
+- Bumped application metadata to `1.0.1121+165`.
+
+
+## [1.0.1120] - 2026-09-13
+
+### Fixed
+
+- Fixed the category breakdown percentage bubbles initially stacking on top of each other when several small categories occupy nearly the same donut-chart angle. The default badge layout now performs bounded collision packing before painting, preserving the slice-driven placement while separating dense clusters into readable positions.
+- Dragged breakdown bubbles can no longer be moved through or dropped on top of another percentage bubble. Drag motion now stops or slides along neighboring badges while remaining constrained inside the breakdown card.
+- Preserved custom dragged positions and the existing selected/dragging visual treatment while adding an 8 px collision gap between badge hit areas.
+- Bumped application metadata to `1.0.1120+164`.
+
+
 ## [1.0.1119] - 2026-09-13
 
 ### Fixed

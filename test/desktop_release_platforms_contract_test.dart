@@ -69,10 +69,13 @@ void main() {
   test('desktop platform metadata stays versioned and documented', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
     final config = File('lib/app_config.dart').readAsStringSync();
+    final androidGradle = File('android/app/build.gradle').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1119+163'));
-    expect(config, contains("defaultValue: '1.0.1119'"));
+    expect(pubspec, contains('version: 1.0.1120+164'));
+    expect(config, contains("defaultValue: '1.0.1120'"));
+    expect(androidGradle, contains('versionCode = 164'));
+    expect(androidGradle, contains('versionName = "1.0.1120"'));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);
