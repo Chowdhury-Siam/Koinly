@@ -166,6 +166,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     final state = context.read<AppController>();
     displayName = TextEditingController(text: state.profileDisplayName);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Opening Profile should never show a stale avatar while waiting for the
+      // normal realtime/fallback interval. This also retries an interrupted
+      // Device A upload immediately when the same account is opened elsewhere.
+      unawaited(state.syncCloudChangesIfIdle(force: true));
+    });
   }
 
   @override
@@ -381,20 +388,15 @@ class _ProfileMediaCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          if (!hasMedia)
-            Text(
-              'Add a photo, animated GIF, or short video.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-            )
-          else
+          const SizedBox(height: 16),
+          if (hasMedia) ...[
             Text(
               'You can reposition and crop the current media without choosing it again.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
             ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -427,14 +429,6 @@ class _ProfileMediaCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (!hasMedia) ...[
-            const SizedBox(height: 12),
-            Text(
-              'JPG, PNG, WebP, GIF, MP4, MOV, M4V, or WebM • maximum 50 MB',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-            ),
-          ],
         ],
       ),
     );

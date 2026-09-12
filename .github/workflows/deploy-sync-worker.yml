@@ -145,7 +145,7 @@ jobs:
             exit 1
           fi
 
-          if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .realtimeSyncAvailable == true' "$health_file" >/dev/null; then
+          if ! jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .realtimeSyncAvailable == true and .profileMediaSyncAvailable == true' "$health_file" >/dev/null; then
             echo "::error::The user Worker is not healthy, is missing a required sync/backup capability, or first-user registration is not enabled (HTTP $http_status). Check the Worker secrets, Turso schema, and deployment URL."
             jq -c . "$health_file"
             exit 1

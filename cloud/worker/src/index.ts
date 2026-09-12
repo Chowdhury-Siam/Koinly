@@ -995,6 +995,7 @@ function rootResponse(env: Env): Response {
       replace: 'POST /v1/sync/replace',
       pull: 'GET /v1/sync/pull?cursor=0&limit=100',
       status: 'GET /v1/sync/status',
+      profileMedia: '/v1/profile-media/*',
       telegramBackup: '/v1/telegram-backup/*',
     },
   });
@@ -1010,6 +1011,7 @@ async function healthResponse(env: Env): Promise<Response> {
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
+      profileMediaSyncAvailable: true,
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -1028,6 +1030,7 @@ async function healthResponse(env: Env): Promise<Response> {
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
+      profileMediaSyncAvailable: true,
       databaseReachable: true,
       schemaReady,
       missingTables,
@@ -1040,6 +1043,7 @@ async function healthResponse(env: Env): Promise<Response> {
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
+      profileMediaSyncAvailable: true,
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -1297,7 +1301,8 @@ async function notifySyncHub(env: Env, auth: AuthContext): Promise<void> {
 
 const profileMediaMaxBytes = 50 * 1024 * 1024;
 const profileMediaMaxChunks = 128;
-const profileMediaMaxEncodedChunkLength = 1_500_000;
+const profileMediaChunkBytes = 10 * 1024 * 1024;
+const profileMediaMaxEncodedChunkLength = Math.ceil(profileMediaChunkBytes / 3) * 4;
 
 function profileMediaVersion(value: unknown): string {
   return normalizeId(value, 'profile media version');

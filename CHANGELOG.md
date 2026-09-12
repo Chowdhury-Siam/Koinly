@@ -1,6 +1,32 @@
 # Changelog
 
 
+## [1.0.1116] - 2026-09-13
+
+### Changed
+- Increased profile-media cloud transfer chunks from 512 KiB to 10 MiB while retaining the existing 50 MB maximum media size.
+- Increased the self-hosted Worker encoded-chunk validation limit to match 10 MiB binary chunks after Base64 encoding.
+- Bumped application metadata to `1.0.1116+160`.
+
+## [1.0.1115] - 2026-09-13
+
+### Changed
+- Removed the empty-profile helper sentence under the profile avatar.
+- Removed the file-format/size helper line below the Add media button while keeping the existing media validation and upload limits unchanged.
+- Bumped application metadata to `1.0.1115+159`.
+
+## [1.0.1114] - 2026-09-13
+
+### Fixed
+- Fixed profile media getting stranded on the device where it was selected: photo/GIF/video uploads, framing changes, and removals now keep cloud retry state pending until the self-hosted sync pass can retry them.
+- Opening Profile now forces an immediate account sync so another device checks for the latest profile media instead of waiting for the normal realtime/fallback interval.
+- Reduced profile-media transfer chunks from 1 MiB to 512 KiB, keeping 50 MB support while making Worker-to-Turso uploads/downloads more reliable on constrained HTTP/database paths.
+- Added explicit `profileMediaSyncAvailable` Worker capability reporting and deployment validation. Old Workers now produce a clear update-required sync error instead of silently leaving Device B on the default avatar.
+- Bumped application metadata to `1.0.1114+158`.
+
+### Deployment required
+- **Redeploy the latest self-hosted Cloudflare Worker** so profile-media endpoints, tables, realtime notifications, and the new capability check are guaranteed to be present. The standard deployment workflow applies the schema automatically.
+
 ## [1.0.1113] - 2026-09-13
 
 ### Changed

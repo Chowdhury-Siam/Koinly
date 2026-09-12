@@ -4596,7 +4596,11 @@ class AppController extends ChangeNotifier {
     await prefs.setString('profileMediaAlignmentY', '0.0');
     await _persistProfileMediaCloudState();
     notifyListeners();
-    if (_hasConfiguredSyncTarget()) unawaited(_syncProfileMediaCloudState());
+    if (_hasConfiguredSyncTarget()) {
+      await _setCloudSyncPending(true);
+      _schedulePendingSyncRetry();
+      unawaited(_syncProfileMediaCloudState());
+    }
   }
 
   Future<void> saveProfileMediaFraming({
@@ -4614,7 +4618,11 @@ class AppController extends ChangeNotifier {
     await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
     await _persistProfileMediaCloudState();
     notifyListeners();
-    if (_hasConfiguredSyncTarget()) unawaited(_syncProfileMediaCloudState());
+    if (_hasConfiguredSyncTarget()) {
+      await _setCloudSyncPending(true);
+      _schedulePendingSyncRetry();
+      unawaited(_syncProfileMediaCloudState());
+    }
   }
 
   Future<void> removeProfileMedia() async {
@@ -4624,7 +4632,11 @@ class AppController extends ChangeNotifier {
     profileMediaCloudDeletePending = hadRemoteMedia;
     await _clearLocalProfileMedia(clearRemoteTracking: !hadRemoteMedia);
     await _persistProfileMediaCloudState();
-    if (_hasConfiguredSyncTarget() && hadRemoteMedia) unawaited(_syncProfileMediaCloudState());
+    if (_hasConfiguredSyncTarget() && hadRemoteMedia) {
+      await _setCloudSyncPending(true);
+      _schedulePendingSyncRetry();
+      unawaited(_syncProfileMediaCloudState());
+    }
   }
 
   Future<void> _persistProfileMediaCloudState() async {
@@ -4700,10 +4712,23 @@ class AppController extends ChangeNotifier {
       }
 
       await _pullProfileMediaFromCloud(syncApi);
+    } on CloudSyncException catch (error) {
+      // Profile-media transfer failures must stay pending independently of the
+      // finance outbox. Otherwise a failed first upload can look successful on
+      // Device A while Device B keeps the default avatar forever.
+      await _setCloudSyncPending(true);
+      _schedulePendingSyncRetry();
+      if (error.code == 'HTTP_404') {
+        cloudSyncError = 'Profile media sync needs the latest self-hosted Worker. Redeploy the Worker, then keep Koinly open briefly on both devices.';
+        cloudSyncErrorCode = 'PROFILE_MEDIA_WORKER_UPDATE_REQUIRED';
+        notifyListeners();
+      }
     } catch (_) {
       // Finance sync remains usable when a large media transfer is interrupted.
-      // Pending upload/framing/delete state is persisted and retried on the next
-      // foreground, realtime, or fallback sync pass.
+      // Keep retry state alive so a transient network/database failure cannot
+      // strand profile media on only one device.
+      await _setCloudSyncPending(true);
+      _schedulePendingSyncRetry();
     } finally {
       _profileMediaCloudSyncInFlight = false;
     }
@@ -4720,7 +4745,7 @@ class AppController extends ChangeNotifier {
       profileMediaRemoteVersion = version;
       await _persistProfileMediaCloudState();
     }
-    const chunkSize = 1024 * 1024;
+    const chunkSize = 10 * 1024 * 1024;
     final chunkCount = (fileSize / chunkSize).ceil();
     if (chunkCount <= 0 || chunkCount > 128) {
       throw const ProfileMediaException(kProfileMediaSizeMessage);

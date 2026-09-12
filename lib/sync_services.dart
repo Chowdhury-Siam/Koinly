@@ -166,6 +166,9 @@ class KoinlySyncApi {
       if (data['registrationMode'] != 'first-user') {
         throw const CloudSyncException('This Worker is not configured for self-hosted first-owner registration.');
       }
+      if (data['profileMediaSyncAvailable'] != true) {
+        throw const CloudSyncException('This Worker is outdated and cannot sync profile media. Redeploy the latest self-hosted Worker.');
+      }
     } on TimeoutException {
       throw const CloudSyncException('Worker validation timed out. Check the URL and try again.');
     } on SocketException {
@@ -545,7 +548,10 @@ class KoinlySyncApi {
       }
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw CloudSyncException(data['error']?.toString() ?? 'Request failed (${response.statusCode}).');
+      throw CloudSyncException(
+        data['error']?.toString() ?? 'Request failed (${response.statusCode}).',
+        code: data['code']?.toString() ?? 'HTTP_${response.statusCode}',
+      );
     }
     return data;
   }

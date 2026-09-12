@@ -97,6 +97,7 @@ A ready Worker returns values equivalent to:
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
   "realtimeSyncAvailable": true,
+  "profileMediaSyncAvailable": true,
   "databaseReachable": true,
   "schemaReady": true,
   "missingTables": []
@@ -119,6 +120,13 @@ A ready Worker returns values equivalent to:
 - `POST /v1/sync/replace`
 - `GET /v1/sync/pull?cursor=0&limit=100`
 - `GET /v1/sync/status`
+- `POST /v1/profile-media/begin`
+- `POST /v1/profile-media/chunk`
+- `POST /v1/profile-media/complete`
+- `GET /v1/profile-media/meta`
+- `GET /v1/profile-media/chunk`
+- `POST /v1/profile-media/framing`
+- `DELETE /v1/profile-media`
 - `GET /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/test`
@@ -131,6 +139,8 @@ Clients write SQLite first and queue entity operations. The Worker stores the cu
 The WebSocket channel carries no finance payload; synchronized records still travel through the existing authenticated push/pull API. A periodic client pull remains as an eventual-consistency fallback if the live connection is unavailable.
 
 The Flutter client uses merge-first synchronization. Full local reconciliation can upload the complete device snapshot, while cloud restore merges the remote state into the device instead of deleting local-only data.
+
+Profile photos, animated GIFs, and short profile videos use the authenticated `/v1/profile-media/*` API and dedicated Turso tables. The media transfer is chunked separately from finance records, and completion/framing/removal events notify the same realtime hub so another signed-in device can refresh the avatar immediately.
 
 `MAX_SYNC_BATCH_SIZE` defaults to `100`. `MAX_SYNC_REPLACE_SIZE` defaults to `25000`.
 
@@ -151,6 +161,10 @@ For channels, the bot must be an administrator with permission to post messages.
 ### Schema is not ready
 
 On GitHub, open **Actions > Deploy Self-Hosted Sync Worker > Run workflow** and run it with the latest project files. The workflow applies the database update automatically. When it succeeds, reopen `/health` in your browser.
+
+### Profile image appears only on one device
+
+Open `/health` and confirm `profileMediaSyncAvailable` is `true`. If the field is missing or false, redeploy the latest Worker from **Actions > Deploy Self-Hosted Sync Worker**. Keep Koinly open briefly on both devices after deployment; the app retries any pending upload and the receiving device performs an immediate media check when Profile is opened.
 
 ### Registration is closed
 
