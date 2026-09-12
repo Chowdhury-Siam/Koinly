@@ -597,7 +597,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1104
+  --dart-define=KOINLY_APP_VERSION=1.0.1105
 ```
 
 ## 10.4 Windows build
@@ -607,7 +607,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1104
+  --dart-define=KOINLY_APP_VERSION=1.0.1105
 ```
 
 ## 10.5 Linux build
@@ -624,10 +624,10 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1104
+  --dart-define=KOINLY_APP_VERSION=1.0.1105
 ```
 
-The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. Each architecture gets:
+The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
 
 - `Koinly-v<version>-linux-<arch>.AppImage` — the recommended broad-distro package.
 - `Koinly-v<version>-linux-<arch>.tar.gz` — the raw Flutter portable bundle.
@@ -643,10 +643,10 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1104
+  --dart-define=KOINLY_APP_VERSION=1.0.1105
 ```
 
-The release workflow builds separate packages for **Apple Silicon (ARM64)** and **Intel (x64)** Macs. Each architecture gets a `.dmg` installer and a `.zip` containing `Koinly.app`. The CI-generated runner uses Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.
+The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI builds the universal binary on the Intel macOS runner to avoid Flutter ARM64 SDK archive gaps, verifies both architecture slices with `lipo`, applies Koinly's icon and `com.koinly.siam` bundle identifier, and enables network access plus user-selected file read/write access for sync, import, and backup workflows.
 
 The GitHub release workflow reads the official version/build number from `pubspec.yaml`.
 

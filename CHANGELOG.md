@@ -19,6 +19,19 @@
 - Configuring administrator credentials closes public app registration. Create further accounts in `/profile`; existing accounts continue to use Login. The administrator identity is separate from sync accounts and remains available after deleting the last sync account.
 
 
+## [1.0.1105] - 2026-09-12
+
+### Fixed
+
+- Fixed Linux AppImage packaging failure by resizing and validating the Koinly icon as a real 512×512 PNG before passing it to `linuxdeploy`.
+- Fixed ARM64 desktop CI setup failures caused by `subosito/flutter-action` being unable to resolve some stable ARM64 SDK archive entries. Linux ARM64 now bootstraps the pinned Flutter `3.47.4` tag directly from the official Flutter repository.
+- Reworked macOS packaging into a single verified universal build produced on `macos-15-intel`, containing both `x86_64` and `arm64` slices. This avoids the ARM64 Flutter SDK archive resolution failure while keeping native Apple Silicon support.
+
+### Changed
+
+- Pinned desktop and release CI to Flutter `3.47.4` for reproducible builds across runners.
+- Bumped application metadata to `1.0.1105+149`.
+
 ## [1.0.1104] - 2026-09-12
 
 ### Added
