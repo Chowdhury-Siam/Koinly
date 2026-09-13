@@ -14661,7 +14661,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
       _compactCurrency(state, value),
       maxLines: 1,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
+            color: const Color(0xFF75729E),
             fontWeight: FontWeight.w800,
           ),
     );
@@ -14679,7 +14679,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
       child: Text(
         _dateLabel(widget.days[index]),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
+              color: const Color(0xFF72719B),
               fontWeight: FontWeight.w800,
             ),
       ),
@@ -14711,39 +14711,34 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     );
     final net = totalIncome - totalExpense;
     final hasData = totalIncome != 0 || totalExpense != 0;
-    final gridColor = scheme.outlineVariant.withOpacity(dark ? .16 : .42);
-    final panelColor = dark
-        ? scheme.surfaceContainerHigh.withOpacity(.46)
-        : scheme.surface.withOpacity(.94);
-
+    // The Analysis trend uses the classic fl_chart LineChartSample1 visual
+    // treatment while continuing to plot the user's real income/expense data.
+    // Keep the semantic Koinly series colors so the existing metric pills and
+    // legend remain consistent with the chart.
     final bars = <LineChartBarData>[
       if (showIncome)
         LineChartBarData(
           spots: incomeSpots,
           isCurved: widget.days.length > 2,
+          curveSmoothness: .35,
           preventCurveOverShooting: true,
-          barWidth: 3.2,
+          barWidth: 8,
           isStrokeCapRound: true,
           color: kSleekIncome,
           dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: _view == _TrendView.income,
-            color: kSleekIncome.withOpacity(dark ? .10 : .08),
-          ),
+          belowBarData: BarAreaData(show: false),
         ),
       if (showExpense)
         LineChartBarData(
           spots: expenseSpots,
           isCurved: widget.days.length > 2,
+          curveSmoothness: .35,
           preventCurveOverShooting: true,
-          barWidth: 3.2,
+          barWidth: 8,
           isStrokeCapRound: true,
           color: kSleekExpense,
           dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: _view == _TrendView.expense,
-            color: kSleekExpense.withOpacity(dark ? .10 : .08),
-          ),
+          belowBarData: BarAreaData(show: false),
         ),
     ];
 
@@ -14857,10 +14852,16 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           Container(
             height: 278,
             padding: const EdgeInsets.fromLTRB(6, 12, 10, 4),
-            decoration: BoxDecoration(
-              color: panelColor,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .14 : .48)),
+            decoration: const BoxDecoration(
+              borderRadius: BorderRadius.all(Radius.circular(18)),
+              gradient: LinearGradient(
+                colors: [
+                  Color(0xFF2C274C),
+                  Color(0xFF46426C),
+                ],
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+              ),
             ),
             child: hasData
                 ? RepaintBoundary(
@@ -14871,13 +14872,16 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         minY: 0,
                         maxY: maxY,
                         clipData: const FlClipData.all(),
-                        borderData: FlBorderData(show: false),
-                        gridData: FlGridData(
+                        borderData: FlBorderData(
                           show: true,
-                          drawVerticalLine: false,
-                          horizontalInterval: maxY / 4,
-                          getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
+                          border: const Border(
+                            bottom: BorderSide(color: Color(0xFF4E4965), width: 4),
+                            left: BorderSide(color: Colors.transparent),
+                            right: BorderSide(color: Colors.transparent),
+                            top: BorderSide(color: Colors.transparent),
+                          ),
                         ),
+                        gridData: const FlGridData(show: false),
                         titlesData: FlTitlesData(
                           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -14901,10 +14905,10 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         lineTouchData: LineTouchData(
                           handleBuiltInTouches: true,
                           touchTooltipData: LineTouchTooltipData(
-                            tooltipRoundedRadius: 14,
+                            tooltipRoundedRadius: 12,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => dark ? const Color(0xFF142A22) : const Color(0xFF142A22),
+                            getTooltipColor: (_) => const Color(0xE6454A64),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
@@ -14918,6 +14922,8 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         ),
                         lineBarsData: bars,
                       ),
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut,
                     ),
                   )
                 : Center(
@@ -15176,7 +15182,7 @@ class CategoryBreakdownCard extends StatefulWidget {
 }
 
 class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
-  final Map<String, Offset> _badgeCenterFractions = <String, Offset>{};
+  int _selectedPieIndex = 0;
 
   CategoryType get type => widget.type;
   bool get interactive => widget.interactive;
@@ -15283,406 +15289,164 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          state.format(total),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -.8,
+                              ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          type == CategoryType.expense ? 'Total expense' : 'Total income',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: kSleekAccent,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: isDark ? scheme.surfaceContainerHighest.withOpacity(.14) : Colors.white.withOpacity(.92),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: isDark ? Colors.white.withOpacity(.05) : const Color(0xFFDCEBEE),
+                      ),
+                    ),
+                    child: Text(
+                      rangeLabel,
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
               SizedBox(
-                height: 334,
+                height: 320,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final canvasWidth = constraints.maxWidth;
-                    const canvasHeight = 334.0;
-                    final chartSize = math.min(math.max(180.0, canvasWidth - 98), math.min(268.0, canvasWidth - 8));
-                    final centerSize = chartSize * .57;
-                    final manyBadges = slices.length > 5;
-                    final badgeWidth = manyBadges ? (canvasWidth < 360 ? 78.0 : 86.0) : (canvasWidth < 360 ? 84.0 : 94.0);
-                    final badgeHeight = manyBadges ? 40.0 : 44.0;
-                    final badgeOrbit = (chartSize / 2) + (manyBadges ? 32.0 : 24.0);
+                    final chartSize = math.min(300.0, math.max(230.0, canvasWidth - 18));
+                    final normalRadius = chartSize * .32;
+                    final selectedRadius = chartSize * .365;
+                    final selectedIndex = _selectedPieIndex.clamp(0, slices.length - 1);
 
-                    double startAngle = -90;
-                    final badgeAngles = <double>[];
-                    for (final slice in slices) {
-                      final sweep = total == 0 ? 0 : (slice.value / total) * 360;
-                      badgeAngles.add(startAngle + (sweep / 2));
-                      startAngle += sweep;
-                    }
-
-                    final badgeNudges = List<double>.filled(slices.length, 0);
-                    void spreadDenseSide(bool leftSide) {
-                      final indexes = <int>[];
-                      for (var i = 0; i < badgeAngles.length; i++) {
-                        final radians = badgeAngles[i] * (math.pi / 180);
-                        final isLeft = math.cos(radians) < -0.18;
-                        if (isLeft == leftSide) indexes.add(i);
-                      }
-                      if (indexes.length <= 1) return;
-                      indexes.sort((a, b) {
-                        final ay = math.sin(badgeAngles[a] * (math.pi / 180));
-                        final by = math.sin(badgeAngles[b] * (math.pi / 180));
-                        return ay.compareTo(by);
-                      });
-                      final spacing = manyBadges ? 11.0 : 8.0;
-                      for (var rank = 0; rank < indexes.length; rank++) {
-                        badgeNudges[indexes[rank]] = (rank - ((indexes.length - 1) / 2)) * spacing;
-                      }
-                    }
-
-                    spreadDenseSide(true);
-                    spreadDenseSide(false);
-
-                    const badgeCollisionGap = 8.0;
-                    int? selectedBadgeIndex;
-                    int? draggingBadgeIndex;
-
-                    Offset clampBadgeCenter(Offset candidate, double currentBadgeWidth, double currentBadgeHeight) {
-                      final halfWidth = currentBadgeWidth / 2;
-                      final halfHeight = currentBadgeHeight / 2;
-                      final minX = halfWidth;
-                      final maxX = math.max(minX, canvasWidth - halfWidth);
-                      final minY = halfHeight;
-                      final maxY = math.max(minY, canvasHeight - halfHeight);
-                      return Offset(
-                        candidate.dx.clamp(minX, maxX).toDouble(),
-                        candidate.dy.clamp(minY, maxY).toDouble(),
-                      );
-                    }
-
-                    Rect badgeCollisionRect(Offset center, double currentBadgeWidth, double currentBadgeHeight) {
-                      return Rect.fromCenter(
-                        center: center,
-                        width: currentBadgeWidth + badgeCollisionGap,
-                        height: currentBadgeHeight + badgeCollisionGap,
-                      );
-                    }
-
-                    List<Offset> buildPackedBadgeCenters() {
-                      // Build the automatic layout only from the slice geometry. A
-                      // user-dragged badge must never become an anchor that causes
-                      // neighboring badges to be repacked on a later rebuild.
-                      final centers = List<Offset>.generate(slices.length, (index) {
-                        final radians = badgeAngles[index] * (math.pi / 180);
-                        return clampBadgeCenter(
-                          Offset(
-                            (canvasWidth / 2) + math.cos(radians) * badgeOrbit,
-                            (canvasHeight / 2) + math.sin(radians) * badgeOrbit + badgeNudges[index],
-                          ),
-                          badgeWidth,
-                          badgeHeight,
-                        );
-                      });
-
-                      // Tiny slices can share almost the same angle. Pack only the
-                      // untouched automatic positions apart. Once a badge is dragged,
-                      // its saved position is applied later by resolvedBadgeCenter(),
-                      // without changing any other badge's automatic position.
-                      for (var pass = 0; pass < 32; pass++) {
-                        var moved = false;
-                        for (var i = 0; i < centers.length; i++) {
-                          for (var j = i + 1; j < centers.length; j++) {
-                            final firstRect = badgeCollisionRect(centers[i], badgeWidth, badgeHeight);
-                            final secondRect = badgeCollisionRect(centers[j], badgeWidth, badgeHeight);
-                            if (!firstRect.overlaps(secondRect)) continue;
-
-                            final overlap = firstRect.intersect(secondRect);
-                            if (overlap.isEmpty) continue;
-                            final delta = centers[j] - centers[i];
-                            final nearTopOrBottom =
-                                math.min(centers[i].dy, centers[j].dy) <= (badgeHeight / 2) + (badgeCollisionGap * 2) ||
-                                    math.max(centers[i].dy, centers[j].dy) >=
-                                        canvasHeight - (badgeHeight / 2) - (badgeCollisionGap * 2);
-                            final nearSideEdge =
-                                math.min(centers[i].dx, centers[j].dx) <= (badgeWidth / 2) + (badgeCollisionGap * 2) ||
-                                    math.max(centers[i].dx, centers[j].dx) >=
-                                        canvasWidth - (badgeWidth / 2) - (badgeCollisionGap * 2);
-                            final separateHorizontally = nearTopOrBottom || (!nearSideEdge && overlap.width <= overlap.height);
-
-                            if (separateHorizontally) {
-                              final direction = delta.dx.abs() < .01 ? 1.0 : (delta.dx > 0 ? 1.0 : -1.0);
-                              final half = (overlap.width + .5) / 2;
-                              centers[i] = clampBadgeCenter(
-                                centers[i] - Offset(direction * half, 0),
-                                badgeWidth,
-                                badgeHeight,
-                              );
-                              centers[j] = clampBadgeCenter(
-                                centers[j] + Offset(direction * half, 0),
-                                badgeWidth,
-                                badgeHeight,
-                              );
-                            } else {
-                              final direction = delta.dy.abs() < .01 ? 1.0 : (delta.dy > 0 ? 1.0 : -1.0);
-                              final half = (overlap.height + .5) / 2;
-                              centers[i] = clampBadgeCenter(
-                                centers[i] - Offset(0, direction * half),
-                                badgeWidth,
-                                badgeHeight,
-                              );
-                              centers[j] = clampBadgeCenter(
-                                centers[j] + Offset(0, direction * half),
-                                badgeWidth,
-                                badgeHeight,
-                              );
-                            }
-                            moved = true;
-                          }
-                        }
-                        if (!moved) break;
-                      }
-
-                      return centers;
-                    }
-
-                    final packedBadgeCenters = buildPackedBadgeCenters();
-
-                    Offset resolvedBadgeCenter(int index, double currentBadgeWidth, double currentBadgeHeight) {
-                      final saved = _badgeCenterFractions[slices[index].categoryId];
-                      final candidate = saved == null
-                          ? packedBadgeCenters[index]
-                          : Offset(saved.dx * canvasWidth, saved.dy * canvasHeight);
-                      return clampBadgeCenter(candidate, currentBadgeWidth, currentBadgeHeight);
-                    }
-
-                    void moveBadge(int index, double currentBadgeWidth, double currentBadgeHeight, Offset delta) {
-                      final current = resolvedBadgeCenter(index, currentBadgeWidth, currentBadgeHeight);
-                      // Every badge owns its own drag state. Do not inspect, push,
-                      // slide around, or otherwise react to neighboring badges while
-                      // dragging; only keep the active badge inside the chart surface.
-                      final next = clampBadgeCenter(
-                        current + delta,
-                        currentBadgeWidth,
-                        currentBadgeHeight,
-                      );
-
-                      _badgeCenterFractions[slices[index].categoryId] = Offset(
-                        (next.dx / canvasWidth).clamp(0.0, 1.0).toDouble(),
-                        (next.dy / canvasHeight).clamp(0.0, 1.0).toDouble(),
-                      );
-                    }
-
-                    return StatefulBuilder(
-                      builder: (context, setBadgeState) {
-                        return TweenAnimationBuilder<double>(
-                      key: ValueKey('${type.name}-${slices.length}-${total.toStringAsFixed(2)}'),
-                      tween: Tween<double>(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 680),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, progress, _) {
-                        final badgeProgress = ((progress - .35) / .65).clamp(0.0, 1.0).toDouble();
-                        final centerProgress = ((progress - .18) / .82).clamp(0.0, 1.0).toDouble();
-                        final badgeOrder = List<int>.generate(slices.length, (index) => index);
-                        if (selectedBadgeIndex != null && selectedBadgeIndex! >= 0 && selectedBadgeIndex! < slices.length) {
-                          badgeOrder
-                            ..remove(selectedBadgeIndex)
-                            ..add(selectedBadgeIndex!);
-                        }
-                        if (draggingBadgeIndex != null && draggingBadgeIndex! >= 0 && draggingBadgeIndex! < slices.length) {
-                          badgeOrder
-                            ..remove(draggingBadgeIndex)
-                            ..add(draggingBadgeIndex!);
-                        }
-
-                        return Stack(
-                          alignment: Alignment.center,
-                          clipBehavior: Clip.hardEdge,
-                          children: [
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(34),
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      chartSurfaceTop,
-                                      chartSurfaceBottom,
+                    return Stack(
+                      alignment: Alignment.center,
+                      clipBehavior: Clip.hardEdge,
+                      children: [
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(34),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [chartSurfaceTop, chartSurfaceBottom],
+                              ),
+                              border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
+                              boxShadow: isDark
+                                  ? null
+                                  : [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(.035),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
                                     ],
+                            ),
+                          ),
+                        ),
+                        Center(
+                          child: SizedBox(
+                            width: chartSize,
+                            height: chartSize,
+                            child: RepaintBoundary(
+                              child: PieChart(
+                                PieChartData(
+                                  startDegreeOffset: -90,
+                                  centerSpaceRadius: 0,
+                                  sectionsSpace: 2.6,
+                                  pieTouchData: PieTouchData(
+                                    enabled: true,
+                                    touchCallback: (event, response) {
+                                      if (!event.isInterestedForInteractions || response?.touchedSection == null) return;
+                                      final touchedIndex = response!.touchedSection!.touchedSectionIndex;
+                                      if (touchedIndex < 0 || touchedIndex >= slices.length || touchedIndex == _selectedPieIndex) return;
+                                      setState(() => _selectedPieIndex = touchedIndex);
+                                    },
                                   ),
-                                  border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
-                                  boxShadow: isDark
-                                      ? null
-                                      : [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(.035),
-                                            blurRadius: 18,
-                                            offset: const Offset(0, 8),
+                                  sections: slices.asMap().entries.map((entry) {
+                                    final index = entry.key;
+                                    final slice = entry.value;
+                                    final percentage = total <= 0 ? 0.0 : (slice.value / total) * 100;
+                                    final selected = selectedIndex == index;
+                                    final showPercent = percentage >= 3.0;
+                                    final titleSize = percentage >= 20
+                                        ? 22.0
+                                        : percentage >= 10
+                                            ? 18.0
+                                            : percentage >= 6
+                                                ? 15.0
+                                                : 12.0;
+                                    final badgeOffset = percentage < 4.0
+                                        ? 1.10 + ((index % 2) * .12)
+                                        : (selected ? 1.02 : 1.06);
+
+                                    return PieChartSectionData(
+                                      value: slice.value <= 0 ? .0001 : slice.value,
+                                      color: slice.color,
+                                      radius: selected ? selectedRadius : normalRadius,
+                                      showTitle: showPercent,
+                                      title: showPercent ? '${percentage.round()}%' : '',
+                                      titlePositionPercentageOffset: .60,
+                                      titleStyle: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: titleSize,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1,
+                                        letterSpacing: -.25,
+                                        shadows: [
+                                          Shadow(
+                                            color: Colors.black.withOpacity(.34),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 1),
                                           ),
                                         ],
-                                ),
-                              ),
-                            ),
-                            Center(
-                              child: SizedBox(
-                                width: chartSize,
-                                height: chartSize,
-                                child: RepaintBoundary(
-                                  child: PieChart(
-                                    PieChartData(
-                                      startDegreeOffset: -90,
-                                      sectionsSpace: 2.2,
-                                      centerSpaceRadius: chartSize * .285,
-                                      sections: slices.asMap().entries.map((entry) {
-                                        final selected = selectedBadgeIndex == entry.key;
-                                        return PieChartSectionData(
-                                          value: entry.value.value,
-                                          color: entry.value.color,
-                                          radius: (chartSize * (selected ? .135 : .118)) * progress,
-                                          showTitle: false,
-                                        );
-                                      }).toList(),
-                                    ),
-                                    swapAnimationDuration: const Duration(milliseconds: 260),
-                                    swapAnimationCurve: Curves.easeOutCubic,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            for (final i in badgeOrder)
-                              Builder(
-                                builder: (context) {
-                                  final isSelected = selectedBadgeIndex == i;
-                                  final isDragging = draggingBadgeIndex == i;
-                                  final currentBadgeWidth = isSelected ? badgeWidth + 12 : badgeWidth;
-                                  final currentBadgeHeight = isSelected ? badgeHeight + 4 : badgeHeight;
-                                  final center = resolvedBadgeCenter(i, currentBadgeWidth, currentBadgeHeight);
-                                  return _DonutBadgePositioned(
-                                    angleDegrees: badgeAngles[i],
-                                    orbit: badgeOrbit,
-                                    canvasWidth: canvasWidth,
-                                    canvasHeight: canvasHeight,
-                                    badgeWidth: currentBadgeWidth,
-                                    badgeHeight: currentBadgeHeight,
-                                    verticalNudge: badgeNudges[i],
-                                    centerOverride: center,
-                                    child: MouseRegion(
-                                      cursor: isDragging ? SystemMouseCursors.grabbing : SystemMouseCursors.grab,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () {
-                                          setBadgeState(() {
-                                            selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
-                                          });
-                                        },
-                                        onPanStart: (_) {
-                                          setBadgeState(() {
-                                            draggingBadgeIndex = i;
-                                          });
-                                        },
-                                        onPanUpdate: (details) {
-                                          setBadgeState(() {
-                                            draggingBadgeIndex = i;
-                                            moveBadge(i, currentBadgeWidth, currentBadgeHeight, details.delta);
-                                          });
-                                        },
-                                        onPanEnd: (_) {
-                                          setBadgeState(() {
-                                            draggingBadgeIndex = null;
-                                          });
-                                        },
-                                        onPanCancel: () {
-                                          setBadgeState(() {
-                                            draggingBadgeIndex = null;
-                                          });
-                                        },
-                                        child: Opacity(
-                                          opacity: badgeProgress,
-                                          child: Transform.scale(
-                                            scale: (.86 + (.14 * badgeProgress)) * (isDragging ? 1.11 : (isSelected ? 1.08 : 1.0)),
-                                            child: _DonutPercentBadge(
-                                              color: slices[i].color,
-                                              iconName: slices[i].iconName,
-                                              label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
-                                              leadingText: _badgeTag(slices[i]),
-                                              useTextBadge: _useTextBadge(slices[i]),
-                                              selected: isSelected || isDragging,
-                                            ),
-                                          ),
-                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            Center(
-                              child: Opacity(
-                                opacity: centerProgress,
-                                child: Transform.scale(
-                                  scale: .92 + (.08 * centerProgress),
-                                  child: Container(
-                                    width: centerSize,
-                                    height: centerSize,
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: isDark ? const Color(0xFF101A15).withOpacity(.97) : Colors.white.withOpacity(.98),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(isDark ? .22 : .08),
-                                          blurRadius: isDark ? 22.0 : 18.0,
-                                          offset: const Offset(0, 10),
-                                        ),
-                                      ],
-                                      border: Border.all(
-                                        color: isDark ? scheme.outline.withOpacity(.10) : const Color(0xFFD7E6E9),
+                                      badgePositionPercentageOffset: badgeOffset,
+                                      badgeWidget: _PieCategoryBadge(
+                                        color: slice.color,
+                                        iconName: slice.iconName,
+                                        textBadge: _useTextBadge(slice) ? _badgeTag(slice) : null,
+                                        selected: selected,
                                       ),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Flexible(
-                                          flex: 3,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              state.format(total),
-                                              maxLines: 1,
-                                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: -.8,
-                                                    color: isDark ? Colors.white : scheme.onSurface,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Flexible(
-                                          flex: 2,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              type == CategoryType.expense ? 'Total expense' : 'Total income',
-                                              maxLines: 1,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                                    color: kSleekAccent,
-                                                    fontWeight: FontWeight.w900,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Flexible(
-                                          flex: 2,
-                                          child: FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              rangeLabel,
-                                              maxLines: 1,
-                                              textAlign: TextAlign.center,
-                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                    color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant.withOpacity(.88),
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                                    );
+                                  }).toList(),
                                 ),
+                                swapAnimationDuration: const Duration(milliseconds: 320),
+                                swapAnimationCurve: Curves.easeOutCubic,
                               ),
                             ),
-                          ],
-                        );
-                      },
-                        );
-                      },
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -15777,149 +15541,72 @@ class _BreakdownSlice {
   String get iconName => iconNameOverride ?? category?.iconName ?? 'category';
 }
 
-class _DonutBadgePositioned extends StatelessWidget {
-  const _DonutBadgePositioned({
-    required this.angleDegrees,
-    required this.orbit,
-    required this.canvasWidth,
-    required this.canvasHeight,
-    required this.badgeWidth,
-    required this.badgeHeight,
-    this.verticalNudge = 0,
-    this.centerOverride,
-    required this.child,
-  });
-
-  final double angleDegrees;
-  final double orbit;
-  final double canvasWidth;
-  final double canvasHeight;
-  final double badgeWidth;
-  final double badgeHeight;
-  final double verticalNudge;
-  final Offset? centerOverride;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final radians = angleDegrees * (math.pi / 180);
-    final chartCenter = Offset(canvasWidth / 2, canvasHeight / 2);
-    final targetCenter = centerOverride ??
-        Offset(
-          chartCenter.dx + math.cos(radians) * orbit,
-          chartCenter.dy + math.sin(radians) * orbit + verticalNudge,
-        );
-    final rawLeft = targetCenter.dx - (badgeWidth / 2);
-    final rawTop = targetCenter.dy - (badgeHeight / 2);
-    final left = rawLeft.clamp(0.0, math.max(0.0, canvasWidth - badgeWidth)).toDouble();
-    final top = rawTop.clamp(0.0, math.max(0.0, canvasHeight - badgeHeight)).toDouble();
-
-    return Positioned(
-      left: left,
-      top: top,
-      width: badgeWidth,
-      height: badgeHeight,
-      child: child,
-    );
-  }
-}
-
-class _DonutPercentBadge extends StatelessWidget {
-  const _DonutPercentBadge({
+class _PieCategoryBadge extends StatelessWidget {
+  const _PieCategoryBadge({
     required this.color,
     required this.iconName,
-    required this.label,
-    required this.leadingText,
-    required this.useTextBadge,
+    this.textBadge,
     this.selected = false,
   });
 
   final Color color;
   final String iconName;
-  final String label;
-  final String leadingText;
-  final bool useTextBadge;
+  final String? textBadge;
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final badgeBackground = selected
-        ? (isDark ? color.withOpacity(.28) : color.withOpacity(.20))
-        : (isDark ? const Color(0xFF151E19).withOpacity(.96) : Colors.white.withOpacity(.96));
-    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : kSleekLightOutlineVariant);
-    final textColor = isDark ? Colors.white.withOpacity(.96) : scheme.onSurface;
-    final iconBackground = useTextBadge
-        ? (isDark ? Colors.black : kSleekLightSurfaceContainer)
-        : color.withOpacity(isDark ? .18 : .16);
-    final iconBorder = useTextBadge
-        ? (isDark ? Colors.white.withOpacity(.06) : kSleekLightOutlineVariant)
-        : color.withOpacity(isDark ? .28 : .30);
-    final iconColor = isDark ? Colors.white : color;
+    final size = selected ? 58.0 : 50.0;
+    final surface = isDark ? const Color(0xFF171A1F) : Colors.white;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: badgeBackground,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: badgeBorder, width: selected ? 2.0 : 1.0),
+        color: surface,
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: selected ? 3.0 : 2.2),
         boxShadow: [
           BoxShadow(
-            color: selected ? color.withOpacity(isDark ? .34 : .22) : Colors.black.withOpacity(isDark ? .26 : .10),
-            blurRadius: selected ? 22.0 : (isDark ? 18.0 : 14.0),
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(isDark ? .40 : .20),
+            blurRadius: selected ? 18 : 13,
+            offset: const Offset(0, 6),
           ),
+          if (selected)
+            BoxShadow(
+              color: color.withOpacity(.30),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: iconBackground,
-              shape: BoxShape.circle,
-              border: Border.all(color: iconBorder),
-            ),
-            child: Center(
-              child: useTextBadge
-                  ? FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: Text(
-                          leadingText,
-                          maxLines: 1,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: textColor,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: .4,
-                              ),
+      child: Center(
+        child: textBadge != null
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    textBadge!,
+                    maxLines: 1,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .3,
                         ),
-                      ),
-                    )
-                  : iconGlyph(context, iconName, color: iconColor, size: 15, imageBackground: Colors.white.withOpacity(.90)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                label,
-                maxLines: 1,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: -.2,
-                      color: textColor,
-                    ),
+                  ),
+                ),
+              )
+            : iconGlyph(
+                context,
+                iconName,
+                color: color,
+                size: size * .48,
+                imageBackground: Colors.white.withOpacity(.92),
               ),
-            ),
-          ),
-        ],
       ),
     );
   }

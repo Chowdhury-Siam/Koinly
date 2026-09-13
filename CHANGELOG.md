@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.0.1126] - 2026-09-13
+
+### Changed
+
+- Replaced the Categories breakdown donut with the requested full `fl_chart` pie-chart style. The chart now has no center hole, shows percentages directly on the slices, and places each category icon in a circular badge on the corresponding slice edge.
+- The largest category is selected by default; tapping another slice expands that slice and moves the highlighted icon badge with it, matching the exploded-slice behavior of the reference chart.
+- Preserved the real category totals, category colors/icons, date-range context, category cards below the chart, and the existing dark/light card styling.
+- Completely removed the old donut percentage-bubble layout helpers from the category breakdown implementation.
+- Bumped application metadata to `1.0.1126+170`.
+
+
+## [1.0.1125] - 2026-09-13
+
+### Changed
+
+- Replaced the Analysis **Cash flow trend** plot with the classic `fl_chart` LineChartSample1-style presentation while continuing to use the user's real income and expense data.
+- The new plot uses the reference purple gradient chart surface, thick rounded smooth lines, no internal grid, the strong bottom-axis rule, muted violet axis labels, and a matching animated tooltip treatment.
+- Preserved the existing Cash flow trend card, date-range controls, income/expense filters, totals, legend, hidden-amount handling, and empty-state behavior.
+- Bumped application metadata to `1.0.1125+169`.
+
+
+## [1.0.1124] - 2026-09-13
+
+### Changed
+
+- Completely removed manual movement/dragging for the category breakdown percentage bubbles. They are now positioned only by the automatic collision-free layout and cannot be dragged with touch, mouse, or trackpad input.
+- Removed the saved per-bubble drag-position state, drag gesture handlers, drag cursor treatment, and dragging visual state while preserving the existing static bubble layout and tap-to-select behavior.
+- Bumped application metadata to `1.0.1124+168`.
+
+
 ## [1.0.1123] - 2026-09-13
 
 ### Fixed
