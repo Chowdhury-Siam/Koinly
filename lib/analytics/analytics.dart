@@ -2,6 +2,20 @@ part of '../main.dart';
 
 enum AnalyticsPeriod { daily, weekly, monthly, yearly }
 
+enum AnalyticsPdfVariant { summary, transactionHistory }
+
+extension AnalyticsPdfVariantLabel on AnalyticsPdfVariant {
+  String get label => switch (this) {
+        AnalyticsPdfVariant.summary => 'Summary',
+        AnalyticsPdfVariant.transactionHistory => 'Transaction history',
+      };
+
+  String get description => switch (this) {
+        AnalyticsPdfVariant.summary => 'Detailed period report with comparison, activity, budgets, category breakdowns, and account balances.',
+        AnalyticsPdfVariant.transactionHistory => 'Complete transaction ledger with every transaction stored in Koinly.',
+      };
+}
+
 extension AnalyticsPeriodLabel on AnalyticsPeriod {
   String get label => switch (this) {
         AnalyticsPeriod.daily => 'Daily',
@@ -310,7 +324,17 @@ String _analyticsPdfMoney(AppController state, double value) {
   return '$sign${_analyticsPdfSafe(state.currencyCode)} ${formatter.format(value.abs())}';
 }
 
-String analyticsPdfFileName(AnalyticsSnapshot snapshot) {
+String _analyticsComparisonLabel(double current, double previous) {
+  if (previous.abs() < .0001) return current.abs() < .0001 ? 'No change' : 'New activity';
+  final percent = ((current - previous) / previous.abs()) * 100;
+  final sign = percent > 0 ? '+' : '';
+  return '$sign${percent.toStringAsFixed(1)}%';
+}
+
+String analyticsPdfFileName(AnalyticsSnapshot snapshot, {AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary}) {
+  if (variant == AnalyticsPdfVariant.transactionHistory) {
+    return 'Koinly-Transaction-History-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
+  }
   final stamp = switch (snapshot.period) {
     AnalyticsPeriod.daily => DateFormat('yyyy-MM-dd').format(snapshot.range.start),
     AnalyticsPeriod.weekly => '${DateFormat('yyyy-MM-dd').format(snapshot.range.start)}_week',
@@ -323,55 +347,65 @@ String analyticsPdfFileName(AnalyticsSnapshot snapshot) {
 class AnalyticsPdfService {
   const AnalyticsPdfService._();
 
-  static Future<Uint8List> build(AppController state, AnalyticsSnapshot snapshot) async {
-    final document = pw.Document();
+  static Future<Uint8List> build(
+    AppController state,
+    AnalyticsSnapshot snapshot, {
+    AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary,
+  }) async {
+    return switch (variant) {
+      AnalyticsPdfVariant.summary => _buildSummary(state, snapshot),
+      AnalyticsPdfVariant.transactionHistory => _buildTransactionHistory(state),
+    };
+  }
 
-    pw.Widget metric(String label, String value) => pw.Container(
-          width: 155,
-          padding: const pw.EdgeInsets.all(10),
-          margin: const pw.EdgeInsets.only(right: 8, bottom: 8),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey300),
-            borderRadius: pw.BorderRadius.circular(6),
-          ),
-          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.Text(_analyticsPdfSafe(label), style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-            pw.SizedBox(height: 4),
-            pw.Text(_analyticsPdfSafe(value), style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
-          ]),
-        );
+  static pw.Widget _metric(String label, String value) => pw.Container(
+        width: 155,
+        padding: const pw.EdgeInsets.all(10),
+        margin: const pw.EdgeInsets.only(right: 8, bottom: 8),
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: PdfColors.grey300),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Text(_analyticsPdfSafe(label), style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+          pw.SizedBox(height: 4),
+          pw.Text(_analyticsPdfSafe(value), style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+        ]),
+      );
 
-    pw.Widget categorySection(String title, List<AnalyticsCategoryItem> items) {
-      final visible = items.take(8).toList();
-      if (visible.isEmpty) {
-        return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-          pw.Text(title, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          pw.Text('No activity in this period.', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-        ]);
-      }
+  static pw.Widget _categorySection(AppController state, String title, List<AnalyticsCategoryItem> items) {
+    final visible = items.take(8).toList();
+    if (visible.isEmpty) {
       return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Text(title, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 6),
-        ...visible.map((item) => pw.Padding(
-              padding: const pw.EdgeInsets.only(bottom: 4),
-              child: pw.Row(children: [
-                pw.Expanded(child: pw.Text(_analyticsPdfSafe(item.name), style: const pw.TextStyle(fontSize: 10))),
-                pw.Text('${(item.share * 100).toStringAsFixed(1)}%', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
-                pw.SizedBox(width: 10),
-                pw.SizedBox(
-                  width: 95,
-                  child: pw.Text(
-                    _analyticsPdfSafe(_analyticsPdfMoney(state, item.amount)),
-                    textAlign: pw.TextAlign.right,
-                    style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-                  ),
-                ),
-              ]),
-            )),
+        pw.Text('No activity in this period.', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
       ]);
     }
+    return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      pw.Text(title, style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 6),
+      ...visible.map((item) => pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 4),
+            child: pw.Row(children: [
+              pw.Expanded(child: pw.Text(_analyticsPdfSafe(item.name), style: const pw.TextStyle(fontSize: 10))),
+              pw.Text('${(item.share * 100).toStringAsFixed(1)}%', style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              pw.SizedBox(width: 10),
+              pw.SizedBox(
+                width: 95,
+                child: pw.Text(
+                  _analyticsPdfSafe(_analyticsPdfMoney(state, item.amount)),
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+            ]),
+          )),
+    ]);
+  }
 
+  static Future<Uint8List> _buildSummary(AppController state, AnalyticsSnapshot snapshot) async {
+    final document = pw.Document();
     final generated = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
     document.addPage(
       pw.MultiPage(
@@ -388,14 +422,20 @@ class AnalyticsPdfService {
           pw.Text('Generated $generated | App version $appVersion', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
           pw.SizedBox(height: 18),
           pw.Wrap(children: [
-            metric('Income', _analyticsPdfMoney(state, snapshot.income)),
-            metric('Expense', _analyticsPdfMoney(state, snapshot.expense)),
-            metric('Net cash flow', _analyticsPdfMoney(state, snapshot.net)),
-            metric('Transactions', snapshot.transactionCount.toString()),
-            metric('Avg income / day', _analyticsPdfMoney(state, snapshot.averageIncomePerDay)),
-            metric('Avg expense / day', _analyticsPdfMoney(state, snapshot.averageExpensePerDay)),
+            _metric('Income', _analyticsPdfMoney(state, snapshot.income)),
+            _metric('Expense', _analyticsPdfMoney(state, snapshot.expense)),
+            _metric('Net cash flow', _analyticsPdfMoney(state, snapshot.net)),
+            _metric('Transactions', snapshot.transactionCount.toString()),
+            _metric('Avg income / day', _analyticsPdfMoney(state, snapshot.averageIncomePerDay)),
+            _metric('Avg expense / day', _analyticsPdfMoney(state, snapshot.averageExpensePerDay)),
           ]),
           pw.SizedBox(height: 10),
+          pw.Text('Compared with previous period', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          pw.Text('Income: ${_analyticsComparisonLabel(snapshot.income, snapshot.previousIncome)}'),
+          pw.Text('Expense: ${_analyticsComparisonLabel(snapshot.expense, snapshot.previousExpense)}'),
+          pw.Text('Net cash flow: ${_analyticsComparisonLabel(snapshot.net, snapshot.previousNet)}'),
+          pw.SizedBox(height: 16),
           pw.Text('Activity', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Text('Income transactions: ${snapshot.incomeCount}'),
@@ -410,9 +450,9 @@ class AnalyticsPdfService {
             pw.Text('Budget spend: ${_analyticsPdfMoney(state, snapshot.budgetSpent)} of ${_analyticsPdfMoney(state, snapshot.budgetLimit)}'),
           ],
           pw.SizedBox(height: 16),
-          categorySection('Top expense categories', snapshot.expenseCategories),
+          _categorySection(state, 'Top expense categories', snapshot.expenseCategories),
           pw.SizedBox(height: 16),
-          categorySection('Top income categories', snapshot.incomeCategories),
+          _categorySection(state, 'Top income categories', snapshot.incomeCategories),
           pw.SizedBox(height: 16),
           pw.Text('Current account balances', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
@@ -435,22 +475,150 @@ class AnalyticsPdfService {
     );
     return document.save();
   }
+
+  static Future<Uint8List> _buildTransactionHistory(AppController state) async {
+    final document = pw.Document();
+    final transactions = List<MoneyTransaction>.of(state.transactions)
+      ..sort((a, b) => b.listOn.compareTo(a.listOn));
+    final generated = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final income = transactions.where((tx) => tx.countsAsIncome).fold<double>(0, (sum, tx) => sum + tx.amount);
+    final expense = transactions.where((tx) => tx.countsAsExpense).fold<double>(0, (sum, tx) => sum + tx.amount);
+    final transfers = transactions.where((tx) => tx.type == MoneyTransactionType.transfer).toList(growable: false);
+    final transferVolume = transfers.fold<double>(0, (sum, tx) => sum + tx.amount);
+
+    String accountName(String id) => state.accountOf(id)?.name ?? 'Unknown account';
+    String categoryName(MoneyTransaction tx) => state.categoryOf(tx.categoryId)?.name ?? 'Uncategorized';
+    String transactionDateLabel(MoneyTransaction tx) {
+      final start = DateFormat('yyyy-MM-dd HH:mm').format(tx.createdOn);
+      final end = tx.effectiveEndOn;
+      if (end.year == tx.createdOn.year &&
+          end.month == tx.createdOn.month &&
+          end.day == tx.createdOn.day &&
+          end.hour == tx.createdOn.hour &&
+          end.minute == tx.createdOn.minute) {
+        return start;
+      }
+      return '$start -> ${DateFormat('yyyy-MM-dd HH:mm').format(end)}';
+    }
+    String amountLabel(MoneyTransaction tx) {
+      final money = _analyticsPdfMoney(state, tx.amount);
+      return switch (tx.type) {
+        MoneyTransactionType.income => '+$money',
+        MoneyTransactionType.expense => '-$money',
+        MoneyTransactionType.transfer => money,
+      };
+    }
+
+    pw.Widget transactionEntry(MoneyTransaction tx) {
+      final savedTitle = tx.title.trim();
+      final category = categoryName(tx);
+      final from = accountName(tx.fromAccountId);
+      final to = tx.toAccountId == null ? null : accountName(tx.toAccountId!);
+      final title = tx.type == MoneyTransactionType.transfer
+          ? '$from -> ${to ?? 'Unknown account'}'
+          : savedTitle.isNotEmpty
+              ? savedTitle
+              : category;
+      final details = <String>[
+        tx.displayType,
+        if (tx.type != MoneyTransactionType.transfer) category,
+        if (tx.type != MoneyTransactionType.transfer) from,
+        if (tx.excludeFromReports) 'Excluded from reports',
+      ];
+      var notes = tx.notes.trim();
+      if (notes.length > 1000) notes = '${notes.substring(0, 1000)}...';
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 10),
+        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Expanded(
+              child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text(_analyticsPdfSafe(title), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 2),
+                pw.Text(transactionDateLabel(tx), style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+              ]),
+            ),
+            pw.SizedBox(width: 12),
+            pw.Text(_analyticsPdfSafe(amountLabel(tx)), style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+          ]),
+          pw.SizedBox(height: 3),
+          pw.Text(_analyticsPdfSafe(details.join(' | ')), style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700)),
+          if (notes.isNotEmpty) ...[
+            pw.SizedBox(height: 3),
+            pw.Text('Note: ${_analyticsPdfSafe(notes)}', style: const pw.TextStyle(fontSize: 8.5)),
+          ],
+          pw.SizedBox(height: 7),
+          pw.Divider(height: 1, color: PdfColors.grey300),
+        ]),
+      );
+    }
+
+    document.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(34, 36, 34, 36),
+        footer: (context) => pw.Align(
+          alignment: pw.Alignment.centerRight,
+          child: pw.Text('Koinly Transaction History | Page ${context.pageNumber} of ${context.pagesCount}', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+        ),
+        build: (context) => [
+          pw.Text('Koinly Transaction History', style: pw.TextStyle(fontSize: 25, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
+          pw.SizedBox(height: 4),
+          pw.Text('All transactions', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text('Generated $generated | App version $appVersion', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+          if (transactions.isNotEmpty)
+            pw.Text(
+              '${DateFormat('yyyy-MM-dd').format(transactions.last.listOn)} to ${DateFormat('yyyy-MM-dd').format(transactions.first.listOn)}',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            ),
+          pw.SizedBox(height: 18),
+          pw.Wrap(children: [
+            _metric('Transactions', transactions.length.toString()),
+            _metric('Income', _analyticsPdfMoney(state, income)),
+            _metric('Expense', _analyticsPdfMoney(state, expense)),
+            _metric('Net cash flow', _analyticsPdfMoney(state, income - expense)),
+            _metric('Transfers', transfers.length.toString()),
+            _metric('Transfer volume', _analyticsPdfMoney(state, transferVolume)),
+          ]),
+          pw.SizedBox(height: 12),
+          if (transactions.isEmpty)
+            pw.Text('No transactions are stored in Koinly yet.', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700))
+          else ...[
+            pw.Text('Transaction ledger', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+            ...transactions.map(transactionEntry),
+          ],
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'This report contains every transaction currently stored in Koinly. Transactions excluded from analytics are still included and are marked accordingly.',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+    return document.save();
+  }
 }
 
-Future<String?> downloadAnalyticsPdf(BuildContext context, AppController state, AnalyticsSnapshot snapshot) async {
+Future<String?> downloadAnalyticsPdf(
+  BuildContext context,
+  AppController state,
+  AnalyticsSnapshot snapshot, {
+  AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary,
+}) async {
   try {
-    final bytes = await AnalyticsPdfService.build(state, snapshot);
-    final fileName = analyticsPdfFileName(snapshot);
+    final bytes = await AnalyticsPdfService.build(state, snapshot, variant: variant);
+    final fileName = analyticsPdfFileName(snapshot, variant: variant);
     try {
       final savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save Koinly analytics PDF',
+        dialogTitle: variant == AnalyticsPdfVariant.summary ? 'Save Koinly analytics PDF' : 'Save Koinly transaction history PDF',
         fileName: fileName,
         type: FileType.custom,
         allowedExtensions: const ['pdf'],
         bytes: bytes,
       );
       if (savedPath == null) return null;
-      if (context.mounted) showSnack(context, 'Analytics PDF saved.');
+      if (context.mounted) showSnack(context, variant == AnalyticsPdfVariant.summary ? 'Analytics PDF saved.' : 'Transaction history PDF saved.');
       return savedPath;
     } catch (_) {
       final documents = await getApplicationDocumentsDirectory();
@@ -458,28 +626,12 @@ Future<String?> downloadAnalyticsPdf(BuildContext context, AppController state, 
       await directory.create(recursive: true);
       final file = File(p.join(directory.path, fileName));
       await file.writeAsBytes(bytes, flush: true);
-      if (context.mounted) showSnack(context, 'Analytics PDF saved to ${file.path}.');
+      if (context.mounted) showSnack(context, 'PDF saved to ${file.path}.');
       return file.path;
     }
   } catch (_) {
-    if (context.mounted) showSnack(context, 'Could not create the analytics PDF.');
+    if (context.mounted) showSnack(context, 'Could not create the PDF.');
     return null;
-  }
-}
-
-Future<void> shareAnalyticsPdf(BuildContext context, AppController state, AnalyticsSnapshot snapshot) async {
-  try {
-    final bytes = await AnalyticsPdfService.build(state, snapshot);
-    final temp = await getTemporaryDirectory();
-    final file = File(p.join(temp.path, analyticsPdfFileName(snapshot)));
-    await file.writeAsBytes(bytes, flush: true);
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/pdf', name: p.basename(file.path))],
-      subject: 'Koinly Analytics - ${snapshot.range.label}',
-      text: 'Koinly ${snapshot.period.label.toLowerCase()} analytics summary for ${snapshot.range.label}.',
-    );
-  } catch (_) {
-    if (context.mounted) showSnack(context, 'Could not open the share sheet for this PDF.');
   }
 }
 
@@ -489,8 +641,11 @@ String _analyticsUploadError(Object error) {
   return text.isEmpty ? 'The upload failed.' : text;
 }
 
-String _analyticsTelegramCaption(AnalyticsSnapshot snapshot) {
-  return 'Koinly ${snapshot.period.label} Analytics\n${snapshot.range.label}';
+String _analyticsTelegramCaption(AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant) {
+  return switch (variant) {
+    AnalyticsPdfVariant.summary => 'Koinly ${snapshot.period.label} Analytics\n${snapshot.range.label}',
+    AnalyticsPdfVariant.transactionHistory => 'Koinly Transaction History\nAll transactions',
+  };
 }
 
 class AnalyticsScreen extends StatefulWidget {
@@ -504,6 +659,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   AnalyticsPeriod period = AnalyticsPeriod.monthly;
   DateTime anchor = DateTime.now();
   bool exporting = false;
+  AnalyticsPdfVariant pdfVariant = AnalyticsPdfVariant.summary;
 
   void _changePeriod(AnalyticsPeriod value) {
     setState(() {
@@ -535,33 +691,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      await downloadAnalyticsPdf(context, state, snapshot);
+      await downloadAnalyticsPdf(context, state, snapshot, variant: pdfVariant);
     } finally {
       if (mounted) setState(() => exporting = false);
     }
   }
 
-  Future<void> _share(AppController state, AnalyticsSnapshot snapshot) async {
-    if (exporting) return;
-    setState(() => exporting = true);
-    try {
-      await shareAnalyticsPdf(context, state, snapshot);
-    } finally {
-      if (mounted) setState(() => exporting = false);
-    }
-  }
 
   Future<void> _uploadTelegram(AppController state, AnalyticsSnapshot snapshot) async {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      final bytes = await AnalyticsPdfService.build(state, snapshot);
+      final bytes = await AnalyticsPdfService.build(state, snapshot, variant: pdfVariant);
       await state.uploadAnalyticsPdfToTelegram(
-        fileName: analyticsPdfFileName(snapshot),
+        fileName: analyticsPdfFileName(snapshot, variant: pdfVariant),
         bytes: bytes,
-        caption: _analyticsTelegramCaption(snapshot),
+        caption: _analyticsTelegramCaption(snapshot, pdfVariant),
       );
-      if (mounted) showSnack(context, 'Analytics PDF uploaded to Telegram.');
+      if (mounted) showSnack(context, pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics PDF uploaded to Telegram.' : 'Transaction history PDF uploaded to Telegram.');
     } catch (error) {
       if (!mounted) return;
       final message = _analyticsUploadError(error);
@@ -579,14 +726,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      final bytes = await AnalyticsPdfService.build(state, snapshot);
+      final bytes = await AnalyticsPdfService.build(state, snapshot, variant: pdfVariant);
       final result = await state.uploadAnalyticsPdfToGoogleDrive(
-        fileName: analyticsPdfFileName(snapshot),
+        fileName: analyticsPdfFileName(snapshot, variant: pdfVariant),
         bytes: bytes,
       );
       if (!mounted) return;
       final folder = result['folderName']?.toString() ?? 'Koinly Analytics';
-      showSnack(context, 'Analytics PDF uploaded to Google Drive • $folder');
+      showSnack(context, '${pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} PDF uploaded to Google Drive • $folder');
     } catch (error) {
       if (!mounted) return;
       final message = _analyticsUploadError(error);
@@ -660,20 +807,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               const SizedBox(width: 10),
               Expanded(child: MiniMetric('Expense / day', state.format(snapshot.averageExpensePerDay), Icons.trending_down_rounded)),
             ]),
-            const SectionHeader('Compared with previous period'),
-            _AnalyticsComparisonCard(snapshot: snapshot),
-            const SectionHeader('Activity'),
-            _AnalyticsActivityCard(snapshot: snapshot),
-            if (snapshot.budgetCount > 0) ...[
-              const SectionHeader('Budgets'),
-              _AnalyticsBudgetCard(snapshot: snapshot),
-            ],
-            const SectionHeader('Top expense categories'),
-            _AnalyticsCategoryCard(items: snapshot.expenseCategories, emptyLabel: 'No expense activity in this period.'),
-            const SectionHeader('Top income categories'),
-            _AnalyticsCategoryCard(items: snapshot.incomeCategories, emptyLabel: 'No income activity in this period.'),
-            const SectionHeader('Current account snapshot'),
-            _AnalyticsAccountsCard(accounts: state.accounts),
             const SectionHeader('PDF report'),
             ExpressiveCard(
               padding: const EdgeInsets.all(16),
@@ -685,33 +818,42 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Export this summary', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        Text('PDF report type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 3),
                         Text(
-                          'Create a PDF with totals, activity, category breakdowns, budgets, and account balances.',
+                          pdfVariant.description,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                         ),
                       ]),
                     ),
                   ]),
                   const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: exporting ? null : () => _download(state, snapshot),
-                        icon: exporting ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download_rounded),
-                        label: const Text('Download PDF'),
-                      ),
+                  SleekPillSelector<AnalyticsPdfVariant>(
+                    options: const [
+                      SleekPillOption(value: AnalyticsPdfVariant.summary, label: 'Summary'),
+                      SleekPillOption(value: AnalyticsPdfVariant.transactionHistory, label: 'Transaction history'),
+                    ],
+                    selected: pdfVariant,
+                    onChanged: (value) {
+                      if (!exporting) setState(() => pdfVariant = value);
+                    },
+                  ),
+                  if (pdfVariant == AnalyticsPdfVariant.transactionHistory) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Transaction history includes every transaction stored in Koinly and does not use the selected analytics period.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: exporting ? null : () => _share(state, snapshot),
-                        icon: const Icon(Icons.ios_share_rounded),
-                        label: const Text('Share PDF'),
-                      ),
+                  ],
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: exporting ? null : () => _download(state, snapshot),
+                      icon: exporting ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download_rounded),
+                      label: const Text('Download PDF'),
                     ),
-                  ]),
+                  ),
                   const SizedBox(height: 10),
                   Row(children: [
                     Expanded(
@@ -1123,178 +1265,4 @@ class _AnalyticsPeriodNavigator extends StatelessWidget {
   }
 }
 
-class _AnalyticsComparisonCard extends StatelessWidget {
-  const _AnalyticsComparisonCard({required this.snapshot});
 
-  final AnalyticsSnapshot snapshot;
-
-  String _delta(double current, double previous) {
-    if (previous.abs() < .0001) return current.abs() < .0001 ? 'No change' : 'New activity';
-    final percent = ((current - previous) / previous.abs()) * 100;
-    final sign = percent > 0 ? '+' : '';
-    return '$sign${percent.toStringAsFixed(1)}%';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget line(String label, double current, double previous, IconData icon) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 7),
-        child: Row(children: [
-          Icon(icon, size: 20, color: kSleekAccent),
-          const SizedBox(width: 10),
-          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800))),
-          Text(_delta(current, previous), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
-        ]),
-      );
-    }
-
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Column(children: [
-        line('Income', snapshot.income, snapshot.previousIncome, Icons.south_west_rounded),
-        line('Expense', snapshot.expense, snapshot.previousExpense, Icons.north_east_rounded),
-        line('Net cash flow', snapshot.net, snapshot.previousNet, Icons.compare_arrows_rounded),
-      ]),
-    );
-  }
-}
-
-class _AnalyticsActivityCard extends StatelessWidget {
-  const _AnalyticsActivityCard({required this.snapshot});
-
-  final AnalyticsSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    final items = <(String, String, IconData)>[
-      ('Income transactions', snapshot.incomeCount.toString(), Icons.south_west_rounded),
-      ('Expense transactions', snapshot.expenseCount.toString(), Icons.north_east_rounded),
-      ('Transfer volume', state.format(snapshot.transferVolume), Icons.swap_horiz_rounded),
-      ('Savings change', state.format(snapshot.savingsNet), Icons.savings_rounded),
-      ('New loans', snapshot.newLoanCount.toString(), Icons.account_balance_rounded),
-      ('Repayments', '${snapshot.repaymentCount} • ${state.format(snapshot.repaymentTotal)}', Icons.payments_rounded),
-    ];
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: items
-            .map((item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(children: [
-                    Icon(item.$3, size: 20, color: kSleekAccent),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(item.$1, style: const TextStyle(fontWeight: FontWeight.w800))),
-                    Text(item.$2, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w900)),
-                  ]),
-                ))
-            .toList(),
-      ),
-    );
-  }
-}
-
-class _AnalyticsBudgetCard extends StatelessWidget {
-  const _AnalyticsBudgetCard({required this.snapshot});
-
-  final AnalyticsSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    final usage = snapshot.budgetUsage.clamp(0.0, 2.0).toDouble();
-    final progress = usage.clamp(0.0, 1.0).toDouble();
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          Expanded(child: Text('${snapshot.budgetCount} relevant budget${snapshot.budgetCount == 1 ? '' : 's'}', style: const TextStyle(fontWeight: FontWeight.w900))),
-          Text('${(usage * 100).toStringAsFixed(0)}%', style: const TextStyle(fontWeight: FontWeight.w900)),
-        ]),
-        const SizedBox(height: 10),
-        ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: progress, minHeight: 8)),
-        const SizedBox(height: 10),
-        Text('${state.format(snapshot.budgetSpent)} spent of ${state.format(snapshot.budgetLimit)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
-        Text('Remaining: ${state.format(snapshot.budgetRemaining)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
-      ]),
-    );
-  }
-}
-
-class _AnalyticsCategoryCard extends StatelessWidget {
-  const _AnalyticsCategoryCard({required this.items, required this.emptyLabel});
-
-  final List<AnalyticsCategoryItem> items;
-  final String emptyLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    final visible = items.take(6).toList();
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(14),
-      child: visible.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(emptyLabel, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-            )
-          : Column(
-              children: visible
-                  .map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(children: [
-                          iconBubble(context, item.category?.iconName ?? 'category', item.category?.iconColor ?? kSleekAccentHex, size: 40),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 5),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(999),
-                                child: LinearProgressIndicator(value: item.share.clamp(0.0, 1.0).toDouble(), minHeight: 5),
-                              ),
-                            ]),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                            Text(state.format(item.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
-                            Text('${(item.share * 100).toStringAsFixed(1)}%', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800)),
-                          ]),
-                        ]),
-                      ))
-                  .toList(),
-            ),
-    );
-  }
-}
-
-class _AnalyticsAccountsCard extends StatelessWidget {
-  const _AnalyticsAccountsCard({required this.accounts});
-
-  final List<Account> accounts;
-
-  @override
-  Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    return ExpressiveCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Balances shown here are the current account balances, not reconstructed historical balances.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        if (accounts.isEmpty)
-          const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Text('No accounts yet.', textAlign: TextAlign.center))
-        else
-          ...accounts.map((account) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 7),
-                child: Row(children: [
-                  iconBubble(context, account.iconName, account.iconColor, size: 38),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(account.name, style: const TextStyle(fontWeight: FontWeight.w800))),
-                  Text(state.format(account.amount), style: const TextStyle(fontWeight: FontWeight.w900)),
-                ]),
-              )),
-      ]),
-    );
-  }
-}

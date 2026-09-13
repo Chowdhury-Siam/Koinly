@@ -1,3 +1,17 @@
+## [1.0.1133] - 2026-09-13
+
+- Removed the Analytics **Share PDF** action and its analytics-only share-sheet code.
+- **Download PDF**, **Upload Telegram**, and **Upload Drive** remain available for both Summary and Transaction history PDF variants.
+- Synchronized application version metadata to `1.0.1133+177`.
+
+## [1.0.1132] - 2026-09-13
+
+- Simplified the Analytics screen by keeping comparison, activity, budgets, category breakdowns, and current account snapshots in the PDF instead of duplicating them on-screen.
+- Added two PDF report variants: the existing period Summary and a new complete Transaction history report containing every stored transaction.
+- Added previous-period comparison details to the Summary PDF so all removed Analytics detail remains available in the exported report.
+- Transaction history PDFs include totals plus each transaction's date/time, type, amount, title, category, account path, notes, and report-exclusion status, and work with download, share, Telegram, and Google Drive uploads.
+- Synchronized application version metadata to `1.0.1132+176`.
+
 ## [1.0.1131] - 2026-09-13
 
 - Fixed Self-Hosted Sync Worker TypeScript compilation with TypeScript 5.9 by keeping Analytics PDF byte arrays explicitly backed by `ArrayBuffer` before passing them to `Blob`.
