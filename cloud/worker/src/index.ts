@@ -764,7 +764,7 @@ async function sendTelegramAnalyticsDocument(
   token: string,
   chatId: string,
   fileName: string,
-  bytes: Uint8Array,
+  bytes: Uint8Array<ArrayBuffer>,
   caption: string,
 ): Promise<void> {
   if (bytes.byteLength > analyticsPdfMaxBytes) throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
@@ -1165,7 +1165,7 @@ async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: C
   }
 }
 
-async function analyticsPdfRequest(request: Request): Promise<{ fileName: string; bytes: Uint8Array; caption: string }> {
+async function analyticsPdfRequest(request: Request): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string }> {
   const body = await readJson(request);
   const fileName = cleanText(body.fileName, 140);
   if (!/^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,130}\.pdf$/i.test(fileName)) {
@@ -1175,7 +1175,7 @@ async function analyticsPdfRequest(request: Request): Promise<{ fileName: string
   if (!contentBase64 || contentBase64.length > Math.ceil(analyticsPdfMaxBytes * 4 / 3) + 16) {
     throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
   }
-  let bytes: Uint8Array;
+  let bytes: Uint8Array<ArrayBuffer>;
   try {
     bytes = bytesFromBase64(contentBase64);
   } catch {
@@ -1324,7 +1324,7 @@ async function googleDriveUploadPdf(
   accessToken: string,
   folderId: string,
   fileName: string,
-  bytes: Uint8Array,
+  bytes: Uint8Array<ArrayBuffer>,
 ): Promise<{ id: string; webViewLink: string }> {
   const boundary = `koinly_${crypto.randomUUID().replace(/-/g, '')}`;
   const metadata = JSON.stringify({ name: fileName, parents: [folderId], mimeType: 'application/pdf' });
@@ -1556,7 +1556,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(chunks.join(''));
 }
 
-function bytesFromBase64(value: string): Uint8Array {
+function bytesFromBase64(value: string): Uint8Array<ArrayBuffer> {
   const raw = atob(value);
   const bytes = new Uint8Array(new ArrayBuffer(raw.length));
   for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);

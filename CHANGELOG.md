@@ -1,3 +1,9 @@
+## [1.0.1131] - 2026-09-13
+
+- Fixed Self-Hosted Sync Worker TypeScript compilation with TypeScript 5.9 by keeping Analytics PDF byte arrays explicitly backed by `ArrayBuffer` before passing them to `Blob`.
+- This fixes the `Uint8Array<ArrayBufferLike>` / `BlobPart` errors in Telegram and Google Drive Analytics PDF uploads.
+- Synchronized application version metadata to `1.0.1131+175`.
+
 ## [1.0.1130] - 2026-09-13
 
 - Replaced the persistent Account & sync registration error with a centered administrator-registration prompt.
