@@ -16090,15 +16090,21 @@ class SettingsScreen extends StatelessWidget {
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SectionHeader('General'),
             SettingsTile(icon: Icons.palette_rounded, title: 'Theme', subtitle: _themeLabel(state.themePreference), color: '#A6E3A1', onTap: () => showThemeDialog(context)),
             SettingsTile(icon: Icons.payments_rounded, title: 'Currency customization', subtitle: '${state.currencyCode} • ${state.currencyPosition == CurrencyPosition.prefix ? 'Prefix' : 'Suffix'}', color: kSleekAccentHex, onTap: () => showCurrencySheet(context)),
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
-            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered summaries and PDF reports', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
-            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
+            const SectionHeader('Data & cloud'),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.key_rounded, title: 'Credential', subtitle: 'Telegram bot and Google Drive', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()))),
+            SettingsTile(icon: Icons.inventory_2_rounded, title: 'Archive', subtitle: 'Local backup, Telegram backup, and cloud PDF schedules', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchiveSettingsScreen()))),
+            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered summaries and PDF reports', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+            const SectionHeader('App'),
+            SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, account order, and data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
           ],
         ),
@@ -16106,7 +16112,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
-
 
 class SettingsTile extends StatelessWidget {
   const SettingsTile({super.key, required this.icon, required this.title, this.subtitle, required this.color, this.onTap});
@@ -16960,25 +16965,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     return PageScaffold(
       title: 'Account & sync',
       subtitle: signedIn ? state.syncAccountUsername : null,
-      actions: [
-        IconButton.filledTonal(
-          tooltip: 'Telegram backup',
-          onPressed: busy
-              ? null
-              : () {
-                  if (!backendConfigured) {
-                    showSnack(context, 'Validate and use the self-hosted Worker first.');
-                    return;
-                  }
-                  if (!signedIn) {
-                    showSnack(context, 'Sign in to the self-hosted Worker before configuring Telegram backups.');
-                    return;
-                  }
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
-                },
-          icon: const Icon(Icons.smart_toy_rounded),
-        ),
-      ],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
@@ -17157,24 +17143,14 @@ class SelfHostedTelegramBackupScreen extends StatefulWidget {
 }
 
 class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBackupScreen> {
-  final _botTokenController = TextEditingController();
-  final _chatIdController = TextEditingController();
   TelegramBackupSettings _settings = const TelegramBackupSettings.defaults();
   bool _loading = true;
   bool _busy = false;
-  bool _obscureToken = true;
 
   @override
   void initState() {
     super.initState();
     unawaited(_load());
-  }
-
-  @override
-  void dispose() {
-    _botTokenController.dispose();
-    _chatIdController.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -17183,7 +17159,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
       if (!mounted) return;
       setState(() {
         _settings = settings;
-        _chatIdController.text = settings.chatId;
         _loading = false;
       });
     } catch (error) {
@@ -17200,14 +17175,11 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     }
   }
 
+  bool get _credentialsReady => _settings.tokenConfigured && _settings.chatId.trim().isNotEmpty;
+
   Future<void> _save() async {
-    final chatId = _chatIdController.text.trim();
-    if (_settings.enabled && chatId.isEmpty) {
-      showSnack(context, 'Enter the Telegram group or channel Chat ID.');
-      return;
-    }
-    if (_settings.enabled && !_settings.tokenConfigured && _botTokenController.text.trim().isEmpty) {
-      showSnack(context, 'Enter a Telegram bot token before enabling backups.');
+    if (_settings.enabled && !_credentialsReady) {
+      showSnack(context, 'Configure Telegram in Settings > Credential before enabling automatic backups.');
       return;
     }
     setState(() => _busy = true);
@@ -17220,46 +17192,18 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
         }
       }
       final settings = await state.saveSelfHostedTelegramBackupSettings(
-            enabled: _settings.enabled,
-            botToken: _botTokenController.text,
-            chatId: chatId,
-            frequency: _settings.frequency,
-            hour: _settings.hour,
-            minute: _settings.minute,
-            weekday: _settings.weekday,
-            monthDay: _settings.monthDay,
-          );
+        enabled: _settings.enabled,
+        botToken: '',
+        chatId: _settings.chatId,
+        frequency: _settings.frequency,
+        hour: _settings.hour,
+        minute: _settings.minute,
+        weekday: _settings.weekday,
+        monthDay: _settings.monthDay,
+      );
       if (!mounted) return;
-      _botTokenController.clear();
-      setState(() {
-        _settings = settings;
-        _chatIdController.text = settings.chatId;
-      });
-      showSnack(context, settings.enabled ? 'Telegram backup schedule saved.' : 'Telegram automatic backups are off.');
-    } catch (error) {
-      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _test() async {
-    final chatId = _chatIdController.text.trim();
-    if (chatId.isEmpty && _settings.chatId.isEmpty) {
-      showSnack(context, 'Enter the Telegram group or channel Chat ID first.');
-      return;
-    }
-    if (!_settings.tokenConfigured && _botTokenController.text.trim().isEmpty) {
-      showSnack(context, 'Enter the Telegram bot token first.');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      await context.read<AppController>().testSelfHostedTelegramBackup(
-            botToken: _botTokenController.text,
-            chatId: chatId,
-          );
-      if (mounted) showSnack(context, 'Telegram bot connected successfully. Check the target chat.');
+      setState(() => _settings = settings);
+      showSnack(context, settings.enabled ? 'Automatic Telegram backup schedule saved.' : 'Automatic Telegram backup is off.');
     } catch (error) {
       if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
     } finally {
@@ -17268,15 +17212,15 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
   }
 
   Future<void> _sendNow() async {
-    if (!_settings.tokenConfigured || _settings.chatId.trim().isEmpty) {
-      showSnack(context, 'Save the Telegram bot and destination first.');
+    if (!_credentialsReady) {
+      showSnack(context, 'Configure Telegram in Settings > Credential first.');
       return;
     }
     setState(() => _busy = true);
     try {
       await context.read<AppController>().sendSelfHostedTelegramBackupNow();
       if (!mounted) return;
-      showSnack(context, 'Cloud backup uploaded to Telegram.');
+      showSnack(context, 'Backup uploaded to Telegram.');
       await _load();
     } catch (error) {
       if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
@@ -17348,15 +17292,16 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
   Widget build(BuildContext context) {
     if (_loading) {
       return const PageScaffold(
-        title: 'Telegram backup',
-        subtitle: 'Self-hosted Sync Worker',
-        child: const KoinlyPageLoader(),
+        title: 'Automatic Telegram backup',
+        subtitle: 'Archive',
+        child: KoinlyPageLoader(),
       );
     }
 
     final time = TimeOfDay(hour: _settings.hour, minute: _settings.minute).format(context);
     return PageScaffold(
-      title: 'Telegram backup',
+      title: 'Automatic Telegram backup',
+      subtitle: 'Archive',
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
         child: Column(
@@ -17366,11 +17311,31 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    value: _settings.enabled,
-                    onChanged: _busy ? null : (value) => setState(() => _settings = _copySettings(enabled: value)),
-                    title: const Text('Automatic Telegram backup', style: TextStyle(fontWeight: FontWeight.w900)),
+                  Row(children: [
+                    iconBubble(context, 'send', '#86E3CE', size: 48),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Telegram destination', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 2),
+                        Text(
+                          _credentialsReady ? 'Credentials ready • ${_settings.chatId}' : 'Not configured',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
+                      ]),
+                    ),
+                    Icon(_credentialsReady ? Icons.check_circle_rounded : Icons.key_rounded, color: _credentialsReady ? kSleekAccent : kSleekMuted),
+                  ]),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()));
+                            if (mounted) await _load();
+                          },
+                    icon: const Icon(Icons.key_rounded),
+                    label: const Text('Open Credential'),
                   ),
                 ],
               ),
@@ -17380,43 +17345,20 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Telegram bot', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 12),
-                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    controller: _botTokenController,
-                    readOnly: _busy,
-                    obscureText: _obscureToken,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: InputDecoration(
-                      labelText: _settings.tokenConfigured ? 'Bot token (saved)' : 'Bot token',
-                      hintText: _settings.tokenConfigured ? 'Leave blank to keep the current token' : '123456789:AA...',
-                      prefixIcon: const Icon(Icons.smart_toy_rounded),
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _obscureToken = !_obscureToken),
-                        icon: Icon(_obscureToken ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    controller: _chatIdController,
-                    readOnly: _busy,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Group or channel Chat ID',
-                      hintText: '-1001234567890 or @channelname',
-                      prefixIcon: Icon(Icons.forum_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _test,
-                    icon: const Icon(Icons.verified_rounded),
-                    label: const Text('Test bot and destination'),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _settings.enabled,
+                    onChanged: _busy
+                        ? null
+                        : (value) {
+                            if (value && !_credentialsReady) {
+                              showSnack(context, 'Configure Telegram in Settings > Credential first.');
+                              return;
+                            }
+                            setState(() => _settings = _copySettings(enabled: value));
+                          },
+                    title: const Text('Automatic Telegram backup', style: TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: const Text('Uploads a .koinlybackup generated from the latest synchronized cloud data.'),
                   ),
                 ],
               ),
@@ -17445,7 +17387,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Automatic Telegram backup must be at least 5 minutes from any automatic Telegram or Google Drive PDF upload.',
+                    'Automatic Telegram backup, Telegram PDF, and Google Drive PDF times must all be at least 5 minutes apart.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
@@ -17498,7 +17440,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   ],
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _busy || !_settings.tokenConfigured || _settings.chatId.trim().isEmpty ? null : _sendNow,
+                    onPressed: _busy || !_credentialsReady ? null : _sendNow,
                     icon: const Icon(Icons.send_rounded),
                     label: const Text('Upload backup now'),
                   ),
@@ -17508,10 +17450,8 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
             const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: _busy ? null : _save,
-              icon: _busy
-                  ? const KoinlyInlineLoader(size: 18)
-                  : const Icon(Icons.save_rounded),
-              label: const Text('Save Telegram backup settings'),
+              icon: _busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.save_rounded),
+              label: const Text('Save automatic backup schedule'),
             ),
           ],
         ),
@@ -17519,6 +17459,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     );
   }
 }
+
 
 class CloudSyncScreen extends StatefulWidget {
   const CloudSyncScreen({super.key});
@@ -19464,6 +19405,68 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   }
 }
 
+class ArchiveSettingsScreen extends StatelessWidget {
+  const ArchiveSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
+    return PageScaffold(
+      title: 'Archive',
+      subtitle: 'Backup and scheduled delivery',
+      child: ResponsiveContent(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+          const SectionHeader('Local'),
+          SettingsTile(
+            icon: Icons.backup_rounded,
+            title: 'Backup',
+            subtitle: 'Create a Koinly backup file now',
+            color: '#86E3CE',
+            onTap: () => runBackupFlow(context, state),
+          ),
+          SettingsTile(
+            icon: Icons.history_toggle_off_rounded,
+            title: 'Automatic local backup',
+            subtitle: state.automaticBackupSettingsSummary,
+            color: '#7FE7D4',
+            onTap: () => showAutomaticBackupSheet(context),
+          ),
+          SettingsTile(
+            icon: Icons.file_open_rounded,
+            title: 'Load backup',
+            subtitle: 'Pick a backup file and merge it with this device',
+            color: '#B4A5FF',
+            onTap: () => runLoadBackupFlow(context, state),
+          ),
+          const SectionHeader('Cloud'),
+          SettingsTile(
+            icon: Icons.send_rounded,
+            title: 'Automatic Telegram backup',
+            subtitle: signedIn ? 'Schedule .koinlybackup delivery through your Worker' : 'Sign in to use Telegram backup',
+            color: '#86E3CE',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => signedIn ? const SelfHostedTelegramBackupScreen() : const MultiDeviceSyncScreen()),
+            ),
+          ),
+          SettingsTile(
+            icon: Icons.cloud_upload_rounded,
+            title: 'Cloud Backup',
+            subtitle: 'Schedule Analytics PDFs for Telegram and Google Drive',
+            color: '#9AD0F5',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloudBackupScreen())),
+          ),
+        ],
+        ),
+      ),
+    );
+  }
+}
+
 class AdvancedSettingsScreen extends StatelessWidget {
   const AdvancedSettingsScreen({super.key});
 
@@ -19479,9 +19482,6 @@ class AdvancedSettingsScreen extends StatelessWidget {
           SettingsTile(icon: Icons.north_east_rounded, title: 'Default expense category', subtitle: state.defaultExpenseCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultExpenseCategoryId!)?.name ?? 'Unknown', color: '#FF9F9F', onTap: () => showDefaultSelection(context, 'expense')),
           SettingsTile(icon: Icons.south_west_rounded, title: 'Default income category', subtitle: state.defaultIncomeCategoryId == null ? 'Not selected' : state.categoryOf(state.defaultIncomeCategoryId!)?.name ?? 'Unknown', color: '#A6E3A1', onTap: () => showDefaultSelection(context, 'income')),
           SettingsTile(icon: Icons.swap_vert_rounded, title: 'Account reorder', subtitle: 'Reorder account sequence', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountReorderScreen()))),
-          SettingsTile(icon: Icons.backup_rounded, title: 'Backup', color: '#86E3CE', onTap: () => runBackupFlow(context, state)),
-          SettingsTile(icon: Icons.history_toggle_off_rounded, title: 'Automatic local backup', subtitle: state.automaticBackupSettingsSummary, color: '#7FE7D4', onTap: () => showAutomaticBackupSheet(context)),
-          SettingsTile(icon: Icons.file_open_rounded, title: 'Load backup', subtitle: 'Pick a backup file and merge it with this device', color: '#B4A5FF', onTap: () => runLoadBackupFlow(context, state)),
           SettingsTile(
             icon: Icons.fact_check_rounded,
             title: 'Data health',

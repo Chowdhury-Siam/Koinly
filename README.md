@@ -20,7 +20,7 @@
 
 | Start here | Self-hosted sync | App & backups | Developers |
 | --- | --- | --- | --- |
-| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[Administration portal](#worker-administration-portal)<br>[7. Telegram backups](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
+| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[Administration portal](#worker-administration-portal)<br>[7. Credentials & Archive](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
 
 ---
 
@@ -510,56 +510,69 @@ Optional command-line instructions and implementation details are in the [Worker
 ---
 
 <a id="optional-telegram-cloud-backup"></a>
-## 7. Optional Telegram cloud backup
+## 7. Credentials, Telegram backup, and cloud PDF backup
 
-Telegram backup is available only when using your self-hosted Worker.
+Cloud delivery is available only when using your self-hosted Worker.
 
-In **Settings > Account & sync**, tap the bot icon in the upper-right corner.
+Koinly now keeps service credentials in one place: **Settings > Credential**. Configure the Telegram bot token and destination there, and configure/connect Google Drive there. Telegram and Google Drive credentials are not editable from Account & sync, Analytics, Archive scheduling pages, or any other app screen.
 
-You can configure:
+### Telegram credentials
+
+In **Settings > Credential > Telegram bot**, configure:
 
 - Telegram bot token;
-- group or channel Chat ID;
-- daily, weekly, or monthly upload schedule;
-- exact delivery time;
-- test delivery; and
-- **Upload backup now**.
+- group or channel Chat ID; and
+- optional test delivery.
 
-The Worker creates a `.koinlybackup` from the synchronized cloud data and sends it as a Telegram document. If automatic Analytics PDF uploads are also enabled, the Telegram backup time must be at least **5 minutes** away from both the automatic Telegram PDF time and the automatic Google Drive PDF time. The Worker rejects conflicting schedules.
+For a Telegram channel, add the bot as an administrator with permission to post messages. The saved bot token is encrypted by the Worker before it is stored in Turso.
 
-For a Telegram channel, add the bot as an administrator with permission to post messages.
+### Google Drive credentials
 
-The saved bot token is encrypted by the Worker before it is stored in Turso.
-
-### Analytics PDF uploads
-
-Open **Settings > Analytics**. Use **Choose Date Filter** to select Today, This Week, This Month, This Year, All Time, or a Custom date range. The bot button opens Telegram bot settings, while the cloud button opens Analytics upload settings. PDFs can be uploaded directly through the same authenticated Self-Hosted Sync Worker:
-
-- **Telegram** reuses the bot token and group/channel destination from Telegram backup. Automatic Telegram backups can stay disabled.
-- **Google Drive** connects once through Google OAuth and stores its Client Secret and refresh token encrypted in Turso. Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for reports uploaded by the app.
-
-For Google Drive, create your own OAuth 2.0 **Web application** in Google Cloud Console:
+In **Settings > Credential > Google Drive**, create and connect your own OAuth 2.0 **Web application**:
 
 1. Enable **Google Drive API** for the Google Cloud project.
 2. Configure the OAuth consent screen. If the app remains in Testing, add the Google account you will use as a test user.
 3. Create an **OAuth 2.0 Client ID** with application type **Web application**.
-4. In Koinly, open **Analytics > cloud button** and copy the displayed **Authorized redirect URI**. Add that exact URI to the Google OAuth client.
+4. Copy the **Authorized redirect URI** shown in Koinly and add that exact URI to the Google OAuth client.
 5. Paste the Client ID and Client Secret into Koinly, select **Save and connect Google Drive**, then finish authorization in the browser.
 
-After that, choose **Summary** or **Transaction history** in Analytics, then use **Upload Telegram** or **Upload Drive**. Both PDF variants follow the selected Analytics date filter. Choose **All Time** when the Transaction history PDF should include every transaction stored in Koinly.
+Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for PDFs uploaded by the app. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
 
-The same upload-settings page can also schedule automatic PDF delivery separately for **Telegram** and **Google Drive**. For each destination you can choose the report type, a rolling date filter (**Today**, **This Week**, **This Month**, **This Year**, or **All Time**), daily/weekly/monthly cadence, and delivery time. The Worker generates these PDFs from the latest synchronized cloud data, so the app does not need to remain open. A fixed **Custom** date range is intentionally not offered for recurring reports.
+### Archive
 
-To keep scheduled Worker activity separated, every enabled automatic upload must use a clock time at least **5 minutes** away from the others. This rule is enforced pairwise across automatic Telegram PDF, automatic Google Drive PDF, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected.
+Backup and scheduled-delivery controls are grouped under **Settings > Archive**:
 
-> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the Analytics upload endpoints, automatic PDF schedule table, and database migration are installed.
+- **Backup** creates a `.koinlybackup` file now.
+- **Automatic local backup** controls scheduled device-folder backups.
+- **Load backup** merges a selected `.koinlybackup` with the active device data.
+- **Automatic Telegram backup** schedules `.koinlybackup` uploads through the Telegram credentials configured in **Settings > Credential**.
+- **Cloud Backup** schedules Analytics PDF delivery to Telegram and Google Drive.
+
+For **Automatic Telegram backup**, choose daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date. **Upload backup now** remains available from that Archive page. The Worker creates the `.koinlybackup` from synchronized cloud data and sends it as a Telegram document.
+
+### Analytics PDF uploads and Cloud Backup
+
+Open **Settings > Analytics** to choose the report date filter and PDF type. Manual **Upload Telegram** and **Upload Drive** actions use the credentials already configured in **Settings > Credential**; Analytics no longer contains credential/settings icons.
+
+For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and Google Drive each have an independent PDF schedule with:
+
+- Summary or Transaction history report type;
+- rolling date filter (**Today**, **This Week**, **This Month**, **This Year**, or **All Time**);
+- daily, weekly, or monthly cadence; and
+- delivery time.
+
+The Worker generates scheduled PDFs from the latest synchronized cloud data, so the app does not need to remain open. A fixed **Custom** date range is intentionally not offered for recurring reports.
+
+Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across automatic Telegram PDF, automatic Google Drive PDF, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
+
+> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the current Analytics upload and scheduling endpoints are installed.
 
 ---
 
 <a id="automatic-local-backup"></a>
 ## 8. Automatic local backup
 
-Open **Settings > Advanced settings > Automatic local backup**.
+Open **Settings > Archive > Automatic local backup**.
 
 You can choose:
 

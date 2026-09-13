@@ -1,3 +1,14 @@
+## [1.0.1137] - 2026-09-14
+
+- Reorganized Settings into **General**, **Data & cloud**, and **App** groups so related controls are easier to locate.
+- Added **Settings > Credential** as the only in-app place to configure the Telegram bot token/destination and Google Drive OAuth credentials/connection.
+- Added **Settings > Archive** and moved **Backup**, **Automatic local backup**, and **Load backup** out of Advanced settings.
+- Moved **Automatic Telegram backup** out of Account & sync and into Archive; its page now manages only backup scheduling/status while using Telegram credentials from Settings > Credential.
+- Added **Archive > Cloud Backup** for automatic Analytics PDF schedules to Telegram and Google Drive; credential editing was removed from Analytics/cloud scheduling.
+- Removed the Telegram backup action from Account & sync and removed the Telegram/Drive configuration icons from the Analytics app bar. Manual Analytics PDF uploads continue to use the credentials configured in Settings > Credential.
+- Preserved Worker-side pairwise minimum five-minute separation across automatic Telegram PDF, Google Drive PDF, and Telegram `.koinlybackup` schedules.
+- Synchronized application version metadata to `1.0.1137+181`.
+
 ## [1.0.1136] - 2026-09-13
 
 - Added an inline eye button to every password field in the self-hosted Worker website, including administrator sign-in, account creation, and password reset/change dialogs.

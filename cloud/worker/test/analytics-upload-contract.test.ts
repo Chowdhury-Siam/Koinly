@@ -21,5 +21,5 @@ test('analytics upload secrets are encrypted and PDF size is bounded', () => {
   assert.match(source, /encryptWorkerSecret\(env\.JWT_SECRET, 'google-drive-client-secret'/);
   assert.match(source, /encryptWorkerSecret\(env\.JWT_SECRET, 'google-drive-refresh-token'/);
   assert.match(source, /analyticsPdfMaxBytes = 10 \* 1024 \* 1024/);
-  assert.match(source, /Configure the Telegram bot token and destination in Telegram backup settings first/);
+  assert.match(source, /Configure Telegram credentials in Settings > Credential first/);
 });

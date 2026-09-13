@@ -805,15 +805,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
-  void _openTelegramBotSettings(AppController state) {
-    final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
-    if (!signedIn) {
-      showSnack(context, 'Sign in to your Self-Hosted Sync Worker before configuring the Telegram bot.');
-      return;
-    }
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
@@ -827,18 +818,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return PageScaffold(
       title: 'Analytics',
       subtitle: snapshot.range.label,
-      actions: [
-        IconButton.filledTonal(
-          tooltip: 'Telegram bot settings',
-          onPressed: exporting ? null : () => _openTelegramBotSettings(state),
-          icon: const Icon(Icons.smart_toy_rounded),
-        ),
-        IconButton.filledTonal(
-          tooltip: 'Analytics upload settings',
-          onPressed: exporting ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsUploadSettingsScreen())),
-          icon: const Icon(Icons.cloud_upload_rounded),
-        ),
-      ],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
@@ -959,7 +938,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ]),
                   const SizedBox(height: 8),
                   Text(
-                    'Telegram and Google Drive uploads go directly through your Self-Hosted Sync Worker. Use the bot and cloud buttons above to configure them.',
+                    'Telegram and Google Drive uploads go directly through your Self-Hosted Sync Worker. Configure both integrations in Settings > Credential.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -972,24 +951,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 }
 
-class AnalyticsUploadSettingsScreen extends StatefulWidget {
-  const AnalyticsUploadSettingsScreen({super.key});
+class CredentialsScreen extends StatefulWidget {
+  const CredentialsScreen({super.key});
 
   @override
-  State<AnalyticsUploadSettingsScreen> createState() => _AnalyticsUploadSettingsScreenState();
+  State<CredentialsScreen> createState() => _CredentialsScreenState();
 }
 
-class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsScreen> {
-  final clientIdController = TextEditingController();
-  final clientSecretController = TextEditingController();
-  GoogleDriveAnalyticsSettings drive = const GoogleDriveAnalyticsSettings.defaults();
-  TelegramBackupSettings telegram = const TelegramBackupSettings.defaults();
-  AnalyticsPdfScheduleSettings telegramPdfSchedule = const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
-  AnalyticsPdfScheduleSettings drivePdfSchedule = const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
-  bool loading = true;
-  bool busy = false;
-  bool secretVisible = false;
-  String? loadError;
+class _CredentialsScreenState extends State<CredentialsScreen> {
+  final _botTokenController = TextEditingController();
+  final _chatIdController = TextEditingController();
+  final _clientIdController = TextEditingController();
+  final _clientSecretController = TextEditingController();
+
+  TelegramBackupSettings _telegram = const TelegramBackupSettings.defaults();
+  GoogleDriveAnalyticsSettings _drive = const GoogleDriveAnalyticsSettings.defaults();
+  bool _loading = true;
+  bool _busy = false;
+  bool _botTokenVisible = false;
+  bool _clientSecretVisible = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -999,14 +980,15 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
 
   @override
   void dispose() {
-    clientIdController.dispose();
-    clientSecretController.dispose();
+    _botTokenController.dispose();
+    _chatIdController.dispose();
+    _clientIdController.dispose();
+    _clientSecretController.dispose();
     super.dispose();
   }
 
-  bool _signedIn(AppController state) {
-    return state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
-  }
+  bool _signedIn(AppController state) =>
+      state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
 
   String _redirectUri(AppController state) {
     final base = CloudSyncService.normalizeApiBaseUrl(
@@ -1020,111 +1002,96 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
     final state = context.read<AppController>();
     if (!_signedIn(state)) {
       setState(() {
-        loading = false;
-        loadError = null;
+        _loading = false;
+        _loadError = null;
       });
       return;
     }
-    if (!quiet) setState(() => loading = true);
+    if (!quiet) setState(() => _loading = true);
     try {
-      final nextTelegram = await state.loadSelfHostedTelegramBackupSettings();
-      if (!mounted) return;
-      setState(() => telegram = nextTelegram);
-      final nextDrive = await state.loadGoogleDriveAnalyticsSettings();
-      if (!mounted) return;
-      final schedules = await state.loadAnalyticsPdfSchedules();
+      final telegram = await state.loadSelfHostedTelegramBackupSettings();
+      final drive = await state.loadGoogleDriveAnalyticsSettings();
       if (!mounted) return;
       setState(() {
-        drive = nextDrive;
-        telegramPdfSchedule = schedules[AnalyticsPdfScheduleDestination.telegram] ??
-            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
-        drivePdfSchedule = schedules[AnalyticsPdfScheduleDestination.googleDrive] ??
-            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
-        clientIdController.text = nextDrive.clientId;
-        loadError = null;
-        loading = false;
+        _telegram = telegram;
+        _drive = drive;
+        _chatIdController.text = telegram.chatId;
+        _clientIdController.text = drive.clientId;
+        _loadError = null;
+        _loading = false;
       });
     } catch (error) {
       if (!mounted) return;
       final message = _analyticsUploadError(error);
       setState(() {
-        loadError = message == 'Not found.' ? 'Redeploy the latest Self-Hosted Sync Worker to enable Analytics uploads.' : message;
-        loading = false;
+        _loadError = message == 'Not found.'
+            ? 'Redeploy the latest Self-Hosted Sync Worker to use cloud credentials.'
+            : message;
+        _loading = false;
       });
     }
   }
 
-  Future<void> _openTelegramSettings() async {
-    final state = context.read<AppController>();
-    if (!_signedIn(state)) {
-      showSnack(context, 'Sign in to your Self-Hosted Sync Worker first.');
+  Future<void> _saveTelegramCredentials() async {
+    if (_busy) return;
+    final chatId = _chatIdController.text.trim();
+    if (chatId.isEmpty) {
+      showSnack(context, 'Enter the Telegram group or channel Chat ID.');
       return;
     }
-    await Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
-    if (mounted) await _load(quiet: true);
-  }
-
-  Future<void> _connectGoogleDrive() async {
-    if (busy) return;
-    final state = context.read<AppController>();
-    if (!_signedIn(state)) {
-      showSnack(context, 'Sign in to your Self-Hosted Sync Worker first.');
+    if (!_telegram.tokenConfigured && _botTokenController.text.trim().isEmpty) {
+      showSnack(context, 'Enter a Telegram bot token.');
       return;
     }
-    setState(() => busy = true);
+    setState(() => _busy = true);
     try {
-      final saved = await state.saveGoogleDriveAnalyticsSettings(
-        clientId: clientIdController.text,
-        clientSecret: clientSecretController.text,
-      );
+      final saved = await context.read<AppController>().saveSelfHostedTelegramBackupSettings(
+            enabled: _telegram.enabled,
+            botToken: _botTokenController.text,
+            chatId: chatId,
+            frequency: _telegram.frequency,
+            hour: _telegram.hour,
+            minute: _telegram.minute,
+            weekday: _telegram.weekday,
+            monthDay: _telegram.monthDay,
+          );
       if (!mounted) return;
-      setState(() => drive = saved);
-      clientSecretController.clear();
-      final result = await state.googleDriveAnalyticsConnectUrl();
-      final rawUrl = result['authorizationUrl']?.toString() ?? '';
-      final url = Uri.tryParse(rawUrl);
-      if (url == null || url.scheme.toLowerCase() != 'https') throw StateError('The Worker did not return a valid Google authorization URL.');
-      final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-      if (!opened) throw StateError('Could not open Google authorization in your browser.');
-      if (mounted) showSnack(context, 'Finish Google authorization in the browser. Koinly will detect it automatically.');
-
-      for (var attempt = 0; attempt < 60 && mounted; attempt += 1) {
-        await Future<void>.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        try {
-          final next = await state.loadGoogleDriveAnalyticsSettings();
-          if (!mounted) return;
-          setState(() => drive = next);
-          if (next.connected) {
-            showSnack(context, next.accountEmail.isEmpty ? 'Google Drive connected.' : 'Google Drive connected • ${next.accountEmail}');
-            return;
-          }
-        } catch (_) {
-          // The browser may still be completing the OAuth callback. Keep polling.
-        }
-      }
-      if (mounted) showSnack(context, 'Google Drive is not connected yet. Finish authorization, then tap Refresh.');
+      _botTokenController.clear();
+      setState(() {
+        _telegram = saved;
+        _chatIdController.text = saved.chatId;
+        _botTokenVisible = false;
+      });
+      showSnack(context, 'Telegram credentials saved.');
     } catch (error) {
       if (mounted) showSnack(context, _analyticsUploadError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _disconnectGoogleDrive() async {
-    if (busy) return;
-    final state = context.read<AppController>();
-    setState(() => busy = true);
+  Future<void> _testTelegramCredentials() async {
+    if (_busy) return;
+    final chatId = _chatIdController.text.trim();
+    if (chatId.isEmpty) {
+      showSnack(context, 'Enter the Telegram group or channel Chat ID.');
+      return;
+    }
+    if (!_telegram.tokenConfigured && _botTokenController.text.trim().isEmpty) {
+      showSnack(context, 'Enter a Telegram bot token.');
+      return;
+    }
+    setState(() => _busy = true);
     try {
-      final next = await state.disconnectGoogleDriveAnalytics();
-      if (!mounted) return;
-      setState(() => drive = next);
-      await _load(quiet: true);
-      if (mounted) showSnack(context, 'Google Drive disconnected. Automatic Drive PDF upload was turned off.');
+      await context.read<AppController>().testSelfHostedTelegramBackup(
+            botToken: _botTokenController.text,
+            chatId: chatId,
+          );
+      if (mounted) showSnack(context, 'Telegram credentials are working. Check the target chat.');
     } catch (error) {
       if (mounted) showSnack(context, _analyticsUploadError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -1138,15 +1105,390 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
     if (mounted) showSnack(context, 'Google OAuth redirect URI copied.');
   }
 
+  Future<void> _connectGoogleDrive() async {
+    if (_busy) return;
+    final state = context.read<AppController>();
+    if (!_signedIn(state)) {
+      showSnack(context, 'Sign in to your Self-Hosted Sync Worker first.');
+      return;
+    }
+    if (_clientIdController.text.trim().isEmpty) {
+      showSnack(context, 'Enter the Google OAuth Client ID.');
+      return;
+    }
+    if (!_drive.clientSecretConfigured && _clientSecretController.text.trim().isEmpty) {
+      showSnack(context, 'Enter the Google OAuth Client Secret.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final saved = await state.saveGoogleDriveAnalyticsSettings(
+        clientId: _clientIdController.text,
+        clientSecret: _clientSecretController.text,
+      );
+      if (!mounted) return;
+      setState(() => _drive = saved);
+      _clientSecretController.clear();
+      final result = await state.googleDriveAnalyticsConnectUrl();
+      final rawUrl = result['authorizationUrl']?.toString() ?? '';
+      final url = Uri.tryParse(rawUrl);
+      if (url == null || url.scheme.toLowerCase() != 'https') {
+        throw StateError('The Worker did not return a valid Google authorization URL.');
+      }
+      final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!opened) throw StateError('Could not open Google authorization in your browser.');
+      if (mounted) showSnack(context, 'Finish Google authorization in the browser. Koinly will detect it automatically.');
+
+      for (var attempt = 0; attempt < 60 && mounted; attempt += 1) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        try {
+          final next = await state.loadGoogleDriveAnalyticsSettings();
+          if (!mounted) return;
+          setState(() => _drive = next);
+          if (next.connected) {
+            showSnack(context, next.accountEmail.isEmpty ? 'Google Drive connected.' : 'Google Drive connected • ${next.accountEmail}');
+            return;
+          }
+        } catch (_) {
+          // Browser authorization may still be completing. Keep polling.
+        }
+      }
+      if (mounted) showSnack(context, 'Google Drive is not connected yet. Finish authorization, then tap Refresh.');
+    } catch (error) {
+      if (mounted) showSnack(context, _analyticsUploadError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _disconnectGoogleDrive() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final next = await context.read<AppController>().disconnectGoogleDriveAnalytics();
+      if (!mounted) return;
+      setState(() => _drive = next);
+      showSnack(context, 'Google Drive disconnected. Automatic Drive PDF upload was turned off.');
+    } catch (error) {
+      if (mounted) showSnack(context, _analyticsUploadError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final signedIn = _signedIn(state);
+    final redirectUri = _redirectUri(state);
+
+    return PageScaffold(
+      title: 'Credential',
+      subtitle: 'Telegram and Google Drive',
+      actions: [
+        IconButton.filledTonal(
+          tooltip: 'Refresh',
+          onPressed: _loading || _busy ? null : () => _load(),
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ],
+      child: ResponsiveContent(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        child: _loading
+            ? const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!signedIn)
+                    ExpressiveCard(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Row(children: [
+                          iconBubble(context, 'cloud', kSleekAccentHex, size: 48),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text('Self-Hosted Sync Worker required', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+                        ]),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Telegram and Google Drive credentials are stored by your Self-Hosted Sync Worker. Sign in first to configure them.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 14),
+                        FilledButton.icon(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen())),
+                          icon: const Icon(Icons.cloud_sync_rounded),
+                          label: const Text('Open Account & sync'),
+                        ),
+                      ]),
+                    )
+                  else ...[
+                    if (_loadError != null) ...[
+                      ExpressiveCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Icon(Icons.error_outline_rounded, color: Colors.orangeAccent),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text(_loadError!, style: const TextStyle(fontWeight: FontWeight.w800))),
+                        ]),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    const SectionHeader('Telegram bot'),
+                    ExpressiveCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Row(children: [
+                          iconBubble(context, 'send', '#86E3CE', size: 48),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('Telegram', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 2),
+                              Text(
+                                _telegram.tokenConfigured && _telegram.chatId.isNotEmpty
+                                    ? 'Configured • ${_telegram.chatId}'
+                                    : 'Used for automatic backups and PDF delivery',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              ),
+                            ]),
+                          ),
+                          Icon(
+                            _telegram.tokenConfigured && _telegram.chatId.isNotEmpty ? Icons.check_circle_rounded : Icons.key_rounded,
+                            color: _telegram.tokenConfigured && _telegram.chatId.isNotEmpty ? kSleekAccent : kSleekMuted,
+                          ),
+                        ]),
+                        const SizedBox(height: 14),
+                        TextField(
+                          contextMenuBuilder: koinlyTextFieldContextMenu,
+                          enableInteractiveSelection: true,
+                          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                          controller: _botTokenController,
+                          readOnly: _busy,
+                          obscureText: !_botTokenVisible,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: InputDecoration(
+                            labelText: _telegram.tokenConfigured ? 'Bot token (saved)' : 'Bot token',
+                            hintText: _telegram.tokenConfigured ? 'Leave blank to keep the current token' : '123456789:AA...',
+                            prefixIcon: const Icon(Icons.smart_toy_rounded),
+                            suffixIcon: IconButton(
+                              tooltip: _botTokenVisible ? 'Hide token' : 'Show token',
+                              onPressed: _busy ? null : () => setState(() => _botTokenVisible = !_botTokenVisible),
+                              icon: Icon(_botTokenVisible ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          contextMenuBuilder: koinlyTextFieldContextMenu,
+                          enableInteractiveSelection: true,
+                          onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                          controller: _chatIdController,
+                          readOnly: _busy,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: const InputDecoration(
+                            labelText: 'Group or channel Chat ID',
+                            hintText: '-1001234567890 or @channelname',
+                            prefixIcon: Icon(Icons.forum_rounded),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _busy ? null : _testTelegramCredentials,
+                              icon: const Icon(Icons.verified_rounded),
+                              label: const Text('Test'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _busy ? null : _saveTelegramCredentials,
+                              icon: const Icon(Icons.save_rounded),
+                              label: const Text('Save'),
+                            ),
+                          ),
+                        ]),
+                      ]),
+                    ),
+                    const SectionHeader('Google Drive'),
+                    ExpressiveCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        Row(children: [
+                          iconBubble(context, 'cloud', '#9AD0F5', size: 48),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text('Google Drive', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 2),
+                              Text(
+                                _drive.connected
+                                    ? (_drive.accountEmail.isEmpty ? 'Connected' : 'Connected • ${_drive.accountEmail}')
+                                    : 'Configure OAuth credentials and connect your Drive',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                              ),
+                            ]),
+                          ),
+                          Icon(_drive.connected ? Icons.check_circle_rounded : Icons.key_rounded, color: _drive.connected ? kSleekAccent : kSleekMuted),
+                        ]),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Enable Google Drive API, create an OAuth 2.0 Web application, add the redirect URI below, then enter its Client ID and Client Secret.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.45),
+                        ),
+                        const SizedBox(height: 14),
+                        Text('Authorized redirect URI', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface.withValues(alpha: .45),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: .55)),
+                          ),
+                          child: Row(children: [
+                            Expanded(child: SelectableText(redirectUri, style: const TextStyle(fontWeight: FontWeight.w700))),
+                            IconButton(onPressed: _busy ? null : () => _copyRedirect(state), icon: const Icon(Icons.copy_rounded), tooltip: 'Copy redirect URI'),
+                          ]),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _clientIdController,
+                          enabled: !_busy,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: const InputDecoration(labelText: 'Google OAuth Client ID', prefixIcon: Icon(Icons.badge_outlined)),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _clientSecretController,
+                          enabled: !_busy,
+                          obscureText: !_clientSecretVisible,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: InputDecoration(
+                            labelText: 'Google OAuth Client Secret',
+                            hintText: _drive.clientSecretConfigured ? 'Leave blank to keep the saved secret' : null,
+                            prefixIcon: const Icon(Icons.key_rounded),
+                            suffixIcon: IconButton(
+                              tooltip: _clientSecretVisible ? 'Hide secret' : 'Show secret',
+                              onPressed: _busy ? null : () => setState(() => _clientSecretVisible = !_clientSecretVisible),
+                              icon: Icon(_clientSecretVisible ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_drive.connected) ...[
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _connectGoogleDrive,
+                            icon: _busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync_rounded),
+                            label: const Text('Save and reconnect Google Drive'),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: _busy ? null : _disconnectGoogleDrive,
+                            icon: const Icon(Icons.link_off_rounded),
+                            label: const Text('Disconnect Google Drive'),
+                          ),
+                        ] else
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _connectGoogleDrive,
+                            icon: _busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_upload_rounded),
+                            label: const Text('Save and connect Google Drive'),
+                          ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Koinly keeps the Google OAuth Client Secret and refresh token encrypted in your Worker. These credentials are configured only on this page.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class CloudBackupScreen extends StatefulWidget {
+  const CloudBackupScreen({super.key});
+
+  @override
+  State<CloudBackupScreen> createState() => _CloudBackupScreenState();
+}
+
+class _CloudBackupScreenState extends State<CloudBackupScreen> {
+  GoogleDriveAnalyticsSettings _drive = const GoogleDriveAnalyticsSettings.defaults();
+  TelegramBackupSettings _telegram = const TelegramBackupSettings.defaults();
+  AnalyticsPdfScheduleSettings _telegramPdfSchedule =
+      const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
+  AnalyticsPdfScheduleSettings _drivePdfSchedule =
+      const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
+  bool _loading = true;
+  bool _busy = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  bool _signedIn(AppController state) =>
+      state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    final state = context.read<AppController>();
+    if (!_signedIn(state)) {
+      setState(() {
+        _loading = false;
+        _loadError = null;
+      });
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final telegram = await state.loadSelfHostedTelegramBackupSettings();
+      final drive = await state.loadGoogleDriveAnalyticsSettings();
+      final schedules = await state.loadAnalyticsPdfSchedules();
+      if (!mounted) return;
+      setState(() {
+        _telegram = telegram;
+        _drive = drive;
+        _telegramPdfSchedule = schedules[AnalyticsPdfScheduleDestination.telegram] ??
+            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
+        _drivePdfSchedule = schedules[AnalyticsPdfScheduleDestination.googleDrive] ??
+            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
+        _loadError = null;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      final message = _analyticsUploadError(error);
+      setState(() {
+        _loadError = message == 'Not found.'
+            ? 'Redeploy the latest Self-Hosted Sync Worker to use automatic cloud PDF uploads.'
+            : message;
+        _loading = false;
+      });
+    }
+  }
+
   AnalyticsPdfScheduleSettings _schedule(AnalyticsPdfScheduleDestination destination) =>
-      destination == AnalyticsPdfScheduleDestination.telegram ? telegramPdfSchedule : drivePdfSchedule;
+      destination == AnalyticsPdfScheduleDestination.telegram ? _telegramPdfSchedule : _drivePdfSchedule;
 
   void _setSchedule(AnalyticsPdfScheduleDestination destination, AnalyticsPdfScheduleSettings next) {
     setState(() {
       if (destination == AnalyticsPdfScheduleDestination.telegram) {
-        telegramPdfSchedule = next;
+        _telegramPdfSchedule = next;
       } else {
-        drivePdfSchedule = next;
+        _drivePdfSchedule = next;
       }
     });
   }
@@ -1169,20 +1511,20 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
   }
 
   Future<void> _savePdfSchedule(AnalyticsPdfScheduleDestination destination) async {
-    if (busy) return;
-    final state = context.read<AppController>();
+    if (_busy) return;
     final current = _schedule(destination);
-    if (current.enabled && destination == AnalyticsPdfScheduleDestination.telegram && !(telegram.tokenConfigured && telegram.chatId.isNotEmpty)) {
-      showSnack(context, 'Configure the Telegram bot and destination before enabling automatic PDF uploads.');
+    final telegramReady = _telegram.tokenConfigured && _telegram.chatId.isNotEmpty;
+    if (current.enabled && destination == AnalyticsPdfScheduleDestination.telegram && !telegramReady) {
+      showSnack(context, 'Configure Telegram in Settings > Credential before enabling automatic PDF uploads.');
       return;
     }
-    if (current.enabled && destination == AnalyticsPdfScheduleDestination.googleDrive && !drive.connected) {
-      showSnack(context, 'Connect Google Drive before enabling automatic PDF uploads.');
+    if (current.enabled && destination == AnalyticsPdfScheduleDestination.googleDrive && !_drive.connected) {
+      showSnack(context, 'Connect Google Drive in Settings > Credential before enabling automatic PDF uploads.');
       return;
     }
-    setState(() => busy = true);
+    setState(() => _busy = true);
     try {
-      final saved = await state.saveAnalyticsPdfSchedule(current);
+      final saved = await context.read<AppController>().saveAnalyticsPdfSchedule(current);
       if (!mounted) return;
       _setSchedule(destination, saved);
       showSnack(
@@ -1191,10 +1533,11 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
             ? '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF schedule saved.'
             : '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF upload is off.',
       );
+      await _load();
     } catch (error) {
       if (mounted) showSnack(context, _analyticsUploadError(error));
     } finally {
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -1225,28 +1568,44 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
   }) {
     final settings = _schedule(destination);
     final destinationName = destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive';
-    final scheduleTitle = destination == AnalyticsPdfScheduleDestination.telegram
-        ? 'Automatic Telegram PDF upload'
-        : 'Automatic Google Drive PDF upload';
     final time = TimeOfDay(hour: settings.hour, minute: settings.minute).format(context);
     return ExpressiveCard(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          iconBubble(context, destination == AnalyticsPdfScheduleDestination.telegram ? 'send' : 'cloud', destination == AnalyticsPdfScheduleDestination.telegram ? '#86E3CE' : '#9AD0F5', size: 46),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(destinationName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 2),
+              Text(
+                destinationReady ? 'Credentials ready' : 'Configure in Settings > Credential first',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+              ),
+            ]),
+          ),
+          Icon(destinationReady ? Icons.check_circle_rounded : Icons.key_rounded, color: destinationReady ? kSleekAccent : kSleekMuted),
+        ]),
+        const SizedBox(height: 10),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           value: settings.enabled,
-          onChanged: busy
+          onChanged: _busy
               ? null
               : (value) {
                   if (value && !destinationReady) {
-                    showSnack(context, destination == AnalyticsPdfScheduleDestination.telegram
-                        ? 'Configure the Telegram bot and destination first.'
-                        : 'Connect Google Drive first.');
+                    showSnack(
+                      context,
+                      destination == AnalyticsPdfScheduleDestination.telegram
+                          ? 'Configure Telegram in Settings > Credential first.'
+                          : 'Connect Google Drive in Settings > Credential first.',
+                    );
                     return;
                   }
                   _setSchedule(destination, settings.copyWith(enabled: value));
                 },
-          title: Text(scheduleTitle, style: const TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text('Automatic PDF upload', style: TextStyle(fontWeight: FontWeight.w900)),
           subtitle: const Text('Generated from the latest data synchronized to your Self-Hosted Worker.'),
         ),
         const SizedBox(height: 8),
@@ -1256,7 +1615,7 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
             ButtonSegment(value: AnalyticsPdfScheduleReportVariant.transactionHistory, label: Text('Transaction history')),
           ],
           selected: {settings.reportVariant},
-          onSelectionChanged: busy ? null : (value) => _setSchedule(destination, settings.copyWith(reportVariant: value.first)),
+          onSelectionChanged: _busy ? null : (value) => _setSchedule(destination, settings.copyWith(reportVariant: value.first)),
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<AnalyticsPdfScheduleDateFilter>(
@@ -1265,7 +1624,7 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
           items: AnalyticsPdfScheduleDateFilter.values
               .map((value) => DropdownMenuItem(value: value, child: Text(_scheduleDateFilterLabel(value))))
               .toList(growable: false),
-          onChanged: busy || settings.enabled && !destinationReady
+          onChanged: _busy
               ? null
               : (value) {
                   if (value != null) _setSchedule(destination, settings.copyWith(dateFilter: value));
@@ -1279,11 +1638,11 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
             ButtonSegment(value: TelegramBackupFrequency.monthly, label: Text('Monthly')),
           ],
           selected: {settings.frequency},
-          onSelectionChanged: busy ? null : (value) => _setSchedule(destination, settings.copyWith(frequency: value.first)),
+          onSelectionChanged: _busy ? null : (value) => _setSchedule(destination, settings.copyWith(frequency: value.first)),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
-          onPressed: busy ? null : () => _pickScheduleTime(destination),
+          onPressed: _busy ? null : () => _pickScheduleTime(destination),
           icon: const Icon(Icons.schedule_rounded),
           label: Text('Time · $time'),
         ),
@@ -1296,9 +1655,11 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
               final weekday = index + 1;
               return DropdownMenuItem(value: weekday, child: Text(_weekdayLabel(weekday)));
             }),
-            onChanged: busy ? null : (value) {
-              if (value != null) _setSchedule(destination, settings.copyWith(weekday: value));
-            },
+            onChanged: _busy
+                ? null
+                : (value) {
+                    if (value != null) _setSchedule(destination, settings.copyWith(weekday: value));
+                  },
           ),
         ],
         if (settings.frequency == TelegramBackupFrequency.monthly) ...[
@@ -1307,14 +1668,16 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
             value: settings.monthDay,
             decoration: const InputDecoration(labelText: 'Day of month', prefixIcon: Icon(Icons.calendar_month_rounded)),
             items: List.generate(31, (index) => DropdownMenuItem(value: index + 1, child: Text('Day ${index + 1}'))),
-            onChanged: busy ? null : (value) {
-              if (value != null) _setSchedule(destination, settings.copyWith(monthDay: value));
-            },
+            onChanged: _busy
+                ? null
+                : (value) {
+                    if (value != null) _setSchedule(destination, settings.copyWith(monthDay: value));
+                  },
           ),
         ],
         const SizedBox(height: 12),
         Text(
-          'Telegram PDF, Google Drive PDF, and Telegram backup times must be at least 5 minutes apart.',
+          'Telegram PDF, Google Drive PDF, and Automatic Telegram backup times must all be at least 5 minutes apart.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
@@ -1330,7 +1693,7 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
         ],
         const SizedBox(height: 12),
         FilledButton.icon(
-          onPressed: busy ? null : () => _savePdfSchedule(destination),
+          onPressed: _busy ? null : () => _savePdfSchedule(destination),
           icon: const Icon(Icons.save_rounded),
           label: const Text('Save automatic PDF schedule'),
         ),
@@ -1342,22 +1705,21 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final signedIn = _signedIn(state);
-    final redirectUri = _redirectUri(state);
-    final telegramReady = telegram.tokenConfigured && telegram.chatId.isNotEmpty;
+    final telegramReady = _telegram.tokenConfigured && _telegram.chatId.isNotEmpty;
 
     return PageScaffold(
-      title: 'Analytics uploads',
-      subtitle: 'Telegram and Google Drive',
+      title: 'Cloud Backup',
+      subtitle: 'Automatic PDF uploads',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Refresh',
-          onPressed: loading || busy ? null : () => _load(),
+          onPressed: _loading || _busy ? null : _load,
           icon: const Icon(Icons.refresh_rounded),
         ),
       ],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        child: loading
+        child: _loading
             ? const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1372,7 +1734,10 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
                           Expanded(child: Text('Self-Hosted Sync Worker required', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
                         ]),
                         const SizedBox(height: 10),
-                        Text('Direct Analytics uploads use your own Worker so credentials stay with your self-hosted account.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
+                        Text(
+                          'Automatic Telegram and Google Drive PDF uploads run through your Self-Hosted Sync Worker.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
                         const SizedBox(height: 14),
                         FilledButton.icon(
                           onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen())),
@@ -1382,149 +1747,34 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
                       ]),
                     )
                   else ...[
-                    if (loadError != null) ...[
+                    if (_loadError != null) ...[
                       ExpressiveCard(
                         padding: const EdgeInsets.all(16),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Icon(Icons.error_outline_rounded, color: Colors.orangeAccent),
                           const SizedBox(width: 10),
-                          Expanded(child: Text(loadError!, style: const TextStyle(fontWeight: FontWeight.w800))),
+                          Expanded(child: Text(_loadError!, style: const TextStyle(fontWeight: FontWeight.w800))),
                         ]),
                       ),
                       const SizedBox(height: 14),
                     ],
-                    const SectionHeader('Telegram'),
-                    ExpressiveCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        Row(children: [
-                          iconBubble(context, 'send', '#86E3CE', size: 48),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('Telegram', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 2),
-                              Text(
-                                telegramReady ? 'Ready • ${telegram.chatId}' : 'Configure your Telegram bot and destination',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                              ),
-                            ]),
-                          ),
-                          Icon(telegramReady ? Icons.check_circle_rounded : Icons.settings_rounded, color: telegramReady ? kSleekAccent : kSleekMuted),
-                        ]),
-                        const SizedBox(height: 12),
-                        Text('Analytics PDFs reuse the same bot token and group/channel destination as Telegram backup. Automatic backup can stay off.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: busy ? null : _openTelegramSettings,
-                          icon: const Icon(Icons.settings_rounded),
-                          label: Text(telegramReady ? 'Telegram backup settings' : 'Configure Telegram'),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(height: 12),
                     _automaticPdfScheduleCard(
                       AnalyticsPdfScheduleDestination.telegram,
                       destinationReady: telegramReady,
                     ),
-                    const SectionHeader('Google Drive'),
-                    ExpressiveCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                        Row(children: [
-                          iconBubble(context, 'cloud', '#9AD0F5', size: 48),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('Google Drive', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                              const SizedBox(height: 2),
-                              Text(
-                                drive.connected
-                                    ? (drive.accountEmail.isEmpty ? 'Connected' : 'Connected • ${drive.accountEmail}')
-                                    : 'Connect once, then upload PDFs directly',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                              ),
-                            ]),
-                          ),
-                          Icon(drive.connected ? Icons.check_circle_rounded : Icons.cloud_upload_rounded, color: drive.connected ? kSleekAccent : kSleekMuted),
-                        ]),
-                        const SizedBox(height: 14),
-                        Text('1. Enable Google Drive API.  2. Create an OAuth 2.0 Web application.  3. Add the redirect URI below.  4. Paste the Client ID and Client Secret, then connect.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.45)),
-                        const SizedBox(height: 14),
-                        Text('Authorized redirect URI', style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface.withValues(alpha: .45),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: .55)),
-                          ),
-                          child: Row(children: [
-                            Expanded(child: SelectableText(redirectUri, style: const TextStyle(fontWeight: FontWeight.w700))),
-                            IconButton(onPressed: busy ? null : () => _copyRedirect(state), icon: const Icon(Icons.copy_rounded), tooltip: 'Copy redirect URI'),
-                          ]),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: clientIdController,
-                          enabled: !busy,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          decoration: const InputDecoration(labelText: 'Google OAuth Client ID', prefixIcon: Icon(Icons.badge_outlined)),
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: clientSecretController,
-                          enabled: !busy,
-                          obscureText: !secretVisible,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          decoration: InputDecoration(
-                            labelText: 'Google OAuth Client Secret',
-                            hintText: drive.clientSecretConfigured ? 'Saved securely in your Worker' : null,
-                            prefixIcon: const Icon(Icons.key_rounded),
-                            suffixIcon: IconButton(
-                              onPressed: () => setState(() => secretVisible = !secretVisible),
-                              icon: Icon(secretVisible ? Icons.visibility_off_rounded : Icons.visibility_rounded),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (drive.connected) ...[
-                          FilledButton.icon(
-                            onPressed: busy ? null : _connectGoogleDrive,
-                            icon: busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync_rounded),
-                            label: const Text('Reconnect Google Drive'),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: busy ? null : _disconnectGoogleDrive,
-                            icon: const Icon(Icons.link_off_rounded),
-                            label: const Text('Disconnect Google Drive'),
-                          ),
-                        ] else
-                          FilledButton.icon(
-                            onPressed: busy ? null : _connectGoogleDrive,
-                            icon: busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_upload_rounded),
-                            label: const Text('Save and connect Google Drive'),
-                          ),
-                        const SizedBox(height: 10),
-                        Text('PDFs are uploaded to a “${drive.folderName}” folder created by Koinly. The Worker stores the OAuth Client Secret and refresh token encrypted with your Worker JWT secret.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-                        if (drive.lastUploadAt != null) ...[
-                          const SizedBox(height: 6),
-                          Text('Last upload ${DateFormat('MMM d, yyyy HH:mm').format(drive.lastUploadAt!.toLocal())}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-                        ],
-                        if (drive.lastError?.trim().isNotEmpty == true) ...[
-                          const SizedBox(height: 6),
-                          Text('Last error: ${drive.lastError}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orangeAccent, fontWeight: FontWeight.w800)),
-                        ],
-                      ]),
-                    ),
                     const SizedBox(height: 12),
                     _automaticPdfScheduleCard(
                       AnalyticsPdfScheduleDestination.googleDrive,
-                      destinationReady: drive.connected,
+                      destinationReady: _drive.connected,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : () async {
+                        await Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()));
+                        if (mounted) await _load();
+                      },
+                      icon: const Icon(Icons.key_rounded),
+                      label: const Text('Open Credential'),
                     ),
                   ],
                 ],

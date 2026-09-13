@@ -1162,7 +1162,7 @@ async function uploadAnalyticsPdfToTelegram(request: Request, env: Env, db: Clie
   const pdf = await analyticsPdfRequest(request);
   const telegram = await readTelegramBackupSettings(db, auth.userId);
   if (!telegram.encryptedToken || !telegram.chatId) {
-    throw new HttpError(400, 'Configure the Telegram bot token and destination in Telegram backup settings first.');
+    throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential first.');
   }
   const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
   const caption = pdf.caption || `Koinly Analytics\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`;
@@ -1173,7 +1173,7 @@ async function uploadAnalyticsPdfToTelegram(request: Request, env: Env, db: Clie
 async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
   const pdf = await analyticsPdfRequest(request);
   const settings = await readGoogleDriveAnalyticsSettings(db, auth.userId);
-  if (!settings.connected) throw new HttpError(400, 'Connect Google Drive in Analytics upload settings first.');
+  if (!settings.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential first.');
   const attemptedAt = Date.now();
   try {
     const accessToken = await googleDriveAccessToken(env, settings);
@@ -1472,12 +1472,12 @@ async function saveAnalyticsPdfSchedule(
   if (enabled && destination === 'telegram') {
     const telegram = await readTelegramBackupSettings(db, auth.userId);
     if (!telegram.encryptedToken || !telegram.chatId) {
-      throw new HttpError(400, 'Configure the Telegram bot token and destination before enabling automatic PDF uploads.');
+      throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential before enabling automatic PDF uploads.');
     }
   }
   if (enabled && destination === 'googleDrive') {
     const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
-    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive before enabling automatic PDF uploads.');
+    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential before enabling automatic PDF uploads.');
   }
 
   const candidate: AnalyticsPdfScheduleSettings = {
@@ -1575,7 +1575,7 @@ async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: Anal
     const generated = await buildScheduledAnalyticsPdf(db, settings.userId, settings, attemptedAt);
     if (settings.destination === 'telegram') {
       const telegram = await readTelegramBackupSettings(db, settings.userId);
-      if (!telegram.encryptedToken || !telegram.chatId) throw new HttpError(400, 'Telegram bot settings are incomplete.');
+      if (!telegram.encryptedToken || !telegram.chatId) throw new HttpError(400, 'Telegram credentials are incomplete. Configure them in Settings > Credential.');
       const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
       await sendTelegramAnalyticsDocument(token, telegram.chatId, generated.fileName, generated.bytes, generated.caption);
     } else {
@@ -1985,7 +1985,7 @@ function buildSimpleTextPdf(sourceLines: string[]): Uint8Array<ArrayBuffer> {
 
 async function googleDriveAccessToken(env: Env, settings: GoogleDriveAnalyticsSettings): Promise<string> {
   if (!settings.clientId || !settings.encryptedClientSecret || !settings.encryptedRefreshToken) {
-    throw new HttpError(400, 'Connect Google Drive in Analytics upload settings first.');
+    throw new HttpError(400, 'Connect Google Drive in Settings > Credential first.');
   }
   const clientSecret = await decryptWorkerSecret(
     env.JWT_SECRET,
@@ -2014,7 +2014,7 @@ async function googleDriveAccessToken(env: Env, settings: GoogleDriveAnalyticsSe
   const data = parseJsonRecord(await response.text());
   if (!response.ok) {
     if (String(data.error ?? '') === 'invalid_grant') {
-      throw new HttpError(401, 'Google Drive authorization is no longer valid. Reconnect Google Drive in Analytics upload settings.');
+      throw new HttpError(401, 'Google Drive authorization is no longer valid. Reconnect Google Drive in Settings > Credential.');
     }
     throw new HttpError(502, googleOAuthFailure(response.status, data));
   }

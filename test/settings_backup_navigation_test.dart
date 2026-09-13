@@ -15,12 +15,16 @@ Future<void> pumpSettingsScreen(WidgetTester tester, Widget screen) async {
 }
 
 void main() {
-  testWidgets('main Settings omits duplicate backup loading', (tester) async {
+  testWidgets('main Settings is grouped and exposes Credential and Archive', (tester) async {
     await pumpSettingsScreen(tester, const SettingsScreen());
 
+    expect(find.text('General'), findsOneWidget);
+    expect(find.text('Data & cloud'), findsOneWidget);
+    expect(find.text('App'), findsOneWidget);
+    expect(find.text('Credential'), findsOneWidget);
+    expect(find.text('Archive'), findsOneWidget);
     expect(find.text('Load backup'), findsNothing);
-    expect(find.text('Savings suggestion profile'), findsNothing);
-    expect(find.text('Advanced settings'), findsOneWidget);
+    expect(find.text('Automatic local backup'), findsNothing);
   });
 
   testWidgets('Profile keeps information and editable media framing only', (tester) async {
@@ -32,12 +36,24 @@ void main() {
     expect(find.text('Savings Suggestion'), findsNothing);
   });
 
-  testWidgets('Advanced settings keeps backup loading available', (tester) async {
-    await pumpSettingsScreen(tester, const AdvancedSettingsScreen());
+  testWidgets('Archive owns backup and scheduled delivery controls', (tester) async {
+    await pumpSettingsScreen(tester, const ArchiveSettingsScreen());
 
+    expect(find.text('Local'), findsOneWidget);
+    expect(find.text('Cloud'), findsOneWidget);
     expect(find.text('Backup'), findsOneWidget);
     expect(find.text('Automatic local backup'), findsOneWidget);
     expect(find.text('Load backup'), findsOneWidget);
-    expect(find.text('Restore last safety backup'), findsNothing);
+    expect(find.text('Automatic Telegram backup'), findsOneWidget);
+    expect(find.text('Cloud Backup'), findsOneWidget);
+  });
+
+  testWidgets('Advanced settings no longer contains backup controls', (tester) async {
+    await pumpSettingsScreen(tester, const AdvancedSettingsScreen());
+
+    expect(find.text('Backup'), findsNothing);
+    expect(find.text('Automatic local backup'), findsNothing);
+    expect(find.text('Load backup'), findsNothing);
+    expect(find.text('Data health'), findsOneWidget);
   });
 }

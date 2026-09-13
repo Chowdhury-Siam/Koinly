@@ -23,7 +23,8 @@ void main() {
     expect(analytics, isNot(contains('shareAnalyticsPdf(')));
     expect(analytics, contains("label: const Text('Upload Telegram')"));
     expect(analytics, contains("label: const Text('Upload Drive')"));
-    expect(analytics, contains('class AnalyticsUploadSettingsScreen'));
+    expect(analytics, contains('class CloudBackupScreen'));
+    expect(analytics, contains('class CredentialsScreen'));
     expect(analytics, contains('saveGoogleDriveAnalyticsSettings'));
     expect(analytics, contains('uploadAnalyticsPdfToTelegram'));
     expect(analytics, contains('uploadAnalyticsPdfToGoogleDrive'));
@@ -33,8 +34,8 @@ void main() {
     expect(analytics, contains('List<MoneyTransaction>.of(snapshot.transactions)'));
     expect(analytics, contains('Transaction history uses the selected date filter. Choose All Time'));
     expect(analytics, isNot(contains('does not use the selected analytics period')));
-    expect(analytics, contains("tooltip: 'Telegram bot settings'"));
-    expect(analytics, contains('Icons.smart_toy_rounded'));
+    expect(analytics, isNot(contains("tooltip: 'Telegram bot settings'")));
+    expect(analytics, isNot(contains("tooltip: 'Analytics upload settings'")));
     expect(analytics, contains("pw.Text('Transaction ledger'"));
     expect(analytics, contains("pw.Text('Compared with previous period'"));
     expect(analytics, isNot(contains("const SectionHeader('Compared with previous period')")));
@@ -45,9 +46,9 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1136+180'));
-    expect(analytics, contains('Automatic Telegram PDF upload'));
-    expect(analytics, contains('Automatic Google Drive PDF upload'));
+    expect(pubspec, contains('version: 1.0.1137+181'));
+    expect(analytics, contains("title: 'Cloud Backup'"));
+    expect(analytics, contains("title: const Text('Automatic PDF upload'"));
     expect(analytics, contains('must be at least 5 minutes apart'));
     expect(analytics, contains('AnalyticsPdfScheduleDateFilter.allTime'));
     expect(analytics, contains('saveAnalyticsPdfSchedule'));
