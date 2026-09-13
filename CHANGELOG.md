@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1123] - 2026-09-13
+
+### Fixed
+
+- Fixed the remaining category-bubble coupling seen after `1.0.1122`: a dragged bubble's saved position could be reused as a collision-packing anchor during a later parent rebuild, which caused untouched bubbles to shift around it.
+- The automatic collision-free layout is now calculated only from the donut slice geometry. Saved drag positions are applied afterward per bubble, so moving one bubble cannot recalculate, push, pull, or reposition any other bubble.
+- Bumped application metadata to `1.0.1123+167`.
+
+
 ## [1.0.1122] - 2026-09-13
 
 - Fixed category-breakdown bubble dragging so each percentage bubble moves completely independently. Dragging one bubble no longer checks, follows, slides around, or reacts to neighboring bubbles.

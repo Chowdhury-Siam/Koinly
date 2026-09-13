@@ -14,6 +14,10 @@ void main() {
     expect(source, contains('onPanUpdate: (details)'));
     expect(source, contains('moveBadge(i, currentBadgeWidth, currentBadgeHeight, details.delta)'));
     expect(source, contains('Every badge owns its own drag state.'));
+    expect(source, contains('user-dragged badge must never become an anchor'));
+    expect(source, contains('saved position is applied later by resolvedBadgeCenter()'));
+    expect(source, isNot(contains('final fixedI = _badgeCenterFractions.containsKey')));
+    expect(source, isNot(contains('final fixedJ = _badgeCenterFractions.containsKey')));
     expect(source, contains('final next = clampBadgeCenter('));
     expect(source, isNot(contains('badgeCenterCollides(')));
     expect(source, isNot(contains('furthestFreeBadgeCenter(')));

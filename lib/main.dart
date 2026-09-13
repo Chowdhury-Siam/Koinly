@@ -15353,15 +15353,10 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                     }
 
                     List<Offset> buildPackedBadgeCenters() {
+                      // Build the automatic layout only from the slice geometry. A
+                      // user-dragged badge must never become an anchor that causes
+                      // neighboring badges to be repacked on a later rebuild.
                       final centers = List<Offset>.generate(slices.length, (index) {
-                        final saved = _badgeCenterFractions[slices[index].categoryId];
-                        if (saved != null) {
-                          return clampBadgeCenter(
-                            Offset(saved.dx * canvasWidth, saved.dy * canvasHeight),
-                            badgeWidth,
-                            badgeHeight,
-                          );
-                        }
                         final radians = badgeAngles[index] * (math.pi / 180);
                         return clampBadgeCenter(
                           Offset(
@@ -15373,10 +15368,10 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                         );
                       });
 
-                      // Tiny slices can share almost the same angle. Pack their badges
-                      // apart before painting so the initial chart never renders a
-                      // stack of unreadable percentage bubbles. Existing user-dragged
-                      // centers are treated as fixed anchors.
+                      // Tiny slices can share almost the same angle. Pack only the
+                      // untouched automatic positions apart. Once a badge is dragged,
+                      // its saved position is applied later by resolvedBadgeCenter(),
+                      // without changing any other badge's automatic position.
                       for (var pass = 0; pass < 32; pass++) {
                         var moved = false;
                         for (var i = 0; i < centers.length; i++) {
@@ -15384,10 +15379,6 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                             final firstRect = badgeCollisionRect(centers[i], badgeWidth, badgeHeight);
                             final secondRect = badgeCollisionRect(centers[j], badgeWidth, badgeHeight);
                             if (!firstRect.overlaps(secondRect)) continue;
-
-                            final fixedI = _badgeCenterFractions.containsKey(slices[i].categoryId);
-                            final fixedJ = _badgeCenterFractions.containsKey(slices[j].categoryId);
-                            if (fixedI && fixedJ) continue;
 
                             final overlap = firstRect.intersect(secondRect);
                             if (overlap.isEmpty) continue;
@@ -15404,60 +15395,30 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
 
                             if (separateHorizontally) {
                               final direction = delta.dx.abs() < .01 ? 1.0 : (delta.dx > 0 ? 1.0 : -1.0);
-                              final amount = overlap.width + .5;
-                              if (fixedI) {
-                                centers[j] = clampBadgeCenter(
-                                  centers[j] + Offset(direction * amount, 0),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              } else if (fixedJ) {
-                                centers[i] = clampBadgeCenter(
-                                  centers[i] - Offset(direction * amount, 0),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              } else {
-                                final half = amount / 2;
-                                centers[i] = clampBadgeCenter(
-                                  centers[i] - Offset(direction * half, 0),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                                centers[j] = clampBadgeCenter(
-                                  centers[j] + Offset(direction * half, 0),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              }
+                              final half = (overlap.width + .5) / 2;
+                              centers[i] = clampBadgeCenter(
+                                centers[i] - Offset(direction * half, 0),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                              centers[j] = clampBadgeCenter(
+                                centers[j] + Offset(direction * half, 0),
+                                badgeWidth,
+                                badgeHeight,
+                              );
                             } else {
                               final direction = delta.dy.abs() < .01 ? 1.0 : (delta.dy > 0 ? 1.0 : -1.0);
-                              final amount = overlap.height + .5;
-                              if (fixedI) {
-                                centers[j] = clampBadgeCenter(
-                                  centers[j] + Offset(0, direction * amount),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              } else if (fixedJ) {
-                                centers[i] = clampBadgeCenter(
-                                  centers[i] - Offset(0, direction * amount),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              } else {
-                                final half = amount / 2;
-                                centers[i] = clampBadgeCenter(
-                                  centers[i] - Offset(0, direction * half),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                                centers[j] = clampBadgeCenter(
-                                  centers[j] + Offset(0, direction * half),
-                                  badgeWidth,
-                                  badgeHeight,
-                                );
-                              }
+                              final half = (overlap.height + .5) / 2;
+                              centers[i] = clampBadgeCenter(
+                                centers[i] - Offset(0, direction * half),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                              centers[j] = clampBadgeCenter(
+                                centers[j] + Offset(0, direction * half),
+                                badgeWidth,
+                                badgeHeight,
+                              );
                             }
                             moved = true;
                           }
