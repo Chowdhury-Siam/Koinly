@@ -122,6 +122,30 @@ CREATE TABLE IF NOT EXISTS analytics_upload_settings (
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS analytics_pdf_schedules (
+  user_id TEXT NOT NULL,
+  destination TEXT NOT NULL CHECK(destination IN ('telegram', 'googleDrive')),
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
+  report_variant TEXT NOT NULL DEFAULT 'summary' CHECK(report_variant IN ('summary', 'transactionHistory')),
+  date_filter TEXT NOT NULL DEFAULT 'thisMonth' CHECK(date_filter IN ('today', 'thisWeek', 'thisMonth', 'thisYear', 'allTime')),
+  frequency TEXT NOT NULL DEFAULT 'daily' CHECK(frequency IN ('daily', 'weekly', 'monthly')),
+  hour INTEGER NOT NULL DEFAULT 3 CHECK(hour BETWEEN 0 AND 23),
+  minute INTEGER NOT NULL DEFAULT 0 CHECK(minute BETWEEN 0 AND 59),
+  weekday INTEGER NOT NULL DEFAULT 7 CHECK(weekday BETWEEN 1 AND 7),
+  month_day INTEGER NOT NULL DEFAULT 1 CHECK(month_day BETWEEN 1 AND 31),
+  timezone_offset_minutes INTEGER NOT NULL DEFAULT 0 CHECK(timezone_offset_minutes BETWEEN -840 AND 840),
+  next_due_at INTEGER,
+  last_sent_at INTEGER,
+  last_attempt_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(user_id, destination),
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_pdf_schedule_due
+  ON analytics_pdf_schedules(enabled, next_due_at);
+
 -- Profile media is stored separately from finance sync rows so large photos,
 -- GIFs, and short videos never inflate the realtime sync change log. Uploads
 -- are chunked and the active metadata row is switched only after all chunks

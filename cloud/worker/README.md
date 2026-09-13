@@ -40,8 +40,8 @@ Complete the main setup once, then use the website:
 
 1. Save all eight values from the main README's setup checklist in your GitHub repository.
 2. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch containing the updated project, start the workflow, and wait for success.
-3. Open your Worker's `/profile` address. Enter the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD`, then select **Sign in**.
-4. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. The account holder can use **Login** in Koinly afterward.
+3. Open your Worker's `/profile` address. Enter the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD`, then select **Sign in**. The password field includes an eye button for temporary visibility.
+4. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. Both password fields include the same visibility control. The account holder can use **Login** in Koinly afterward.
 
 Use **Change password** beside an account to reset its password. Use **Delete** to open the confirmation dialog; check the username before selecting **Delete account**. Use **Sign out** when finished. There is no separate hash-generation or administrator setup page.
 
@@ -154,15 +154,17 @@ Profile photos, animated GIFs, and short profile videos use the authenticated `/
 
 ## Telegram `.koinlybackup`
 
-`wrangler.self-hosted.toml` checks scheduled Telegram backups every five minutes. Users configure the optional Telegram bot from the authenticated Koinly app.
+`wrangler.self-hosted.toml` runs one five-minute scheduler that checks both automatic Analytics PDFs and scheduled Telegram backups. Users configure the optional Telegram bot from the authenticated Koinly app.
 
-The Worker validates the destination, encrypts the bot token with AES-GCM, builds the `.koinlybackup` from synchronized entities, and refuses to send an empty finance backup.
+The Worker validates the destination, encrypts the bot token with AES-GCM, builds the `.koinlybackup` from synchronized entities, and refuses to send an empty finance backup. Any enabled Telegram backup time must be at least five minutes away from both automatic Analytics PDF upload times.
 
 For channels, the bot must be an administrator with permission to post messages.
 
 ## Analytics PDF uploads
 
-Authenticated app clients can send locally generated Analytics PDFs through `/v1/analytics-upload/*`. Telegram uploads reuse the encrypted Telegram-backup bot token and destination.
+Authenticated app clients can send locally generated Analytics PDFs through `/v1/analytics-upload/*`. Telegram uploads reuse the encrypted Telegram-backup bot token and destination. The same API stores automatic Telegram and Google Drive PDF schedules. Scheduled reports are generated server-side from the latest synchronized finance snapshot, so the Flutter app does not need to be running.
+
+Automatic report schedules support Summary or Transaction history, Today/This Week/This Month/This Year/All Time date filters, daily/weekly/monthly cadence, and a local-clock delivery time. The Worker enforces at least five minutes between the enabled Telegram PDF, Google Drive PDF, and Telegram `.koinlybackup` times; conflicting changes return HTTP 409.
 
 Google Drive uses the user's own Google OAuth Web application. The Worker stores the OAuth Client Secret and refresh token encrypted with a key derived from `JWT_SECRET`, uses a signed ten-minute OAuth state token, requests `openid email https://www.googleapis.com/auth/drive.file`, creates/reuses a **Koinly Analytics** Drive folder, refreshes access tokens server-side, and uploads PDFs there. The callback route does not require an app bearer token because it validates the signed OAuth state instead.
 

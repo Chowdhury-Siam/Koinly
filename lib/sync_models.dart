@@ -104,6 +104,135 @@ class TelegramBackupSettings {
   }
 }
 
+enum AnalyticsPdfScheduleDestination { telegram, googleDrive }
+enum AnalyticsPdfScheduleReportVariant { summary, transactionHistory }
+enum AnalyticsPdfScheduleDateFilter { today, thisWeek, thisMonth, thisYear, allTime }
+
+class AnalyticsPdfScheduleSettings {
+  const AnalyticsPdfScheduleSettings({
+    required this.destination,
+    required this.enabled,
+    required this.reportVariant,
+    required this.dateFilter,
+    required this.frequency,
+    required this.hour,
+    required this.minute,
+    required this.weekday,
+    required this.monthDay,
+    required this.timezoneOffsetMinutes,
+    this.nextDueAt,
+    this.lastSentAt,
+    this.lastError,
+  });
+
+  const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination destination)
+      : destination = destination,
+        enabled = false,
+        reportVariant = AnalyticsPdfScheduleReportVariant.summary,
+        dateFilter = AnalyticsPdfScheduleDateFilter.thisMonth,
+        frequency = TelegramBackupFrequency.daily,
+        hour = destination == AnalyticsPdfScheduleDestination.telegram ? 3 : 4,
+        minute = 0,
+        weekday = DateTime.sunday,
+        monthDay = 1,
+        timezoneOffsetMinutes = 0,
+        nextDueAt = null,
+        lastSentAt = null,
+        lastError = null;
+
+  final AnalyticsPdfScheduleDestination destination;
+  final bool enabled;
+  final AnalyticsPdfScheduleReportVariant reportVariant;
+  final AnalyticsPdfScheduleDateFilter dateFilter;
+  final TelegramBackupFrequency frequency;
+  final int hour;
+  final int minute;
+  final int weekday;
+  final int monthDay;
+  final int timezoneOffsetMinutes;
+  final DateTime? nextDueAt;
+  final DateTime? lastSentAt;
+  final String? lastError;
+
+  AnalyticsPdfScheduleSettings copyWith({
+    bool? enabled,
+    AnalyticsPdfScheduleReportVariant? reportVariant,
+    AnalyticsPdfScheduleDateFilter? dateFilter,
+    TelegramBackupFrequency? frequency,
+    int? hour,
+    int? minute,
+    int? weekday,
+    int? monthDay,
+    int? timezoneOffsetMinutes,
+    DateTime? nextDueAt,
+    bool clearNextDueAt = false,
+    DateTime? lastSentAt,
+    String? lastError,
+  }) => AnalyticsPdfScheduleSettings(
+        destination: destination,
+        enabled: enabled ?? this.enabled,
+        reportVariant: reportVariant ?? this.reportVariant,
+        dateFilter: dateFilter ?? this.dateFilter,
+        frequency: frequency ?? this.frequency,
+        hour: hour ?? this.hour,
+        minute: minute ?? this.minute,
+        weekday: weekday ?? this.weekday,
+        monthDay: monthDay ?? this.monthDay,
+        timezoneOffsetMinutes: timezoneOffsetMinutes ?? this.timezoneOffsetMinutes,
+        nextDueAt: clearNextDueAt ? null : (nextDueAt ?? this.nextDueAt),
+        lastSentAt: lastSentAt ?? this.lastSentAt,
+        lastError: lastError ?? this.lastError,
+      );
+
+  factory AnalyticsPdfScheduleSettings.fromJson(Map<String, dynamic> data) {
+    T enumValue<T extends Enum>(List<T> values, String raw, T fallback) {
+      for (final value in values) {
+        if (value.name == raw) return value;
+      }
+      return fallback;
+    }
+
+    DateTime? parseTime(dynamic value) {
+      final millis = value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+      if (millis == null || millis <= 0) return null;
+      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+    }
+
+    final destination = enumValue(
+      AnalyticsPdfScheduleDestination.values,
+      data['destination']?.toString() ?? '',
+      AnalyticsPdfScheduleDestination.telegram,
+    );
+    return AnalyticsPdfScheduleSettings(
+      destination: destination,
+      enabled: data['enabled'] == true,
+      reportVariant: enumValue(
+        AnalyticsPdfScheduleReportVariant.values,
+        data['reportVariant']?.toString() ?? '',
+        AnalyticsPdfScheduleReportVariant.summary,
+      ),
+      dateFilter: enumValue(
+        AnalyticsPdfScheduleDateFilter.values,
+        data['dateFilter']?.toString() ?? '',
+        AnalyticsPdfScheduleDateFilter.thisMonth,
+      ),
+      frequency: enumValue(
+        TelegramBackupFrequency.values,
+        data['frequency']?.toString() ?? '',
+        TelegramBackupFrequency.daily,
+      ),
+      hour: ((data['hour'] as num?)?.toInt() ?? (destination == AnalyticsPdfScheduleDestination.telegram ? 3 : 4)).clamp(0, 23).toInt(),
+      minute: ((data['minute'] as num?)?.toInt() ?? 0).clamp(0, 59).toInt(),
+      weekday: ((data['weekday'] as num?)?.toInt() ?? DateTime.sunday).clamp(DateTime.monday, DateTime.sunday).toInt(),
+      monthDay: ((data['monthDay'] as num?)?.toInt() ?? 1).clamp(1, 31).toInt(),
+      timezoneOffsetMinutes: ((data['timezoneOffsetMinutes'] as num?)?.toInt() ?? 0).clamp(-840, 840).toInt(),
+      nextDueAt: parseTime(data['nextDueAt']),
+      lastSentAt: parseTime(data['lastSentAt']),
+      lastError: data['lastError']?.toString(),
+    );
+  }
+}
+
 class GoogleDriveAnalyticsSettings {
   const GoogleDriveAnalyticsSettings({
     required this.clientId,

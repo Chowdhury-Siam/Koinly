@@ -3595,6 +3595,17 @@ class AppController extends ChangeNotifier {
     return _withSelfHostedSyncToken((api, accessToken) => api.disconnectGoogleDriveAnalytics(accessToken: accessToken));
   }
 
+  Future<Map<AnalyticsPdfScheduleDestination, AnalyticsPdfScheduleSettings>> loadAnalyticsPdfSchedules() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.analyticsPdfSchedules(accessToken: accessToken));
+  }
+
+  Future<AnalyticsPdfScheduleSettings> saveAnalyticsPdfSchedule(AnalyticsPdfScheduleSettings settings) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.saveAnalyticsPdfSchedule(
+          accessToken: accessToken,
+          settings: settings.copyWith(timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes),
+        ));
+  }
+
   Future<Map<String, dynamic>> uploadAnalyticsPdfToTelegram({
     required String fileName,
     required Uint8List bytes,
@@ -16085,7 +16096,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
-            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Daily, weekly, monthly, and yearly summaries', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered summaries and PDF reports', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
@@ -17431,6 +17442,11 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                     onPressed: _busy ? null : _pickTime,
                     icon: const Icon(Icons.schedule_rounded),
                     label: Text('Time · $time'),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Automatic Telegram backup must be at least 5 minutes from any automatic Telegram or Google Drive PDF upload.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
                     const SizedBox(height: 12),

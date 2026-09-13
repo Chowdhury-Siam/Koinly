@@ -32,6 +32,9 @@ test('profile authentication and account lifecycle use the real database', async
     const page = await call('/profile');
     const html = await page.text();
     assert.match(html, /id="login-form"/);
+    assert.match(html, /id="admin-password"[^>]*type="password"/);
+    assert.match(html, /data-password-toggle[^>]*aria-controls="admin-password"[^>]*aria-label="Show password"/);
+    assert.match(html, /function setPasswordVisibility\(button, visible\)/);
     assert.doesNotMatch(html, /id="dashboard"|id="accounts"/);
     assert.match(page.headers.get('cache-control')!, /no-store/);
     assert.match(page.headers.get('content-security-policy')!, /frame-ancestors 'none'/);
@@ -64,7 +67,12 @@ test('profile authentication and account lifecycle use the real database', async
     const stored = (await db.execute('SELECT token_hash FROM admin_sessions')).rows;
     assert.equal(stored.length, 1);
     assert.notEqual(stored[0].token_hash, cookie.split('=')[1]);
-    assert.match(await (await call('/profile')).text(), /id="dashboard"/);
+    const dashboardHtml = await (await call('/profile')).text();
+    assert.match(dashboardHtml, /id="dashboard"/);
+    assert.match(dashboardHtml, /id="account-password"[^>]*type="password"/);
+    assert.match(dashboardHtml, /data-password-toggle[^>]*aria-controls="account-password"/);
+    assert.match(dashboardHtml, /id="account-confirm"[^>]*type="password"/);
+    assert.match(dashboardHtml, /data-password-toggle[^>]*aria-controls="account-confirm"/);
   });
 
   let accountId: string;

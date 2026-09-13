@@ -476,6 +476,43 @@ class KoinlySyncApi {
     return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
   }
 
+  Future<Map<AnalyticsPdfScheduleDestination, AnalyticsPdfScheduleSettings>> analyticsPdfSchedules({required String accessToken}) async {
+    final data = await _get('/v1/analytics-upload/schedules', accessToken: accessToken);
+    final schedules = (data['schedules'] as Map? ?? const {}).cast<String, dynamic>();
+    final result = <AnalyticsPdfScheduleDestination, AnalyticsPdfScheduleSettings>{};
+    for (final destination in AnalyticsPdfScheduleDestination.values) {
+      final raw = schedules[destination.name];
+      if (raw is Map) {
+        result[destination] = AnalyticsPdfScheduleSettings.fromJson(raw.cast<String, dynamic>());
+      } else {
+        result[destination] = AnalyticsPdfScheduleSettings.defaults(destination);
+      }
+    }
+    return result;
+  }
+
+  Future<AnalyticsPdfScheduleSettings> saveAnalyticsPdfSchedule({
+    required String accessToken,
+    required AnalyticsPdfScheduleSettings settings,
+  }) async {
+    final data = await _post(
+      '/v1/analytics-upload/schedules/${settings.destination.name}',
+      {
+        'enabled': settings.enabled,
+        'reportVariant': settings.reportVariant.name,
+        'dateFilter': settings.dateFilter.name,
+        'frequency': settings.frequency.name,
+        'hour': settings.hour,
+        'minute': settings.minute,
+        'weekday': settings.weekday,
+        'monthDay': settings.monthDay,
+        'timezoneOffsetMinutes': settings.timezoneOffsetMinutes,
+      },
+      accessToken: accessToken,
+    );
+    return AnalyticsPdfScheduleSettings.fromJson((data['schedule'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
   Future<Map<String, dynamic>> uploadAnalyticsPdfToTelegram({
     required String accessToken,
     required String fileName,

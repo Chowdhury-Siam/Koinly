@@ -19,7 +19,7 @@ REFRESH_TOKEN_TTL_SECONDS = "2592000"
 MAX_SYNC_BATCH_SIZE = "100"
 MAX_SYNC_REPLACE_SIZE = "25000"
 
-# Every five minutes the Worker checks whether the signed-in owner's optional
-# Telegram .koinlybackup schedule is due. Disabled settings perform no upload.
+# Every five minutes the Worker checks automatic Analytics PDF schedules and the signed-in owner's optional
+# Telegram .koinlybackup schedule. The app enforces at least five minutes between enabled upload times.
 [triggers]
 crons = ["*/5 * * * *"]

@@ -42,6 +42,7 @@ const requiredTables = [
   'rate_limits',
   'telegram_backup_settings',
   'analytics_upload_settings',
+  'analytics_pdf_schedules',
   'profile_media',
   'profile_media_chunks',
   'admin_sessions',
@@ -171,6 +172,8 @@ export default {
       if (request.method === 'DELETE' && url.pathname === '/v1/analytics-upload/google-drive/connection') return await disconnectGoogleDriveAnalytics(env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/telegram') return await uploadAnalyticsPdfToTelegram(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive') return await uploadAnalyticsPdfToGoogleDrive(request, env, db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/analytics-upload/schedules') return await analyticsPdfSchedules(db, auth);
+      if (request.method === 'POST' && url.pathname.startsWith('/v1/analytics-upload/schedules/')) return await saveAnalyticsPdfSchedule(request, env, db, auth, url.pathname);
 
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
@@ -191,14 +194,17 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env, _context: ExecutionContext): Promise<void> {
-    // Every Koinly Worker is self-hosted, so scheduled Telegram backups are
-    // available whenever the user enables them.
+    // A single five-minute cron checks all user-configured uploads. Schedule
+    // validation keeps Telegram PDF, Drive PDF, and Telegram backup jobs at
+    // least five minutes apart so they do not pile external requests into the
+    // same Cloudflare invocation.
     validateWorkerConfig(env);
     const db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     try {
       await runDueTelegramBackups(env, db);
+      await runDueAnalyticsPdfUploads(env, db);
     } catch (error) {
-      console.error('Scheduled Telegram backup run failed', databaseErrorMessage(error));
+      console.error('Scheduled upload run failed', databaseErrorMessage(error));
     } finally {
       db.close();
     }
@@ -206,6 +212,9 @@ export default {
 };
 
 type TelegramBackupFrequency = 'daily' | 'weekly' | 'monthly';
+type AnalyticsPdfDestination = 'telegram' | 'googleDrive';
+type AnalyticsPdfReportVariant = 'summary' | 'transactionHistory';
+type AnalyticsPdfDateFilter = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'allTime';
 
 const adminCookie = '__Host-koinly-admin';
 const adminSessionSeconds = 3600;
@@ -353,7 +362,7 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
   if (request.method === 'DELETE' && !match[2]) {
     // Delete children before their parent. The batch rolls back completely on any error.
     const results = await db.batch([
-      ...['profile_media_chunks', 'profile_media', 'analytics_upload_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
+      ...['profile_media_chunks', 'profile_media', 'analytics_pdf_schedules', 'analytics_upload_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
@@ -380,6 +389,24 @@ type GoogleDriveAnalyticsSettings = {
   accountEmail: string;
   connectedAt: number | null;
   lastUploadAt: number | null;
+  lastError: string | null;
+};
+
+type AnalyticsPdfScheduleSettings = {
+  userId: string;
+  destination: AnalyticsPdfDestination;
+  enabled: boolean;
+  reportVariant: AnalyticsPdfReportVariant;
+  dateFilter: AnalyticsPdfDateFilter;
+  frequency: TelegramBackupFrequency;
+  hour: number;
+  minute: number;
+  weekday: number;
+  monthDay: number;
+  timezoneOffsetMinutes: number;
+  nextDueAt: number | null;
+  lastSentAt: number | null;
+  lastAttemptAt: number | null;
   lastError: string | null;
 };
 
@@ -456,6 +483,12 @@ async function saveTelegramBackupSettings(request: Request, env: Env, db: Client
 
   if (enabled && !encryptedToken) throw new HttpError(400, 'Enter a Telegram bot token before enabling backups.');
   if (enabled && !chatId) throw new HttpError(400, 'Enter a Telegram group or channel Chat ID before enabling backups.');
+  const telegramPdfSchedule = await readAnalyticsPdfSchedule(db, auth.userId, 'telegram');
+  if (telegramPdfSchedule.enabled && (!encryptedToken || !chatId)) {
+    throw new HttpError(409, 'Keep the Telegram bot token and destination configured while automatic Telegram PDF uploads are enabled.');
+  }
+
+  await assertScheduledUploadSeparation(db, auth.userId, undefined, { enabled, hour, minute });
 
   const nextDueAt = enabled
     ? nextTelegramBackupDueAt({ frequency, hour, minute, weekday, monthDay, timezoneOffsetMinutes }, Date.now())
@@ -614,12 +647,17 @@ async function deliverTelegramBackupForUser(
   }
 }
 
-async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fileName: string; contents: string }> {
+type CloudFinanceSnapshot = {
+  database: Record<string, Array<Record<string, unknown>>>;
+  preferences: Record<string, unknown>;
+  financeRecordCount: number;
+};
+
+async function readCloudFinanceSnapshot(db: Client, userId: string): Promise<CloudFinanceSnapshot> {
   const database: Record<string, Array<Record<string, unknown>>> = {};
   for (const table of telegramBackupEntityTables) database[table] = [];
   let preferences: Record<string, unknown> = {};
 
-  // sync_entities is the canonical current cloud state. Read it first.
   const entityRows = (await db.execute({
     sql: `SELECT entity_type, entity_id, payload_json
           FROM sync_entities
@@ -629,11 +667,6 @@ async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fi
   })).rows;
   applyTelegramBackupRows(entityRows, database, value => { preferences = value; });
 
-  // Older/incomplete deployments can have a valid sync history while
-  // sync_entities is unexpectedly empty (for example after an interrupted
-  // legacy replace). Reconstruct the latest active state from sync_changes so
-  // Telegram never silently emits an empty backup when recoverable cloud data
-  // exists. The most recent __reset__ is respected.
   if (telegramBackupFinanceRecordCount(database) === 0) {
     const historyRows = (await db.execute({
       sql: `WITH last_reset AS (
@@ -661,7 +694,16 @@ async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fi
     applyTelegramBackupRows(historyRows, database, value => { preferences = value; });
   }
 
-  const financeRecordCount = telegramBackupFinanceRecordCount(database);
+  return {
+    database,
+    preferences,
+    financeRecordCount: telegramBackupFinanceRecordCount(database),
+  };
+}
+
+async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fileName: string; contents: string }> {
+  const snapshot = await readCloudFinanceSnapshot(db, userId);
+  const { database, preferences, financeRecordCount } = snapshot;
   if (financeRecordCount === 0) {
     throw new HttpError(
       409,
@@ -1095,13 +1137,21 @@ async function disconnectGoogleDriveAnalytics(env: Env, db: Client, auth: AuthCo
     } catch {}
   }
   const now = Date.now();
-  await db.execute({
-    sql: `UPDATE analytics_upload_settings
-          SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
-              google_account_email = '', google_connected_at = NULL, google_last_error = NULL, updated_at = ?
-          WHERE user_id = ?`,
-    args: [now, auth.userId],
-  });
+  await db.batch([
+    {
+      sql: `UPDATE analytics_upload_settings
+            SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
+                google_account_email = '', google_connected_at = NULL, google_last_error = NULL, updated_at = ?
+            WHERE user_id = ?`,
+      args: [now, auth.userId],
+    },
+    {
+      sql: `UPDATE analytics_pdf_schedules
+            SET enabled = 0, next_due_at = NULL, last_error = NULL, updated_at = ?
+            WHERE user_id = ? AND destination = 'googleDrive'`,
+      args: [now, auth.userId],
+    },
+  ], 'write');
   return privateJson({
     ok: true,
     settings: publicGoogleDriveAnalyticsSettings(await readGoogleDriveAnalyticsSettings(db, auth.userId)),
@@ -1246,6 +1296,691 @@ function publicGoogleDriveAnalyticsSettings(settings: GoogleDriveAnalyticsSettin
     lastUploadAt: settings.lastUploadAt,
     lastError: settings.lastError,
   };
+}
+
+function normalizeAnalyticsPdfDestination(value: unknown): AnalyticsPdfDestination {
+  const normalized = String(value ?? '').trim();
+  if (normalized === 'telegram' || normalized === 'googleDrive') return normalized;
+  throw new HttpError(400, 'Analytics PDF destination must be Telegram or Google Drive.');
+}
+
+function normalizeAnalyticsPdfReportVariant(value: unknown): AnalyticsPdfReportVariant {
+  const normalized = String(value ?? '').trim();
+  if (normalized === 'summary' || normalized === 'transactionHistory') return normalized;
+  throw new HttpError(400, 'PDF report type must be Summary or Transaction history.');
+}
+
+function normalizeAnalyticsPdfDateFilter(value: unknown): AnalyticsPdfDateFilter {
+  const normalized = String(value ?? '').trim();
+  if (normalized === 'today' || normalized === 'thisWeek' || normalized === 'thisMonth' || normalized === 'thisYear' || normalized === 'allTime') {
+    return normalized;
+  }
+  throw new HttpError(400, 'Automatic PDF date filter must be Today, This Week, This Month, This Year, or All Time.');
+}
+
+function defaultAnalyticsPdfSchedule(userId: string, destination: AnalyticsPdfDestination): AnalyticsPdfScheduleSettings {
+  return {
+    userId,
+    destination,
+    enabled: false,
+    reportVariant: 'summary',
+    dateFilter: 'thisMonth',
+    frequency: 'daily',
+    hour: destination === 'telegram' ? 3 : 4,
+    minute: 0,
+    weekday: 7,
+    monthDay: 1,
+    timezoneOffsetMinutes: 0,
+    nextDueAt: null,
+    lastSentAt: null,
+    lastAttemptAt: null,
+    lastError: null,
+  };
+}
+
+function analyticsPdfScheduleFromRow(row: Record<string, unknown>): AnalyticsPdfScheduleSettings {
+  const destination = normalizeAnalyticsPdfDestination(row.destination);
+  return {
+    userId: String(row.user_id ?? ''),
+    destination,
+    enabled: Number(row.enabled ?? 0) === 1,
+    reportVariant: normalizeAnalyticsPdfReportVariant(row.report_variant),
+    dateFilter: normalizeAnalyticsPdfDateFilter(row.date_filter),
+    frequency: normalizeTelegramBackupFrequency(row.frequency),
+    hour: integerInRange(row.hour, destination === 'telegram' ? 3 : 4, 0, 23, 'hour'),
+    minute: integerInRange(row.minute, 0, 0, 59, 'minute'),
+    weekday: integerInRange(row.weekday, 7, 1, 7, 'weekday'),
+    monthDay: integerInRange(row.month_day, 1, 1, 31, 'monthDay'),
+    timezoneOffsetMinutes: integerInRange(row.timezone_offset_minutes, 0, -840, 840, 'timezoneOffsetMinutes'),
+    nextDueAt: nullableInteger(row.next_due_at),
+    lastSentAt: nullableInteger(row.last_sent_at),
+    lastAttemptAt: nullableInteger(row.last_attempt_at),
+    lastError: row.last_error == null ? null : String(row.last_error),
+  };
+}
+
+async function readAnalyticsPdfSchedule(db: Client, userId: string, destination: AnalyticsPdfDestination): Promise<AnalyticsPdfScheduleSettings> {
+  const row = (await db.execute({
+    sql: `SELECT user_id, destination, enabled, report_variant, date_filter, frequency,
+                 hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+                 last_sent_at, last_attempt_at, last_error
+          FROM analytics_pdf_schedules
+          WHERE user_id = ? AND destination = ?`,
+    args: [userId, destination],
+  })).rows[0];
+  return row ? analyticsPdfScheduleFromRow(row) : defaultAnalyticsPdfSchedule(userId, destination);
+}
+
+function publicAnalyticsPdfSchedule(settings: AnalyticsPdfScheduleSettings): Record<string, unknown> {
+  return {
+    destination: settings.destination,
+    enabled: settings.enabled,
+    reportVariant: settings.reportVariant,
+    dateFilter: settings.dateFilter,
+    frequency: settings.frequency,
+    hour: settings.hour,
+    minute: settings.minute,
+    weekday: settings.weekday,
+    monthDay: settings.monthDay,
+    timezoneOffsetMinutes: settings.timezoneOffsetMinutes,
+    nextDueAt: settings.nextDueAt,
+    lastSentAt: settings.lastSentAt,
+    lastError: settings.lastError,
+  };
+}
+
+async function analyticsPdfSchedules(db: Client, auth: AuthContext): Promise<Response> {
+  const [telegram, googleDrive] = await Promise.all([
+    readAnalyticsPdfSchedule(db, auth.userId, 'telegram'),
+    readAnalyticsPdfSchedule(db, auth.userId, 'googleDrive'),
+  ]);
+  return privateJson({
+    ok: true,
+    schedules: {
+      telegram: publicAnalyticsPdfSchedule(telegram),
+      googleDrive: publicAnalyticsPdfSchedule(googleDrive),
+    },
+    minimumSpacingMinutes: 5,
+  });
+}
+
+type ScheduledClock = { label: string; hour: number; minute: number; enabled: boolean };
+
+export function scheduledClockDistanceMinutes(first: ScheduledClock, second: ScheduledClock): number {
+  const a = first.hour * 60 + first.minute;
+  const b = second.hour * 60 + second.minute;
+  const direct = Math.abs(a - b);
+  return Math.min(direct, 24 * 60 - direct);
+}
+
+function formatScheduledClock(clock: ScheduledClock): string {
+  return `${String(clock.hour).padStart(2, '0')}:${String(clock.minute).padStart(2, '0')}`;
+}
+
+async function assertScheduledUploadSeparation(
+  db: Client,
+  userId: string,
+  candidate?: AnalyticsPdfScheduleSettings,
+  telegramBackupCandidate?: Pick<TelegramBackupSettings, 'enabled' | 'hour' | 'minute'>,
+): Promise<void> {
+  const [telegramSchedule, driveSchedule, storedBackup] = await Promise.all([
+    readAnalyticsPdfSchedule(db, userId, 'telegram'),
+    readAnalyticsPdfSchedule(db, userId, 'googleDrive'),
+    readTelegramBackupSettings(db, userId),
+  ]);
+  const telegram = candidate?.destination === 'telegram' ? candidate : telegramSchedule;
+  const drive = candidate?.destination === 'googleDrive' ? candidate : driveSchedule;
+  const backup = telegramBackupCandidate ?? storedBackup;
+  const clocks: ScheduledClock[] = [
+    { label: 'Telegram PDF', hour: telegram.hour, minute: telegram.minute, enabled: telegram.enabled },
+    { label: 'Google Drive PDF', hour: drive.hour, minute: drive.minute, enabled: drive.enabled },
+    { label: 'Telegram backup', hour: backup.hour, minute: backup.minute, enabled: backup.enabled },
+  ].filter(item => item.enabled);
+
+  for (let i = 0; i < clocks.length; i += 1) {
+    for (let j = i + 1; j < clocks.length; j += 1) {
+      if (scheduledClockDistanceMinutes(clocks[i], clocks[j]) < 5) {
+        throw new HttpError(
+          409,
+          `Automatic uploads must be at least 5 minutes apart. ${clocks[i].label} at ${formatScheduledClock(clocks[i])} conflicts with ${clocks[j].label} at ${formatScheduledClock(clocks[j])}.`,
+        );
+      }
+    }
+  }
+}
+
+async function saveAnalyticsPdfSchedule(
+  request: Request,
+  _env: Env,
+  db: Client,
+  auth: AuthContext,
+  pathname: string,
+): Promise<Response> {
+  const destination = normalizeAnalyticsPdfDestination(pathname.split('/').pop());
+  const body = await readJson(request);
+  const existing = await readAnalyticsPdfSchedule(db, auth.userId, destination);
+  const enabled = body.enabled === true;
+  const reportVariant = normalizeAnalyticsPdfReportVariant(body.reportVariant ?? existing.reportVariant);
+  const dateFilter = normalizeAnalyticsPdfDateFilter(body.dateFilter ?? existing.dateFilter);
+  const frequency = normalizeTelegramBackupFrequency(body.frequency ?? existing.frequency);
+  const hour = integerInRange(body.hour, existing.hour, 0, 23, 'hour');
+  const minute = integerInRange(body.minute, existing.minute, 0, 59, 'minute');
+  const weekday = integerInRange(body.weekday, existing.weekday, 1, 7, 'weekday');
+  const monthDay = integerInRange(body.monthDay, existing.monthDay, 1, 31, 'monthDay');
+  const timezoneOffsetMinutes = integerInRange(body.timezoneOffsetMinutes, existing.timezoneOffsetMinutes, -840, 840, 'timezoneOffsetMinutes');
+
+  if (enabled && destination === 'telegram') {
+    const telegram = await readTelegramBackupSettings(db, auth.userId);
+    if (!telegram.encryptedToken || !telegram.chatId) {
+      throw new HttpError(400, 'Configure the Telegram bot token and destination before enabling automatic PDF uploads.');
+    }
+  }
+  if (enabled && destination === 'googleDrive') {
+    const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive before enabling automatic PDF uploads.');
+  }
+
+  const candidate: AnalyticsPdfScheduleSettings = {
+    userId: auth.userId,
+    destination,
+    enabled,
+    reportVariant,
+    dateFilter,
+    frequency,
+    hour,
+    minute,
+    weekday,
+    monthDay,
+    timezoneOffsetMinutes,
+    nextDueAt: enabled
+      ? nextScheduledUploadDueAt({ frequency, hour, minute, weekday, monthDay, timezoneOffsetMinutes }, Date.now())
+      : null,
+    lastSentAt: existing.lastSentAt,
+    lastAttemptAt: existing.lastAttemptAt,
+    lastError: null,
+  };
+  await assertScheduledUploadSeparation(db, auth.userId, candidate);
+
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO analytics_pdf_schedules(
+            user_id, destination, enabled, report_variant, date_filter, frequency,
+            hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+            last_sent_at, last_attempt_at, last_error, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id, destination) DO UPDATE SET
+            enabled = excluded.enabled,
+            report_variant = excluded.report_variant,
+            date_filter = excluded.date_filter,
+            frequency = excluded.frequency,
+            hour = excluded.hour,
+            minute = excluded.minute,
+            weekday = excluded.weekday,
+            month_day = excluded.month_day,
+            timezone_offset_minutes = excluded.timezone_offset_minutes,
+            next_due_at = excluded.next_due_at,
+            last_error = NULL,
+            updated_at = excluded.updated_at`,
+    args: [
+      auth.userId, destination, enabled ? 1 : 0, reportVariant, dateFilter, frequency,
+      hour, minute, weekday, monthDay, timezoneOffsetMinutes, candidate.nextDueAt,
+      existing.lastSentAt, existing.lastAttemptAt, null, now,
+    ],
+  });
+  return privateJson({ ok: true, schedule: publicAnalyticsPdfSchedule(await readAnalyticsPdfSchedule(db, auth.userId, destination)), minimumSpacingMinutes: 5 });
+}
+
+async function runDueAnalyticsPdfUploads(env: Env, db: Client): Promise<void> {
+  const now = Date.now();
+  const rows = (await db.execute({
+    sql: `SELECT user_id, destination, enabled, report_variant, date_filter, frequency,
+                 hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+                 last_sent_at, last_attempt_at, last_error
+          FROM analytics_pdf_schedules
+          WHERE enabled = 1 AND next_due_at IS NOT NULL AND next_due_at <= ?
+          ORDER BY next_due_at
+          LIMIT 20`,
+    args: [now],
+  })).rows;
+
+  for (const row of rows) {
+    const settings = analyticsPdfScheduleFromRow(row);
+    if (settings.nextDueAt == null) continue;
+    const claimedDueAt = settings.nextDueAt;
+    const nextDueAt = nextScheduledUploadDueAt(settings, now + 60_000);
+    const claimed = await db.execute({
+      sql: `UPDATE analytics_pdf_schedules
+            SET next_due_at = ?, last_attempt_at = ?, updated_at = ?
+            WHERE user_id = ? AND destination = ? AND enabled = 1 AND next_due_at = ?`,
+      args: [nextDueAt, now, now, settings.userId, settings.destination, claimedDueAt],
+    });
+    if (claimed.rowsAffected !== 1) continue;
+    settings.nextDueAt = nextDueAt;
+    settings.lastAttemptAt = now;
+    try {
+      await deliverScheduledAnalyticsPdf(env, db, settings);
+    } catch (error) {
+      console.error('Scheduled Analytics PDF delivery failed', {
+        userId: settings.userId,
+        destination: settings.destination,
+        error: safeExternalUploadError(error),
+      });
+    }
+  }
+}
+
+async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: AnalyticsPdfScheduleSettings): Promise<void> {
+  const attemptedAt = Date.now();
+  try {
+    const generated = await buildScheduledAnalyticsPdf(db, settings.userId, settings, attemptedAt);
+    if (settings.destination === 'telegram') {
+      const telegram = await readTelegramBackupSettings(db, settings.userId);
+      if (!telegram.encryptedToken || !telegram.chatId) throw new HttpError(400, 'Telegram bot settings are incomplete.');
+      const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
+      await sendTelegramAnalyticsDocument(token, telegram.chatId, generated.fileName, generated.bytes, generated.caption);
+    } else {
+      const drive = await readGoogleDriveAnalyticsSettings(db, settings.userId);
+      if (!drive.connected) throw new HttpError(400, 'Google Drive is no longer connected.');
+      const accessToken = await googleDriveAccessToken(env, drive);
+      const folderId = await ensureGoogleAnalyticsFolder(accessToken);
+      await googleDriveUploadPdf(accessToken, folderId, generated.fileName, generated.bytes);
+      await db.execute({
+        sql: 'UPDATE analytics_upload_settings SET google_last_upload_at = ?, google_last_error = NULL, updated_at = ? WHERE user_id = ?',
+        args: [Date.now(), Date.now(), settings.userId],
+      });
+    }
+    const sentAt = Date.now();
+    await db.execute({
+      sql: `UPDATE analytics_pdf_schedules
+            SET last_sent_at = ?, last_attempt_at = ?, last_error = NULL, updated_at = ?
+            WHERE user_id = ? AND destination = ?`,
+      args: [sentAt, attemptedAt, sentAt, settings.userId, settings.destination],
+    });
+  } catch (error) {
+    const message = safeExternalUploadError(error);
+    const failedAt = Date.now();
+    if (settings.destination === 'googleDrive' && error instanceof HttpError && error.status === 401) {
+      await db.batch([
+        {
+          sql: `UPDATE analytics_upload_settings
+                SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
+                    google_account_email = '', google_connected_at = NULL, google_last_error = ?, updated_at = ?
+                WHERE user_id = ?`,
+          args: [message, failedAt, settings.userId],
+        },
+        {
+          sql: `UPDATE analytics_pdf_schedules
+                SET enabled = 0, next_due_at = NULL, last_attempt_at = ?, last_error = ?, updated_at = ?
+                WHERE user_id = ? AND destination = 'googleDrive'`,
+          args: [attemptedAt, message, failedAt, settings.userId],
+        },
+      ], 'write');
+    } else {
+      await db.execute({
+        sql: `UPDATE analytics_pdf_schedules
+              SET last_attempt_at = ?, last_error = ?, updated_at = ?
+              WHERE user_id = ? AND destination = ?`,
+        args: [attemptedAt, message, failedAt, settings.userId, settings.destination],
+      });
+    }
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, message);
+  }
+}
+
+type ScheduledAnalyticsRange = { startMs: number | null; endMs: number | null; label: string; stamp: string; dayCount: number };
+
+function scheduledAnalyticsRange(filter: AnalyticsPdfDateFilter, nowMs: number, offsetMinutes: number): ScheduledAnalyticsRange {
+  const offsetMs = offsetMinutes * 60_000;
+  const localNow = new Date(nowMs + offsetMs);
+  const y = localNow.getUTCFullYear();
+  const m = localNow.getUTCMonth();
+  const d = localNow.getUTCDate();
+  const localMidnightUtc = (year: number, month: number, day: number) => Date.UTC(year, month, day) - offsetMs;
+  const fmt = (valueMs: number) => {
+    const value = new Date(valueMs + offsetMs);
+    return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
+  };
+  if (filter === 'allTime') return { startMs: null, endMs: null, label: 'All time', stamp: 'all-time', dayCount: 1 };
+  if (filter === 'today') {
+    const start = localMidnightUtc(y, m, d);
+    const end = localMidnightUtc(y, m, d + 1);
+    return { startMs: start, endMs: end, label: fmt(start), stamp: fmt(start), dayCount: 1 };
+  }
+  if (filter === 'thisWeek') {
+    const jsDay = localNow.getUTCDay();
+    const weekday = jsDay === 0 ? 7 : jsDay;
+    const start = localMidnightUtc(y, m, d - (weekday - 1));
+    const end = start + 7 * 86_400_000;
+    return { startMs: start, endMs: end, label: `${fmt(start)} - ${fmt(end - 1)}`, stamp: `${fmt(start)}_week`, dayCount: 7 };
+  }
+  if (filter === 'thisMonth') {
+    const start = localMidnightUtc(y, m, 1);
+    const end = localMidnightUtc(y, m + 1, 1);
+    return { startMs: start, endMs: end, label: `${y}-${String(m + 1).padStart(2, '0')}`, stamp: `${y}-${String(m + 1).padStart(2, '0')}`, dayCount: Math.max(1, Math.round((end - start) / 86_400_000)) };
+  }
+  const start = localMidnightUtc(y, 0, 1);
+  const end = localMidnightUtc(y + 1, 0, 1);
+  return { startMs: start, endMs: end, label: String(y), stamp: String(y), dayCount: Math.max(1, Math.round((end - start) / 86_400_000)) };
+}
+
+function rowNumber(row: Record<string, unknown>, key: string): number {
+  const value = Number(row[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function rowTimestamp(row: Record<string, unknown>, key: string): number | null {
+  const raw = row[key];
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.trunc(raw);
+  const parsedNumber = Number(raw);
+  if (Number.isFinite(parsedNumber) && String(raw).trim() !== '') return Math.trunc(parsedNumber);
+  const parsedDate = Date.parse(String(raw));
+  return Number.isFinite(parsedDate) ? parsedDate : null;
+}
+
+function transactionEffectiveTimestamp(row: Record<string, unknown>): number {
+  const created = rowTimestamp(row, 'created_on') ?? 0;
+  const end = rowTimestamp(row, 'end_on');
+  return end != null && end >= created ? end : created;
+}
+
+function scheduledRangeContains(range: ScheduledAnalyticsRange, valueMs: number): boolean {
+  if (range.startMs == null || range.endMs == null) return true;
+  return valueMs >= range.startMs && valueMs < range.endMs;
+}
+
+function scheduledAnalyticsMoney(currencyCode: string, value: number): string {
+  const amount = Math.abs(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return `${value < 0 ? '-' : ''}${currencyCode} ${amount}`;
+}
+
+function scheduledDateTimeLabel(valueMs: number, offsetMinutes: number): string {
+  const date = new Date(valueMs + offsetMinutes * 60_000);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')} ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+function scheduledAnalyticsComparison(current: number, previous: number): string {
+  if (Math.abs(previous) < 0.0001) return Math.abs(current) < 0.0001 ? 'No change' : 'New activity';
+  const percent = ((current - previous) / Math.abs(previous)) * 100;
+  return `${percent > 0 ? '+' : ''}${percent.toFixed(1)}%`;
+}
+
+function previousScheduledRange(range: ScheduledAnalyticsRange): ScheduledAnalyticsRange | null {
+  if (range.startMs == null || range.endMs == null) return null;
+  const duration = range.endMs - range.startMs;
+  return { startMs: range.startMs - duration, endMs: range.startMs, label: 'Previous period', stamp: 'previous', dayCount: range.dayCount };
+}
+
+function scheduledAnalyticsFileName(settings: AnalyticsPdfScheduleSettings, range: ScheduledAnalyticsRange): string {
+  return settings.reportVariant === 'transactionHistory'
+    ? `Koinly-Transaction-History-${range.stamp}.pdf`
+    : `Koinly-Analytics-${settings.dateFilter}-${range.stamp}.pdf`;
+}
+
+async function buildScheduledAnalyticsPdf(
+  db: Client,
+  userId: string,
+  settings: AnalyticsPdfScheduleSettings,
+  nowMs: number,
+): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string }> {
+  const snapshot = await readCloudFinanceSnapshot(db, userId);
+  if (snapshot.financeRecordCount === 0) {
+    throw new HttpError(409, 'The cloud copy contains no finance data. Upload local changes before automatic Analytics PDFs can be generated.');
+  }
+  const range = scheduledAnalyticsRange(settings.dateFilter, nowMs, settings.timezoneOffsetMinutes);
+  const transactions = snapshot.database.transactions
+    .filter(row => scheduledRangeContains(range, transactionEffectiveTimestamp(row)))
+    .sort((a, b) => transactionEffectiveTimestamp(b) - transactionEffectiveTimestamp(a));
+  const currencyCode = cleanText(snapshot.preferences.currencyCode, 12) || 'BDT';
+  const categories = new Map(snapshot.database.categories.map(row => [String(row.id ?? ''), String(row.name ?? 'Uncategorized')]));
+  const accounts = new Map(snapshot.database.accounts.map(row => [String(row.id ?? ''), row]));
+  const accountName = (id: unknown) => String(accounts.get(String(id ?? ''))?.name ?? 'Unknown account');
+  const categoryName = (id: unknown) => categories.get(String(id ?? '')) ?? 'Uncategorized';
+  const lines: string[] = [];
+
+  if (settings.reportVariant === 'transactionHistory') {
+    let income = 0;
+    let expense = 0;
+    let transferVolume = 0;
+    let transferCount = 0;
+    for (const tx of transactions) {
+      const amount = rowNumber(tx, 'amount');
+      const excluded = Number(tx.exclude_from_reports ?? 0) === 1;
+      if (!excluded && tx.type === 'income') income += amount;
+      if (!excluded && tx.type === 'expense') expense += amount;
+      if (tx.type === 'transfer') { transferVolume += amount; transferCount += 1; }
+    }
+    lines.push('Koinly Transaction History');
+    lines.push(`${scheduledDateFilterLabel(settings.dateFilter)} | ${range.label}`);
+    lines.push(`Generated ${scheduledDateTimeLabel(nowMs, settings.timezoneOffsetMinutes)}`);
+    lines.push('');
+    lines.push(`Transactions: ${transactions.length}`);
+    lines.push(`Income: ${scheduledAnalyticsMoney(currencyCode, income)}`);
+    lines.push(`Expense: ${scheduledAnalyticsMoney(currencyCode, expense)}`);
+    lines.push(`Net cash flow: ${scheduledAnalyticsMoney(currencyCode, income - expense)}`);
+    lines.push(`Transfers: ${transferCount} (${scheduledAnalyticsMoney(currencyCode, transferVolume)})`);
+    lines.push('');
+    if (transactions.length === 0) {
+      lines.push('No transactions in this date filter.');
+    } else {
+      for (const tx of transactions) {
+        const date = scheduledDateTimeLabel(transactionEffectiveTimestamp(tx), settings.timezoneOffsetMinutes);
+        const type = String(tx.linked_entity_type ?? '').startsWith('loan') ? 'Loan' : String(tx.type ?? 'expense');
+        const amount = rowNumber(tx, 'amount');
+        const sign = tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '';
+        const title = cleanText(tx.title, 120) || categoryName(tx.category_id);
+        const route = tx.type === 'transfer'
+          ? `${accountName(tx.from_account_id)} -> ${accountName(tx.to_account_id)}`
+          : accountName(tx.from_account_id);
+        lines.push(`${date} | ${type} | ${sign}${scheduledAnalyticsMoney(currencyCode, amount)} | ${title}`);
+        lines.push(`Category: ${categoryName(tx.category_id)} | Account: ${route}${Number(tx.exclude_from_reports ?? 0) === 1 ? ' | Excluded from reports' : ''}`);
+        const notes = cleanText(tx.notes, 500);
+        if (notes) lines.push(`Notes: ${notes}`);
+        lines.push('');
+      }
+    }
+  } else {
+    const coreFor = (targetRange: ScheduledAnalyticsRange) => {
+      const txs = snapshot.database.transactions.filter(row => scheduledRangeContains(targetRange, transactionEffectiveTimestamp(row)));
+      let income = 0;
+      let expense = 0;
+      let transferVolume = 0;
+      let transferCount = 0;
+      let savingsIn = 0;
+      let savingsOut = 0;
+      const expenseCategories = new Map<string, number>();
+      const incomeCategories = new Map<string, number>();
+      for (const tx of txs) {
+        const amount = rowNumber(tx, 'amount');
+        const excluded = Number(tx.exclude_from_reports ?? 0) === 1;
+        const categoryId = String(tx.category_id ?? '');
+        if (!excluded && tx.type === 'income') {
+          income += amount;
+          incomeCategories.set(categoryId, (incomeCategories.get(categoryId) ?? 0) + amount);
+        }
+        if (!excluded && tx.type === 'expense') {
+          expense += amount;
+          expenseCategories.set(categoryId, (expenseCategories.get(categoryId) ?? 0) + amount);
+        }
+        if (tx.type === 'transfer') {
+          transferVolume += amount;
+          transferCount += 1;
+          const fromSavings = accounts.get(String(tx.from_account_id ?? ''))?.type === 'savings';
+          const toSavings = accounts.get(String(tx.to_account_id ?? ''))?.type === 'savings';
+          if (!fromSavings && toSavings) savingsIn += amount;
+          if (fromSavings && !toSavings) savingsOut += amount;
+        }
+      }
+      return { txs, income, expense, transferVolume, transferCount, savingsIn, savingsOut, expenseCategories, incomeCategories };
+    };
+    const current = coreFor(range);
+    const reportDayCount = settings.dateFilter === 'allTime' && current.txs.length > 0
+      ? Math.max(1, Math.floor((nowMs - Math.min(...current.txs.map(transactionEffectiveTimestamp))) / 86_400_000) + 1)
+      : range.dayCount;
+    const previousRange = previousScheduledRange(range);
+    const previous = previousRange ? coreFor(previousRange) : null;
+    const loanStarts = snapshot.database.loans.filter(row => {
+      const value = rowTimestamp(row, 'start_date');
+      return value != null && scheduledRangeContains(range, value);
+    }).length;
+    const repayments = snapshot.database.loan_payments.filter(row => {
+      const value = rowTimestamp(row, 'paid_on');
+      return value != null && scheduledRangeContains(range, value);
+    });
+    const repaymentTotal = repayments.reduce((sum, row) => sum + rowNumber(row, 'amount'), 0);
+
+    let budgetLimit = 0;
+    let budgetSpent = 0;
+    let budgetCount = 0;
+    for (const budget of snapshot.database.budgets) {
+      const selected = String(budget.selected_month ?? '');
+      const match = /^(\d{4})-(\d{2})$/.exec(selected);
+      if (!match) continue;
+      const monthStart = Date.UTC(Number(match[1]), Number(match[2]) - 1, 1) - settings.timezoneOffsetMinutes * 60_000;
+      const monthEndDate = new Date(Date.UTC(Number(match[1]), Number(match[2]), 1));
+      const monthEnd = monthEndDate.getTime() - settings.timezoneOffsetMinutes * 60_000;
+      const overlaps = range.startMs == null || range.endMs == null || (range.startMs < monthEnd && range.endMs > monthStart);
+      if (!overlaps) continue;
+      budgetCount += 1;
+      budgetLimit += rowNumber(budget, 'amount');
+      const budgetId = String(budget.id ?? '');
+      const allowedAccounts = new Set(snapshot.database.budget_accounts.filter(row => String(row.budget_id ?? '') === budgetId).map(row => String(row.account_id ?? '')));
+      const allowedCategories = new Set(snapshot.database.budget_categories.filter(row => String(row.budget_id ?? '') === budgetId).map(row => String(row.category_id ?? '')));
+      const allAccounts = Number(budget.all_accounts_selected ?? 1) === 1;
+      const allCategories = Number(budget.all_categories_selected ?? 1) === 1;
+      for (const tx of current.txs) {
+        const when = transactionEffectiveTimestamp(tx);
+        if (when < monthStart || when >= monthEnd || tx.type !== 'expense' || Number(tx.exclude_from_reports ?? 0) === 1) continue;
+        if (!allAccounts && !allowedAccounts.has(String(tx.from_account_id ?? ''))) continue;
+        if (!allCategories && !allowedCategories.has(String(tx.category_id ?? ''))) continue;
+        budgetSpent += rowNumber(tx, 'amount');
+      }
+    }
+
+    lines.push('Koinly Analytics');
+    lines.push(`${scheduledDateFilterLabel(settings.dateFilter)} summary | ${range.label}`);
+    lines.push(`Generated ${scheduledDateTimeLabel(nowMs, settings.timezoneOffsetMinutes)}`);
+    lines.push('');
+    lines.push(`Income: ${scheduledAnalyticsMoney(currencyCode, current.income)}`);
+    lines.push(`Expense: ${scheduledAnalyticsMoney(currencyCode, current.expense)}`);
+    lines.push(`Net cash flow: ${scheduledAnalyticsMoney(currencyCode, current.income - current.expense)}`);
+    lines.push(`Transactions: ${current.txs.length}`);
+    lines.push(`Average income / day: ${scheduledAnalyticsMoney(currencyCode, current.income / Math.max(1, reportDayCount))}`);
+    lines.push(`Average expense / day: ${scheduledAnalyticsMoney(currencyCode, current.expense / Math.max(1, reportDayCount))}`);
+    if (previous) {
+      lines.push('');
+      lines.push('Compared with previous period');
+      lines.push(`Income: ${scheduledAnalyticsComparison(current.income, previous.income)}`);
+      lines.push(`Expense: ${scheduledAnalyticsComparison(current.expense, previous.expense)}`);
+      lines.push(`Net cash flow: ${scheduledAnalyticsComparison(current.income - current.expense, previous.income - previous.expense)}`);
+    }
+    lines.push('');
+    lines.push('Activity');
+    lines.push(`Income transactions: ${current.txs.filter(tx => tx.type === 'income' && Number(tx.exclude_from_reports ?? 0) !== 1).length}`);
+    lines.push(`Expense transactions: ${current.txs.filter(tx => tx.type === 'expense' && Number(tx.exclude_from_reports ?? 0) !== 1).length}`);
+    lines.push(`Transfers: ${current.transferCount} (${scheduledAnalyticsMoney(currencyCode, current.transferVolume)})`);
+    lines.push(`Savings in: ${scheduledAnalyticsMoney(currencyCode, current.savingsIn)}`);
+    lines.push(`Savings out: ${scheduledAnalyticsMoney(currencyCode, current.savingsOut)}`);
+    lines.push(`Loan records started: ${loanStarts}`);
+    lines.push(`Repayments: ${repayments.length} (${scheduledAnalyticsMoney(currencyCode, repaymentTotal)})`);
+    if (budgetCount > 0) {
+      lines.push(`Relevant budgets: ${budgetCount}`);
+      lines.push(`Budget spend: ${scheduledAnalyticsMoney(currencyCode, budgetSpent)} of ${scheduledAnalyticsMoney(currencyCode, budgetLimit)}`);
+    }
+    const appendTop = (title: string, totals: Map<string, number>, overall: number) => {
+      lines.push('');
+      lines.push(title);
+      const entries = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+      if (entries.length === 0) { lines.push('No activity in this period.'); return; }
+      for (const [categoryId, amount] of entries) {
+        const share = overall <= 0 ? 0 : (amount / overall) * 100;
+        lines.push(`${categoryName(categoryId)} | ${share.toFixed(1)}% | ${scheduledAnalyticsMoney(currencyCode, amount)}`);
+      }
+    };
+    appendTop('Top expense categories', current.expenseCategories, current.expense);
+    appendTop('Top income categories', current.incomeCategories, current.income);
+    lines.push('');
+    lines.push('Current account balances');
+    lines.push('Account balances are a current snapshot, not historical balances for the selected period.');
+    for (const account of snapshot.database.accounts) {
+      lines.push(`${String(account.name ?? 'Account')}: ${scheduledAnalyticsMoney(currencyCode, rowNumber(account, 'amount'))}`);
+    }
+    lines.push('');
+    lines.push('Transfers are not counted as income or expense. This automatic report is generated from the latest finance data synchronized to the Self-Hosted Worker.');
+  }
+
+  const bytes = buildSimpleTextPdf(lines);
+  if (bytes.byteLength > analyticsPdfMaxBytes) throw new HttpError(413, 'The generated Analytics PDF is too large to upload safely.');
+  return {
+    fileName: scheduledAnalyticsFileName(settings, range),
+    bytes,
+    caption: settings.reportVariant === 'transactionHistory'
+      ? `Koinly Transaction History\n${range.label}`
+      : `Koinly ${scheduledDateFilterLabel(settings.dateFilter)} Analytics\n${range.label}`,
+  };
+}
+
+function scheduledDateFilterLabel(filter: AnalyticsPdfDateFilter): string {
+  return ({ today: 'Today', thisWeek: 'This Week', thisMonth: 'This Month', thisYear: 'This Year', allTime: 'All Time' } as const)[filter];
+}
+
+function buildSimpleTextPdf(sourceLines: string[]): Uint8Array<ArrayBuffer> {
+  const sanitize = (value: string) => value.replace(/[^\x20-\x7E]/g, '?');
+  const escape = (value: string) => sanitize(value).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const wrap = (value: string, width = 92): string[] => {
+    const clean = sanitize(value).trimEnd();
+    if (!clean) return [''];
+    const result: string[] = [];
+    let remaining = clean;
+    while (remaining.length > width) {
+      let cut = remaining.lastIndexOf(' ', width);
+      if (cut < Math.floor(width * 0.55)) cut = width;
+      result.push(remaining.slice(0, cut).trimEnd());
+      remaining = remaining.slice(cut).trimStart();
+    }
+    result.push(remaining);
+    return result;
+  };
+  const lines = sourceLines.flatMap(line => wrap(String(line)));
+  const pages: string[][] = [];
+  for (let index = 0; index < lines.length; index += 47) pages.push(lines.slice(index, index + 47));
+  if (pages.length === 0) pages.push(['Koinly']);
+
+  const objects = new Map<number, string>();
+  const pageIds: number[] = [];
+  objects.set(1, '<< /Type /Catalog /Pages 2 0 R >>');
+  objects.set(3, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  let nextId = 4;
+  for (const pageLines of pages) {
+    const pageId = nextId++;
+    const contentId = nextId++;
+    pageIds.push(pageId);
+    const commands = ['BT', '/F1 10 Tf', '48 796 Td', '15 TL'];
+    for (const line of pageLines) {
+      commands.push(`(${escape(line)}) Tj`, 'T*');
+    }
+    commands.push('ET');
+    const stream = `${commands.join('\n')}\n`;
+    objects.set(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
+    objects.set(contentId, `<< /Length ${new TextEncoder().encode(stream).byteLength} >>\nstream\n${stream}endstream`);
+  }
+  objects.set(2, `<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] >>`);
+
+  const encoder = new TextEncoder();
+  let pdf = '%PDF-1.4\n%Koinly\n';
+  const offsets: number[] = [0];
+  for (let id = 1; id < nextId; id += 1) {
+    offsets[id] = encoder.encode(pdf).byteLength;
+    pdf += `${id} 0 obj\n${objects.get(id) ?? '<< >>'}\nendobj\n`;
+  }
+  const xrefOffset = encoder.encode(pdf).byteLength;
+  pdf += `xref\n0 ${nextId}\n0000000000 65535 f \n`;
+  for (let id = 1; id < nextId; id += 1) {
+    pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${nextId} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return new Uint8Array<ArrayBuffer>(encoder.encode(pdf).buffer as ArrayBuffer);
 }
 
 async function googleDriveAccessToken(env: Env, settings: GoogleDriveAnalyticsSettings): Promise<string> {
@@ -1437,7 +2172,7 @@ function nullableInteger(value: unknown): number | null {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
 }
 
-export function nextTelegramBackupDueAt(
+export function nextScheduledUploadDueAt(
   settings: Pick<TelegramBackupSettings, 'frequency' | 'hour' | 'minute' | 'weekday' | 'monthDay' | 'timezoneOffsetMinutes'>,
   afterMs: number,
 ): number {
@@ -1476,6 +2211,13 @@ export function nextTelegramBackupDueAt(
     candidate = monthlyCandidate(nextMonthDate.getUTCFullYear(), nextMonthDate.getUTCMonth());
   }
   return candidate;
+}
+
+export function nextTelegramBackupDueAt(
+  settings: Pick<TelegramBackupSettings, 'frequency' | 'hour' | 'minute' | 'weekday' | 'monthDay' | 'timezoneOffsetMinutes'>,
+  afterMs: number,
+): number {
+  return nextScheduledUploadDueAt(settings, afterMs);
 }
 
 async function encryptTelegramBotToken(secret: string, plaintext: string): Promise<{ ciphertext: string; iv: string }> {

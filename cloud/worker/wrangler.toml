@@ -24,6 +24,6 @@ MAX_SYNC_REPLACE_SIZE = "25000"
 # wrangler secret put TURSO_AUTH_TOKEN
 # wrangler secret put JWT_SECRET
 
-# Check optional Telegram .koinlybackup schedules every five minutes.
+# Check automatic Analytics PDF uploads and optional Telegram .koinlybackup schedules every five minutes.
 [triggers]
 crons = ["*/5 * * * *"]

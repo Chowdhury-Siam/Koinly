@@ -15,6 +15,9 @@ void main() {
     expect(app, contains('SelfHostedTelegramBackupScreen'));
     expect(app, contains("title: 'Telegram backup'"));
     expect(app, contains('Automatic Telegram backup'));
+    expect(app, contains('Automatic Telegram backup must be at least 5 minutes from any automatic Telegram or Google Drive PDF upload.'));
+    expect(worker, contains('Automatic uploads must be at least 5 minutes apart'));
+    expect(worker, contains("readAnalyticsPdfSchedule(db, auth.userId, 'telegram')"));
     expect(app, contains('Test bot and destination'));
     expect(app, contains('Upload backup now'));
     expect(app, contains('TelegramBackupFrequency.daily'));

@@ -57,8 +57,8 @@ You do not need to write Cloudflare or Turso code yourself.
 - Purchase planning with item name, expected price, category, total planned cost, editing, and one-tap purchase conversion
 - Recurring subscriptions with scheduled date/time, price, category, spending account, daily/weekly/monthly/yearly repeat, automatic transaction recording, and manual “Add now”
 - Cash-flow trends, category analysis, balances, and net results
-- Daily, weekly, monthly, and yearly Analytics summaries with previous-period comparisons
-- Two Analytics PDF report types: a detailed period Summary and a complete all-transaction history ledger, with direct Self-Hosted Worker uploads to Telegram and Google Drive
+- Analytics summaries driven by the same **Choose Date Filter** flow used elsewhere in Koinly: Today, This Week, This Month, This Year, All Time, or a Custom date range
+- Two Analytics PDF report types: a detailed filtered Summary and a filtered Transaction history ledger, with direct and scheduled Self-Hosted Worker uploads to Telegram and Google Drive
 - Search and filters for account, category, type, and date
 - Quick account/category creation from transaction pickers
 
@@ -447,7 +447,7 @@ The administrator login manages the Worker. Sync accounts are the accounts peopl
    ```
 
 2. Enter the administrator username saved in `ADMIN_USERNAME`.
-3. Enter the password you saved as `ADMIN_PASSWORD` in GitHub.
+3. Enter the password you saved as `ADMIN_PASSWORD` in GitHub. Use the eye button inside the password field when you need to verify what you typed.
 4. Select **Sign in**.
 
 The dashboard shows the total number of registered accounts and a list of their usernames, creation dates, and status. **Invited** means an account has not signed in yet. **Active** means it has signed in at least once; it does not indicate that the person is online. Use **Previous** and **Next** to browse lists larger than 50 accounts.
@@ -456,7 +456,7 @@ The dashboard shows the total number of registered accounts and a list of their 
 
 1. In the dashboard, select **+ Create account**.
 2. Enter the new account's **Username**.
-3. Enter an 8–256 character password in **New password** and repeat it in **Confirm password**.
+3. Enter an 8–256 character password in **New password** and repeat it in **Confirm password**. Both fields include an eye button for temporary password visibility.
 4. Select **Create account**.
 5. Wait for **Account created**. The account will appear in the list.
 6. Give the account holder the Worker URL, username, and password through a private channel. They can now select **Login** in Koinly.
@@ -466,7 +466,7 @@ Each account keeps its own synchronized data. Creating an account here does not 
 #### 6.3.3 Change or reset an account password
 
 1. Find the account in the list and select **Change password**.
-2. Enter and confirm the new password.
+2. Enter and confirm the new password. Use either field's eye button if you need to verify the entry before saving.
 3. Select **Change password** and wait for the success message.
 4. Give the account holder their new password privately.
 
@@ -525,7 +525,7 @@ You can configure:
 - test delivery; and
 - **Upload backup now**.
 
-The Worker creates a `.koinlybackup` from the synchronized cloud data and sends it as a Telegram document.
+The Worker creates a `.koinlybackup` from the synchronized cloud data and sends it as a Telegram document. If automatic Analytics PDF uploads are also enabled, the Telegram backup time must be at least **5 minutes** away from both the automatic Telegram PDF time and the automatic Google Drive PDF time. The Worker rejects conflicting schedules.
 
 For a Telegram channel, add the bot as an administrator with permission to post messages.
 
@@ -533,7 +533,7 @@ The saved bot token is encrypted by the Worker before it is stored in Turso.
 
 ### Analytics PDF uploads
 
-Open **Settings > Analytics**, then use the cloud button in the upper-right corner. Analytics PDFs can be uploaded directly through the same authenticated Self-Hosted Sync Worker:
+Open **Settings > Analytics**. Use **Choose Date Filter** to select Today, This Week, This Month, This Year, All Time, or a Custom date range. The bot button opens Telegram bot settings, while the cloud button opens Analytics upload settings. PDFs can be uploaded directly through the same authenticated Self-Hosted Sync Worker:
 
 - **Telegram** reuses the bot token and group/channel destination from Telegram backup. Automatic Telegram backups can stay disabled.
 - **Google Drive** connects once through Google OAuth and stores its Client Secret and refresh token encrypted in Turso. Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for reports uploaded by the app.
@@ -546,9 +546,13 @@ For Google Drive, create your own OAuth 2.0 **Web application** in Google Cloud 
 4. In Koinly, open **Analytics > cloud button** and copy the displayed **Authorized redirect URI**. Add that exact URI to the Google OAuth client.
 5. Paste the Client ID and Client Secret into Koinly, select **Save and connect Google Drive**, then finish authorization in the browser.
 
-After that, choose **Summary** or **Transaction history** in Analytics, then use **Upload Telegram** or **Upload Drive**. Summary follows the selected Daily/Weekly/Monthly/Yearly period; Transaction history exports every transaction currently stored in Koinly.
+After that, choose **Summary** or **Transaction history** in Analytics, then use **Upload Telegram** or **Upload Drive**. Both PDF variants follow the selected Analytics date filter. Choose **All Time** when the Transaction history PDF should include every transaction stored in Koinly.
 
-> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the Analytics upload endpoints and database table are installed.
+The same upload-settings page can also schedule automatic PDF delivery separately for **Telegram** and **Google Drive**. For each destination you can choose the report type, a rolling date filter (**Today**, **This Week**, **This Month**, **This Year**, or **All Time**), daily/weekly/monthly cadence, and delivery time. The Worker generates these PDFs from the latest synchronized cloud data, so the app does not need to remain open. A fixed **Custom** date range is intentionally not offered for recurring reports.
+
+To keep scheduled Worker activity separated, every enabled automatic upload must use a clock time at least **5 minutes** away from the others. This rule is enforced pairwise across automatic Telegram PDF, automatic Google Drive PDF, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected.
+
+> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the Analytics upload endpoints, automatic PDF schedule table, and database migration are installed.
 
 ---
 
@@ -616,7 +620,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1133
+  --dart-define=KOINLY_APP_VERSION=1.0.1134
 ```
 
 ## 10.4 Windows build
@@ -626,7 +630,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1133
+  --dart-define=KOINLY_APP_VERSION=1.0.1134
 ```
 
 ## 10.5 Linux build
@@ -643,7 +647,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1133
+  --dart-define=KOINLY_APP_VERSION=1.0.1134
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -662,7 +666,7 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1133
+  --dart-define=KOINLY_APP_VERSION=1.0.1134
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.

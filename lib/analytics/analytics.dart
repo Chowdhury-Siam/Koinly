@@ -1,7 +1,5 @@
 part of '../main.dart';
 
-enum AnalyticsPeriod { daily, weekly, monthly, yearly }
-
 enum AnalyticsPdfVariant { summary, transactionHistory }
 
 extension AnalyticsPdfVariantLabel on AnalyticsPdfVariant {
@@ -11,24 +9,19 @@ extension AnalyticsPdfVariantLabel on AnalyticsPdfVariant {
       };
 
   String get description => switch (this) {
-        AnalyticsPdfVariant.summary => 'Detailed period report with comparison, activity, budgets, category breakdowns, and account balances.',
-        AnalyticsPdfVariant.transactionHistory => 'Complete transaction ledger with every transaction stored in Koinly.',
+        AnalyticsPdfVariant.summary => 'Detailed report for the selected date filter with comparison, activity, budgets, category breakdowns, and account balances.',
+        AnalyticsPdfVariant.transactionHistory => 'Complete transaction ledger for the selected date filter.',
       };
 }
 
-extension AnalyticsPeriodLabel on AnalyticsPeriod {
-  String get label => switch (this) {
-        AnalyticsPeriod.daily => 'Daily',
-        AnalyticsPeriod.weekly => 'Weekly',
-        AnalyticsPeriod.monthly => 'Monthly',
-        AnalyticsPeriod.yearly => 'Yearly',
-      };
-
-  IconData get icon => switch (this) {
-        AnalyticsPeriod.daily => Icons.today_rounded,
-        AnalyticsPeriod.weekly => Icons.view_week_rounded,
-        AnalyticsPeriod.monthly => Icons.calendar_month_rounded,
-        AnalyticsPeriod.yearly => Icons.calendar_view_month_rounded,
+extension AnalyticsDateFilterLabel on DateRangeType {
+  String get analyticsLabel => switch (this) {
+        DateRangeType.today => 'Today',
+        DateRangeType.thisWeek => 'This Week',
+        DateRangeType.thisMonth => 'This Month',
+        DateRangeType.thisYear => 'This Year',
+        DateRangeType.allTime => 'All Time',
+        DateRangeType.custom => 'Custom',
       };
 }
 
@@ -42,52 +35,89 @@ class AnalyticsRange {
   int get dayCount => math.max(1, end.difference(start).inDays);
 }
 
-AnalyticsRange analyticsRangeFor(AnalyticsPeriod period, DateTime anchor) {
-  final day = DateTime(anchor.year, anchor.month, anchor.day);
-  switch (period) {
-    case AnalyticsPeriod.daily:
+DateTime _analyticsDay(DateTime value) => DateTime(value.year, value.month, value.day);
+
+String _analyticsRangeLabel(DateTime start, DateTime endExclusive) {
+  final last = endExclusive.subtract(const Duration(days: 1));
+  if (start.year == last.year && start.month == last.month && start.day == last.day) {
+    return DateFormat('EEE, MMM d, yyyy').format(start);
+  }
+  if (start.year == last.year) {
+    return '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d, yyyy').format(last)}';
+  }
+  return '${DateFormat('MMM d, yyyy').format(start)} - ${DateFormat('MMM d, yyyy').format(last)}';
+}
+
+AnalyticsRange analyticsRangeForDateFilter(
+  AppController state,
+  DateRangeType filter, {
+  DateTime? customStart,
+  DateTime? customEnd,
+}) {
+  final now = DateTime.now();
+  final today = _analyticsDay(now);
+  switch (filter) {
+    case DateRangeType.today:
       return AnalyticsRange(
-        start: day,
-        end: day.add(const Duration(days: 1)),
-        label: DateFormat('EEE, MMM d, yyyy').format(day),
+        start: today,
+        end: today.add(const Duration(days: 1)),
+        label: DateFormat('EEE, MMM d, yyyy').format(today),
       );
-    case AnalyticsPeriod.weekly:
-      final start = day.subtract(Duration(days: day.weekday - DateTime.monday));
+    case DateRangeType.thisWeek:
+      final start = today.subtract(Duration(days: today.weekday - DateTime.monday));
       final end = start.add(const Duration(days: 7));
-      final last = end.subtract(const Duration(days: 1));
-      final sameYear = start.year == last.year;
-      final label = sameYear
-          ? '${DateFormat('MMM d').format(start)} - ${DateFormat('MMM d, yyyy').format(last)}'
-          : '${DateFormat('MMM d, yyyy').format(start)} - ${DateFormat('MMM d, yyyy').format(last)}';
-      return AnalyticsRange(start: start, end: end, label: label);
-    case AnalyticsPeriod.monthly:
-      final start = DateTime(day.year, day.month, 1);
+      return AnalyticsRange(start: start, end: end, label: _analyticsRangeLabel(start, end));
+    case DateRangeType.thisMonth:
+      final start = DateTime(today.year, today.month, 1);
       return AnalyticsRange(
         start: start,
         end: DateTime(start.year, start.month + 1, 1),
         label: DateFormat('MMMM yyyy').format(start),
       );
-    case AnalyticsPeriod.yearly:
-      final start = DateTime(day.year, 1, 1);
+    case DateRangeType.thisYear:
+      final start = DateTime(today.year, 1, 1);
       return AnalyticsRange(
         start: start,
-        end: DateTime(day.year + 1, 1, 1),
-        label: day.year.toString(),
+        end: DateTime(today.year + 1, 1, 1),
+        label: today.year.toString(),
       );
+    case DateRangeType.allTime:
+      final dates = <DateTime>[
+        ...state.transactions.map((tx) => tx.listOn),
+        ...state.loans.map((loan) => loan.startDate),
+        ...state.loanPayments.map((payment) => payment.paidOn),
+        ...state.budgets.map((budget) => budget.selectedMonth),
+      ];
+      if (dates.isEmpty) {
+        return AnalyticsRange(
+          start: today,
+          end: today.add(const Duration(days: 1)),
+          label: 'All time',
+        );
+      }
+      dates.sort();
+      final start = _analyticsDay(dates.first);
+      final latest = dates.last.isAfter(now) ? dates.last : now;
+      final end = _analyticsDay(latest).add(const Duration(days: 1));
+      return AnalyticsRange(start: start, end: end, label: 'All time');
+    case DateRangeType.custom:
+      var start = _analyticsDay(customStart ?? today);
+      var last = _analyticsDay(customEnd ?? customStart ?? today);
+      if (last.isBefore(start)) {
+        final swap = start;
+        start = last;
+        last = swap;
+      }
+      final end = last.add(const Duration(days: 1));
+      return AnalyticsRange(start: start, end: end, label: _analyticsRangeLabel(start, end));
   }
 }
 
-DateTime shiftAnalyticsAnchor(AnalyticsPeriod period, DateTime anchor, int amount) {
-  switch (period) {
-    case AnalyticsPeriod.daily:
-      return anchor.add(Duration(days: amount));
-    case AnalyticsPeriod.weekly:
-      return anchor.add(Duration(days: amount * 7));
-    case AnalyticsPeriod.monthly:
-      return DateTime(anchor.year, anchor.month + amount, 1);
-    case AnalyticsPeriod.yearly:
-      return DateTime(anchor.year + amount, 1, 1);
-  }
+AnalyticsRange _analyticsPreviousRange(AnalyticsRange range) {
+  final duration = range.end.difference(range.start);
+  final end = range.start;
+  final start = end.subtract(duration);
+  return AnalyticsRange(start: start, end: end, label: _analyticsRangeLabel(start, end));
 }
 
 class AnalyticsCategoryItem {
@@ -102,7 +132,7 @@ class AnalyticsCategoryItem {
 
 class AnalyticsSnapshot {
   const AnalyticsSnapshot({
-    required this.period,
+    required this.dateFilter,
     required this.range,
     required this.transactions,
     required this.income,
@@ -122,9 +152,10 @@ class AnalyticsSnapshot {
     required this.previousIncome,
     required this.previousExpense,
     required this.previousNet,
+    required this.compareWithPrevious,
   });
 
-  final AnalyticsPeriod period;
+  final DateRangeType dateFilter;
   final AnalyticsRange range;
   final List<MoneyTransaction> transactions;
   final double income;
@@ -144,7 +175,9 @@ class AnalyticsSnapshot {
   final double previousIncome;
   final double previousExpense;
   final double previousNet;
+  final bool compareWithPrevious;
 
+  String get filterLabel => dateFilter.analyticsLabel;
   double get net => income - expense;
   double get savingsNet => savingsIn - savingsOut;
   double get averageIncomePerDay => income / range.dayCount;
@@ -155,15 +188,24 @@ class AnalyticsSnapshot {
   int get incomeCount => transactions.where((tx) => tx.countsAsIncome).length;
   int get expenseCount => transactions.where((tx) => tx.countsAsExpense).length;
 
-  static AnalyticsSnapshot build(AppController state, AnalyticsPeriod period, DateTime anchor) {
-    final range = analyticsRangeFor(period, anchor);
-    final previousAnchor = shiftAnalyticsAnchor(period, range.start, -1);
-    final previousRange = analyticsRangeFor(period, previousAnchor);
+  static AnalyticsSnapshot build(
+    AppController state,
+    DateRangeType dateFilter, {
+    DateTime? customStart,
+    DateTime? customEnd,
+  }) {
+    final range = analyticsRangeForDateFilter(
+      state,
+      dateFilter,
+      customStart: customStart,
+      customEnd: customEnd,
+    );
     final current = _buildAnalyticsCore(state, range);
-    final previous = _buildAnalyticsCore(state, previousRange);
+    final compareWithPrevious = dateFilter != DateRangeType.allTime;
+    final previous = compareWithPrevious ? _buildAnalyticsCore(state, _analyticsPreviousRange(range)) : null;
 
     return AnalyticsSnapshot(
-      period: period,
+      dateFilter: dateFilter,
       range: range,
       transactions: current.transactions,
       income: current.income,
@@ -180,9 +222,10 @@ class AnalyticsSnapshot {
       newLoanCount: current.newLoanCount,
       repaymentCount: current.repaymentCount,
       repaymentTotal: current.repaymentTotal,
-      previousIncome: previous.income,
-      previousExpense: previous.expense,
-      previousNet: previous.income - previous.expense,
+      previousIncome: previous?.income ?? 0,
+      previousExpense: previous?.expense ?? 0,
+      previousNet: previous == null ? 0 : previous.income - previous.expense,
+      compareWithPrevious: compareWithPrevious,
     );
   }
 }
@@ -331,17 +374,25 @@ String _analyticsComparisonLabel(double current, double previous) {
   return '$sign${percent.toStringAsFixed(1)}%';
 }
 
-String analyticsPdfFileName(AnalyticsSnapshot snapshot, {AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary}) {
-  if (variant == AnalyticsPdfVariant.transactionHistory) {
-    return 'Koinly-Transaction-History-${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
-  }
-  final stamp = switch (snapshot.period) {
-    AnalyticsPeriod.daily => DateFormat('yyyy-MM-dd').format(snapshot.range.start),
-    AnalyticsPeriod.weekly => '${DateFormat('yyyy-MM-dd').format(snapshot.range.start)}_week',
-    AnalyticsPeriod.monthly => DateFormat('yyyy-MM').format(snapshot.range.start),
-    AnalyticsPeriod.yearly => snapshot.range.start.year.toString(),
+String _analyticsPdfDateStamp(AnalyticsSnapshot snapshot) {
+  final start = snapshot.range.start;
+  final last = snapshot.range.end.subtract(const Duration(days: 1));
+  return switch (snapshot.dateFilter) {
+    DateRangeType.today => DateFormat('yyyy-MM-dd').format(start),
+    DateRangeType.thisWeek => '${DateFormat('yyyy-MM-dd').format(start)}_week',
+    DateRangeType.thisMonth => DateFormat('yyyy-MM').format(start),
+    DateRangeType.thisYear => start.year.toString(),
+    DateRangeType.allTime => 'all-time',
+    DateRangeType.custom => '${DateFormat('yyyy-MM-dd').format(start)}_to_${DateFormat('yyyy-MM-dd').format(last)}',
   };
-  return 'Koinly-Analytics-${snapshot.period.name}-$stamp.pdf';
+}
+
+String analyticsPdfFileName(AnalyticsSnapshot snapshot, {AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary}) {
+  final stamp = _analyticsPdfDateStamp(snapshot);
+  if (variant == AnalyticsPdfVariant.transactionHistory) {
+    return 'Koinly-Transaction-History-$stamp.pdf';
+  }
+  return 'Koinly-Analytics-${snapshot.dateFilter.name}-$stamp.pdf';
 }
 
 class AnalyticsPdfService {
@@ -354,7 +405,7 @@ class AnalyticsPdfService {
   }) async {
     return switch (variant) {
       AnalyticsPdfVariant.summary => _buildSummary(state, snapshot),
-      AnalyticsPdfVariant.transactionHistory => _buildTransactionHistory(state),
+      AnalyticsPdfVariant.transactionHistory => _buildTransactionHistory(state, snapshot),
     };
   }
 
@@ -418,7 +469,7 @@ class AnalyticsPdfService {
         build: (context) => [
           pw.Text('Koinly Analytics', style: pw.TextStyle(fontSize: 25, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
           pw.SizedBox(height: 4),
-          pw.Text('${snapshot.period.label} summary - ${_analyticsPdfSafe(snapshot.range.label)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text('${snapshot.filterLabel} summary - ${_analyticsPdfSafe(snapshot.range.label)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.Text('Generated $generated | App version $appVersion', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
           pw.SizedBox(height: 18),
           pw.Wrap(children: [
@@ -429,13 +480,16 @@ class AnalyticsPdfService {
             _metric('Avg income / day', _analyticsPdfMoney(state, snapshot.averageIncomePerDay)),
             _metric('Avg expense / day', _analyticsPdfMoney(state, snapshot.averageExpensePerDay)),
           ]),
-          pw.SizedBox(height: 10),
-          pw.Text('Compared with previous period', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          pw.Text('Income: ${_analyticsComparisonLabel(snapshot.income, snapshot.previousIncome)}'),
-          pw.Text('Expense: ${_analyticsComparisonLabel(snapshot.expense, snapshot.previousExpense)}'),
-          pw.Text('Net cash flow: ${_analyticsComparisonLabel(snapshot.net, snapshot.previousNet)}'),
-          pw.SizedBox(height: 16),
+          if (snapshot.compareWithPrevious) ...[
+            pw.SizedBox(height: 10),
+            pw.Text('Compared with previous period', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Text('Income: ${_analyticsComparisonLabel(snapshot.income, snapshot.previousIncome)}'),
+            pw.Text('Expense: ${_analyticsComparisonLabel(snapshot.expense, snapshot.previousExpense)}'),
+            pw.Text('Net cash flow: ${_analyticsComparisonLabel(snapshot.net, snapshot.previousNet)}'),
+            pw.SizedBox(height: 16),
+          ] else
+            pw.SizedBox(height: 16),
           pw.Text('Activity', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Text('Income transactions: ${snapshot.incomeCount}'),
@@ -476,9 +530,9 @@ class AnalyticsPdfService {
     return document.save();
   }
 
-  static Future<Uint8List> _buildTransactionHistory(AppController state) async {
+  static Future<Uint8List> _buildTransactionHistory(AppController state, AnalyticsSnapshot snapshot) async {
     final document = pw.Document();
-    final transactions = List<MoneyTransaction>.of(state.transactions)
+    final transactions = List<MoneyTransaction>.of(snapshot.transactions)
       ..sort((a, b) => b.listOn.compareTo(a.listOn));
     final generated = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
     final income = transactions.where((tx) => tx.countsAsIncome).fold<double>(0, (sum, tx) => sum + tx.amount);
@@ -564,7 +618,7 @@ class AnalyticsPdfService {
         build: (context) => [
           pw.Text('Koinly Transaction History', style: pw.TextStyle(fontSize: 25, fontWeight: pw.FontWeight.bold, color: PdfColors.teal800)),
           pw.SizedBox(height: 4),
-          pw.Text('All transactions', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+          pw.Text(_analyticsPdfSafe(snapshot.range.label), style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
           pw.Text('Generated $generated | App version $appVersion', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
           if (transactions.isNotEmpty)
             pw.Text(
@@ -582,7 +636,7 @@ class AnalyticsPdfService {
           ]),
           pw.SizedBox(height: 12),
           if (transactions.isEmpty)
-            pw.Text('No transactions are stored in Koinly yet.', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700))
+            pw.Text('No transactions match the selected date filter.', style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700))
           else ...[
             pw.Text('Transaction ledger', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
@@ -590,7 +644,7 @@ class AnalyticsPdfService {
           ],
           pw.SizedBox(height: 8),
           pw.Text(
-            'This report contains every transaction currently stored in Koinly. Transactions excluded from analytics are still included and are marked accordingly.',
+            'This report contains transactions matching the selected Koinly date filter. Transactions excluded from analytics are still included and are marked accordingly.',
             style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
           ),
         ],
@@ -643,8 +697,8 @@ String _analyticsUploadError(Object error) {
 
 String _analyticsTelegramCaption(AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant) {
   return switch (variant) {
-    AnalyticsPdfVariant.summary => 'Koinly ${snapshot.period.label} Analytics\n${snapshot.range.label}',
-    AnalyticsPdfVariant.transactionHistory => 'Koinly Transaction History\nAll transactions',
+    AnalyticsPdfVariant.summary => 'Koinly ${snapshot.filterLabel} Analytics\n${snapshot.range.label}',
+    AnalyticsPdfVariant.transactionHistory => 'Koinly Transaction History\n${snapshot.range.label}',
   };
 }
 
@@ -656,35 +710,40 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  AnalyticsPeriod period = AnalyticsPeriod.monthly;
-  DateTime anchor = DateTime.now();
+  DateRangeType dateFilter = DateRangeType.thisMonth;
+  DateTime? customStart;
+  DateTime? customEnd;
   bool exporting = false;
   AnalyticsPdfVariant pdfVariant = AnalyticsPdfVariant.summary;
 
-  void _changePeriod(AnalyticsPeriod value) {
-    setState(() {
-      period = value;
-      anchor = DateTime.now();
-    });
-  }
-
-  void _movePeriod(int amount) {
-    final candidate = shiftAnalyticsAnchor(period, anchor, amount);
-    final currentStart = analyticsRangeFor(period, DateTime.now()).start;
-    if (analyticsRangeFor(period, candidate).start.isAfter(currentStart)) return;
-    setState(() => anchor = candidate);
-  }
-
-  Future<void> _pickPeriod() async {
-    final now = DateTime.now();
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: anchor.isAfter(now) ? now : anchor,
-      firstDate: DateTime(2000, 1, 1),
-      lastDate: now,
-      helpText: 'Choose ${period.label.toLowerCase()} analytics period',
+  Future<void> _chooseDateFilter() async {
+    final selectedId = await showAppleWheelSelectionSheet(
+      context,
+      title: 'Choose Date Filter',
+      selectedId: enumName(dateFilter),
+      options: DateRangeType.values.map(optionFromDateRangeType).toList(),
     );
-    if (selected != null && mounted) setState(() => anchor = selected);
+    if (selectedId == null || !mounted) return;
+
+    final selected = DateRangeType.values.firstWhere(
+      (type) => enumName(type) == selectedId,
+      orElse: () => dateFilter,
+    );
+
+    if (selected == DateRangeType.custom) {
+      final start = await pickDate(context, customStart ?? DateTime.now());
+      if (!mounted || start == null) return;
+      final end = await pickDate(context, customEnd ?? start);
+      if (!mounted || end == null) return;
+      setState(() {
+        dateFilter = DateRangeType.custom;
+        customStart = start;
+        customEnd = end;
+      });
+      return;
+    }
+
+    setState(() => dateFilter = selected);
   }
 
   Future<void> _download(AppController state, AnalyticsSnapshot snapshot) async {
@@ -696,7 +755,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (mounted) setState(() => exporting = false);
     }
   }
-
 
   Future<void> _uploadTelegram(AppController state, AnalyticsSnapshot snapshot) async {
     if (exporting) return;
@@ -747,17 +805,34 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  void _openTelegramBotSettings(AppController state) {
+    final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
+    if (!signedIn) {
+      showSnack(context, 'Sign in to your Self-Hosted Sync Worker before configuring the Telegram bot.');
+      return;
+    }
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfHostedTelegramBackupScreen()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final snapshot = AnalyticsSnapshot.build(state, period, anchor);
-    final currentStart = analyticsRangeFor(period, DateTime.now()).start;
-    final canMoveForward = analyticsRangeFor(period, shiftAnalyticsAnchor(period, anchor, 1)).start.compareTo(currentStart) <= 0;
+    final snapshot = AnalyticsSnapshot.build(
+      state,
+      dateFilter,
+      customStart: customStart,
+      customEnd: customEnd,
+    );
 
     return PageScaffold(
       title: 'Analytics',
       subtitle: snapshot.range.label,
       actions: [
+        IconButton.filledTonal(
+          tooltip: 'Telegram bot settings',
+          onPressed: exporting ? null : () => _openTelegramBotSettings(state),
+          icon: const Icon(Icons.smart_toy_rounded),
+        ),
         IconButton.filledTonal(
           tooltip: 'Analytics upload settings',
           onPressed: exporting ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsUploadSettingsScreen())),
@@ -769,23 +844,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SleekPillSelector<AnalyticsPeriod>(
-              options: const [
-                SleekPillOption(value: AnalyticsPeriod.daily, label: 'Daily'),
-                SleekPillOption(value: AnalyticsPeriod.weekly, label: 'Weekly'),
-                SleekPillOption(value: AnalyticsPeriod.monthly, label: 'Monthly'),
-                SleekPillOption(value: AnalyticsPeriod.yearly, label: 'Yearly'),
-              ],
-              selected: period,
-              onChanged: _changePeriod,
-            ),
-            const SizedBox(height: 12),
-            _AnalyticsPeriodNavigator(
-              label: snapshot.range.label,
-              icon: period.icon,
-              onPrevious: () => _movePeriod(-1),
-              onNext: canMoveForward ? () => _movePeriod(1) : null,
-              onPick: _pickPeriod,
+            ExpressiveCard(
+              padding: EdgeInsets.zero,
+              child: MotionInkWell(
+                onTap: exporting ? null : _chooseDateFilter,
+                borderRadius: BorderRadius.circular(24),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(children: [
+                    iconBubble(context, 'custom_range', '#B4A5FF', size: 44),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Choose Date Filter', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${dateFilter.analyticsLabel} • ${snapshot.range.label}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right_rounded),
+                  ]),
+                ),
+              ),
             ),
             const SectionHeader('Overview'),
             Row(children: [
@@ -841,7 +926,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   if (pdfVariant == AnalyticsPdfVariant.transactionHistory) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Transaction history includes every transaction stored in Koinly and does not use the selected analytics period.',
+                      'Transaction history uses the selected date filter. Choose All Time to include every transaction stored in Koinly.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -874,7 +959,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ]),
                   const SizedBox(height: 8),
                   Text(
-                    'Telegram and Google Drive uploads go directly through your Self-Hosted Sync Worker. Configure them with the cloud button above.',
+                    'Telegram and Google Drive uploads go directly through your Self-Hosted Sync Worker. Use the bot and cloud buttons above to configure them.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -899,6 +984,8 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
   final clientSecretController = TextEditingController();
   GoogleDriveAnalyticsSettings drive = const GoogleDriveAnalyticsSettings.defaults();
   TelegramBackupSettings telegram = const TelegramBackupSettings.defaults();
+  AnalyticsPdfScheduleSettings telegramPdfSchedule = const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
+  AnalyticsPdfScheduleSettings drivePdfSchedule = const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
   bool loading = true;
   bool busy = false;
   bool secretVisible = false;
@@ -945,8 +1032,14 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
       setState(() => telegram = nextTelegram);
       final nextDrive = await state.loadGoogleDriveAnalyticsSettings();
       if (!mounted) return;
+      final schedules = await state.loadAnalyticsPdfSchedules();
+      if (!mounted) return;
       setState(() {
         drive = nextDrive;
+        telegramPdfSchedule = schedules[AnalyticsPdfScheduleDestination.telegram] ??
+            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.telegram);
+        drivePdfSchedule = schedules[AnalyticsPdfScheduleDestination.googleDrive] ??
+            const AnalyticsPdfScheduleSettings.defaults(AnalyticsPdfScheduleDestination.googleDrive);
         clientIdController.text = nextDrive.clientId;
         loadError = null;
         loading = false;
@@ -1026,7 +1119,8 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
       final next = await state.disconnectGoogleDriveAnalytics();
       if (!mounted) return;
       setState(() => drive = next);
-      showSnack(context, 'Google Drive disconnected.');
+      await _load(quiet: true);
+      if (mounted) showSnack(context, 'Google Drive disconnected. Automatic Drive PDF upload was turned off.');
     } catch (error) {
       if (mounted) showSnack(context, _analyticsUploadError(error));
     } finally {
@@ -1042,6 +1136,206 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
     }
     await Clipboard.setData(ClipboardData(text: value));
     if (mounted) showSnack(context, 'Google OAuth redirect URI copied.');
+  }
+
+  AnalyticsPdfScheduleSettings _schedule(AnalyticsPdfScheduleDestination destination) =>
+      destination == AnalyticsPdfScheduleDestination.telegram ? telegramPdfSchedule : drivePdfSchedule;
+
+  void _setSchedule(AnalyticsPdfScheduleDestination destination, AnalyticsPdfScheduleSettings next) {
+    setState(() {
+      if (destination == AnalyticsPdfScheduleDestination.telegram) {
+        telegramPdfSchedule = next;
+      } else {
+        drivePdfSchedule = next;
+      }
+    });
+  }
+
+  Future<void> _pickScheduleTime(AnalyticsPdfScheduleDestination destination) async {
+    final current = _schedule(destination);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: current.hour, minute: current.minute),
+    );
+    if (picked == null || !mounted) return;
+    _setSchedule(
+      destination,
+      current.copyWith(
+        hour: picked.hour,
+        minute: picked.minute,
+        timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+      ),
+    );
+  }
+
+  Future<void> _savePdfSchedule(AnalyticsPdfScheduleDestination destination) async {
+    if (busy) return;
+    final state = context.read<AppController>();
+    final current = _schedule(destination);
+    if (current.enabled && destination == AnalyticsPdfScheduleDestination.telegram && !(telegram.tokenConfigured && telegram.chatId.isNotEmpty)) {
+      showSnack(context, 'Configure the Telegram bot and destination before enabling automatic PDF uploads.');
+      return;
+    }
+    if (current.enabled && destination == AnalyticsPdfScheduleDestination.googleDrive && !drive.connected) {
+      showSnack(context, 'Connect Google Drive before enabling automatic PDF uploads.');
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      final saved = await state.saveAnalyticsPdfSchedule(current);
+      if (!mounted) return;
+      _setSchedule(destination, saved);
+      showSnack(
+        context,
+        saved.enabled
+            ? '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF schedule saved.'
+            : '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF upload is off.',
+      );
+    } catch (error) {
+      if (mounted) showSnack(context, _analyticsUploadError(error));
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  String _weekdayLabel(int weekday) => const {
+        DateTime.monday: 'Monday',
+        DateTime.tuesday: 'Tuesday',
+        DateTime.wednesday: 'Wednesday',
+        DateTime.thursday: 'Thursday',
+        DateTime.friday: 'Friday',
+        DateTime.saturday: 'Saturday',
+        DateTime.sunday: 'Sunday',
+      }[weekday] ?? 'Sunday';
+
+  String _scheduleDateFilterLabel(AnalyticsPdfScheduleDateFilter filter) => switch (filter) {
+        AnalyticsPdfScheduleDateFilter.today => 'Today',
+        AnalyticsPdfScheduleDateFilter.thisWeek => 'This Week',
+        AnalyticsPdfScheduleDateFilter.thisMonth => 'This Month',
+        AnalyticsPdfScheduleDateFilter.thisYear => 'This Year',
+        AnalyticsPdfScheduleDateFilter.allTime => 'All Time',
+      };
+
+  String _scheduleStatusTime(DateTime? value) =>
+      value == null ? 'Not yet' : DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
+
+  Widget _automaticPdfScheduleCard(
+    AnalyticsPdfScheduleDestination destination, {
+    required bool destinationReady,
+  }) {
+    final settings = _schedule(destination);
+    final destinationName = destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive';
+    final scheduleTitle = destination == AnalyticsPdfScheduleDestination.telegram
+        ? 'Automatic Telegram PDF upload'
+        : 'Automatic Google Drive PDF upload';
+    final time = TimeOfDay(hour: settings.hour, minute: settings.minute).format(context);
+    return ExpressiveCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          value: settings.enabled,
+          onChanged: busy
+              ? null
+              : (value) {
+                  if (value && !destinationReady) {
+                    showSnack(context, destination == AnalyticsPdfScheduleDestination.telegram
+                        ? 'Configure the Telegram bot and destination first.'
+                        : 'Connect Google Drive first.');
+                    return;
+                  }
+                  _setSchedule(destination, settings.copyWith(enabled: value));
+                },
+          title: Text(scheduleTitle, style: const TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: const Text('Generated from the latest data synchronized to your Self-Hosted Worker.'),
+        ),
+        const SizedBox(height: 8),
+        SegmentedButton<AnalyticsPdfScheduleReportVariant>(
+          segments: const [
+            ButtonSegment(value: AnalyticsPdfScheduleReportVariant.summary, label: Text('Summary')),
+            ButtonSegment(value: AnalyticsPdfScheduleReportVariant.transactionHistory, label: Text('Transaction history')),
+          ],
+          selected: {settings.reportVariant},
+          onSelectionChanged: busy ? null : (value) => _setSchedule(destination, settings.copyWith(reportVariant: value.first)),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<AnalyticsPdfScheduleDateFilter>(
+          value: settings.dateFilter,
+          decoration: const InputDecoration(labelText: 'Date filter', prefixIcon: Icon(Icons.date_range_rounded)),
+          items: AnalyticsPdfScheduleDateFilter.values
+              .map((value) => DropdownMenuItem(value: value, child: Text(_scheduleDateFilterLabel(value))))
+              .toList(growable: false),
+          onChanged: busy || settings.enabled && !destinationReady
+              ? null
+              : (value) {
+                  if (value != null) _setSchedule(destination, settings.copyWith(dateFilter: value));
+                },
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<TelegramBackupFrequency>(
+          segments: const [
+            ButtonSegment(value: TelegramBackupFrequency.daily, label: Text('Daily')),
+            ButtonSegment(value: TelegramBackupFrequency.weekly, label: Text('Weekly')),
+            ButtonSegment(value: TelegramBackupFrequency.monthly, label: Text('Monthly')),
+          ],
+          selected: {settings.frequency},
+          onSelectionChanged: busy ? null : (value) => _setSchedule(destination, settings.copyWith(frequency: value.first)),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: busy ? null : () => _pickScheduleTime(destination),
+          icon: const Icon(Icons.schedule_rounded),
+          label: Text('Time · $time'),
+        ),
+        if (settings.frequency == TelegramBackupFrequency.weekly) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: settings.weekday,
+            decoration: const InputDecoration(labelText: 'Day of week', prefixIcon: Icon(Icons.calendar_view_week_rounded)),
+            items: List.generate(7, (index) {
+              final weekday = index + 1;
+              return DropdownMenuItem(value: weekday, child: Text(_weekdayLabel(weekday)));
+            }),
+            onChanged: busy ? null : (value) {
+              if (value != null) _setSchedule(destination, settings.copyWith(weekday: value));
+            },
+          ),
+        ],
+        if (settings.frequency == TelegramBackupFrequency.monthly) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: settings.monthDay,
+            decoration: const InputDecoration(labelText: 'Day of month', prefixIcon: Icon(Icons.calendar_month_rounded)),
+            items: List.generate(31, (index) => DropdownMenuItem(value: index + 1, child: Text('Day ${index + 1}'))),
+            onChanged: busy ? null : (value) {
+              if (value != null) _setSchedule(destination, settings.copyWith(monthDay: value));
+            },
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          'Telegram PDF, Google Drive PDF, and Telegram backup times must be at least 5 minutes apart.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        Text('Last automatic upload: ${_scheduleStatusTime(settings.lastSentAt)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text(
+          'Next scheduled: ${settings.enabled ? _scheduleStatusTime(settings.nextDueAt) : 'Automatic upload is off'}',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        if (settings.lastError?.trim().isNotEmpty == true) ...[
+          const SizedBox(height: 8),
+          Text(settings.lastError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orangeAccent, fontWeight: FontWeight.w800)),
+        ],
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: busy ? null : () => _savePdfSchedule(destination),
+          icon: const Icon(Icons.save_rounded),
+          label: const Text('Save automatic PDF schedule'),
+        ),
+      ]),
+    );
   }
 
   @override
@@ -1127,6 +1421,11 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
                           label: Text(telegramReady ? 'Telegram backup settings' : 'Configure Telegram'),
                         ),
                       ]),
+                    ),
+                    const SizedBox(height: 12),
+                    _automaticPdfScheduleCard(
+                      AnalyticsPdfScheduleDestination.telegram,
+                      destinationReady: telegramReady,
                     ),
                     const SectionHeader('Google Drive'),
                     ExpressiveCard(
@@ -1222,6 +1521,11 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
                         ],
                       ]),
                     ),
+                    const SizedBox(height: 12),
+                    _automaticPdfScheduleCard(
+                      AnalyticsPdfScheduleDestination.googleDrive,
+                      destinationReady: drive.connected,
+                    ),
                   ],
                 ],
               ),
@@ -1229,40 +1533,3 @@ class _AnalyticsUploadSettingsScreenState extends State<AnalyticsUploadSettingsS
     );
   }
 }
-
-class _AnalyticsPeriodNavigator extends StatelessWidget {
-  const _AnalyticsPeriodNavigator({required this.label, required this.icon, required this.onPrevious, required this.onNext, required this.onPick});
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onPrevious;
-  final VoidCallback? onNext;
-  final VoidCallback onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    return ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      child: Row(children: [
-        IconButton(onPressed: onPrevious, icon: const Icon(Icons.chevron_left_rounded), tooltip: 'Previous period'),
-        Expanded(
-          child: MotionInkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: onPick,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(icon, size: 20, color: kSleekAccent),
-                const SizedBox(width: 8),
-                Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900))),
-              ]),
-            ),
-          ),
-        ),
-        IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right_rounded), tooltip: 'Next period'),
-      ]),
-    );
-  }
-}
-
-

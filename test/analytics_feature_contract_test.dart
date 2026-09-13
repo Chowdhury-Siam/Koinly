@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('settings exposes analytics with all summary periods and PDF export', () {
+  test('settings exposes date-filtered analytics and PDF export', () {
     final main = File('lib/main.dart').readAsStringSync();
     final analytics = File('lib/analytics/analytics.dart').readAsStringSync();
     final pubspec = File('pubspec.yaml').readAsStringSync();
@@ -12,7 +12,9 @@ void main() {
     expect(main, contains('const AnalyticsScreen()'));
     expect(main, contains("part 'analytics/analytics.dart';"));
 
-    expect(analytics, contains('enum AnalyticsPeriod { daily, weekly, monthly, yearly }'));
+    expect(analytics, contains('DateRangeType dateFilter = DateRangeType.thisMonth'));
+    expect(analytics, contains("title: 'Choose Date Filter'"));
+    expect(analytics, contains('DateRangeType.allTime'));
     expect(analytics, contains('class AnalyticsSnapshot'));
     expect(analytics, contains("title: 'Analytics'"));
     expect(analytics, contains("label: const Text('Download PDF')"));
@@ -27,7 +29,12 @@ void main() {
     expect(analytics, contains('uploadAnalyticsPdfToGoogleDrive'));
     expect(analytics, contains('enum AnalyticsPdfVariant { summary, transactionHistory }'));
     expect(analytics, contains("label: 'Transaction history'"));
-    expect(analytics, contains('static Future<Uint8List> _buildTransactionHistory'));
+    expect(analytics, contains('static Future<Uint8List> _buildTransactionHistory(AppController state, AnalyticsSnapshot snapshot)'));
+    expect(analytics, contains('List<MoneyTransaction>.of(snapshot.transactions)'));
+    expect(analytics, contains('Transaction history uses the selected date filter. Choose All Time'));
+    expect(analytics, isNot(contains('does not use the selected analytics period')));
+    expect(analytics, contains("tooltip: 'Telegram bot settings'"));
+    expect(analytics, contains('Icons.smart_toy_rounded'));
     expect(analytics, contains("pw.Text('Transaction ledger'"));
     expect(analytics, contains("pw.Text('Compared with previous period'"));
     expect(analytics, isNot(contains("const SectionHeader('Compared with previous period')")));
@@ -38,7 +45,14 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1133+177'));
+    expect(pubspec, contains('version: 1.0.1136+180'));
+    expect(analytics, contains('Automatic Telegram PDF upload'));
+    expect(analytics, contains('Automatic Google Drive PDF upload'));
+    expect(analytics, contains('must be at least 5 minutes apart'));
+    expect(analytics, contains('AnalyticsPdfScheduleDateFilter.allTime'));
+    expect(analytics, contains('saveAnalyticsPdfSchedule'));
+    expect(main, contains('loadAnalyticsPdfSchedules'));
+    expect(main, contains('saveAnalyticsPdfSchedule'));
   });
 
   test('static category badges keep no obsolete orbit fallback state', () {
