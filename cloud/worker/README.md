@@ -7,7 +7,7 @@ For the easiest setup, follow the beginner-friendly guide in the repository's ma
 
 ## Registration model
 
-A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. Registration returns a one-time recovery key; after registration closes, additional devices use **Login** with the same username and password.
+A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. After registration closes, additional devices use **Login** with the same username and password. Current Koinly builds use the `/profile` administration portal for forgotten-password recovery.
 
 When administrator credentials are configured, registration is managed exclusively through `/profile`, including the first account. Existing accounts continue to sign in. This prevents public registration from reopening when an administrator deletes the last account.
 
@@ -49,7 +49,7 @@ For detailed steps, password changes, and troubleshooting, see [the main README'
 
 Account lists expose only IDs, usernames, creation/update timestamps, and status, with an exact total and 50 accounts per page. **Invited** means no device has signed in; **Active** means at least one has signed in historically, not that a session is online. The administrator is separate and excluded from this count.
 
-Creation and reset accept 8–256 character account passwords. Share new passwords privately. New account holders can create a recovery key in Koinly after login. A reset immediately invalidates old access/refresh sessions and the recovery key. Confirmed deletion atomically removes the account, sync records, devices, sessions, and Telegram backup settings; existing local copies and previously sent Telegram files remain.
+Creation and reset accept 8–256 character account passwords. Share new passwords privately. A reset immediately invalidates old access/refresh sessions. Confirmed deletion atomically removes the account, sync records, devices, sessions, Telegram backup settings, and Analytics upload credentials; existing local copies and files already sent to Telegram or Google Drive remain.
 
 Security details:
 
@@ -96,6 +96,7 @@ A ready Worker returns values equivalent to:
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
+  "analyticsUploadAvailable": true,
   "realtimeSyncAvailable": true,
   "profileMediaSyncAvailable": true,
   "databaseReachable": true,
@@ -131,6 +132,13 @@ A ready Worker returns values equivalent to:
 - `POST /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/test`
 - `POST /v1/telegram-backup/send-now`
+- `GET /v1/analytics-upload/google-drive/settings`
+- `POST /v1/analytics-upload/google-drive/settings`
+- `POST /v1/analytics-upload/google-drive/connect-url`
+- `GET /v1/analytics-upload/google-drive/callback`
+- `DELETE /v1/analytics-upload/google-drive/connection`
+- `POST /v1/analytics-upload/telegram`
+- `POST /v1/analytics-upload/google-drive`
 
 ## Sync model
 
@@ -151,6 +159,14 @@ Profile photos, animated GIFs, and short profile videos use the authenticated `/
 The Worker validates the destination, encrypts the bot token with AES-GCM, builds the `.koinlybackup` from synchronized entities, and refuses to send an empty finance backup.
 
 For channels, the bot must be an administrator with permission to post messages.
+
+## Analytics PDF uploads
+
+Authenticated app clients can send locally generated Analytics PDFs through `/v1/analytics-upload/*`. Telegram uploads reuse the encrypted Telegram-backup bot token and destination.
+
+Google Drive uses the user's own Google OAuth Web application. The Worker stores the OAuth Client Secret and refresh token encrypted with a key derived from `JWT_SECRET`, uses a signed ten-minute OAuth state token, requests `openid email https://www.googleapis.com/auth/drive.file`, creates/reuses a **Koinly Analytics** Drive folder, refreshes access tokens server-side, and uploads PDFs there. The callback route does not require an app bearer token because it validates the signed OAuth state instead.
+
+PDF payloads are validated as PDF data and limited to 10 MB before any third-party upload. Account deletion removes the stored Analytics OAuth credentials but never deletes files already uploaded to Google Drive or Telegram.
 
 ## Troubleshooting
 
@@ -173,9 +189,9 @@ Create additional accounts from the `/profile` website using **+ Create account*
 
 ### Password recovery
 
-New registrations return a recovery key once. The Worker stores only a keyed hash of that recovery key. `POST /v1/auth/recover` accepts the username, recovery key, and new password, rate-limits failed attempts, revokes existing refresh tokens after a successful reset, and issues a new session.
+Current Koinly builds recover forgotten passwords from the `/profile` administration portal using **Change password**. The administrator does not need the old account password. A successful reset revokes the account's existing refresh sessions.
 
-An authenticated user can call `POST /v1/auth/recovery-key` to rotate the recovery key. Only the newly generated key remains valid.
+The legacy `POST /v1/auth/recover` and `POST /v1/auth/recovery-key` endpoints remain available only for backward compatibility with older Koinly app versions. New app builds do not expose or call that recovery-key flow.
 
 ## Optional command-line setup
 

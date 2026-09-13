@@ -20,6 +20,10 @@ void main() {
     expect(app, contains('TelegramBackupFrequency.daily'));
     expect(app, contains('TelegramBackupFrequency.weekly'));
     expect(app, contains('TelegramBackupFrequency.monthly'));
+    expect(app, isNot(contains('Self-hosted Sync Worker only')));
+    expect(app, isNot(contains('The self-hosted Worker creates a .koinlybackup from the cloud copy and uploads it to your Telegram group or channel.')));
+    expect(app, isNot(contains('Add the bot to the target group/channel. For a channel, make the bot an administrator with permission to post messages. The bot token is encrypted by your Worker before it is stored in Turso.')));
+    expect(app, isNot(contains('Schedule uses this device timezone')));
 
     expect(api, contains('/v1/telegram-backup/settings'));
     expect(api, contains('/v1/telegram-backup/test'));

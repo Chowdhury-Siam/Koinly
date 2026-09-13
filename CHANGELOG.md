@@ -1,25 +1,65 @@
+## [1.0.1130] - 2026-09-13
+
+- Replaced the persistent Account & sync registration error with a centered administrator-registration prompt.
+- When Worker-managed registration blocks app signup, the prompt asks whether to create the account from the admin panel and offers only **Yes** and **No** actions.
+- **Yes** opens the configured self-hosted Cloudflare Worker at `/profile`; **No** simply closes the prompt.
+- Worker-managed registration failures no longer remain visible as a red sync error on the Account & sync status card.
+- Added the `REGISTRATION_MANAGED` Worker error code while retaining message-based compatibility with older deployed Workers.
+- Bumped application metadata to `1.0.1130+174`.
+
+## [1.0.1129] - 2026-09-13
+
+### Removed
+
+- Completely removed the in-app **Forgot password** flow from Account & sync.
+- Removed the recovery-key popup, recovery-key rotation control, and the client-side recovery API code that existed only for in-app password recovery.
+- Account password recovery is now handled from the Self-Hosted Sync Worker's `/profile` administration page.
+- Kept the Worker's legacy recovery endpoints intact for backward compatibility with older Koinly app versions.
+- Bumped application metadata to `1.0.1129+173`.
+
+## [1.0.1128] - 2026-09-13
+
+- Removed the requested explanatory helper text from Account & sync and Telegram backup without changing the underlying sync, account, backup, or scheduling behavior.
+- Tightened spacing where the removed copy previously occupied layout space.
+- Bumped application metadata to `1.0.1128+172`.
+
 # Changelog
+
+## [1.0.1127] - 2026-09-13
+
+### Fixed
+
+- Added clear, consistent outlines to the Daily, Weekly, Monthly, and Yearly cards in the subscription Repeat picker.
+- The selected repeat option now uses a stronger accent outline while unselected options retain a subtle theme-aware border.
+- Bumped application metadata to `1.0.1127+171`.
 
 ## [1.0.1126] - 2026-09-13
 
+### Added
+
+- Added direct **Upload Telegram** and **Upload Drive** actions to Analytics PDF reports. These now upload through the authenticated Self-Hosted Sync Worker instead of relying only on the device share sheet.
+- Telegram Analytics uploads reuse the existing encrypted Telegram-backup bot token and destination, so no duplicate Telegram configuration is required and automatic Telegram backups may remain disabled.
+- Added Google Drive connection settings for Analytics. Users configure their own Google OAuth Web application once, authorize their Google account in the browser, and Koinly uploads reports into a dedicated **Koinly Analytics** folder using the limited `drive.file` scope.
+- Added Worker-side encrypted storage for the Google OAuth Client Secret and refresh token, OAuth callback handling, token refresh, Drive folder creation, and PDF upload endpoints.
+- Added Worker health/deployment capability reporting for Analytics uploads and schema support for the new encrypted upload settings.
+
 ### Changed
 
-- Replaced the Categories breakdown donut with the requested full `fl_chart` pie-chart style. The chart now has no center hole, shows percentages directly on the slices, and places each category icon in a circular badge on the corresponding slice edge.
-- The largest category is selected by default; tapping another slice expands that slice and moves the highlighted icon badge with it, matching the exploded-slice behavior of the reference chart.
-- Preserved the real category totals, category colors/icons, date-range context, category cards below the chart, and the existing dark/light card styling.
-- Completely removed the old donut percentage-bubble layout helpers from the category breakdown implementation.
+- Account deletion now also removes stored Analytics upload credentials while leaving files already sent to Telegram or Google Drive untouched.
 - Bumped application metadata to `1.0.1126+170`.
-
 
 ## [1.0.1125] - 2026-09-13
 
+### Added
+
+- Added **Settings > Analytics** with Daily, Weekly, Monthly, and Yearly summaries. Each period reports income, expense, net cash flow, transaction activity, transfers, savings movement, loan/repayment activity, applicable budgets, top income/expense categories, and a current account-balance snapshot.
+- Added previous-period comparisons and period navigation/date selection so historical summaries can be reviewed without changing the app-wide default date filter.
+- Added local PDF report generation with **Download PDF** and **Share / upload** actions. The share flow uses the device share sheet so the PDF can be sent to Telegram, Google Drive, or another compatible app without adding separate cloud credentials to Koinly.
+
 ### Changed
 
-- Replaced the Analysis **Cash flow trend** plot with the classic `fl_chart` LineChartSample1-style presentation while continuing to use the user's real income and expense data.
-- The new plot uses the reference purple gradient chart surface, thick rounded smooth lines, no internal grid, the strong bottom-axis rule, muted violet axis labels, and a matching animated tooltip treatment.
-- Preserved the existing Cash flow trend card, date-range controls, income/expense filters, totals, legend, hidden-amount handling, and empty-state behavior.
+- Removed obsolete fallback positioning parameters from the now-static category breakdown badge widget. Static collision-packed placement and tap-to-select remain unchanged.
 - Bumped application metadata to `1.0.1125+169`.
-
 
 ## [1.0.1124] - 2026-09-13
 

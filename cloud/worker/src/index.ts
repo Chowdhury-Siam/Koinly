@@ -41,6 +41,7 @@ const requiredTables = [
   'processed_operations',
   'rate_limits',
   'telegram_backup_settings',
+  'analytics_upload_settings',
   'profile_media',
   'profile_media_chunks',
   'admin_sessions',
@@ -117,6 +118,9 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/auth/login') return await login(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recover') return await recoverAccount(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/refresh') return await refresh(request, env, db);
+      if (request.method === 'GET' && url.pathname === '/v1/analytics-upload/google-drive/callback') {
+        return await googleDriveAnalyticsCallback(request, env, db);
+      }
       const auth = await requireAuth(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
@@ -161,11 +165,18 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/settings') return await saveTelegramBackupSettings(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/test') return await testTelegramBackup(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/send-now') return await sendTelegramBackupNow(env, db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/analytics-upload/google-drive/settings') return await googleDriveAnalyticsSettings(db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive/settings') return await saveGoogleDriveAnalyticsSettings(request, env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive/connect-url') return await googleDriveAnalyticsConnectUrl(request, env, db, auth);
+      if (request.method === 'DELETE' && url.pathname === '/v1/analytics-upload/google-drive/connection') return await disconnectGoogleDriveAnalytics(env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/telegram') return await uploadAnalyticsPdfToTelegram(request, env, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive') return await uploadAnalyticsPdfToGoogleDrive(request, env, db, auth);
 
       return json({ error: 'Not found.' }, 404);
     } catch (error) {
       const statusCode = error instanceof HttpError ? error.status : 500;
       const message = error instanceof HttpError ? error.message : 'Internal server error.';
+      const code = error instanceof HttpError ? error.code : undefined;
       if (!(error instanceof HttpError)) {
         console.error('Unhandled sync worker error', {
           path: url.pathname,
@@ -173,7 +184,7 @@ export default {
           error: databaseErrorMessage(error),
         });
       }
-      return json({ error: message }, statusCode);
+      return json({ error: message, ...(code ? { code } : {}) }, statusCode);
     } finally {
       db?.close();
     }
@@ -342,7 +353,7 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
   if (request.method === 'DELETE' && !match[2]) {
     // Delete children before their parent. The batch rolls back completely on any error.
     const results = await db.batch([
-      ...['profile_media_chunks', 'profile_media', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
+      ...['profile_media_chunks', 'profile_media', 'analytics_upload_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
@@ -356,6 +367,21 @@ function profilePassword(value: unknown): string {
   validatePassword(value);
   return value;
 }
+
+type GoogleDriveAnalyticsSettings = {
+  userId: string;
+  clientId: string;
+  clientSecretConfigured: boolean;
+  encryptedClientSecret: string;
+  clientSecretIv: string;
+  connected: boolean;
+  encryptedRefreshToken: string;
+  refreshTokenIv: string;
+  accountEmail: string;
+  connectedAt: number | null;
+  lastUploadAt: number | null;
+  lastError: string | null;
+};
 
 type TelegramBackupSettings = {
   userId: string;
@@ -725,12 +751,39 @@ async function sendTelegramBackupDocument(token: string, chatId: string, fileNam
   if (contents.length > 45 * 1024 * 1024) {
     throw new HttpError(413, 'The generated Telegram backup is too large to upload safely. Download a local backup instead.');
   }
+  await sendTelegramDocument(
+    token,
+    chatId,
+    fileName,
+    new Blob([contents], { type: 'application/octet-stream' }),
+    `Koinly cloud backup\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`,
+  );
+}
+
+async function sendTelegramAnalyticsDocument(
+  token: string,
+  chatId: string,
+  fileName: string,
+  bytes: Uint8Array,
+  caption: string,
+): Promise<void> {
+  if (bytes.byteLength > analyticsPdfMaxBytes) throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
+  await sendTelegramDocument(token, chatId, fileName, new Blob([bytes], { type: 'application/pdf' }), caption);
+}
+
+async function sendTelegramDocument(
+  token: string,
+  chatId: string,
+  fileName: string,
+  document: Blob,
+  caption: string,
+): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const form = new FormData();
       form.set('chat_id', chatId);
-      form.set('caption', `Koinly cloud backup\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`);
-      form.set('document', new Blob([contents], { type: 'application/octet-stream' }), fileName);
+      form.set('caption', caption.slice(0, 1024));
+      form.set('document', document, fileName);
       const response = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
         method: 'POST',
         body: form,
@@ -838,6 +891,517 @@ function publicTelegramBackupSettings(settings: TelegramBackupSettings): Record<
   };
 }
 
+const analyticsGoogleDriveFolderName = 'Koinly Analytics';
+const analyticsPdfMaxBytes = 10 * 1024 * 1024;
+
+async function googleDriveAnalyticsSettings(db: Client, auth: AuthContext): Promise<Response> {
+  return privateJson({
+    ok: true,
+    settings: publicGoogleDriveAnalyticsSettings(await readGoogleDriveAnalyticsSettings(db, auth.userId)),
+  });
+}
+
+async function saveGoogleDriveAnalyticsSettings(
+  request: Request,
+  env: Env,
+  db: Client,
+  auth: AuthContext,
+): Promise<Response> {
+  const body = await readJson(request);
+  const existing = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+  const clientId = String(body.clientId ?? existing.clientId).trim();
+  if (!/^[A-Za-z0-9._-]{10,220}\.apps\.googleusercontent\.com$/.test(clientId)) {
+    throw new HttpError(400, 'Enter a valid Google OAuth Web application Client ID.');
+  }
+
+  const suppliedSecret = String(body.clientSecret ?? '').trim();
+  if (suppliedSecret.length > 512) throw new HttpError(400, 'Google OAuth Client Secret is too long.');
+  let encryptedClientSecret = existing.encryptedClientSecret;
+  let clientSecretIv = existing.clientSecretIv;
+  if (suppliedSecret) {
+    const encrypted = await encryptWorkerSecret(env.JWT_SECRET, 'google-drive-client-secret', suppliedSecret);
+    encryptedClientSecret = encrypted.ciphertext;
+    clientSecretIv = encrypted.iv;
+  }
+  if (!encryptedClientSecret) {
+    throw new HttpError(400, 'Enter the Google OAuth Web application Client Secret.');
+  }
+
+  const clientChanged = existing.clientId.length > 0 && existing.clientId !== clientId;
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO analytics_upload_settings(
+            user_id, google_client_id, google_client_secret_encrypted, google_client_secret_iv,
+            google_refresh_token_encrypted, google_refresh_token_iv, google_account_email,
+            google_connected_at, google_last_upload_at, google_last_error, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            google_client_id = excluded.google_client_id,
+            google_client_secret_encrypted = excluded.google_client_secret_encrypted,
+            google_client_secret_iv = excluded.google_client_secret_iv,
+            google_refresh_token_encrypted = excluded.google_refresh_token_encrypted,
+            google_refresh_token_iv = excluded.google_refresh_token_iv,
+            google_account_email = excluded.google_account_email,
+            google_connected_at = excluded.google_connected_at,
+            google_last_upload_at = excluded.google_last_upload_at,
+            google_last_error = NULL,
+            updated_at = excluded.updated_at`,
+    args: [
+      auth.userId,
+      clientId,
+      encryptedClientSecret,
+      clientSecretIv,
+      clientChanged ? null : (existing.encryptedRefreshToken || null),
+      clientChanged ? null : (existing.refreshTokenIv || null),
+      clientChanged ? '' : existing.accountEmail,
+      clientChanged ? null : existing.connectedAt,
+      clientChanged ? null : existing.lastUploadAt,
+      null,
+      now,
+    ],
+  });
+  return privateJson({
+    ok: true,
+    settings: publicGoogleDriveAnalyticsSettings(await readGoogleDriveAnalyticsSettings(db, auth.userId)),
+  });
+}
+
+async function googleDriveAnalyticsConnectUrl(
+  request: Request,
+  env: Env,
+  db: Client,
+  auth: AuthContext,
+): Promise<Response> {
+  const settings = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+  if (!settings.clientId || !settings.encryptedClientSecret) {
+    throw new HttpError(400, 'Save your Google OAuth Client ID and Client Secret first.');
+  }
+  const redirectUri = `${new URL(request.url).origin}/v1/analytics-upload/google-drive/callback`;
+  const state = await signToken(env.JWT_SECRET, {
+    scope: 'google-drive-analytics-connect',
+    sub: auth.userId,
+    exp: Math.floor(Date.now() / 1000) + 10 * 60,
+    nonce: b64urlBytes(crypto.getRandomValues(new Uint8Array(18))),
+  });
+  const authorization = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authorization.searchParams.set('client_id', settings.clientId);
+  authorization.searchParams.set('redirect_uri', redirectUri);
+  authorization.searchParams.set('response_type', 'code');
+  authorization.searchParams.set('access_type', 'offline');
+  authorization.searchParams.set('prompt', 'consent');
+  authorization.searchParams.set('include_granted_scopes', 'true');
+  authorization.searchParams.set('scope', 'openid email https://www.googleapis.com/auth/drive.file');
+  authorization.searchParams.set('state', state);
+  return privateJson({ ok: true, authorizationUrl: authorization.toString(), redirectUri });
+}
+
+async function googleDriveAnalyticsCallback(request: Request, env: Env, db: Client): Promise<Response> {
+  const url = new URL(request.url);
+  try {
+    const oauthError = cleanText(url.searchParams.get('error_description') || url.searchParams.get('error'), 240);
+    if (oauthError) throw new HttpError(400, `Google authorization was not completed: ${oauthError}`);
+    const code = String(url.searchParams.get('code') ?? '').trim();
+    const stateToken = String(url.searchParams.get('state') ?? '').trim();
+    if (!code || !stateToken) throw new HttpError(400, 'Google did not return the required authorization code.');
+    const state = await verifyToken(env.JWT_SECRET, stateToken);
+    if (state.scope !== 'google-drive-analytics-connect') throw new HttpError(401, 'Invalid Google Drive connection state.');
+    const userId = String(state.sub ?? '');
+    if (!userId) throw new HttpError(401, 'Invalid Google Drive connection state.');
+
+    const settings = await readGoogleDriveAnalyticsSettings(db, userId);
+    if (!settings.clientId || !settings.encryptedClientSecret) {
+      throw new HttpError(409, 'Google Drive credentials are no longer configured in Koinly.');
+    }
+    const clientSecret = await decryptWorkerSecret(
+      env.JWT_SECRET,
+      'google-drive-client-secret',
+      settings.encryptedClientSecret,
+      settings.clientSecretIv,
+      'The saved Google OAuth Client Secret cannot be decrypted. Re-enter it in Koinly.',
+    );
+    const redirectUri = `${url.origin}/v1/analytics-upload/google-drive/callback`;
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: settings.clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    const tokenText = await tokenResponse.text();
+    const tokenData = parseJsonRecord(tokenText);
+    if (!tokenResponse.ok) {
+      throw new HttpError(502, googleOAuthFailure(tokenResponse.status, tokenData));
+    }
+    const refreshToken = String(tokenData.refresh_token ?? '').trim();
+    const accessToken = String(tokenData.access_token ?? '').trim();
+    if (!refreshToken) {
+      throw new HttpError(409, 'Google did not issue an offline refresh token. Remove Koinly from your Google account permissions, then connect again.');
+    }
+    if (!accessToken) throw new HttpError(502, 'Google did not return an access token.');
+
+    let accountEmail = '';
+    try {
+      const userResponse = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+      });
+      if (userResponse.ok) {
+        const userInfo = parseJsonRecord(await userResponse.text());
+        accountEmail = cleanText(userInfo.email, 240);
+      }
+    } catch {}
+
+    const encryptedRefreshToken = await encryptWorkerSecret(env.JWT_SECRET, 'google-drive-refresh-token', refreshToken);
+    const now = Date.now();
+    await db.execute({
+      sql: `UPDATE analytics_upload_settings
+            SET google_refresh_token_encrypted = ?, google_refresh_token_iv = ?, google_account_email = ?,
+                google_connected_at = ?, google_last_error = NULL, updated_at = ?
+            WHERE user_id = ?`,
+      args: [encryptedRefreshToken.ciphertext, encryptedRefreshToken.iv, accountEmail, now, now, userId],
+    });
+    return googleDriveCallbackPage(
+      'Google Drive connected',
+      accountEmail ? `Koinly can now upload Analytics PDFs to ${accountEmail}. You can return to the app.` : 'Koinly can now upload Analytics PDFs to Google Drive. You can return to the app.',
+      true,
+      200,
+    );
+  } catch (error) {
+    const status = error instanceof HttpError ? error.status : 500;
+    const message = error instanceof HttpError ? error.message : 'Google Drive connection failed. Return to Koinly and try again.';
+    return googleDriveCallbackPage('Google Drive connection failed', message, false, status);
+  }
+}
+
+async function disconnectGoogleDriveAnalytics(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  const settings = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+  if (settings.encryptedRefreshToken) {
+    try {
+      const refreshToken = await decryptWorkerSecret(
+        env.JWT_SECRET,
+        'google-drive-refresh-token',
+        settings.encryptedRefreshToken,
+        settings.refreshTokenIv,
+        'The saved Google Drive authorization cannot be decrypted.',
+      );
+      await fetch('https://oauth2.googleapis.com/revoke', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: refreshToken }).toString(),
+      });
+    } catch {}
+  }
+  const now = Date.now();
+  await db.execute({
+    sql: `UPDATE analytics_upload_settings
+          SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
+              google_account_email = '', google_connected_at = NULL, google_last_error = NULL, updated_at = ?
+          WHERE user_id = ?`,
+    args: [now, auth.userId],
+  });
+  return privateJson({
+    ok: true,
+    settings: publicGoogleDriveAnalyticsSettings(await readGoogleDriveAnalyticsSettings(db, auth.userId)),
+  });
+}
+
+async function uploadAnalyticsPdfToTelegram(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  const pdf = await analyticsPdfRequest(request);
+  const telegram = await readTelegramBackupSettings(db, auth.userId);
+  if (!telegram.encryptedToken || !telegram.chatId) {
+    throw new HttpError(400, 'Configure the Telegram bot token and destination in Telegram backup settings first.');
+  }
+  const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
+  const caption = pdf.caption || `Koinly Analytics\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`;
+  await sendTelegramAnalyticsDocument(token, telegram.chatId, pdf.fileName, pdf.bytes, caption);
+  return privateJson({ ok: true, destination: 'telegram', fileName: pdf.fileName, sentAt: Date.now() });
+}
+
+async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  const pdf = await analyticsPdfRequest(request);
+  const settings = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+  if (!settings.connected) throw new HttpError(400, 'Connect Google Drive in Analytics upload settings first.');
+  const attemptedAt = Date.now();
+  try {
+    const accessToken = await googleDriveAccessToken(env, settings);
+    const folderId = await ensureGoogleAnalyticsFolder(accessToken);
+    const uploaded = await googleDriveUploadPdf(accessToken, folderId, pdf.fileName, pdf.bytes);
+    const completedAt = Date.now();
+    await db.execute({
+      sql: `UPDATE analytics_upload_settings
+            SET google_last_upload_at = ?, google_last_error = NULL, updated_at = ? WHERE user_id = ?`,
+      args: [completedAt, completedAt, auth.userId],
+    });
+    return privateJson({
+      ok: true,
+      destination: 'google-drive',
+      fileName: pdf.fileName,
+      folderName: analyticsGoogleDriveFolderName,
+      fileId: uploaded.id,
+      webViewLink: uploaded.webViewLink,
+      uploadedAt: completedAt,
+    });
+  } catch (error) {
+    const message = safeExternalUploadError(error);
+    if (error instanceof HttpError && error.status === 401) {
+      await db.execute({
+        sql: `UPDATE analytics_upload_settings
+              SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
+                  google_account_email = '', google_connected_at = NULL, google_last_error = ?, updated_at = ?
+              WHERE user_id = ?`,
+        args: [message, attemptedAt, auth.userId],
+      });
+    } else {
+      await db.execute({
+        sql: `UPDATE analytics_upload_settings SET google_last_error = ?, updated_at = ? WHERE user_id = ?`,
+        args: [message, attemptedAt, auth.userId],
+      });
+    }
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, message);
+  }
+}
+
+async function analyticsPdfRequest(request: Request): Promise<{ fileName: string; bytes: Uint8Array; caption: string }> {
+  const body = await readJson(request);
+  const fileName = cleanText(body.fileName, 140);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,130}\.pdf$/i.test(fileName)) {
+    throw new HttpError(400, 'Analytics PDF filename is invalid.');
+  }
+  const contentBase64 = typeof body.contentBase64 === 'string' ? body.contentBase64 : '';
+  if (!contentBase64 || contentBase64.length > Math.ceil(analyticsPdfMaxBytes * 4 / 3) + 16) {
+    throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = bytesFromBase64(contentBase64);
+  } catch {
+    throw new HttpError(400, 'Analytics PDF payload is invalid.');
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > analyticsPdfMaxBytes) {
+    throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
+  }
+  if (bytes.byteLength < 5 || String.fromCharCode(...Array.from(bytes.subarray(0, 5))) !== '%PDF-') {
+    throw new HttpError(400, 'The uploaded Analytics document is not a valid PDF.');
+  }
+  return { fileName, bytes, caption: cleanText(body.caption, 512) };
+}
+
+async function readGoogleDriveAnalyticsSettings(db: Client, userId: string): Promise<GoogleDriveAnalyticsSettings> {
+  const row = (await db.execute({
+    sql: `SELECT user_id, google_client_id, google_client_secret_encrypted, google_client_secret_iv,
+                 google_refresh_token_encrypted, google_refresh_token_iv, google_account_email,
+                 google_connected_at, google_last_upload_at, google_last_error
+          FROM analytics_upload_settings WHERE user_id = ?`,
+    args: [userId],
+  })).rows[0];
+  if (!row) {
+    return {
+      userId,
+      clientId: '',
+      clientSecretConfigured: false,
+      encryptedClientSecret: '',
+      clientSecretIv: '',
+      connected: false,
+      encryptedRefreshToken: '',
+      refreshTokenIv: '',
+      accountEmail: '',
+      connectedAt: null,
+      lastUploadAt: null,
+      lastError: null,
+    };
+  }
+  return googleDriveAnalyticsSettingsFromRow(row);
+}
+
+function googleDriveAnalyticsSettingsFromRow(row: Record<string, unknown>): GoogleDriveAnalyticsSettings {
+  const encryptedRefreshToken = String(row.google_refresh_token_encrypted ?? '');
+  return {
+    userId: String(row.user_id ?? ''),
+    clientId: String(row.google_client_id ?? ''),
+    clientSecretConfigured: Boolean(row.google_client_secret_encrypted),
+    encryptedClientSecret: String(row.google_client_secret_encrypted ?? ''),
+    clientSecretIv: String(row.google_client_secret_iv ?? ''),
+    connected: Boolean(encryptedRefreshToken),
+    encryptedRefreshToken,
+    refreshTokenIv: String(row.google_refresh_token_iv ?? ''),
+    accountEmail: String(row.google_account_email ?? ''),
+    connectedAt: nullableInteger(row.google_connected_at),
+    lastUploadAt: nullableInteger(row.google_last_upload_at),
+    lastError: row.google_last_error == null ? null : String(row.google_last_error),
+  };
+}
+
+function publicGoogleDriveAnalyticsSettings(settings: GoogleDriveAnalyticsSettings): Record<string, unknown> {
+  return {
+    clientId: settings.clientId,
+    clientSecretConfigured: settings.clientSecretConfigured,
+    connected: settings.connected,
+    accountEmail: settings.accountEmail,
+    folderName: analyticsGoogleDriveFolderName,
+    connectedAt: settings.connectedAt,
+    lastUploadAt: settings.lastUploadAt,
+    lastError: settings.lastError,
+  };
+}
+
+async function googleDriveAccessToken(env: Env, settings: GoogleDriveAnalyticsSettings): Promise<string> {
+  if (!settings.clientId || !settings.encryptedClientSecret || !settings.encryptedRefreshToken) {
+    throw new HttpError(400, 'Connect Google Drive in Analytics upload settings first.');
+  }
+  const clientSecret = await decryptWorkerSecret(
+    env.JWT_SECRET,
+    'google-drive-client-secret',
+    settings.encryptedClientSecret,
+    settings.clientSecretIv,
+    'The saved Google OAuth Client Secret cannot be decrypted. Re-enter it in Koinly.',
+  );
+  const refreshToken = await decryptWorkerSecret(
+    env.JWT_SECRET,
+    'google-drive-refresh-token',
+    settings.encryptedRefreshToken,
+    settings.refreshTokenIv,
+    'The saved Google Drive authorization cannot be decrypted. Reconnect Google Drive.',
+  );
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: settings.clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  const data = parseJsonRecord(await response.text());
+  if (!response.ok) {
+    if (String(data.error ?? '') === 'invalid_grant') {
+      throw new HttpError(401, 'Google Drive authorization is no longer valid. Reconnect Google Drive in Analytics upload settings.');
+    }
+    throw new HttpError(502, googleOAuthFailure(response.status, data));
+  }
+  const accessToken = String(data.access_token ?? '').trim();
+  if (!accessToken) throw new HttpError(502, 'Google did not return a Drive access token.');
+  return accessToken;
+}
+
+async function ensureGoogleAnalyticsFolder(accessToken: string): Promise<string> {
+  const query = `name = '${analyticsGoogleDriveFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
+  listUrl.searchParams.set('q', query);
+  listUrl.searchParams.set('spaces', 'drive');
+  listUrl.searchParams.set('fields', 'files(id,name)');
+  listUrl.searchParams.set('pageSize', '10');
+  const listResponse = await fetch(listUrl, {
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+  });
+  const listData = parseJsonRecord(await listResponse.text());
+  if (!listResponse.ok) throw new HttpError(502, googleDriveApiFailure(listResponse.status, listData));
+  const files = Array.isArray(listData.files) ? listData.files : [];
+  const first = files.find(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id ?? '')) as Record<string, unknown> | undefined;
+  if (first) return String(first.id);
+
+  const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json; charset=UTF-8',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({ name: analyticsGoogleDriveFolderName, mimeType: 'application/vnd.google-apps.folder' }),
+  });
+  const createData = parseJsonRecord(await createResponse.text());
+  if (!createResponse.ok) throw new HttpError(502, googleDriveApiFailure(createResponse.status, createData));
+  const folderId = String(createData.id ?? '');
+  if (!folderId) throw new HttpError(502, 'Google Drive did not return the Analytics folder ID.');
+  return folderId;
+}
+
+async function googleDriveUploadPdf(
+  accessToken: string,
+  folderId: string,
+  fileName: string,
+  bytes: Uint8Array,
+): Promise<{ id: string; webViewLink: string }> {
+  const boundary = `koinly_${crypto.randomUUID().replace(/-/g, '')}`;
+  const metadata = JSON.stringify({ name: fileName, parents: [folderId], mimeType: 'application/pdf' });
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
+    `--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,
+    bytes,
+    `\r\n--${boundary}--`,
+  ]);
+  const uploadUrl = new URL('https://www.googleapis.com/upload/drive/v3/files');
+  uploadUrl.searchParams.set('uploadType', 'multipart');
+  uploadUrl.searchParams.set('fields', 'id,name,webViewLink');
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': `multipart/related; boundary=${boundary}`,
+      accept: 'application/json',
+    },
+    body,
+  });
+  const data = parseJsonRecord(await response.text());
+  if (!response.ok) throw new HttpError(502, googleDriveApiFailure(response.status, data));
+  const id = String(data.id ?? '');
+  if (!id) throw new HttpError(502, 'Google Drive did not return an uploaded file ID.');
+  return { id, webViewLink: String(data.webViewLink ?? '') };
+}
+
+function googleOAuthFailure(status: number, data: Record<string, unknown>): string {
+  const description = cleanText(data.error_description, 200);
+  const code = cleanText(data.error, 80);
+  if (description) return `Google OAuth rejected the request: ${description}`;
+  if (code) return `Google OAuth rejected the request: ${code}`;
+  return `Google OAuth returned HTTP ${status}.`;
+}
+
+function googleDriveApiFailure(status: number, data: Record<string, unknown>): string {
+  const error = data.error;
+  if (error && typeof error === 'object') {
+    const message = cleanText((error as Record<string, unknown>).message, 200);
+    if (message) return `Google Drive rejected the upload: ${message}`;
+  }
+  return `Google Drive API returned HTTP ${status}.`;
+}
+
+function parseJsonRecord(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function googleDriveCallbackPage(title: string, message: string, ok: boolean, status: number): Response {
+  const accent = ok ? '#16c79a' : '#ef5350';
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>body{margin:0;background:#0f1217;color:#f4f7f5;font:16px system-ui,-apple-system,Segoe UI,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px;box-sizing:border-box}.card{max-width:560px;background:#0b2119;border:1px solid #244438;border-radius:28px;padding:28px;box-shadow:0 24px 80px #0008}h1{margin:0 0 12px;font-size:28px}p{margin:0;color:#a9bbb3;line-height:1.55}.dot{width:54px;height:54px;border-radius:18px;background:${accent}22;color:${accent};display:grid;place-items:center;font-size:28px;margin-bottom:18px}</style></head><body><main class="card"><div class="dot">${ok ? '✓' : '!'}</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main></body></html>`;
+  return new Response(html, {
+    status,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+    },
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
+}
+
+function safeExternalUploadError(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').slice(0, 220);
+}
+
 function normalizeTelegramBackupFrequency(value: unknown): TelegramBackupFrequency {
   const normalized = String(value ?? '').trim().toLowerCase();
   if (normalized === 'daily' || normalized === 'weekly' || normalized === 'monthly') return normalized;
@@ -940,6 +1504,38 @@ async function telegramBackupEncryptionKey(secret: string, usages: KeyUsage[]): 
   return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, usages);
 }
 
+async function encryptWorkerSecret(secret: string, purpose: string, plaintext: string): Promise<{ ciphertext: string; iv: string }> {
+  const key = await workerSecretEncryptionKey(secret, purpose, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
+  return { ciphertext: b64urlBytes(encrypted), iv: b64urlBytes(iv) };
+}
+
+async function decryptWorkerSecret(
+  secret: string,
+  purpose: string,
+  ciphertext: string,
+  encodedIv: string,
+  failureMessage: string,
+): Promise<string> {
+  try {
+    const key = await workerSecretEncryptionKey(secret, purpose, ['decrypt']);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: bytesFromB64Url(encodedIv) },
+      key,
+      bytesFromB64Url(ciphertext),
+    );
+    return new TextDecoder().decode(decrypted);
+  } catch {
+    throw new HttpError(503, failureMessage);
+  }
+}
+
+async function workerSecretEncryptionKey(secret: string, purpose: string, usages: KeyUsage[]): Promise<CryptoKey> {
+  const material = await crypto.subtle.digest('SHA-256', enc.encode(`koinly-worker-secret:${purpose}:${secret}`));
+  return crypto.subtle.importKey('raw', material, { name: 'AES-GCM' }, false, usages);
+}
+
 function encodeKoinlyBackup(payload: unknown): string {
   const source = enc.encode(JSON.stringify(payload));
   const key = enc.encode(koinlyBackupCompatibilityKey);
@@ -958,6 +1554,13 @@ function bytesToBase64(bytes: Uint8Array): string {
     chunks.push(String.fromCharCode(...Array.from(chunk)));
   }
   return btoa(chunks.join(''));
+}
+
+function bytesFromBase64(value: string): Uint8Array {
+  const raw = atob(value);
+  const bytes = new Uint8Array(new ArrayBuffer(raw.length));
+  for (let index = 0; index < raw.length; index += 1) bytes[index] = raw.charCodeAt(index);
+  return bytes;
 }
 
 function compactUtcTimestamp(value: Date): string {
@@ -997,6 +1600,7 @@ function rootResponse(env: Env): Response {
       status: 'GET /v1/sync/status',
       profileMedia: '/v1/profile-media/*',
       telegramBackup: '/v1/telegram-backup/*',
+      analyticsUpload: '/v1/analytics-upload/*',
     },
   });
 }
@@ -1010,6 +1614,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: false,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
       databaseReachable: false,
@@ -1029,6 +1634,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
       databaseReachable: true,
@@ -1042,6 +1648,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
       databaseReachable: false,
@@ -1102,7 +1709,7 @@ function databaseErrorMessage(error: unknown): string {
 
 export async function register(request: Request, env: Env, db: Client): Promise<Response> {
   if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH) {
-    throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.');
+    throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.', 'REGISTRATION_MANAGED');
   }
   const body = await readJson(request);
   const username = normalizeUsername(body.username);
@@ -2005,7 +2612,7 @@ function cors(response: Response): Response {
 }
 
 class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message);
   }
 }

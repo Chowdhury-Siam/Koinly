@@ -100,6 +100,8 @@ IconData iconFor(String name) {
     case 'warning': return Icons.warning_amber_rounded;
     case 'reminder': return Icons.notifications_active_rounded;
     case 'download': return Icons.system_update_alt_rounded;
+    case 'cloud': return Icons.cloud_upload_rounded;
+    case 'send': return Icons.send_rounded;
     default: return Icons.category_rounded;
   }
 }

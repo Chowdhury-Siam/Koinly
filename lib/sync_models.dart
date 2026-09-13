@@ -15,7 +15,6 @@ class SyncAuthSession {
     required this.accessToken,
     required this.refreshToken,
     required this.username,
-    this.recoveryKey,
     required this.userId,
     required this.deviceId,
     required this.accessExpiresAt,
@@ -24,7 +23,6 @@ class SyncAuthSession {
   final String accessToken;
   final String refreshToken;
   final String username;
-  final String? recoveryKey;
   final String userId;
   final String deviceId;
   final DateTime accessExpiresAt;
@@ -101,6 +99,57 @@ class TelegramBackupSettings {
       timezoneOffsetMinutes: ((data['timezoneOffsetMinutes'] as num?)?.toInt() ?? 0).clamp(-840, 840).toInt(),
       nextDueAt: parseTime(data['nextDueAt']),
       lastSentAt: parseTime(data['lastSentAt']),
+      lastError: data['lastError']?.toString(),
+    );
+  }
+}
+
+class GoogleDriveAnalyticsSettings {
+  const GoogleDriveAnalyticsSettings({
+    required this.clientId,
+    required this.clientSecretConfigured,
+    required this.connected,
+    required this.accountEmail,
+    required this.folderName,
+    this.connectedAt,
+    this.lastUploadAt,
+    this.lastError,
+  });
+
+  const GoogleDriveAnalyticsSettings.defaults()
+      : clientId = '',
+        clientSecretConfigured = false,
+        connected = false,
+        accountEmail = '',
+        folderName = 'Koinly Analytics',
+        connectedAt = null,
+        lastUploadAt = null,
+        lastError = null;
+
+  final String clientId;
+  final bool clientSecretConfigured;
+  final bool connected;
+  final String accountEmail;
+  final String folderName;
+  final DateTime? connectedAt;
+  final DateTime? lastUploadAt;
+  final String? lastError;
+
+  factory GoogleDriveAnalyticsSettings.fromJson(Map<String, dynamic> data) {
+    DateTime? parseTime(dynamic value) {
+      final millis = value is num ? value.toInt() : int.tryParse(value?.toString() ?? '');
+      if (millis == null || millis <= 0) return null;
+      return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+    }
+
+    return GoogleDriveAnalyticsSettings(
+      clientId: data['clientId']?.toString() ?? '',
+      clientSecretConfigured: data['clientSecretConfigured'] == true,
+      connected: data['connected'] == true,
+      accountEmail: data['accountEmail']?.toString() ?? '',
+      folderName: data['folderName']?.toString().trim().isNotEmpty == true ? data['folderName'].toString() : 'Koinly Analytics',
+      connectedAt: parseTime(data['connectedAt']),
+      lastUploadAt: parseTime(data['lastUploadAt']),
       lastError: data['lastError']?.toString(),
     );
   }

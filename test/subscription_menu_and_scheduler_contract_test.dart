@@ -37,6 +37,9 @@ void main() {
     expect(app, contains("labelText: 'Price'"));
     expect(app, contains("labelText: 'Repeat'"));
     expect(app, contains('showSubscriptionFrequencyPopup(context, frequency)'));
+    expect(app, contains('scheme.outlineVariant.withOpacity(.34)'));
+    expect(app, contains('kSleekAccent.withOpacity(.56)'));
+    expect(app, contains('width: value == selected ? 1.25 : 1'));
     expect(app, contains("Text('Auto pay'"));
     expect(app, contains('auto_pay INTEGER NOT NULL DEFAULT 1'));
     expect(app, contains("label: Text(recording ? 'Adding…' : 'Add now')"));

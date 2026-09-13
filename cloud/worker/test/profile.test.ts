@@ -154,17 +154,18 @@ test('profile authentication and account lifecycle use the real database', async
       { sql: 'INSERT INTO sync_changes(user_id, entity_type, entity_id, operation, version, device_id, operation_id, changed_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)', args: [accountId, 'accounts', 'item', 'upsert', 'test-device', 'op', now] },
       { sql: 'INSERT INTO processed_operations VALUES (?, ?, 1, ?)', args: [accountId, 'op', now] },
       { sql: 'INSERT INTO telegram_backup_settings(user_id, updated_at) VALUES (?, ?)', args: [accountId, now] },
+      { sql: 'INSERT INTO analytics_upload_settings(user_id, updated_at) VALUES (?, ?)', args: [accountId, now] },
       `CREATE TRIGGER fail_delete BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'private database detail'); END`,
     ], 'write');
     const failed = await call('/profile/api/accounts/' + accountId, 'DELETE');
     assert.equal(failed.status, 503);
     assert.doesNotMatch(await failed.text(), /private database detail/);
-    for (const table of ['sync_entities', 'sync_changes', 'processed_operations', 'telegram_backup_settings', 'refresh_tokens', 'devices']) {
+    for (const table of ['sync_entities', 'sync_changes', 'processed_operations', 'analytics_upload_settings', 'telegram_backup_settings', 'refresh_tokens', 'devices']) {
       assert.ok(Number((await db.execute({ sql: `SELECT COUNT(*) AS count FROM ${table} WHERE user_id = ?`, args: [accountId] })).rows[0].count) > 0, table + ' should survive rollback');
     }
     await db.execute('DROP TRIGGER fail_delete');
     assert.equal((await call('/profile/api/accounts/' + accountId, 'DELETE')).status, 200);
-    for (const table of ['sync_entities', 'sync_changes', 'processed_operations', 'telegram_backup_settings', 'refresh_tokens', 'devices']) {
+    for (const table of ['sync_entities', 'sync_changes', 'processed_operations', 'analytics_upload_settings', 'telegram_backup_settings', 'refresh_tokens', 'devices']) {
       assert.equal(Number((await db.execute({ sql: `SELECT COUNT(*) AS count FROM ${table} WHERE user_id = ?`, args: [accountId] })).rows[0].count), 0);
     }
     await assert.rejects(requireAuth(request('/v1/sync/status', 'GET', undefined, { authorization: 'Bearer ' + oldAccess }), env, db), /revoked/);

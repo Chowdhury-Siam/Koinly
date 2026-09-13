@@ -3,21 +3,22 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('self-hosted authentication uses username and recovery key UI', () {
+  test('self-hosted authentication uses username without in-app password recovery', () {
     final app = File('lib/main.dart').readAsStringSync();
     final api = File('lib/sync_services.dart').readAsStringSync();
     final models = File('lib/sync_models.dart').readAsStringSync();
 
     expect(app, contains("labelText: 'Username'"));
-    expect(app, contains("Text('Forgot password?')"));
-    expect(app, contains('class _AccountRecoveryPopup'));
-    expect(app, contains('class _RecoveryKeyPopup'));
-    expect(app, contains('recoverSyncAccount('));
-    expect(app, contains('rotateSyncRecoveryKey()'));
+    expect(app, isNot(contains("Text('Forgot password?')")));
+    expect(app, isNot(contains('class _AccountRecoveryPopup')));
+    expect(app, isNot(contains('class _RecoveryKeyPopup')));
+    expect(app, isNot(contains('recoverSyncAccount(')));
+    expect(app, isNot(contains('rotateSyncRecoveryKey()')));
     expect(api, contains("'username': username"));
-    expect(api, contains("'/v1/auth/recover'"));
-    expect(api, contains("'/v1/auth/recovery-key'"));
+    expect(api, isNot(contains("'/v1/auth/recover'")));
+    expect(api, isNot(contains("'/v1/auth/recovery-key'")));
     expect(models, contains('final String username;'));
+    expect(models, isNot(contains('recoveryKey')));
   });
 
   test('center popup bodies use fixed adaptive content instead of full-card scrolling', () {

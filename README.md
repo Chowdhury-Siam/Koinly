@@ -57,6 +57,8 @@ You do not need to write Cloudflare or Turso code yourself.
 - Purchase planning with item name, expected price, category, total planned cost, editing, and one-tap purchase conversion
 - Recurring subscriptions with scheduled date/time, price, category, spending account, daily/weekly/monthly/yearly repeat, automatic transaction recording, and manual “Add now”
 - Cash-flow trends, category analysis, balances, and net results
+- Daily, weekly, monthly, and yearly Analytics summaries with previous-period comparisons
+- Downloadable Analytics PDF reports with direct Self-Hosted Worker uploads to Telegram and Google Drive, plus the normal system share sheet
 - Search and filters for account, category, type, and date
 - Quick account/category creation from transaction pickers
 
@@ -408,18 +410,15 @@ To connect an account to the app:
 3. Paste your Cloudflare Worker URL, without `/profile` at the end.
 4. Select **Validate and use Worker**.
 5. Select **Login** and enter the username and password created in the administration portal.
-6. While signed in, open **Recovery key**, generate a key, and save it securely.
-7. Repeat these steps on other devices using the same account.
+6. Repeat these steps on other devices using the same account.
 
-Existing accounts can continue to sign in with their current credentials. For Workers without administrator settings, the app still allows the first account to be created through **Create account** and displays a recovery key during registration. Once administrator settings are configured, use `/profile` to create accounts.
+Existing accounts can continue to sign in with their current credentials. Once administrator settings are configured, use `/profile` to create accounts and reset forgotten passwords.
 
-### 6.1 Forgot your password?
+### 6.1 Password recovery
 
-On the Login screen, choose **Forgot password?** and enter your username, saved recovery key, and a new password. A successful reset revokes the old refresh sessions and signs the current device in with the new password.
+Koinly no longer exposes an in-app **Forgot password** or recovery-key flow. If an account holder forgets their password, open the Worker's `/profile` administration portal, select the account, and use **Change password**. The reset signs out the account's existing sessions, and the user can then sign in again with the new password.
 
-While signed in, **Settings > Account & sync > Recovery key** creates a replacement recovery key. The previous recovery key stops working immediately.
-
-> Existing self-hosted databases created by older Koinly releases are migrated from email login to username login when the latest deployment workflow applies the schema. The old email's part before `@` becomes the initial username. Existing accounts do not have a recovery key until you sign in once and create one from **Recovery key**.
+> Existing self-hosted databases created by older Koinly releases are migrated from email login to username login when the latest deployment workflow applies the schema. The old email's part before `@` becomes the initial username.
 
 ### 6.2 Sync controls
 
@@ -460,7 +459,7 @@ The dashboard shows the total number of registered accounts and a list of their 
 3. Enter an 8–256 character password in **New password** and repeat it in **Confirm password**.
 4. Select **Create account**.
 5. Wait for **Account created**. The account will appear in the list.
-6. Give the account holder the Worker URL, username, and password through a private channel. They can now select **Login** in Koinly and create their own recovery key after signing in.
+6. Give the account holder the Worker URL, username, and password through a private channel. They can now select **Login** in Koinly.
 
 Each account keeps its own synchronized data. Creating an account here does not grant administrator access.
 
@@ -471,7 +470,7 @@ Each account keeps its own synchronized data. Creating an account here does not 
 3. Select **Change password** and wait for the success message.
 4. Give the account holder their new password privately.
 
-You do not need the old password. The reset signs out the account's devices and invalidates its previous recovery key. The account holder must sign in again and generate a replacement recovery key.
+You do not need the old password. The reset signs out the account's devices. The account holder must sign in again with the replacement password.
 
 #### 6.3.4 Delete an account
 
@@ -532,6 +531,25 @@ For a Telegram channel, add the bot as an administrator with permission to post 
 
 The saved bot token is encrypted by the Worker before it is stored in Turso.
 
+### Analytics PDF uploads
+
+Open **Settings > Analytics**, then use the cloud button in the upper-right corner. Analytics PDFs can be uploaded directly through the same authenticated Self-Hosted Sync Worker:
+
+- **Telegram** reuses the bot token and group/channel destination from Telegram backup. Automatic Telegram backups can stay disabled.
+- **Google Drive** connects once through Google OAuth and stores its Client Secret and refresh token encrypted in Turso. Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for reports uploaded by the app.
+
+For Google Drive, create your own OAuth 2.0 **Web application** in Google Cloud Console:
+
+1. Enable **Google Drive API** for the Google Cloud project.
+2. Configure the OAuth consent screen. If the app remains in Testing, add the Google account you will use as a test user.
+3. Create an **OAuth 2.0 Client ID** with application type **Web application**.
+4. In Koinly, open **Analytics > cloud button** and copy the displayed **Authorized redirect URI**. Add that exact URI to the Google OAuth client.
+5. Paste the Client ID and Client Secret into Koinly, select **Save and connect Google Drive**, then finish authorization in the browser.
+
+After that, **Upload Telegram** and **Upload Drive** on the Analytics page send the currently selected Daily, Weekly, Monthly, or Yearly PDF directly without opening the system share sheet.
+
+> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the Analytics upload endpoints and database table are installed.
+
 ---
 
 <a id="automatic-local-backup"></a>
@@ -563,6 +581,7 @@ On Android, Koinly uses the system folder picker and creates/uses a `Koinly/Back
 - Local/cloud restore is merge-based.
 - Backup imports reconcile equivalent categories to reduce duplicates.
 - Telegram bot tokens saved for cloud backup are encrypted before Turso storage.
+- Google Drive OAuth Client Secrets and refresh tokens used by Analytics uploads are encrypted by the Worker before Turso storage.
 - Profile media remains device-local and is not part of finance synchronization.
 
 ---
@@ -597,7 +616,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1126
+  --dart-define=KOINLY_APP_VERSION=1.0.1130
 ```
 
 ## 10.4 Windows build
@@ -607,7 +626,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1126
+  --dart-define=KOINLY_APP_VERSION=1.0.1130
 ```
 
 ## 10.5 Linux build
@@ -624,7 +643,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1126
+  --dart-define=KOINLY_APP_VERSION=1.0.1130
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -643,7 +662,7 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1126
+  --dart-define=KOINLY_APP_VERSION=1.0.1130
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.

@@ -40,13 +40,14 @@ void main() {
     final app = File('lib/main.dart').readAsStringSync();
     final restoreIndex = app.indexOf("label: const Text('Restore cloud copy')");
     final uploadIndex = app.indexOf('label: Text(uploadButtonLabel)');
-    final recoveryIndex = app.indexOf("label: const Text('Recovery key')");
+    final signOutIndex = app.indexOf("label: const Text('Sign out')");
 
     expect(restoreIndex, greaterThan(0));
     expect(uploadIndex, greaterThan(restoreIndex));
-    expect(recoveryIndex, greaterThan(uploadIndex));
-    final actionBlock = app.substring(restoreIndex - 900, recoveryIndex + 250);
+    expect(signOutIndex, greaterThan(uploadIndex));
+    final actionBlock = app.substring(restoreIndex - 900, signOutIndex + 250);
     expect(actionBlock, contains('Row('));
     expect(actionBlock, contains('const SizedBox(width: 10)'));
+    expect(actionBlock, isNot(contains("label: const Text('Recovery key')")));
   });
 }

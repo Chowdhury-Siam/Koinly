@@ -107,6 +107,21 @@ CREATE TABLE IF NOT EXISTS telegram_backup_settings (
 CREATE INDEX IF NOT EXISTS idx_telegram_backup_due
   ON telegram_backup_settings(enabled, next_due_at);
 
+CREATE TABLE IF NOT EXISTS analytics_upload_settings (
+  user_id TEXT PRIMARY KEY,
+  google_client_id TEXT NOT NULL DEFAULT '',
+  google_client_secret_encrypted TEXT,
+  google_client_secret_iv TEXT,
+  google_refresh_token_encrypted TEXT,
+  google_refresh_token_iv TEXT,
+  google_account_email TEXT NOT NULL DEFAULT '',
+  google_connected_at INTEGER,
+  google_last_upload_at INTEGER,
+  google_last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 -- Profile media is stored separately from finance sync rows so large photos,
 -- GIFs, and short videos never inflate the realtime sync change log. Uploads
 -- are chunked and the active metadata row is switched only after all chunks

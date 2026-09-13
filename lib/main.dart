@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -23,6 +24,8 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart' as sql;
@@ -56,6 +59,7 @@ part 'loans/loan_controller_part.dart';
 part 'loans/loan_screens.dart';
 part 'loans/loan_sheets.dart';
 part 'profile/profile_ui.dart';
+part 'analytics/analytics.dart';
 
 const _uuid = Uuid();
 
@@ -3568,6 +3572,53 @@ class AppController extends ChangeNotifier {
     return _withSelfHostedSyncToken((api, accessToken) => api.sendTelegramBackupNow(accessToken: accessToken));
   }
 
+  Future<GoogleDriveAnalyticsSettings> loadGoogleDriveAnalyticsSettings() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.googleDriveAnalyticsSettings(accessToken: accessToken));
+  }
+
+  Future<GoogleDriveAnalyticsSettings> saveGoogleDriveAnalyticsSettings({
+    required String clientId,
+    String clientSecret = '',
+  }) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.saveGoogleDriveAnalyticsSettings(
+          accessToken: accessToken,
+          clientId: clientId,
+          clientSecret: clientSecret,
+        ));
+  }
+
+  Future<Map<String, dynamic>> googleDriveAnalyticsConnectUrl() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.googleDriveAnalyticsConnectUrl(accessToken: accessToken));
+  }
+
+  Future<GoogleDriveAnalyticsSettings> disconnectGoogleDriveAnalytics() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.disconnectGoogleDriveAnalytics(accessToken: accessToken));
+  }
+
+  Future<Map<String, dynamic>> uploadAnalyticsPdfToTelegram({
+    required String fileName,
+    required Uint8List bytes,
+    required String caption,
+  }) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.uploadAnalyticsPdfToTelegram(
+          accessToken: accessToken,
+          fileName: fileName,
+          bytes: bytes,
+          caption: caption,
+        ));
+  }
+
+  Future<Map<String, dynamic>> uploadAnalyticsPdfToGoogleDrive({
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.uploadAnalyticsPdfToGoogleDrive(
+          accessToken: accessToken,
+          fileName: fileName,
+          bytes: bytes,
+        ));
+  }
+
   Future<void> configureSelfHostedSyncEndpoint(String apiBaseUrl) async {
     final nextApiBaseUrl = CloudSyncService.validateApiBaseUrl(apiBaseUrl);
     await KoinlySyncApi(baseUrl: nextApiBaseUrl).validateBackend();
@@ -3584,12 +3635,12 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> registerSyncAccount({
+  Future<void> registerSyncAccount({
     required String username,
     required String password,
     bool deferInitialDataSync = false,
   }) async {
-    return _authenticateSyncAccount(
+    await _authenticateSyncAccount(
       register: true,
       username: username,
       password: password,
@@ -3601,7 +3652,13 @@ class AppController extends ChangeNotifier {
     await _authenticateSyncAccount(register: false, username: username, password: password, preferCloudData: preferCloudData);
   }
 
-  Future<String?> _authenticateSyncAccount({
+  void clearCloudSyncTransientError() {
+    cloudSyncError = null;
+    cloudSyncErrorCode = null;
+    notifyListeners();
+  }
+
+  Future<void> _authenticateSyncAccount({
     required bool register,
     required String username,
     required String password,
@@ -3610,6 +3667,7 @@ class AppController extends ChangeNotifier {
   }) async {
     syncAuthBusy = true;
     cloudSyncError = null;
+    cloudSyncErrorCode = null;
     syncStatus = register ? 'Creating account...' : 'Signing in...';
     notifyListeners();
     try {
@@ -3650,67 +3708,15 @@ class AppController extends ChangeNotifier {
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();
       }
-      return session.recoveryKey;
     } catch (error) {
-      cloudSyncError = _cleanSyncError(error);
-      syncStatus = 'Sync error';
-      return null;
-    } finally {
-      syncAuthBusy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> recoverSyncAccount({
-    required String username,
-    required String recoveryKey,
-    required String newPassword,
-    bool preferCloudData = true,
-  }) async {
-    syncAuthBusy = true;
-    cloudSyncError = null;
-    syncStatus = 'Recovering account...';
-    notifyListeners();
-    try {
-      if (cloudSyncApiBaseUrl.isEmpty) {
-        throw StateError('Validate your self-hosted Sync Worker first.');
-      }
-      final session = await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).recoverAccount(
-        username: username,
-        recoveryKey: recoveryKey,
-        newPassword: newPassword,
-        deviceId: syncDeviceId,
-        deviceName: _deviceName(),
-        platform: _platformName(),
-      );
-      await _saveSyncSession(session);
-      await database.writeSyncState('serverCursor', '0');
-      newSyncAccountAwaitingSetupChoice = false;
-      await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
-      if (authoritativeCloudUploadPending) {
-        await _prepareRestoredDataForMergeSync();
-      }
-      await _mergeAfterExistingAccountAuth(preferCloudData: preferCloudData);
-      _startCloudAutoPull();
-    } catch (error) {
-      cloudSyncError = _cleanSyncError(error);
-      syncStatus = 'Sync error';
-    } finally {
-      syncAuthBusy = false;
-      notifyListeners();
-    }
-  }
-
-  Future<String?> rotateSyncRecoveryKey() async {
-    if (!cloudSyncEnabled || syncAccessToken.isEmpty) return null;
-    syncAuthBusy = true;
-    cloudSyncError = null;
-    notifyListeners();
-    try {
-      return await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).rotateRecoveryKey(accessToken: syncAccessToken);
-    } catch (error) {
-      cloudSyncError = _cleanSyncError(error);
-      return null;
+      final code = error is CloudSyncException ? error.code : null;
+      final cleaned = _cleanSyncError(error);
+      final managedRegistration = register &&
+          (code == 'REGISTRATION_MANAGED' ||
+              cleaned.trim().toLowerCase() == 'registration is managed by the worker administrator at /profile.');
+      cloudSyncErrorCode = managedRegistration ? 'REGISTRATION_MANAGED' : code;
+      cloudSyncError = managedRegistration ? null : cleaned;
+      syncStatus = managedRegistration ? 'Sign in required' : 'Sync error';
     } finally {
       syncAuthBusy = false;
       notifyListeners();
@@ -12286,6 +12292,7 @@ Future<SubscriptionFrequency?> showSubscriptionFrequencyPopup(
   BuildContext context,
   SubscriptionFrequency selected,
 ) {
+  final scheme = Theme.of(context).colorScheme;
   return showKoinlyPopup<SubscriptionFrequency>(
     context,
     maxWidth: 420,
@@ -12310,10 +12317,18 @@ Future<SubscriptionFrequency?> showSubscriptionFrequencyPopup(
           const SizedBox(height: 8),
           for (final value in SubscriptionFrequency.values) ...[
             ListTile(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(
+                  color: value == selected
+                      ? kSleekAccent.withOpacity(.56)
+                      : scheme.outlineVariant.withOpacity(.34),
+                  width: value == selected ? 1.25 : 1,
+                ),
+              ),
               tileColor: value == selected
-                  ? Theme.of(context).colorScheme.primary.withOpacity(.14)
-                  : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.34),
+                  ? scheme.primary.withOpacity(.14)
+                  : scheme.surfaceContainerHighest.withOpacity(.34),
               leading: Icon(
                 Icons.repeat_rounded,
                 color: value == selected ? Theme.of(context).colorScheme.primary : null,
@@ -14661,7 +14676,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
       _compactCurrency(state, value),
       maxLines: 1,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: const Color(0xFF75729E),
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.76),
             fontWeight: FontWeight.w800,
           ),
     );
@@ -14679,7 +14694,7 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
       child: Text(
         _dateLabel(widget.days[index]),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: const Color(0xFF72719B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(.78),
               fontWeight: FontWeight.w800,
             ),
       ),
@@ -14711,34 +14726,39 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
     );
     final net = totalIncome - totalExpense;
     final hasData = totalIncome != 0 || totalExpense != 0;
-    // The Analysis trend uses the classic fl_chart LineChartSample1 visual
-    // treatment while continuing to plot the user's real income/expense data.
-    // Keep the semantic Koinly series colors so the existing metric pills and
-    // legend remain consistent with the chart.
+    final gridColor = scheme.outlineVariant.withOpacity(dark ? .16 : .42);
+    final panelColor = dark
+        ? scheme.surfaceContainerHigh.withOpacity(.46)
+        : scheme.surface.withOpacity(.94);
+
     final bars = <LineChartBarData>[
       if (showIncome)
         LineChartBarData(
           spots: incomeSpots,
           isCurved: widget.days.length > 2,
-          curveSmoothness: .35,
           preventCurveOverShooting: true,
-          barWidth: 8,
+          barWidth: 3.2,
           isStrokeCapRound: true,
           color: kSleekIncome,
           dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.income,
+            color: kSleekIncome.withOpacity(dark ? .10 : .08),
+          ),
         ),
       if (showExpense)
         LineChartBarData(
           spots: expenseSpots,
           isCurved: widget.days.length > 2,
-          curveSmoothness: .35,
           preventCurveOverShooting: true,
-          barWidth: 8,
+          barWidth: 3.2,
           isStrokeCapRound: true,
           color: kSleekExpense,
           dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(show: false),
+          belowBarData: BarAreaData(
+            show: _view == _TrendView.expense,
+            color: kSleekExpense.withOpacity(dark ? .10 : .08),
+          ),
         ),
     ];
 
@@ -14852,16 +14872,10 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
           Container(
             height: 278,
             padding: const EdgeInsets.fromLTRB(6, 12, 10, 4),
-            decoration: const BoxDecoration(
-              borderRadius: BorderRadius.all(Radius.circular(18)),
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF2C274C),
-                  Color(0xFF46426C),
-                ],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-              ),
+            decoration: BoxDecoration(
+              color: panelColor,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(dark ? .14 : .48)),
             ),
             child: hasData
                 ? RepaintBoundary(
@@ -14872,16 +14886,13 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         minY: 0,
                         maxY: maxY,
                         clipData: const FlClipData.all(),
-                        borderData: FlBorderData(
+                        borderData: FlBorderData(show: false),
+                        gridData: FlGridData(
                           show: true,
-                          border: const Border(
-                            bottom: BorderSide(color: Color(0xFF4E4965), width: 4),
-                            left: BorderSide(color: Colors.transparent),
-                            right: BorderSide(color: Colors.transparent),
-                            top: BorderSide(color: Colors.transparent),
-                          ),
+                          drawVerticalLine: false,
+                          horizontalInterval: maxY / 4,
+                          getDrawingHorizontalLine: (_) => FlLine(color: gridColor, strokeWidth: 1),
                         ),
-                        gridData: const FlGridData(show: false),
                         titlesData: FlTitlesData(
                           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                           rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -14905,10 +14916,10 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         lineTouchData: LineTouchData(
                           handleBuiltInTouches: true,
                           touchTooltipData: LineTouchTooltipData(
-                            tooltipRoundedRadius: 12,
+                            tooltipRoundedRadius: 14,
                             tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                             tooltipMargin: 12,
-                            getTooltipColor: (_) => const Color(0xE6454A64),
+                            getTooltipColor: (_) => dark ? const Color(0xFF142A22) : const Color(0xFF142A22),
                             getTooltipItems: (items) => items.map((item) {
                               final index = item.x.round().clamp(0, widget.days.length - 1).toInt();
                               final date = DateFormat('MMM d, yyyy').format(widget.days[index]);
@@ -14922,8 +14933,6 @@ class _AnalysisTrendChartState extends State<AnalysisTrendChart> {
                         ),
                         lineBarsData: bars,
                       ),
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
                     ),
                   )
                 : Center(
@@ -15182,8 +15191,6 @@ class CategoryBreakdownCard extends StatefulWidget {
 }
 
 class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
-  int _selectedPieIndex = 0;
-
   CategoryType get type => widget.type;
   bool get interactive => widget.interactive;
 
@@ -15289,164 +15296,347 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          state.format(total),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -.8,
-                              ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          type == CategoryType.expense ? 'Total expense' : 'Total income',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: kSleekAccent,
-                                fontWeight: FontWeight.w900,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                    decoration: BoxDecoration(
-                      color: isDark ? scheme.surfaceContainerHighest.withOpacity(.14) : Colors.white.withOpacity(.92),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(
-                        color: isDark ? Colors.white.withOpacity(.05) : const Color(0xFFDCEBEE),
-                      ),
-                    ),
-                    child: Text(
-                      rangeLabel,
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
               SizedBox(
-                height: 320,
+                height: 334,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final canvasWidth = constraints.maxWidth;
-                    final chartSize = math.min(300.0, math.max(230.0, canvasWidth - 18));
-                    final normalRadius = chartSize * .32;
-                    final selectedRadius = chartSize * .365;
-                    final selectedIndex = _selectedPieIndex.clamp(0, slices.length - 1);
+                    const canvasHeight = 334.0;
+                    final chartSize = math.min(math.max(180.0, canvasWidth - 98), math.min(268.0, canvasWidth - 8));
+                    final centerSize = chartSize * .57;
+                    final manyBadges = slices.length > 5;
+                    final badgeWidth = manyBadges ? (canvasWidth < 360 ? 78.0 : 86.0) : (canvasWidth < 360 ? 84.0 : 94.0);
+                    final badgeHeight = manyBadges ? 40.0 : 44.0;
+                    final badgeOrbit = (chartSize / 2) + (manyBadges ? 32.0 : 24.0);
 
-                    return Stack(
-                      alignment: Alignment.center,
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(34),
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [chartSurfaceTop, chartSurfaceBottom],
-                              ),
-                              border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
-                              boxShadow: isDark
-                                  ? null
-                                  : [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(.035),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                            ),
+                    double startAngle = -90;
+                    final badgeAngles = <double>[];
+                    for (final slice in slices) {
+                      final sweep = total == 0 ? 0 : (slice.value / total) * 360;
+                      badgeAngles.add(startAngle + (sweep / 2));
+                      startAngle += sweep;
+                    }
+
+                    final badgeNudges = List<double>.filled(slices.length, 0);
+                    void spreadDenseSide(bool leftSide) {
+                      final indexes = <int>[];
+                      for (var i = 0; i < badgeAngles.length; i++) {
+                        final radians = badgeAngles[i] * (math.pi / 180);
+                        final isLeft = math.cos(radians) < -0.18;
+                        if (isLeft == leftSide) indexes.add(i);
+                      }
+                      if (indexes.length <= 1) return;
+                      indexes.sort((a, b) {
+                        final ay = math.sin(badgeAngles[a] * (math.pi / 180));
+                        final by = math.sin(badgeAngles[b] * (math.pi / 180));
+                        return ay.compareTo(by);
+                      });
+                      final spacing = manyBadges ? 11.0 : 8.0;
+                      for (var rank = 0; rank < indexes.length; rank++) {
+                        badgeNudges[indexes[rank]] = (rank - ((indexes.length - 1) / 2)) * spacing;
+                      }
+                    }
+
+                    spreadDenseSide(true);
+                    spreadDenseSide(false);
+
+                    const badgeCollisionGap = 8.0;
+                    int? selectedBadgeIndex;
+
+                    Offset clampBadgeCenter(Offset candidate, double currentBadgeWidth, double currentBadgeHeight) {
+                      final halfWidth = currentBadgeWidth / 2;
+                      final halfHeight = currentBadgeHeight / 2;
+                      final minX = halfWidth;
+                      final maxX = math.max(minX, canvasWidth - halfWidth);
+                      final minY = halfHeight;
+                      final maxY = math.max(minY, canvasHeight - halfHeight);
+                      return Offset(
+                        candidate.dx.clamp(minX, maxX).toDouble(),
+                        candidate.dy.clamp(minY, maxY).toDouble(),
+                      );
+                    }
+
+                    Rect badgeCollisionRect(Offset center, double currentBadgeWidth, double currentBadgeHeight) {
+                      return Rect.fromCenter(
+                        center: center,
+                        width: currentBadgeWidth + badgeCollisionGap,
+                        height: currentBadgeHeight + badgeCollisionGap,
+                      );
+                    }
+
+                    List<Offset> buildPackedBadgeCenters() {
+                      // Build a stable, collision-free layout directly from the
+                      // slice geometry. Percentage badges are display elements only.
+                      final centers = List<Offset>.generate(slices.length, (index) {
+                        final radians = badgeAngles[index] * (math.pi / 180);
+                        return clampBadgeCenter(
+                          Offset(
+                            (canvasWidth / 2) + math.cos(radians) * badgeOrbit,
+                            (canvasHeight / 2) + math.sin(radians) * badgeOrbit + badgeNudges[index],
                           ),
-                        ),
-                        Center(
-                          child: SizedBox(
-                            width: chartSize,
-                            height: chartSize,
-                            child: RepaintBoundary(
-                              child: PieChart(
-                                PieChartData(
-                                  startDegreeOffset: -90,
-                                  centerSpaceRadius: 0,
-                                  sectionsSpace: 2.6,
-                                  pieTouchData: PieTouchData(
-                                    enabled: true,
-                                    touchCallback: (event, response) {
-                                      if (!event.isInterestedForInteractions || response?.touchedSection == null) return;
-                                      final touchedIndex = response!.touchedSection!.touchedSectionIndex;
-                                      if (touchedIndex < 0 || touchedIndex >= slices.length || touchedIndex == _selectedPieIndex) return;
-                                      setState(() => _selectedPieIndex = touchedIndex);
-                                    },
-                                  ),
-                                  sections: slices.asMap().entries.map((entry) {
-                                    final index = entry.key;
-                                    final slice = entry.value;
-                                    final percentage = total <= 0 ? 0.0 : (slice.value / total) * 100;
-                                    final selected = selectedIndex == index;
-                                    final showPercent = percentage >= 3.0;
-                                    final titleSize = percentage >= 20
-                                        ? 22.0
-                                        : percentage >= 10
-                                            ? 18.0
-                                            : percentage >= 6
-                                                ? 15.0
-                                                : 12.0;
-                                    final badgeOffset = percentage < 4.0
-                                        ? 1.10 + ((index % 2) * .12)
-                                        : (selected ? 1.02 : 1.06);
+                          badgeWidth,
+                          badgeHeight,
+                        );
+                      });
 
-                                    return PieChartSectionData(
-                                      value: slice.value <= 0 ? .0001 : slice.value,
-                                      color: slice.color,
-                                      radius: selected ? selectedRadius : normalRadius,
-                                      showTitle: showPercent,
-                                      title: showPercent ? '${percentage.round()}%' : '',
-                                      titlePositionPercentageOffset: .60,
-                                      titleStyle: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: titleSize,
-                                        fontWeight: FontWeight.w900,
-                                        height: 1,
-                                        letterSpacing: -.25,
-                                        shadows: [
-                                          Shadow(
-                                            color: Colors.black.withOpacity(.34),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 1),
+                      // Tiny slices can share almost the same angle, so separate
+                      // overlapping automatic positions before painting the badges.
+                      for (var pass = 0; pass < 32; pass++) {
+                        var moved = false;
+                        for (var i = 0; i < centers.length; i++) {
+                          for (var j = i + 1; j < centers.length; j++) {
+                            final firstRect = badgeCollisionRect(centers[i], badgeWidth, badgeHeight);
+                            final secondRect = badgeCollisionRect(centers[j], badgeWidth, badgeHeight);
+                            if (!firstRect.overlaps(secondRect)) continue;
+
+                            final overlap = firstRect.intersect(secondRect);
+                            if (overlap.isEmpty) continue;
+                            final delta = centers[j] - centers[i];
+                            final nearTopOrBottom =
+                                math.min(centers[i].dy, centers[j].dy) <= (badgeHeight / 2) + (badgeCollisionGap * 2) ||
+                                    math.max(centers[i].dy, centers[j].dy) >=
+                                        canvasHeight - (badgeHeight / 2) - (badgeCollisionGap * 2);
+                            final nearSideEdge =
+                                math.min(centers[i].dx, centers[j].dx) <= (badgeWidth / 2) + (badgeCollisionGap * 2) ||
+                                    math.max(centers[i].dx, centers[j].dx) >=
+                                        canvasWidth - (badgeWidth / 2) - (badgeCollisionGap * 2);
+                            final separateHorizontally = nearTopOrBottom || (!nearSideEdge && overlap.width <= overlap.height);
+
+                            if (separateHorizontally) {
+                              final direction = delta.dx.abs() < .01 ? 1.0 : (delta.dx > 0 ? 1.0 : -1.0);
+                              final half = (overlap.width + .5) / 2;
+                              centers[i] = clampBadgeCenter(
+                                centers[i] - Offset(direction * half, 0),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                              centers[j] = clampBadgeCenter(
+                                centers[j] + Offset(direction * half, 0),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                            } else {
+                              final direction = delta.dy.abs() < .01 ? 1.0 : (delta.dy > 0 ? 1.0 : -1.0);
+                              final half = (overlap.height + .5) / 2;
+                              centers[i] = clampBadgeCenter(
+                                centers[i] - Offset(0, direction * half),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                              centers[j] = clampBadgeCenter(
+                                centers[j] + Offset(0, direction * half),
+                                badgeWidth,
+                                badgeHeight,
+                              );
+                            }
+                            moved = true;
+                          }
+                        }
+                        if (!moved) break;
+                      }
+
+                      return centers;
+                    }
+
+                    final packedBadgeCenters = buildPackedBadgeCenters();
+
+                    return StatefulBuilder(
+                      builder: (context, setBadgeState) {
+                        return TweenAnimationBuilder<double>(
+                      key: ValueKey('${type.name}-${slices.length}-${total.toStringAsFixed(2)}'),
+                      tween: Tween<double>(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 680),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, progress, _) {
+                        final badgeProgress = ((progress - .35) / .65).clamp(0.0, 1.0).toDouble();
+                        final centerProgress = ((progress - .18) / .82).clamp(0.0, 1.0).toDouble();
+                        final badgeOrder = List<int>.generate(slices.length, (index) => index);
+                        if (selectedBadgeIndex != null && selectedBadgeIndex! >= 0 && selectedBadgeIndex! < slices.length) {
+                          badgeOrder
+                            ..remove(selectedBadgeIndex)
+                            ..add(selectedBadgeIndex!);
+                        }
+                        return Stack(
+                          alignment: Alignment.center,
+                          clipBehavior: Clip.hardEdge,
+                          children: [
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(34),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      chartSurfaceTop,
+                                      chartSurfaceBottom,
+                                    ],
+                                  ),
+                                  border: Border.all(color: chartBorderColor, width: isDark ? 0.0 : 1.0),
+                                  boxShadow: isDark
+                                      ? null
+                                      : [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(.035),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 8),
                                           ),
                                         ],
-                                      ),
-                                      badgePositionPercentageOffset: badgeOffset,
-                                      badgeWidget: _PieCategoryBadge(
-                                        color: slice.color,
-                                        iconName: slice.iconName,
-                                        textBadge: _useTextBadge(slice) ? _badgeTag(slice) : null,
-                                        selected: selected,
-                                      ),
-                                    );
-                                  }).toList(),
                                 ),
-                                swapAnimationDuration: const Duration(milliseconds: 320),
-                                swapAnimationCurve: Curves.easeOutCubic,
                               ),
                             ),
-                          ),
-                        ),
-                      ],
+                            Center(
+                              child: SizedBox(
+                                width: chartSize,
+                                height: chartSize,
+                                child: RepaintBoundary(
+                                  child: PieChart(
+                                    PieChartData(
+                                      startDegreeOffset: -90,
+                                      sectionsSpace: 2.2,
+                                      centerSpaceRadius: chartSize * .285,
+                                      sections: slices.asMap().entries.map((entry) {
+                                        final selected = selectedBadgeIndex == entry.key;
+                                        return PieChartSectionData(
+                                          value: entry.value.value,
+                                          color: entry.value.color,
+                                          radius: (chartSize * (selected ? .135 : .118)) * progress,
+                                          showTitle: false,
+                                        );
+                                      }).toList(),
+                                    ),
+                                    swapAnimationDuration: const Duration(milliseconds: 260),
+                                    swapAnimationCurve: Curves.easeOutCubic,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            for (final i in badgeOrder)
+                              Builder(
+                                builder: (context) {
+                                  final isSelected = selectedBadgeIndex == i;
+                                  final currentBadgeWidth = isSelected ? badgeWidth + 12 : badgeWidth;
+                                  final currentBadgeHeight = isSelected ? badgeHeight + 4 : badgeHeight;
+                                  final center = clampBadgeCenter(
+                                    packedBadgeCenters[i],
+                                    currentBadgeWidth,
+                                    currentBadgeHeight,
+                                  );
+                                  return _DonutBadgePositioned(
+                                    canvasWidth: canvasWidth,
+                                    canvasHeight: canvasHeight,
+                                    badgeWidth: currentBadgeWidth,
+                                    badgeHeight: currentBadgeHeight,
+                                    center: center,
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {
+                                        setBadgeState(() {
+                                          selectedBadgeIndex = selectedBadgeIndex == i ? null : i;
+                                        });
+                                      },
+                                      child: Opacity(
+                                        opacity: badgeProgress,
+                                        child: Transform.scale(
+                                          scale: (.86 + (.14 * badgeProgress)) * (isSelected ? 1.08 : 1.0),
+                                          child: _DonutPercentBadge(
+                                            color: slices[i].color,
+                                            iconName: slices[i].iconName,
+                                            label: total <= 0 ? '0%' : '${((slices[i].value / total) * 100).round()}%',
+                                            leadingText: _badgeTag(slices[i]),
+                                            useTextBadge: _useTextBadge(slices[i]),
+                                            selected: isSelected,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            Center(
+                              child: Opacity(
+                                opacity: centerProgress,
+                                child: Transform.scale(
+                                  scale: .92 + (.08 * centerProgress),
+                                  child: Container(
+                                    width: centerSize,
+                                    height: centerSize,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? const Color(0xFF101A15).withOpacity(.97) : Colors.white.withOpacity(.98),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(isDark ? .22 : .08),
+                                          blurRadius: isDark ? 22.0 : 18.0,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ],
+                                      border: Border.all(
+                                        color: isDark ? scheme.outline.withOpacity(.10) : const Color(0xFFD7E6E9),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Flexible(
+                                          flex: 3,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              state.format(total),
+                                              maxLines: 1,
+                                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                    letterSpacing: -.8,
+                                                    color: isDark ? Colors.white : scheme.onSurface,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Flexible(
+                                          flex: 2,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              type == CategoryType.expense ? 'Total expense' : 'Total income',
+                                              maxLines: 1,
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                    color: kSleekAccent,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Flexible(
+                                          flex: 2,
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text(
+                                              rangeLabel,
+                                              maxLines: 1,
+                                              textAlign: TextAlign.center,
+                                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                    color: isDark ? Colors.white.withOpacity(.82) : scheme.onSurfaceVariant.withOpacity(.88),
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                        );
+                      },
                     );
                   },
                 ),
@@ -15541,72 +15731,136 @@ class _BreakdownSlice {
   String get iconName => iconNameOverride ?? category?.iconName ?? 'category';
 }
 
-class _PieCategoryBadge extends StatelessWidget {
-  const _PieCategoryBadge({
+class _DonutBadgePositioned extends StatelessWidget {
+  const _DonutBadgePositioned({
+    required this.canvasWidth,
+    required this.canvasHeight,
+    required this.badgeWidth,
+    required this.badgeHeight,
+    required this.center,
+    required this.child,
+  });
+
+  final double canvasWidth;
+  final double canvasHeight;
+  final double badgeWidth;
+  final double badgeHeight;
+  final Offset center;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final rawLeft = center.dx - (badgeWidth / 2);
+    final rawTop = center.dy - (badgeHeight / 2);
+    final left = rawLeft.clamp(0.0, math.max(0.0, canvasWidth - badgeWidth)).toDouble();
+    final top = rawTop.clamp(0.0, math.max(0.0, canvasHeight - badgeHeight)).toDouble();
+
+    return Positioned(
+      left: left,
+      top: top,
+      width: badgeWidth,
+      height: badgeHeight,
+      child: child,
+    );
+  }
+}
+
+class _DonutPercentBadge extends StatelessWidget {
+  const _DonutPercentBadge({
     required this.color,
     required this.iconName,
-    this.textBadge,
+    required this.label,
+    required this.leadingText,
+    required this.useTextBadge,
     this.selected = false,
   });
 
   final Color color;
   final String iconName;
-  final String? textBadge;
+  final String label;
+  final String leadingText;
+  final bool useTextBadge;
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final size = selected ? 58.0 : 50.0;
-    final surface = isDark ? const Color(0xFF171A1F) : Colors.white;
+    final badgeBackground = selected
+        ? (isDark ? color.withOpacity(.28) : color.withOpacity(.20))
+        : (isDark ? const Color(0xFF151E19).withOpacity(.96) : Colors.white.withOpacity(.96));
+    final badgeBorder = selected ? color.withOpacity(isDark ? .88 : .72) : (isDark ? Colors.white.withOpacity(.05) : kSleekLightOutlineVariant);
+    final textColor = isDark ? Colors.white.withOpacity(.96) : scheme.onSurface;
+    final iconBackground = useTextBadge
+        ? (isDark ? Colors.black : kSleekLightSurfaceContainer)
+        : color.withOpacity(isDark ? .18 : .16);
+    final iconBorder = useTextBadge
+        ? (isDark ? Colors.white.withOpacity(.06) : kSleekLightOutlineVariant)
+        : color.withOpacity(isDark ? .28 : .30);
+    final iconColor = isDark ? Colors.white : color;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      width: size,
-      height: size,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
       decoration: BoxDecoration(
-        color: surface,
-        shape: BoxShape.circle,
-        border: Border.all(color: color, width: selected ? 3.0 : 2.2),
+        color: badgeBackground,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: badgeBorder, width: selected ? 2.0 : 1.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? .40 : .20),
-            blurRadius: selected ? 18 : 13,
-            offset: const Offset(0, 6),
+            color: selected ? color.withOpacity(isDark ? .34 : .22) : Colors.black.withOpacity(isDark ? .26 : .10),
+            blurRadius: selected ? 22.0 : (isDark ? 18.0 : 14.0),
+            offset: const Offset(0, 8),
           ),
-          if (selected)
-            BoxShadow(
-              color: color.withOpacity(.30),
-              blurRadius: 18,
-              spreadRadius: 1,
-            ),
         ],
       ),
-      child: Center(
-        child: textBadge != null
-            ? Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    textBadge!,
-                    maxLines: 1,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: isDark ? Colors.white : Theme.of(context).colorScheme.onSurface,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .3,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: iconBackground,
+              shape: BoxShape.circle,
+              border: Border.all(color: iconBorder),
+            ),
+            child: Center(
+              child: useTextBadge
+                  ? FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Text(
+                          leadingText,
+                          maxLines: 1,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: textColor,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: .4,
+                              ),
                         ),
-                  ),
-                ),
-              )
-            : iconGlyph(
-                context,
-                iconName,
-                color: color,
-                size: size * .48,
-                imageBackground: Colors.white.withOpacity(.92),
+                      ),
+                    )
+                  : iconGlyph(context, iconName, color: iconColor, size: 15, imageBackground: Colors.white.withOpacity(.90)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.2,
+                      color: textColor,
+                    ),
               ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -15831,6 +16085,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
+            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Daily, weekly, monthly, and yearly summaries', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, backup, data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
             SettingsTile(icon: Icons.info_rounded, title: 'About app', subtitle: 'Version, credits, licenses, and links', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen()))),
@@ -16564,13 +16819,17 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       selection: TextSelection.collapsed(offset: normalizedUsername.length),
       composing: TextRange.empty,
     );
-    String? recoveryKey;
     if (register) {
-      recoveryKey = await state.registerSyncAccount(
+      await state.registerSyncAccount(
         username: normalizedUsername,
         password: _passwordController.text,
         deferInitialDataSync: onboardingAuthFlow,
       );
+      if (_registrationManagedByWorker(state)) {
+        state.clearCloudSyncTransientError();
+        if (mounted) await _showManagedRegistrationDialog(state);
+        return;
+      }
     } else {
       await state.loginSyncAccount(
         username: normalizedUsername,
@@ -16580,10 +16839,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     }
     if (mounted && state.cloudSyncError == null) {
       _passwordController.clear();
-      if (register && recoveryKey != null && recoveryKey.isNotEmpty) {
-        await _showRecoveryKey(recoveryKey);
-        if (!mounted) return;
-      }
       showSnack(
         context,
         register
@@ -16603,52 +16858,48 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     }
   }
 
-  Future<void> _showRecoveryKey(String recoveryKey) async {
-    await showKoinlyPopup<void>(
-      context,
-      maxWidth: 520,
-      maxHeight: 430,
-      barrierDismissible: false,
-      child: _RecoveryKeyPopup(recoveryKey: recoveryKey),
-    );
+  bool _registrationManagedByWorker(AppController state) {
+    if (state.cloudSyncErrorCode == 'REGISTRATION_MANAGED') return true;
+    final message = state.cloudSyncError?.trim().toLowerCase() ?? '';
+    return message == 'registration is managed by the worker administrator at /profile.';
   }
 
-  Future<void> _showForgotPassword() async {
-    final state = context.read<AppController>();
-    if (!_isWorkerActive(state)) {
+  Future<void> _showManagedRegistrationDialog(AppController state) async {
+    final shouldOpenAdmin = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Registration managed by administrator'),
+        content: const Text(
+          'Registration is managed by the Worker administrator at /profile. '
+          'Do you wish to create an account from the admin panel?',
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (shouldOpenAdmin != true || !mounted) return;
+
+    final baseUrl = CloudSyncService.normalizeApiBaseUrl(state.cloudSyncApiBaseUrl);
+    if (baseUrl.isEmpty) {
       showSnack(context, 'Validate and use the self-hosted Worker first.');
       return;
     }
-    final recovered = await showKoinlyPopup<bool>(
-      context,
-      maxWidth: 540,
-      maxHeight: 620,
-      barrierDismissible: false,
-      child: _AccountRecoveryPopup(
-        initialUsername: _usernameController.text.trim(),
-        preferCloudData: widget.completeOnAuth || widget.returnOnAuth ? true : widget.preferCloudDataOnAuth,
-      ),
+    final opened = await launchUrl(
+      Uri.parse('$baseUrl/profile'),
+      mode: LaunchMode.externalApplication,
     );
-    if (!mounted || recovered != true) return;
-    _usernameController.text = state.syncAccountUsername;
-    _passwordController.clear();
-    showSnack(context, 'Password changed and account recovered.');
-    final onboardingAuthFlow = widget.completeOnAuth || widget.returnOnAuth;
-    if (onboardingAuthFlow) {
-      await state.completeOnboarding();
-      if (mounted) Navigator.pop(context, false);
+    if (!opened && mounted) {
+      showSnack(context, 'Could not open the Worker admin panel.');
     }
-  }
-
-  Future<void> _rotateRecoveryKey() async {
-    final state = context.read<AppController>();
-    final recoveryKey = await state.rotateSyncRecoveryKey();
-    if (!mounted) return;
-    if (recoveryKey == null || recoveryKey.isEmpty) {
-      showSnack(context, state.cloudSyncError ?? 'Could not create a recovery key.');
-      return;
-    }
-    await _showRecoveryKey(recoveryKey);
   }
 
   Future<void> _restoreCloudCopy() async {
@@ -16697,7 +16948,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     final backendConfigured = _isWorkerActive(state);
     return PageScaffold(
       title: 'Account & sync',
-      subtitle: signedIn ? state.syncAccountUsername : 'Self-hosted multi-device sync',
+      subtitle: signedIn ? state.syncAccountUsername : null,
       actions: [
         IconButton.filledTonal(
           tooltip: 'Telegram backup',
@@ -16727,11 +16978,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('Self-hosted Sync Worker', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Enter the HTTPS URL from your own Cloudflare Worker deployment.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                  ),
                   const SizedBox(height: 12),
                   TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
                     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
@@ -16755,13 +17001,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         : const Icon(Icons.verified_rounded),
                     label: const Text('Validate and use Worker'),
                   ),
-                  if (signedIn) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Changing the Worker signs out this device because each self-hosted deployment has separate accounts and tokens.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -16838,19 +17077,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                 _registerMode ? 'Create your Koinly sync account' : 'Login to your Koinly sync account',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
               ),
-              if (_registerMode) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Only the first account can be created on a new self-hosted Worker. After that, sign in with that account on your other devices.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
-                ),
-              ] else ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Login merges your cloud copy with finance data already on this device. Local-only records are preserved.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w800),
-                ),
-              ],
               const SizedBox(height: 10),
             ],
             if (signedIn)
@@ -16879,24 +17105,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: busy ? null : _rotateRecoveryKey,
-                          icon: const Icon(Icons.key_rounded),
-                          label: const Text('Recovery key'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: busy ? null : () => state.logoutSyncAccount(),
-                          icon: const Icon(Icons.logout_rounded),
-                          label: const Text('Sign out'),
-                        ),
-                      ),
-                    ],
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : () => state.logoutSyncAccount(),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Sign out'),
                   ),
                 ],
               )
@@ -16917,220 +17129,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                     icon: Icon(_registerMode ? Icons.login_rounded : Icons.person_add_alt_rounded),
                     label: Text(_registerMode ? 'Use login instead' : 'Create account instead'),
                   ),
-                  if (!_registerMode)
-                    TextButton.icon(
-                      onPressed: busy || !backendConfigured ? null : _showForgotPassword,
-                      icon: const Icon(Icons.lock_reset_rounded),
-                      label: const Text('Forgot password?'),
-                    ),
                 ],
               ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _RecoveryKeyPopup extends StatelessWidget {
-  const _RecoveryKeyPopup({required this.recoveryKey});
-
-  final String recoveryKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return KoinlyPopupContent(
-      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Icon(Icons.key_rounded, size: 42, color: kSleekAccent),
-          const SizedBox(height: 12),
-          Text('Save your recovery key', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Text(
-            'This key is the only in-app way to reset a forgotten password. Store it somewhere safe. Creating a new recovery key invalidates the previous one.',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.45),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: SelectableText(recoveryKey, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .8)),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: recoveryKey));
-                    if (context.mounted) showSnack(context, 'Recovery key copied.');
-                  },
-                  icon: const Icon(Icons.copy_rounded),
-                  label: const Text('Copy'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('I saved it'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccountRecoveryPopup extends StatefulWidget {
-  const _AccountRecoveryPopup({required this.initialUsername, required this.preferCloudData});
-
-  final String initialUsername;
-  final bool preferCloudData;
-
-  @override
-  State<_AccountRecoveryPopup> createState() => _AccountRecoveryPopupState();
-}
-
-class _AccountRecoveryPopupState extends State<_AccountRecoveryPopup> {
-  late final TextEditingController username;
-  final recoveryKey = TextEditingController();
-  final password = TextEditingController();
-  final confirmPassword = TextEditingController();
-  bool obscurePassword = true;
-  bool busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    username = TextEditingController(text: widget.initialUsername);
-  }
-
-  @override
-  void dispose() {
-    username.dispose();
-    recoveryKey.dispose();
-    password.dispose();
-    confirmPassword.dispose();
-    super.dispose();
-  }
-
-  Future<void> _recover() async {
-    if (busy) return;
-    final usernameValue = username.text.trim().toLowerCase();
-    final recoveryValue = recoveryKey.text.trim();
-    if (usernameValue.isEmpty || recoveryValue.isEmpty || password.text.isEmpty || confirmPassword.text.isEmpty) {
-      showSnack(context, 'Complete all recovery fields.');
-      return;
-    }
-    final usernameError = _syncUsernameValidationError(usernameValue);
-    if (usernameError != null) {
-      showSnack(context, usernameError);
-      return;
-    }
-    if (password.text != confirmPassword.text) {
-      showSnack(context, 'Passwords do not match.');
-      return;
-    }
-    if (password.text.length < 8) {
-      showSnack(context, 'Password must be at least 8 characters.');
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    setState(() => busy = true);
-    final state = context.read<AppController>();
-    await state.recoverSyncAccount(
-      username: usernameValue,
-      recoveryKey: recoveryValue,
-      newPassword: password.text,
-      preferCloudData: widget.preferCloudData,
-    );
-    if (!mounted) return;
-    if (state.cloudSyncError != null) {
-      setState(() => busy = false);
-      showSnack(context, state.cloudSyncError!);
-      return;
-    }
-    Navigator.pop(context, true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return KoinlyPopupContent(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(child: Text('Recover account', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
-              IconButton(onPressed: busy ? null : () => Navigator.pop(context, false), icon: const Icon(Icons.close_rounded)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text('Enter your username, saved recovery key, and a new password.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 14),
-          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            controller: username,
-            readOnly: busy,
-            autocorrect: false,
-            enableSuggestions: false,
-            textCapitalization: TextCapitalization.none,
-            decoration: const InputDecoration(labelText: 'Username', prefixIcon: Icon(Icons.person_rounded)),
-          ),
-          const SizedBox(height: 10),
-          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            controller: recoveryKey,
-            readOnly: busy,
-            autocorrect: false,
-            enableSuggestions: false,
-            textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(labelText: 'Recovery key', prefixIcon: Icon(Icons.key_rounded)),
-          ),
-          const SizedBox(height: 10),
-          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            controller: password,
-            readOnly: busy,
-            obscureText: obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'New password',
-              prefixIcon: const Icon(Icons.lock_rounded),
-              suffixIcon: IconButton(
-                onPressed: busy ? null : () => setState(() => obscurePassword = !obscurePassword),
-                icon: Icon(obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-            controller: confirmPassword,
-            readOnly: busy,
-            obscureText: obscurePassword,
-            onSubmitted: (_) => _recover(),
-            decoration: const InputDecoration(labelText: 'Confirm new password', prefixIcon: Icon(Icons.lock_outline_rounded)),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: busy ? null : _recover,
-            icon: busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.lock_reset_rounded),
-            label: Text(busy ? 'Recovering...' : 'Reset password'),
-          ),
-        ],
       ),
     );
   }
@@ -17326,16 +17328,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
         DateTime.sunday: 'Sunday',
       }[weekday] ?? 'Sunday';
 
-  String _offsetLabel() {
-    final offset = DateTime.now().timeZoneOffset;
-    final totalMinutes = offset.inMinutes;
-    final sign = totalMinutes >= 0 ? '+' : '-';
-    final absolute = totalMinutes.abs();
-    final hours = absolute ~/ 60;
-    final minutes = absolute % 60;
-    return 'UTC$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-  }
-
   String _formatServerTime(DateTime? value) {
     if (value == null) return 'Not yet';
     return DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
@@ -17354,7 +17346,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     final time = TimeOfDay(hour: _settings.hour, minute: _settings.minute).format(context);
     return PageScaffold(
       title: 'Telegram backup',
-      subtitle: 'Self-hosted Sync Worker only',
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
         child: Column(
@@ -17369,7 +17360,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                     value: _settings.enabled,
                     onChanged: _busy ? null : (value) => setState(() => _settings = _copySettings(enabled: value)),
                     title: const Text('Automatic Telegram backup', style: TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: const Text('The self-hosted Worker creates a .koinlybackup from the cloud copy and uploads it to your Telegram group or channel.'),
                   ),
                 ],
               ),
@@ -17410,11 +17400,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                       hintText: '-1001234567890 or @channelname',
                       prefixIcon: Icon(Icons.forum_rounded),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Add the bot to the target group/channel. For a channel, make the bot an administrator with permission to post messages. The bot token is encrypted by your Worker before it is stored in Turso.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.35),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
@@ -17478,11 +17463,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                             },
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  Text(
-                    'Schedule uses this device timezone (${_offsetLabel()}). The Worker checks due schedules every 5 minutes, so delivery can occur a few minutes after the selected time.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700, height: 1.35),
-                  ),
                 ],
               ),
             ),

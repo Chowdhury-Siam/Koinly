@@ -225,34 +225,6 @@ class KoinlySyncApi {
     return _sessionFromResponse(data, username);
   }
 
-  Future<SyncAuthSession> recoverAccount({
-    required String username,
-    required String recoveryKey,
-    required String newPassword,
-    required String deviceId,
-    required String deviceName,
-    required String platform,
-  }) async {
-    final data = await _post('/v1/auth/recover', {
-      'username': username,
-      'recoveryKey': recoveryKey,
-      'newPassword': newPassword,
-      'deviceId': deviceId,
-      'deviceName': deviceName,
-      'platform': platform,
-    });
-    return _sessionFromResponse(data, username);
-  }
-
-  Future<String> rotateRecoveryKey({required String accessToken}) async {
-    final data = await _post('/v1/auth/recovery-key', const {}, accessToken: accessToken);
-    final recoveryKey = data['recoveryKey']?.toString() ?? '';
-    if (recoveryKey.isEmpty) {
-      throw const CloudSyncException('The Worker did not return a recovery key.');
-    }
-    return recoveryKey;
-  }
-
   Future<SyncAuthSession> refresh({required String refreshToken, required String deviceId, required String username}) async {
     final data = await _post('/v1/auth/refresh', {'refreshToken': refreshToken, 'deviceId': deviceId});
     return _sessionFromResponse(data, username);
@@ -473,6 +445,71 @@ class KoinlySyncApi {
     );
   }
 
+  Future<GoogleDriveAnalyticsSettings> googleDriveAnalyticsSettings({required String accessToken}) async {
+    final data = await _get('/v1/analytics-upload/google-drive/settings', accessToken: accessToken);
+    return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<GoogleDriveAnalyticsSettings> saveGoogleDriveAnalyticsSettings({
+    required String accessToken,
+    required String clientId,
+    String clientSecret = '',
+  }) async {
+    final data = await _post(
+      '/v1/analytics-upload/google-drive/settings',
+      {'clientId': clientId.trim(), 'clientSecret': clientSecret.trim()},
+      accessToken: accessToken,
+    );
+    return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<Map<String, dynamic>> googleDriveAnalyticsConnectUrl({required String accessToken}) {
+    return _post(
+      '/v1/analytics-upload/google-drive/connect-url',
+      const {},
+      accessToken: accessToken,
+    );
+  }
+
+  Future<GoogleDriveAnalyticsSettings> disconnectGoogleDriveAnalytics({required String accessToken}) async {
+    final data = await _delete('/v1/analytics-upload/google-drive/connection', accessToken: accessToken);
+    return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<Map<String, dynamic>> uploadAnalyticsPdfToTelegram({
+    required String accessToken,
+    required String fileName,
+    required Uint8List bytes,
+    required String caption,
+  }) {
+    return _post(
+      '/v1/analytics-upload/telegram',
+      {
+        'fileName': fileName,
+        'contentBase64': base64Encode(bytes),
+        'caption': caption,
+      },
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 90),
+    );
+  }
+
+  Future<Map<String, dynamic>> uploadAnalyticsPdfToGoogleDrive({
+    required String accessToken,
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    return _post(
+      '/v1/analytics-upload/google-drive',
+      {
+        'fileName': fileName,
+        'contentBase64': base64Encode(bytes),
+      },
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 90),
+    );
+  }
+
   Future<Map<String, dynamic>> _get(
     String path, {
     String? accessToken,
@@ -588,7 +625,6 @@ class KoinlySyncApi {
       accessToken: data['accessToken']?.toString() ?? '',
       refreshToken: data['refreshToken']?.toString() ?? '',
       username: user['username']?.toString() ?? fallbackUsername,
-      recoveryKey: data['recoveryKey']?.toString(),
       userId: user['id']?.toString() ?? '',
       deviceId: data['deviceId']?.toString() ?? '',
       accessExpiresAt: DateTime.fromMillisecondsSinceEpoch((data['accessExpiresAt'] as num? ?? DateTime.now().millisecondsSinceEpoch).toInt()),
