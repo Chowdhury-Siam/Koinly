@@ -10,7 +10,7 @@ extension AnalyticsPdfVariantLabel on AnalyticsPdfVariant {
 
   String get description => switch (this) {
         AnalyticsPdfVariant.summary => '',
-        AnalyticsPdfVariant.transactionHistory => 'Complete transaction ledger for the selected date filter.',
+        AnalyticsPdfVariant.transactionHistory => '',
       };
 }
 
@@ -1343,13 +1343,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       if (!exporting) setState(() => pdfVariant = value);
                     },
                   ),
-                  if (pdfVariant == AnalyticsPdfVariant.transactionHistory) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Transaction history uses the selected date filter. Choose All Time to include every transaction stored in Koinly.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                    ),
-                  ],
                   const SizedBox(height: 14),
                   Text('File format', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),

@@ -1,3 +1,26 @@
+## [1.0.1155] - 2026-09-14
+
+- Added **Settings > Account & sync > Deploy Database** as a second self-hosted Worker deployment path alongside GitHub Actions.
+- Added an in-app deployment guide and form for Cloudflare Worker name/account/token, Turso database URL/token, JWT secret, and Worker administrator credentials.
+- In-app deployment now validates Cloudflare and Turso, applies the current Turso schema and legacy migrations, derives the administrator password verifier locally, uploads the bundled Worker, enables the workers.dev route, configures the five-minute scheduler, and waits for the full Worker health contract.
+- Deployment failures are shown directly on the deployment page; successful deployment automatically returns the Worker URL to **Account & sync** and validates/enables it.
+- Deployment credentials entered in the app are not persisted; official release builds now embed a deployable Worker bundle generated from the current `cloud/worker` source.
+- Updated the README for both supported Worker deployment methods and synchronized application version metadata to `1.0.1155+199`.
+
+## [1.0.1154] - 2026-09-14
+
+- Refreshed the public README so it documents the current Koinly experience instead of calling out features that were removed in earlier versions.
+- Updated self-hosted account password-reset documentation to describe the current `/profile` administrator flow directly.
+- Removed stale README wording around the retired in-app recovery flow and legacy email-login migration.
+- Simplified credential and Analytics documentation to describe where current controls live without listing removed UI elements.
+- Corrected the README profile-media security note to match authenticated Worker media synchronization.
+- Synchronized application version metadata to `1.0.1154+198`.
+
+## [1.0.1153] - 2026-09-14
+
+- Removed the extra transaction-history explanatory copy from Analytics export UI.
+- Synchronized application version metadata to `1.0.1153+197`.
+
 ## [1.0.1152] - 2026-09-14
 
 - Simplified **Archive > Local backup file > Local** so its outside status now shows only **On** or **Off**, matching the cloud backup indicators.

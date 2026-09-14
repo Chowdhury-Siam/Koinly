@@ -36,7 +36,6 @@ void main() {
     expect(analytics, contains("label: 'Transaction history'"));
     expect(analytics, contains('static Future<Uint8List> _buildTransactionHistory(AppController state, AnalyticsSnapshot snapshot)'));
     expect(analytics, contains('List<MoneyTransaction>.of(snapshot.transactions)'));
-    expect(analytics, contains('Transaction history uses the selected date filter. Choose All Time'));
     expect(analytics, isNot(contains('does not use the selected analytics period')));
     expect(analytics, isNot(contains("tooltip: 'Telegram bot settings'")));
     expect(analytics, isNot(contains("tooltip: 'Analytics upload settings'")));
@@ -50,7 +49,7 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1152+196'));
+    expect(pubspec, contains('version: 1.0.1155+199'));
     expect(analytics, contains("title: 'Cloud'"));
     expect(analytics, contains("title: const Text('Automatic report upload'"));
     expect(analytics, contains('settings.fileFormat'));

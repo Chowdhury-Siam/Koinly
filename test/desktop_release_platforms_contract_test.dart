@@ -31,7 +31,8 @@ void main() {
     expect(workflow, contains('Restore pinned Flutter SDK cache'));
     expect(workflow, contains('Set up pinned Flutter on Apple Silicon'));
     expect(workflow, contains('--filter=blob:none --single-branch --depth 1'));
-    expect(workflow, contains('Restore macOS dependency and incremental build caches'));
+    expect(workflow, contains('Restore macOS dependency cache'));
+    expect(workflow, contains('Restore macOS incremental build cache'));
     expect(workflow, contains('build/macos'));
     expect(workflow, contains('FLUTTER_MACOS_ARM64_ONLY: "false"'));
     expect(workflow, contains('flutter build macos --release'));
@@ -62,7 +63,7 @@ void main() {
         r"^    if: github\.repository == 'Chowdhury-Siam/Koinly'\s*$",
         multiLine: true,
       ).allMatches(workflow).length,
-      4,
+      5,
     );
   });
 
@@ -72,10 +73,10 @@ void main() {
     final androidGradle = File('android/app/build.gradle').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1152+196'));
-    expect(config, contains("defaultValue: '1.0.1152'"));
-    expect(androidGradle, contains('versionCode = 196'));
-    expect(androidGradle, contains('versionName = "1.0.1152"'));
+    expect(pubspec, contains('version: 1.0.1155+199'));
+    expect(config, contains("defaultValue: '1.0.1155'"));
+    expect(androidGradle, contains('versionCode = 199'));
+    expect(androidGradle, contains('versionName = "1.0.1155"'));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);

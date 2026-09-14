@@ -93,7 +93,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Your own Cloudflare Worker and Turso database
 - A private administration portal for creating and managing sync accounts
 - Username/password login from additional devices
-- Recovery-key password reset without requiring an email address
+- Administrator-managed account password resets through the private `/profile` dashboard
 - Offline-first local outbox
 - Realtime foreground synchronization over an authenticated Cloudflare WebSocket hub, with incremental pull fallback
 - Merge-first **Restore cloud copy** and **Upload local changes**
@@ -130,21 +130,23 @@ The full beginner-friendly deployment guide is below.
 
 Self-hosted sync is optional. It is only needed if you want your Koinly data synchronized through your own backend.
 
-Before starting, you need:
+Before starting, you need a **Turso account** and a **Cloudflare account**. A GitHub account and fork are required only when you choose the GitHub Actions deployment method.
 
-- a GitHub account;
-- a Turso account;
-- a Cloudflare account; and
-- a fork of this repository.
+Koinly supports two Worker deployment methods:
 
-### 4.1 The eight values you will create
+- **Deploy Database in the app** — open **Settings > Account & sync > Deploy Database**, follow the setup guide, enter the deployment values, and let Koinly create/update the database and Worker directly.
+- **GitHub Actions** — fork this repository, save the same deployment values as repository secrets/variables, and run **Deploy Self-Hosted Sync Worker**.
 
-You will add these names to **GitHub > Settings > Secrets and variables > Actions**:
+Both methods deploy the same Worker contract and can be used again later to update an existing Worker. When redeploying, keep the same Worker name, Turso database, and `JWT_SECRET` unless you intentionally want a separate backend.
+
+### 4.1 The eight deployment values
+
+The in-app deployment page asks for these values directly. The GitHub Actions method stores the same values under **GitHub > Settings > Secrets and variables > Actions**:
 
 | Name | What it is | Where it comes from |
 | --- | --- | --- |
 | `CLOUDFLARE_NAME` | Your Worker name, such as `my-koinly-sync` | You choose it |
-| `CLOUDFLARE_API_TOKEN` | Lets GitHub deploy your Worker | Cloudflare |
+| `CLOUDFLARE_API_TOKEN` | Authorizes Worker deployment | Cloudflare |
 | `CLOUDFLARE_ACCOUNT_ID` | Identifies your Cloudflare account | Cloudflare |
 | `TURSO_DATABASE_URL` | Your `libsql://...turso.io` database address | Turso |
 | `TURSO_AUTH_TOKEN` | Read/write access token for the Turso database | Turso |
@@ -159,27 +161,31 @@ Keep the token/secret values private. Never post them in issues, screenshots, ch
 <a id="deploy-your-self-hosted-worker"></a>
 # 5. Deploy your self-hosted Worker
 
-The normal setup is:
+Create the Turso and Cloudflare values once, then choose either deployment path:
 
 ```text
-Fork Koinly on GitHub
+Create a Turso database + token
         ↓
-Create a Turso database
+Create a Cloudflare API token + copy Account ID
         ↓
-Create a Cloudflare API token
+Choose Worker name, JWT secret, and administrator credentials
         ↓
-Add 8 values to GitHub Actions
-        ↓
-Run "Deploy Self-Hosted Sync Worker"
-        ↓
-Copy the workers.dev URL
+        ├─ In Koinly: Settings > Account & sync > Deploy Database
+        │      ↓
+        │   Deploy directly and auto-fill the Worker URL
+        │
+        └─ GitHub: save the 8 values and run Deploy Self-Hosted Sync Worker
+               ↓
+            Copy the Worker URL into Koinly
         ↓
 Open /profile and create a sync account
         ↓
 Sign in to that account in Koinly
 ```
 
-## 5.1 Step 1 — Fork Koinly
+If you use the in-app method, you can skip Sections **5.1, 5.8, and 5.9** and continue with **5.10** after gathering the common values in Sections 5.2–5.7.
+
+## 5.1 Step 1 — Fork Koinly (GitHub Actions method only)
 
 1. Open this repository on GitHub.
 2. Click **Fork** in the upper-right corner.
@@ -216,11 +222,7 @@ The correct value looks similar to:
 libsql://koinly-yourname.turso.io
 ```
 
-Add it to GitHub later as:
-
-```text
-TURSO_DATABASE_URL
-```
+Use this value as `TURSO_DATABASE_URL` in whichever deployment method you choose.
 
 > **Important:** Do not copy the normal `https://app.turso.tech/...` browser address. Koinly needs the `libsql://...turso.io` database URL shown under **Connect**.
 
@@ -259,17 +261,13 @@ You do not need to buy or configure a domain for the normal Koinly setup. The de
 8. On the **Token created successfully** dialog, copy **Your API Token** immediately. This is `CLOUDFLARE_API_TOKEN`.
 9. The same success dialog shows **Account ID**. Copy that value too; it is `CLOUDFLARE_ACCOUNT_ID`.
 
-The deployment workflow checks the values before running Wrangler. If Cloudflare changes the template later, recreate the token from the **Edit Cloudflare Workers** template rather than granting unrelated account-wide permissions.
+Both deployment methods validate the Cloudflare values before uploading the Worker. If Cloudflare changes the template later, recreate the token from the **Edit Cloudflare Workers** template rather than granting unrelated account-wide permissions.
 
 ## 5.5 Step 5 — Confirm your Cloudflare Account ID
 
 The easiest place to copy the Account ID is the **Token created successfully** dialog shown immediately after creating the token. Use the Account ID from the same Cloudflare account that owns the Worker.
 
-Copy it and add it to GitHub later as:
-
-```text
-CLOUDFLARE_ACCOUNT_ID
-```
+Use this value as `CLOUDFLARE_ACCOUNT_ID` in whichever deployment method you choose.
 
 ## 5.6 Step 6 — Choose a Worker name
 
@@ -285,11 +283,7 @@ Rules:
 - 1 to 63 characters;
 - do not start or end with `-`.
 
-Add the name to GitHub as:
-
-```text
-CLOUDFLARE_NAME
-```
+Use the name as `CLOUDFLARE_NAME` in GitHub Actions, or enter it as **Cloudflare Worker name** on the in-app deployment page.
 
 Your final address will look similar to:
 
@@ -297,7 +291,7 @@ Your final address will look similar to:
 https://my-koinly-sync.<your-workers-subdomain>.workers.dev
 ```
 
-The workflow prints the exact URL after deployment.
+GitHub Actions prints the exact URL after deployment; in-app deployment fills the URL in **Account & sync** automatically.
 
 ## 5.7 Step 7 — Choose your security credentials
 
@@ -307,11 +301,11 @@ Choose the remaining three values from the checklist in Section 4.1:
 - **`ADMIN_USERNAME`:** Choose a lowercase username such as `worker-admin`. Use 3–32 letters, numbers, dots, dashes, or underscores, starting and ending with a letter or number.
 - **`ADMIN_PASSWORD`:** Choose a strong, unique password of 12–256 characters and save it in your password manager. This is the password you will enter when signing in to `/profile`.
 
-Enter these values directly in the GitHub secret fields in the next step. The deployment workflow hashes the administrator password automatically before sending its verifier to Cloudflare. You do not need to generate a hash or open a separate setup page. GitHub stores repository secrets encrypted; the password is not printed in deployment logs or stored in the account database.
+Enter these values in the deployment method you choose. Both methods derive the administrator password verifier before deployment, so the raw administrator password is not stored in the account database. The in-app method keeps the entered deployment credentials only for the active deployment operation; the GitHub method keeps them in encrypted repository secrets.
 
 Use different values for `JWT_SECRET` and `ADMIN_PASSWORD`, and do not reuse your GitHub, Cloudflare, or Koinly account password.
 
-## 5.8 Step 8 — Add the values to GitHub
+## 5.8 Step 8 — Add the values to GitHub (GitHub Actions method only)
 
 Open your **forked Koinly repository**, then go to:
 
@@ -368,7 +362,7 @@ ADMIN_PASSWORD
 
 Spelling matters. The workflow expects these exact names.
 
-## 5.9 Step 9 — Deploy the Worker
+## 5.9 Step 9 — Deploy the Worker with GitHub Actions
 
 1. Open the **Actions** tab in your fork.
 2. If GitHub asks you to enable Actions for the fork, enable them.
@@ -396,6 +390,23 @@ https://my-koinly-sync.example-subdomain.workers.dev
 
 You do **not** need to manually create Turso tables. The workflow applies the schema for you.
 
+## 5.10 Deploy directly from Koinly
+
+After you have the values from Sections 5.2–5.7:
+
+1. Open **Settings > Account & sync** in Koinly.
+2. Select **Deploy Database** under **Self-hosted Sync Worker**.
+3. Use the Cloudflare and Turso shortcut buttons on that page if you still need to copy a value.
+4. Enter the Worker name, Cloudflare Account ID, Cloudflare API token, Turso database URL, Turso auth token, JWT secret, administrator username, and administrator password.
+5. Select **Deploy Worker**.
+6. Keep the page open while Koinly validates Cloudflare and Turso, applies the current database schema, uploads the Worker, enables its `workers.dev` route, configures the five-minute scheduler, and waits for the Worker health check.
+7. If a step fails, the deployment page shows the error there so you can correct the value and retry.
+8. When deployment succeeds, Koinly returns to **Account & sync**, automatically fills the **Cloudflare Worker URL**, and validates that Worker for use by the app.
+
+The Cloudflare API token, Turso token, JWT secret, and administrator password are **not saved by the app**. They are kept only for the active deployment operation. Koinly derives the administrator password verifier locally; the raw administrator password is not uploaded as a Worker secret. Cloudflare receives the Worker secrets needed by the deployed service.
+
+The release workflow embeds the matching deployable Worker bundle into official Koinly builds. If a source build reports that the deployable bundle is missing, build the app through the repository release workflow or run `npm run bundle:app` inside `cloud/worker` before building Flutter.
+
 ---
 
 <a id="connect-koinly-to-your-worker"></a>
@@ -405,20 +416,16 @@ After completing Sections 4 and 5, create and manage sync accounts from your Wor
 
 To connect an account to the app:
 
-1. Open Koinly.
-2. Go to **Settings > Account & sync**.
-3. Paste your Cloudflare Worker URL, without `/profile` at the end.
-4. Select **Validate and use Worker**.
-5. Select **Login** and enter the username and password created in the administration portal.
-6. Repeat these steps on other devices using the same account.
+1. Open Koinly and go to **Settings > Account & sync**.
+2. If you deployed through **Deploy Database**, the Worker URL is already filled and validated automatically. If you deployed through GitHub Actions, paste the Worker URL without `/profile` and select **Validate and use Worker**.
+3. Select **Login** and enter the username and password created in the administration portal.
+4. Repeat these steps on other devices using the same Worker URL and account.
 
-Existing accounts can continue to sign in with their current credentials. Once administrator settings are configured, use `/profile` to create accounts and reset forgotten passwords.
+Use `/profile` to create sync accounts and manage account passwords.
 
-### 6.1 Password recovery
+### 6.1 Password reset
 
-Koinly no longer exposes an in-app **Forgot password** or recovery-key flow. If an account holder forgets their password, open the Worker's `/profile` administration portal, select the account, and use **Change password**. The reset signs out the account's existing sessions, and the user can then sign in again with the new password.
-
-> Existing self-hosted databases created by older Koinly releases are migrated from email login to username login when the latest deployment workflow applies the schema. The old email's part before `@` becomes the initial username.
+If an account holder needs a new password, open the Worker's `/profile` administration portal, select the account, and use **Change password**. The reset signs out that account's existing sessions, and the user can then sign in again with the new password.
 
 ### 6.2 Sync controls
 
@@ -434,7 +441,7 @@ When two signed-in devices are open, the Worker uses an authenticated Durable Ob
 
 Manage your Worker's accounts through a private web dashboard. Administrator access is included in the normal setup in Sections 4 and 5; use the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you saved there.
 
-> **Existing Worker owners: redeployment is required.** After updating your project, check that all eight values from Section 4.1 are saved on GitHub, then open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch with your updated files, start the workflow, and wait for success. The deployment now also provisions the `SyncHub` Durable Object used for realtime cross-device notifications. Updating the Koinly app alone does not update your Worker. Keep the same Worker name, Turso database, and `JWT_SECRET`.
+> **Existing Worker owners:** when a Koinly update includes Worker changes, redeploy the Worker using either **Settings > Account & sync > Deploy Database** or **Actions > Deploy Self-Hosted Sync Worker**. Updating only the app does not update an already deployed Worker. Keep the same Worker name, Turso database, and `JWT_SECRET` so the existing backend continues to use the same identity and encrypted data.
 
 The administrator login manages the Worker. Sync accounts are the accounts people use to sign in to Koinly; they are listed in the dashboard. Your administrator login is separate and is not included in that count.
 
@@ -447,7 +454,7 @@ The administrator login manages the Worker. Sync accounts are the accounts peopl
    ```
 
 2. Enter the administrator username saved in `ADMIN_USERNAME`.
-3. Enter the password you saved as `ADMIN_PASSWORD` in GitHub. Use the eye button inside the password field when you need to verify what you typed.
+3. Enter the administrator password you supplied during deployment. Use the eye button inside the password field when you need to verify what you typed.
 4. Select **Sign in**.
 
 The dashboard shows the total number of registered accounts and a list of their usernames, creation dates, and status. **Invited** means an account has not signed in yet. **Active** means it has signed in at least once; it does not indicate that the person is online. Use **Previous** and **Next** to browse lists larger than 50 accounts.
@@ -483,25 +490,24 @@ Deletion removes that account's synchronized cloud data, device and session reco
 
 #### 6.3.5 Change the administrator password
 
-1. In your GitHub repository, open **Settings > Secrets and variables > Actions**.
-2. Find `ADMIN_PASSWORD` and select its edit button.
-3. Enter your new administrator password and save the change.
-4. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**, choose the updated branch, and start the workflow.
-5. When deployment succeeds, sign in to `/profile` with your new password.
+Redeploy the same Worker with a new administrator password using either deployment method:
 
-The workflow hashes the new password automatically. Deployments refresh the administrator verifier and sign out existing dashboard sessions. Keep `JWT_SECRET` unchanged; it also protects other Worker credentials and encrypted data.
+- **In the app:** open **Settings > Account & sync > Deploy Database**, enter the same Worker name, Cloudflare/Turso values, and existing `JWT_SECRET`, then enter the new administrator password and deploy again.
+- **GitHub Actions:** update the `ADMIN_PASSWORD` repository secret, then run **Deploy Self-Hosted Sync Worker** again.
+
+After deployment succeeds, sign in to `/profile` with the new password. Redeployment refreshes the administrator verifier and signs out existing dashboard sessions. Keep `JWT_SECRET` unchanged; it also protects other Worker credentials and encrypted data.
 
 #### 6.3.6 Common messages
 
 | Message or problem | What to do |
 | --- | --- |
-| Administrator login is not configured | Check `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the main GitHub secrets checklist, then run the deployment workflow again. |
-| Invalid administrator username or password | Use the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD` on GitHub. |
+| Administrator login is not configured | Redeploy the Worker and confirm the administrator username/password are filled in the deployment method you use. |
+| Invalid administrator username or password | Use the administrator username/password you supplied during the latest Worker deployment. |
 | Duplicate username | Choose a different username, or find the existing account and change its password. |
 | Session expired | Sign in again. Dashboard sessions last one hour. |
 | Too many attempts | Wait fifteen minutes before trying again. |
-| Server/database error | Open the latest GitHub Actions run and check the failed step. Confirm the Turso settings in Section 5, then rerun the deployment workflow. |
-| `/profile` is not found | Confirm that the workflow deployed the updated files to the Worker URL you are opening. |
+| Server/database error | Confirm the Turso values in Section 5 and redeploy. For in-app deployment, read the error shown on **Deploy Database**; for GitHub deployment, inspect the failed Actions step. |
+| `/profile` is not found | Confirm that the latest Worker deployment completed successfully and that you are opening the exact deployed Worker URL. |
 
 Use **Sign out** when finished. The dashboard supports desktop and mobile browsers, light/dark/system appearance, and reduced-motion preferences. Account information and administrative actions require a signed-in administrator; passwords are stored as hashes and are never displayed in account lists.
 
@@ -514,7 +520,7 @@ Optional command-line instructions and implementation details are in the [Worker
 
 Cloud delivery is available only when using your self-hosted Worker.
 
-Koinly now keeps service credentials in one place: **Settings > Credential**. Configure the Telegram bot token and destination there, and configure/connect Google Drive there. Telegram and Google Drive credentials are not editable from Account & sync, Analytics, Archive scheduling pages, or any other app screen.
+Koinly keeps service credentials in **Settings > Credential**. Configure the Telegram bot token and destination there, and configure/connect Google Drive there.
 
 ### Telegram credentials
 
@@ -551,7 +557,7 @@ In **Archive > Local backup file > Cloud**, Telegram and Google Drive have indep
 
 ### Analytics backup
 
-Open **Settings > Analytics** to choose the report date filter, report type, and output format: **PDF**, **XLSX**, or **TXT**. **Download**, **Upload Telegram**, and **Upload Drive** all use the selected format. Manual cloud uploads use the credentials already configured in **Settings > Credential**; Analytics does not contain credential/settings icons.
+Open **Settings > Analytics** to choose the report date filter, report type, and output format: **PDF**, **XLSX**, or **TXT**. **Download**, **Upload Telegram**, and **Upload Drive** all use the selected format. Manual cloud uploads use the credentials configured in **Settings > Credential**.
 
 For automatic delivery, open **Settings > Archive > Analytics backup > Cloud**. Telegram and Google Drive each have an independent report schedule with:
 
@@ -565,7 +571,7 @@ The Worker generates scheduled reports in the selected format from the latest sy
 
 Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across Telegram report, Google Drive report, Telegram `.koinlybackup`, and Google Drive `.koinlybackup` schedules. For example, `03:00`, `03:05`, `03:10`, and `03:15` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
 
-> Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the current Analytics upload and scheduling endpoints are installed.
+> Existing Worker owners should redeploy the Worker after updating when the release includes Worker changes. Use either **Deploy Database** in Koinly or **Deploy Self-Hosted Sync Worker** on GitHub.
 
 ---
 
@@ -599,7 +605,7 @@ On Android, automatic local backups run through a native WorkManager job using t
 - Backup imports reconcile equivalent categories to reduce duplicates.
 - Telegram bot tokens saved for cloud backup are encrypted before Turso storage.
 - Google Drive OAuth Client Secrets and refresh tokens used by Analytics uploads are encrypted by the Worker before Turso storage.
-- Profile media remains device-local and is not part of finance synchronization.
+- Profile media can synchronize through authenticated Worker media endpoints and is kept separate from the normal finance sync payload.
 
 ---
 
@@ -723,7 +729,7 @@ When these are present, CI signs the app with hardened runtime, submits the sign
 <a id="worker-development"></a>
 ## 11. Worker development (optional)
 
-This section is for developers. For normal setup and account management, use the website steps in Sections 5 and 6.
+This section is for developers. For normal setup and account management, use the deployment and administration steps in Sections 5 and 6.
 
 ```bash
 cd cloud/worker
@@ -740,7 +746,7 @@ export TURSO_AUTH_TOKEN='your-token'
 npm run schema:apply
 ```
 
-For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. This handles the administrator password securely and applies the required database updates.
+For normal deployment, use either **Settings > Account & sync > Deploy Database** in Koinly or **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. Both paths apply the required database updates and deploy the same Worker contract.
 
 See [`cloud/worker/README.md`](cloud/worker/README.md) for Worker API and development details.
 
@@ -789,7 +795,7 @@ https://something.workers.dev/...
 
 ## 12.3 Cloudflare authentication error / code 10000
 
-Create a new Cloudflare API token using the **Edit Cloudflare Workers** template, then replace `CLOUDFLARE_API_TOKEN` in your GitHub repository secrets and run the deployment again.
+Create a new Cloudflare API token using the **Edit Cloudflare Workers** template, then use the replacement token in **Deploy Database** or update the `CLOUDFLARE_API_TOKEN` GitHub repository secret and redeploy.
 
 ## 12.4 Worker validation fails in Koinly
 

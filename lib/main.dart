@@ -54,6 +54,7 @@ import 'subscription_background_service.dart';
 import 'ui_foundation.dart';
 import 'update_service.dart';
 import 'update_background_service.dart';
+import 'worker_deployment.dart';
 
 part 'loans/loan_controller_part.dart';
 part 'loans/loan_screens.dart';
@@ -16893,6 +16894,311 @@ class _LinkedSegmentsText extends StatelessWidget {
   }
 }
 
+
+class WorkerDeploymentScreen extends StatefulWidget {
+  const WorkerDeploymentScreen({super.key});
+
+  @override
+  State<WorkerDeploymentScreen> createState() => _WorkerDeploymentScreenState();
+}
+
+class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
+  final _workerNameController = TextEditingController(text: 'koinly-sync');
+  final _accountIdController = TextEditingController();
+  final _cloudflareTokenController = TextEditingController();
+  final _tursoUrlController = TextEditingController();
+  final _tursoTokenController = TextEditingController();
+  final _jwtSecretController = TextEditingController();
+  final _adminUsernameController = TextEditingController(text: 'worker-admin');
+  final _adminPasswordController = TextEditingController();
+
+  bool _cloudflareTokenVisible = false;
+  bool _tursoTokenVisible = false;
+  bool _jwtVisible = false;
+  bool _adminPasswordVisible = false;
+  bool _deploying = false;
+  String? _error;
+  final List<String> _progress = <String>[];
+
+  @override
+  void dispose() {
+    for (final controller in <TextEditingController>[
+      _workerNameController,
+      _accountIdController,
+      _cloudflareTokenController,
+      _tursoUrlController,
+      _tursoTokenController,
+      _jwtSecretController,
+      _adminUsernameController,
+      _adminPasswordController,
+    ]) {
+      controller.clear();
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  String _generateSecret() {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_';
+    final random = math.Random.secure();
+    return List<String>.generate(48, (_) => alphabet[random.nextInt(alphabet.length)]).join();
+  }
+
+  Future<void> _launchSetupLink(String url) async {
+    final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    if (!opened && mounted) showSnack(context, 'Could not open the setup page.');
+  }
+
+  Widget _secretField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required bool visible,
+    required VoidCallback onToggle,
+    String? hint,
+  }) {
+    return TextField(
+      contextMenuBuilder: koinlyTextFieldContextMenu,
+      enableInteractiveSelection: true,
+      controller: controller,
+      readOnly: _deploying,
+      obscureText: !visible,
+      autocorrect: false,
+      enableSuggestions: false,
+      onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        suffixIcon: IconButton(
+          tooltip: visible ? 'Hide' : 'Show',
+          onPressed: _deploying ? null : onToggle,
+          icon: Icon(visible ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deploy() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _deploying = true;
+      _error = null;
+      _progress
+        ..clear()
+        ..add('Starting deployment…');
+    });
+
+    final service = WorkerDeploymentService();
+    try {
+      final result = await service.deploy(
+        WorkerDeploymentConfig(
+          workerName: _workerNameController.text,
+          cloudflareAccountId: _accountIdController.text,
+          cloudflareApiToken: _cloudflareTokenController.text,
+          tursoDatabaseUrl: _tursoUrlController.text,
+          tursoAuthToken: _tursoTokenController.text,
+          jwtSecret: _jwtSecretController.text,
+          adminUsername: _adminUsernameController.text,
+          adminPassword: _adminPasswordController.text,
+        ),
+        onProgress: (message) {
+          if (!mounted) return;
+          setState(() {
+            if (_progress.isEmpty || _progress.last != message) _progress.add(message);
+          });
+        },
+      );
+      if (!mounted) return;
+      setState(() => _progress.add('Worker URL: ${result.workerUrl}'));
+      await Future<void>.delayed(const Duration(milliseconds: 850));
+      if (mounted) Navigator.pop(context, result.workerUrl);
+    } on WorkerDeploymentException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Deployment failed. Check your connection and credentials, then try again.');
+      }
+    } finally {
+      service.close();
+      if (mounted) setState(() => _deploying = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurface.withOpacity(.66);
+    return PageScaffold(
+      title: 'Deploy Database',
+      subtitle: 'Deploy the Koinly Worker directly from this app',
+      child: ResponsiveContent(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('1. Get your Cloudflare values', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('Open Cloudflare, copy your Account ID, then create an API token with Workers Scripts Write permission. Your account must already have a workers.dev subdomain.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _deploying ? null : () => _launchSetupLink('https://dash.cloudflare.com/'),
+                        icon: const Icon(Icons.open_in_new_rounded),
+                        label: const Text('Open Cloudflare'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _deploying ? null : () => _launchSetupLink('https://dash.cloudflare.com/profile/api-tokens'),
+                        icon: const Icon(Icons.key_rounded),
+                        label: const Text('Create API token'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('2. Get your Turso values', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('Create or open a Turso database. Copy its libsql://…turso.io Database URL and create a database authentication token. Koinly applies the required tables automatically during deployment.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: _deploying ? null : () => _launchSetupLink('https://app.turso.tech/'),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: const Text('Open Turso'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('3. Enter deployment values', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text('Sensitive values are used only for this deployment session and are not saved by Koinly.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    contextMenuBuilder: koinlyTextFieldContextMenu,
+                    enableInteractiveSelection: true,
+                    controller: _workerNameController,
+                    readOnly: _deploying,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.none,
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: const InputDecoration(labelText: 'Cloudflare Worker name', prefixIcon: Icon(Icons.cloud_rounded), hintText: 'koinly-sync'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    contextMenuBuilder: koinlyTextFieldContextMenu,
+                    enableInteractiveSelection: true,
+                    controller: _accountIdController,
+                    readOnly: _deploying,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: const InputDecoration(labelText: 'Cloudflare Account ID', prefixIcon: Icon(Icons.badge_rounded)),
+                  ),
+                  const SizedBox(height: 12),
+                  _secretField(controller: _cloudflareTokenController, label: 'Cloudflare API token', icon: Icons.key_rounded, visible: _cloudflareTokenVisible, onToggle: () => setState(() => _cloudflareTokenVisible = !_cloudflareTokenVisible)),
+                  const SizedBox(height: 12),
+                  TextField(
+                    contextMenuBuilder: koinlyTextFieldContextMenu,
+                    enableInteractiveSelection: true,
+                    controller: _tursoUrlController,
+                    readOnly: _deploying,
+                    keyboardType: TextInputType.url,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: const InputDecoration(labelText: 'Turso Database URL', prefixIcon: Icon(Icons.storage_rounded), hintText: 'libsql://your-db.turso.io'),
+                  ),
+                  const SizedBox(height: 12),
+                  _secretField(controller: _tursoTokenController, label: 'Turso auth token', icon: Icons.vpn_key_rounded, visible: _tursoTokenVisible, onToggle: () => setState(() => _tursoTokenVisible = !_tursoTokenVisible)),
+                  const SizedBox(height: 12),
+                  _secretField(controller: _jwtSecretController, label: 'JWT secret', icon: Icons.security_rounded, visible: _jwtVisible, onToggle: () => setState(() => _jwtVisible = !_jwtVisible), hint: 'At least 32 characters'),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _deploying ? null : () => setState(() => _jwtSecretController.text = _generateSecret()),
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                      label: const Text('Generate secure JWT secret'),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  TextField(
+                    contextMenuBuilder: koinlyTextFieldContextMenu,
+                    enableInteractiveSelection: true,
+                    controller: _adminUsernameController,
+                    readOnly: _deploying,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textCapitalization: TextCapitalization.none,
+                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                    decoration: const InputDecoration(labelText: 'Administrator username', prefixIcon: Icon(Icons.admin_panel_settings_rounded)),
+                  ),
+                  const SizedBox(height: 12),
+                  _secretField(controller: _adminPasswordController, label: 'Administrator password', icon: Icons.lock_rounded, visible: _adminPasswordVisible, onToggle: () => setState(() => _adminPasswordVisible = !_adminPasswordVisible), hint: '12–256 characters'),
+                ],
+              ),
+            ),
+            if (_progress.isNotEmpty || _error != null) ...[
+              const SizedBox(height: 12),
+              ExpressiveCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        if (_deploying) const KoinlyInlineLoader(size: 20) else Icon(_error == null ? Icons.check_circle_rounded : Icons.error_rounded, color: _error == null ? kSleekAccent : kSleekExpense),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(_error == null ? 'Deployment status' : 'Deployment error', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+                      ],
+                    ),
+                    if (_progress.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ..._progress.take(12).map((message) => Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: Text(message, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700, color: muted)),
+                          )),
+                    ],
+                    if (_error != null) ...[
+                      const SizedBox(height: 10),
+                      Text(_error!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _deploying ? null : _deploy,
+              icon: _deploying ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.rocket_launch_rounded),
+              label: Text(_deploying ? 'Deploying…' : 'Deploy Worker'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MultiDeviceSyncScreen extends StatefulWidget {
   const MultiDeviceSyncScreen({
     super.key,
@@ -16935,6 +17241,21 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     _passwordController.dispose();
     _workerUrlController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openWorkerDeployment() async {
+    final workerUrl = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const WorkerDeploymentScreen()),
+    );
+    if (!mounted || workerUrl == null || workerUrl.trim().isEmpty) return;
+    _workerUrlController.value = _workerUrlController.value.copyWith(
+      text: workerUrl,
+      selection: TextSelection.collapsed(offset: workerUrl.length),
+      composing: TextRange.empty,
+    );
+    setState(() {});
+    await _saveSyncEndpoint();
   }
 
   Future<void> _saveSyncEndpoint() async {
@@ -17144,6 +17465,12 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         ? const KoinlyInlineLoader(size: 18)
                         : const Icon(Icons.verified_rounded),
                     label: const Text('Validate and use Worker'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : _openWorkerDeployment,
+                    icon: const Icon(Icons.rocket_launch_rounded),
+                    label: const Text('Deploy Database'),
                   ),
                 ],
               ),

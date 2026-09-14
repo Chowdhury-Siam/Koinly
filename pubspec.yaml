@@ -1,7 +1,7 @@
 name: koinly
 description: Flutter rebuild of the Koinly personal finance tracker with adaptive Material 3 UI for Android, Windows, Linux, and macOS.
 publish_to: "none"
-version: 1.0.1152+196
+version: 1.0.1155+199
 environment:
   sdk: ">=3.12.0 <4.0.0"
 
@@ -32,6 +32,7 @@ dependencies:
   workmanager: ^0.10.10
   flutter_secure_storage: ^10.3.1
   http: ^1.2.2
+  http_parser: ^4.1.2
   mongo_dart: ^0.10.9
   timezone: ^0.9.4
   url_launcher: ^6.3.0
@@ -52,3 +53,5 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/lottie/
+    - assets/worker/
+    - cloud/worker/schema.sql

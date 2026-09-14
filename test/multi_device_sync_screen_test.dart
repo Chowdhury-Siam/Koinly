@@ -19,6 +19,7 @@ void main() {
     expect(find.text('Self-hosted Sync Worker'), findsOneWidget);
     expect(find.text('Cloudflare Worker URL'), findsOneWidget);
     expect(find.text('Validate and use Worker'), findsOneWidget);
+    expect(find.text('Deploy Database'), findsOneWidget);
     expect(find.text('Default'), findsNothing);
     expect(find.text('Registration Key'), findsNothing);
   });

@@ -14,6 +14,7 @@ on:
       - "macos/**"
       - "tools/linux/**"
       - "assets/**"
+      - "cloud/worker/**"
       - "pubspec.yaml"
       - "pubspec.lock"
       - "CHANGELOG.md"
@@ -24,10 +25,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare-worker-bundle:
+    name: Prepare in-app Worker deployment bundle
+    if: github.repository == 'Chowdhury-Siam/Koinly'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Restore prepared Worker bundle cache
+        id: worker-bundle-cache
+        uses: actions/cache@v5
+        with:
+          path: assets/worker/koinly_sync_worker.js
+          key: koinly-worker-bundle-v1-${{ hashFiles('cloud/worker/src/**', 'cloud/worker/package-lock.json', 'cloud/worker/wrangler.self-hosted.toml', 'cloud/worker/scripts/build-app-deploy-bundle.mjs') }}
+
+      - name: Set up Node 22
+        if: steps.worker-bundle-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Restore Worker dependency cache
+        if: steps.worker-bundle-cache.outputs.cache-hit != 'true'
+        id: worker-node-cache
+        uses: actions/cache@v5
+        with:
+          path: cloud/worker/node_modules
+          key: koinly-worker-node22-${{ hashFiles('cloud/worker/package-lock.json') }}
+
+      - name: Install Worker dependencies
+        if: steps.worker-bundle-cache.outputs.cache-hit != 'true' && steps.worker-node-cache.outputs.cache-hit != 'true'
+        working-directory: cloud/worker
+        run: npm ci --no-audit --no-fund
+
+      - name: Build deployable Worker bundle for the app
+        if: steps.worker-bundle-cache.outputs.cache-hit != 'true'
+        working-directory: cloud/worker
+        run: npm run bundle:app
+
+      - name: Verify embedded Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="assets/worker/koinly_sync_worker.js"
+          test -s "$bundle"
+          ! grep -q 'KOINLY_WORKER_BUNDLE_PLACEHOLDER' "$bundle"
+          test "$(wc -c < "$bundle")" -gt 10000
+
+      - name: Upload deployable Worker bundle
+        uses: actions/upload-artifact@v5
+        with:
+          name: koinly-worker-deploy-bundle
+          path: assets/worker/koinly_sync_worker.js
+          if-no-files-found: error
+          compression-level: 0
+
   # GitHub copies workflow triggers into forks. Keep every release build job
   # restricted to the canonical repository so fork pushes and manual runs
   # cannot spend Actions minutes building Koinly application packages.
   build-apks:
+    needs: prepare-worker-bundle
     name: Build Android ${{ matrix.label }} APK
     if: github.repository == 'Chowdhury-Siam/Koinly'
     strategy:
@@ -60,6 +120,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Add deployable Worker bundle
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-worker-deploy-bundle
+          path: assets/worker
 
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -265,6 +331,7 @@ jobs:
           compression-level: 0
 
   build-windows:
+    needs: prepare-worker-bundle
     name: Build Windows x64 installer EXE
     if: github.repository == 'Chowdhury-Siam/Koinly'
     runs-on: windows-2022
@@ -276,6 +343,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Add deployable Worker bundle
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-worker-deploy-bundle
+          path: assets/worker
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -598,6 +671,7 @@ jobs:
 
 
   build-linux:
+    needs: prepare-worker-bundle
     name: Build Linux ${{ matrix.arch }} AppImage and portable archive
     if: github.repository == 'Chowdhury-Siam/Koinly'
     strategy:
@@ -619,6 +693,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Add deployable Worker bundle
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-worker-deploy-bundle
+          path: assets/worker
 
       - name: Install Linux desktop build dependencies
         shell: bash
@@ -784,6 +864,7 @@ jobs:
           compression-level: 0
 
   build-macos:
+    needs: prepare-worker-bundle
     name: Build macOS universal DMG and app archive
     if: github.repository == 'Chowdhury-Siam/Koinly'
     # Apple Silicon is substantially faster for Flutter/Xcode release compilation than
@@ -803,6 +884,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+
+      - name: Add deployable Worker bundle
+        uses: actions/download-artifact@v5
+        with:
+          name: koinly-worker-deploy-bundle
+          path: assets/worker
 
       - name: Restore pinned Flutter SDK cache
         id: flutter-sdk-cache
