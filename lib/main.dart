@@ -16956,13 +16956,13 @@ class WorkerDeploymentScreen extends StatefulWidget {
 
 class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
   final _credentialStore = WorkerDeploymentCredentialStore();
-  final _workerNameController = TextEditingController(text: 'koinly-sync');
+  final _workerNameController = TextEditingController();
   final _accountIdController = TextEditingController();
   final _cloudflareTokenController = TextEditingController();
   final _tursoUrlController = TextEditingController();
   final _tursoTokenController = TextEditingController();
   final _jwtSecretController = TextEditingController();
-  final _adminUsernameController = TextEditingController(text: 'worker-admin');
+  final _adminUsernameController = TextEditingController();
   final _adminPasswordController = TextEditingController();
 
   bool _cloudflareTokenVisible = false;
@@ -17258,7 +17258,7 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
                     enableSuggestions: false,
                     textCapitalization: TextCapitalization.none,
                     onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    decoration: const InputDecoration(labelText: 'Cloudflare Worker name', prefixIcon: Icon(Icons.cloud_rounded), hintText: 'koinly-sync'),
+                    decoration: const InputDecoration(labelText: 'Cloudflare Worker name', prefixIcon: Icon(Icons.cloud_rounded)),
                   ),
                   const SizedBox(height: 12),
                   TextField(

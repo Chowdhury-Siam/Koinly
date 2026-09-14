@@ -7,9 +7,9 @@ For the easiest setup, follow the beginner-friendly guide in the repository's ma
 
 ## Registration model
 
-A fresh Worker accepts one owner account identified by a username. Email addresses are not used for authentication. After registration closes, additional devices use **Login** with the same username and password. Current Koinly builds use the `/profile` administration portal for forgotten-password recovery.
+A fresh Worker accepts exactly one first sync account directly from the Koinly app, identified by a username. Email addresses are not used for authentication. Administrator credentials for `/profile` do not block this initial app registration. After the first sync account exists, additional devices use **Login** with the same username and password, while additional accounts are created from `/profile`. Current Koinly builds use the `/profile` administration portal for forgotten-password recovery.
 
-When administrator credentials are configured, registration is managed exclusively through `/profile`, including the first account. Existing accounts continue to sign in. This prevents public registration from reopening when an administrator deletes the last account.
+After the first sync account has been created, registration is managed through `/profile`. Deleting every sync account does not reopen unrestricted app registration; subsequent account creation remains administrator-managed.
 
 ## GitHub Actions deployment values
 
@@ -93,7 +93,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
-  "workerVersion": "1.0.1159",
+  "workerVersion": "1.0.1160",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
@@ -191,7 +191,7 @@ Open `/health` and confirm `profileMediaSyncAvailable` is `true`. If the field i
 
 ### Registration is closed
 
-Create additional accounts from the `/profile` website using **+ Create account**. For another device using an existing account, select **Login** in Koinly. If an older deployment used email login, redeploy the latest Worker first; the schema migration converts the old email local-part into the username.
+On a fresh Worker, create the first sync account directly from Koinly. Once that first account exists, create additional accounts from the `/profile` website using **+ Create account**. For another device using an existing account, select **Login** in Koinly.
 
 
 ### Password recovery

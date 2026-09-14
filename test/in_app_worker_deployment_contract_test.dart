@@ -13,6 +13,10 @@ void main() {
     expect(main, contains('await _saveSyncEndpoint();'));
     expect(main, contains("title: 'Deploy Database'"));
     expect(main, contains("label: Text(_deploying ? 'Deploying…' : 'Deploy Worker')"));
+    expect(main, contains('final _workerNameController = TextEditingController();'));
+    expect(main, contains('final _adminUsernameController = TextEditingController();'));
+    expect(main, isNot(contains("TextEditingController(text: 'koinly-sync')")));
+    expect(main, isNot(contains("TextEditingController(text: 'worker-admin')")));
   });
 
   test('in-app deployment provisions database, Worker, route, cron and health', () {

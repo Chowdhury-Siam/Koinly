@@ -178,9 +178,9 @@ Choose Worker name, JWT secret, and administrator credentials
                ↓
             Copy the Worker URL into Koinly
         ↓
-Open /profile and create a sync account
+Create the first sync account directly in Koinly
         ↓
-Sign in to that account in Koinly
+Use /profile only for additional accounts and account administration
 ```
 
 If you use the in-app method, you can skip Sections **5.1, 5.8, and 5.9** and continue with **5.10** after gathering the common values in Sections 5.2–5.7.
@@ -423,16 +423,17 @@ Users who first deployed with Koinly `1.0.1155` or earlier must open **Deploy Da
 <a id="connect-koinly-to-your-worker"></a>
 # 6. Connect Koinly to your Worker
 
-After completing Sections 4 and 5, create and manage sync accounts from your Worker's [administration portal](#worker-administration-portal). Use the administrator credentials you already added to the main setup checklist.
+After completing Sections 4 and 5, the first sync account can be created directly from Koinly. The Worker's [administration portal](#worker-administration-portal) is used for additional accounts and account administration.
 
 To connect an account to the app:
 
 1. Open Koinly and go to **Settings > Account & sync**.
 2. If you deployed through **Deploy Database**, the Worker URL is already filled and validated automatically. If you deployed through GitHub Actions, paste the Worker URL without `/profile` and select **Validate and use Worker**.
-3. Select **Login** and enter the username and password created in the administration portal.
-4. Repeat these steps on other devices using the same Worker URL and account.
+3. On a fresh Worker with no sync accounts yet, enter the username and password you want and select **Create account**. This first account is created directly from the app even though the Worker administrator credentials are already configured.
+4. On another device, select **Login** and use that same sync-account username and password.
+5. To create a second or later account, open `/profile` and use **+ Create account**.
 
-Use `/profile` to create sync accounts and manage account passwords.
+Use `/profile` for additional sync accounts and account password management. Deleting every sync account does not reopen public registration; after the first account has existed, further account creation remains administrator-managed.
 
 ### 6.1 Password reset
 
@@ -834,7 +835,7 @@ Confirm that `TURSO_DATABASE_URL` is your Turso `libsql://...turso.io` URL, not 
 
 ## 12.6 I cannot create another Koinly account
 
-To create a separate account, sign in to your Worker's `/profile` website and select **+ Create account**. If administrator access is not configured, follow [the portal setup guide](#worker-administration-portal). To use an existing account on another device, choose **Login** in Koinly with that account's username and password.
+A fresh Worker allows its first sync account to be created directly from **Settings > Account & sync > Create account**. After that first account exists, create any additional accounts from the Worker's `/profile` website with **+ Create account**. To use an existing account on another device, choose **Login** in Koinly with that account's username and password.
 
 ## 12.7 Telegram backup is empty or fails
 

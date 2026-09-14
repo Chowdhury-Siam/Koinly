@@ -48,6 +48,7 @@ const requiredTables = [
   'profile_media',
   'profile_media_chunks',
   'admin_sessions',
+  'worker_state',
 ];
 
 export class SyncHub {
@@ -343,11 +344,14 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
     const username = normalizeUsername(body.username);
     const password = profilePassword(body.password);
     const now = Date.now();
-    const result = await db.execute({
-      sql: `INSERT INTO users(id, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(username) DO NOTHING`,
-      args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), now, now],
-    });
+    const [result] = await db.batch([
+      {
+        sql: `INSERT INTO users(id, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(username) DO NOTHING`,
+        args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), now, now],
+      },
+      { sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('registration_closed', '1')`, args: [] },
+    ], 'write');
     if (!result.rowsAffected) throw new HttpError(409, 'Duplicate username. That username is already in use.');
     return privateJson({ ok: true, message: 'Account created.' }, 201);
   }
@@ -3100,9 +3104,6 @@ function databaseErrorMessage(error: unknown): string {
 }
 
 export async function register(request: Request, env: Env, db: Client): Promise<Response> {
-  if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH) {
-    throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.', 'REGISTRATION_MANAGED');
-  }
   const body = await readJson(request);
   const username = normalizeUsername(body.username);
   const password = String(body.password ?? '');
@@ -3119,7 +3120,15 @@ export async function register(request: Request, env: Env, db: Client): Promise<
   const transaction = await db.transaction('write');
   try {
     const userCount = Number((await transaction.execute('SELECT COUNT(*) AS count FROM users')).rows[0]?.count ?? 0);
-    if (userCount > 0) {
+    const registrationState = (await transaction.execute({
+      sql: 'SELECT value FROM worker_state WHERE key = ?',
+      args: ['registration_closed'],
+    })).rows[0];
+    const registrationClosed = String(registrationState?.value ?? '') === '1';
+    if (registrationClosed || userCount > 0) {
+      if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH) {
+        throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.', 'REGISTRATION_MANAGED');
+      }
       throw new HttpError(403, 'Self-hosted registration is closed. Sign in with the first account.');
     }
     await transaction.execute({
@@ -3130,6 +3139,7 @@ export async function register(request: Request, env: Env, db: Client): Promise<
       sql: 'INSERT INTO devices(id, user_id, name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)',
       args: [deviceId, userId, deviceName, platform, now, now],
     });
+    await transaction.execute(`INSERT OR REPLACE INTO worker_state(key, value) VALUES ('registration_closed', '1')`);
     await transaction.commit();
   } catch (error) {
     if (error instanceof HttpError) throw error;

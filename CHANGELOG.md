@@ -1,3 +1,10 @@
+## [1.0.1160] - 2026-09-15
+
+- Fresh self-hosted Workers now allow the first Koinly sync account to be created directly from **Account & sync**, even when `/profile` administrator credentials are configured.
+- After the first sync account exists, later app registration remains administrator-managed and continues to redirect account creation to `/profile`.
+- Removed the prefilled `koinly-sync` Worker name and `worker-admin` administrator username from the in-app deployment form; both fields now start empty on a fresh deployment.
+- Updated the README and Worker documentation for the first-account flow and synchronized application/Worker version metadata to `1.0.1160+204`.
+
 ## [1.0.1159] - 2026-09-14
 
 - Fixed in-app Cloudflare Worker updates failing when an existing `SyncHub` Durable Object had already applied the `v1-realtime-sync-hub` migration.

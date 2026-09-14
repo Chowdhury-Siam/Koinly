@@ -16,6 +16,12 @@ void main() {
     expect(app, contains('state.clearCloudSyncTransientError();'));
     expect(app, contains("cloudSyncError = managedRegistration ? null : cleaned;"));
 
+
+    expect(worker, contains("SELECT COUNT(*) AS count FROM users"));
+    expect(worker, contains("SELECT value FROM worker_state WHERE key = ?"));
+    expect(worker, contains("registrationClosed || userCount > 0"));
+    expect(worker, contains("INSERT OR REPLACE INTO worker_state(key, value) VALUES ('registration_closed', '1')"));
+    expect(worker, contains("if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH)"));
     expect(worker, contains("'REGISTRATION_MANAGED'"));
     expect(worker, contains("return json({ error: message, ...(code ? { code } : {}) }, statusCode);"));
   });

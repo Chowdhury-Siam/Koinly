@@ -73,10 +73,10 @@ void main() {
     final androidGradle = File('android/app/build.gradle').readAsStringSync();
     final readme = File('README.md').readAsStringSync();
 
-    expect(pubspec, contains('version: 1.0.1159+203'));
-    expect(config, contains("defaultValue: '1.0.1159'"));
-    expect(androidGradle, contains('versionCode = 203'));
-    expect(androidGradle, contains('versionName = "1.0.1159"'));
+    expect(pubspec, contains('version: 1.0.1160+204'));
+    expect(config, contains("defaultValue: '1.0.1160'"));
+    expect(androidGradle, contains('versionCode = 204'));
+    expect(androidGradle, contains('versionName = "1.0.1160"'));
     expect(readme, contains('Android, Windows, Linux, and macOS'));
     expect(readme, contains('universal macOS package'));
     expect(File('tools/linux/koinly.desktop').existsSync(), isTrue);

@@ -75,6 +75,27 @@ test('profile authentication and account lifecycle use the real database', async
     assert.match(dashboardHtml, /data-password-toggle[^>]*aria-controls="account-confirm"/);
   });
 
+  await t.test('fresh Worker lets the app create exactly the first sync account even with admin credentials', async () => {
+    const first = await register(
+      request('/v1/auth/register', 'POST', { username: 'first-owner', password: 'password123', deviceId: 'first-device' }),
+      env,
+      db,
+    );
+    assert.equal(first.status, 200);
+    await assert.rejects(
+      register(request('/v1/auth/register', 'POST', { username: 'second-owner', password: 'password123', deviceId: 'second-device' }), env, db),
+      /administrator/,
+    );
+    const listed = await (await call('/profile/api/accounts')).json();
+    assert.equal(listed.total, 1);
+    assert.equal(listed.accounts[0].username, 'first-owner');
+    assert.equal((await call('/profile/api/accounts/' + listed.accounts[0].id, 'DELETE')).status, 200);
+    await assert.rejects(
+      register(request('/v1/auth/register', 'POST', { username: 'reopened', password: 'password123', deviceId: 'reopened-device' }), env, db),
+      /administrator/,
+    );
+  });
+
   let accountId: string;
   await t.test('create validates inputs and handles case-insensitive duplicates without exposing hashes', async () => {
     for (const username of ['a', 'ab', '_bad', 'bad_', '<script>', 'x'.repeat(33)]) {

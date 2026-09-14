@@ -79,6 +79,18 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   expires_at INTEGER NOT NULL
 );
 
+-- Once the first sync account has been created, app-side registration stays
+-- closed even if every account is later deleted from /profile. Existing
+-- databases with accounts are latched closed during schema application.
+CREATE TABLE IF NOT EXISTS worker_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO worker_state(key, value)
+SELECT 'registration_closed', '1'
+WHERE EXISTS (SELECT 1 FROM users);
+
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id, device_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_changes_user_sequence ON sync_changes(user_id, sequence);
