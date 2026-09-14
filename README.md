@@ -399,7 +399,7 @@ After you have the values from Sections 5.2–5.7:
 3. Use the Cloudflare and Turso shortcut buttons on that page if you still need to copy a value.
 4. Enter the Worker name, Cloudflare Account ID, Cloudflare API token, Turso database URL, Turso auth token, JWT secret, administrator username, and administrator password.
 5. Select **Deploy Worker**.
-6. Keep the page open while Koinly validates Cloudflare and Turso, applies the current database schema, uploads the Worker, enables its `workers.dev` route, configures the five-minute scheduler, and waits for the Worker health check.
+6. Keep the page open while Koinly validates Cloudflare and Turso, applies the current database schema, uploads the Worker, enables its `workers.dev` route, configures the five-minute scheduler, and waits for the Worker health check. A first-time `workers.dev` route can take a few minutes to finish TLS/routing propagation; Koinly keeps polling and shows the current health stage instead of treating the first minute as a failure.
 7. If a step fails, the deployment page shows the error there so you can correct the value and retry.
 8. Leave **Automatic Worker updates** enabled if you want this device to keep the Worker current after future Koinly app updates.
 9. When deployment succeeds, Koinly returns to **Account & sync**, automatically fills the **Cloudflare Worker URL**, and validates that Worker for use by the app.

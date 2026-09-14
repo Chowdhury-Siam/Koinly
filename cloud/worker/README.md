@@ -93,7 +93,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
-  "workerVersion": "1.0.1157",
+  "workerVersion": "1.0.1158",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
@@ -187,7 +187,7 @@ On GitHub, open **Actions > Deploy Self-Hosted Sync Worker > Run workflow** and 
 
 ### Profile image appears only on one device
 
-Open `/health` and confirm `profileMediaSyncAvailable` is `true`. If the field is missing or false, redeploy the latest Worker from **Actions > Deploy Self-Hosted Sync Worker**. Keep Koinly open briefly on both devices after deployment; the app retries any pending upload and the receiving device performs an immediate media check when Profile is opened.
+Open `/health` and confirm `profileMediaSyncAvailable` is `true`. If the field is missing or false, redeploy the latest Worker from **Actions > Deploy Self-Hosted Sync Worker**. Keep Koinly open briefly on both devices after deployment; the app retries any pending upload and the receiving device performs an immediate media check when Profile is opened. On a brand-new `workers.dev` deployment, the public route/TLS endpoint can take a few minutes to propagate even after Cloudflare accepts the Worker upload.
 
 ### Registration is closed
 

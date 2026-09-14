@@ -334,7 +334,7 @@ class WorkerDeploymentService {
 
     final workerUrl = 'https://${config.workerName}.$accountSubdomain.workers.dev';
     onProgress('Waiting for Worker health check…');
-    await _waitForHealthyWorker(workerUrl);
+    await _waitForHealthyWorker(workerUrl, onProgress: onProgress);
 
     onProgress('Worker deployed successfully.');
     return WorkerDeploymentResult(
@@ -739,7 +739,10 @@ class WorkerDeploymentService {
       'main_module': 'worker.js',
       'compatibility_date': '2026-08-21',
       'bindings': [
-        {'type': 'secret_text', 'name': 'TURSO_DATABASE_URL', 'text': c.tursoDatabaseUrl},
+        // The Worker uses @libsql/client/web (HTTP transport). Keep the UI on Turso's
+        // canonical libsql:// value, but bind the equivalent HTTPS endpoint so
+        // Cloudflare never has to negotiate a WebSocket-style libsql scheme.
+        {'type': 'secret_text', 'name': 'TURSO_DATABASE_URL', 'text': _tursoHttpBase(c.tursoDatabaseUrl)},
         {'type': 'secret_text', 'name': 'TURSO_AUTH_TOKEN', 'text': c.tursoAuthToken},
         {'type': 'secret_text', 'name': 'JWT_SECRET', 'text': c.jwtSecret},
         {'type': 'secret_text', 'name': 'ADMIN_USERNAME', 'text': c.adminUsername},
@@ -800,41 +803,134 @@ class WorkerDeploymentService {
     }
   }
 
-  Future<void> _waitForHealthyWorker(String workerUrl) async {
+  Future<void> _waitForHealthyWorker(
+    String workerUrl, {
+    required WorkerDeploymentProgress onProgress,
+  }) async {
+    // First-time workers.dev routes can take longer than a minute to finish
+    // TLS/routing propagation. Match the more patient GitHub deployment path
+    // and keep the user informed instead of reporting a false deployment
+    // failure after only ~60 seconds.
+    const maxAttempts = 24;
     Object? lastError;
-    for (var attempt = 0; attempt < 12; attempt++) {
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        final response = await _client.get(Uri.parse('$workerUrl/health')).timeout(const Duration(seconds: 20));
-        if (response.statusCode == 200) {
-          final data = _decodeJson(response.body);
-          if (data['ok'] == true &&
-              data['service'] == 'koinly-sync' &&
-              data['databaseReachable'] == true &&
-              data['schemaReady'] == true &&
-              data['registrationMode'] == 'first-user' &&
-              data['telegramBackupAvailable'] == true &&
-              data['googleDriveBackupAvailable'] == true &&
-              data['analyticsUploadAvailable'] == true &&
-              data['realtimeSyncAvailable'] == true &&
-              data['profileMediaSyncAvailable'] == true &&
-              data['workerVersion'] == appVersion) {
-            return;
-          }
-          final missing = data['missingTables'];
-          lastError = WorkerDeploymentException(
-            missing is List && missing.isNotEmpty
-                ? 'Worker is online, but the database schema is missing: ${missing.join(', ')}.'
-                : data['workerVersion'] != appVersion
-                    ? 'Worker is online, but Cloudflare is still serving Worker version ${data['workerVersion'] ?? 'legacy'} instead of $appVersion.'
-                    : 'Worker is online, but its health check is not ready yet.',
-          );
+        final response = await _client
+            .get(
+              Uri.parse('$workerUrl/health'),
+              headers: const {'accept': 'application/json'},
+            )
+            .timeout(const Duration(seconds: 20));
+        final data = _decodeJson(response.body);
+        final hasJson = data.isNotEmpty;
+
+        if (response.statusCode == 200 &&
+            data['ok'] == true &&
+            data['service'] == 'koinly-sync' &&
+            data['databaseReachable'] == true &&
+            data['schemaReady'] == true &&
+            data['registrationMode'] == 'first-user' &&
+            data['telegramBackupAvailable'] == true &&
+            data['googleDriveBackupAvailable'] == true &&
+            data['analyticsUploadAvailable'] == true &&
+            data['realtimeSyncAvailable'] == true &&
+            data['profileMediaSyncAvailable'] == true &&
+            data['workerVersion'] == appVersion) {
+          return;
+        }
+
+        lastError = WorkerDeploymentException(_healthDiagnostic(
+          statusCode: response.statusCode,
+          data: data,
+          body: response.body,
+        ));
+
+        // Keep 404/52x/temporary 5xx responses in the normal propagation
+        // path. For a JSON 503 from Koinly itself, the diagnostic below keeps
+        // the actual database/schema/runtime reason so the final error is
+        // actionable if it never recovers.
+        if (attempt == 1 || attempt % 3 == 0 || hasJson) {
+          onProgress('Worker health check $attempt/$maxAttempts: ${_healthProgressSummary(response.statusCode, data)}');
         }
       } catch (error) {
         lastError = error;
+        if (attempt == 1 || attempt % 3 == 0) {
+          onProgress('Worker health check $attempt/$maxAttempts: waiting for workers.dev route propagation…');
+        }
       }
-      await Future<void>.delayed(const Duration(seconds: 5));
+
+      if (attempt < maxAttempts) {
+        await Future<void>.delayed(const Duration(seconds: 8));
+      }
     }
-    throw WorkerDeploymentException('The Worker was uploaded but did not become healthy in time. ${lastError ?? ''}'.trim());
+
+    final detail = lastError is WorkerDeploymentException
+        ? lastError.message
+        : 'Cloudflare did not make the workers.dev route reachable in time.';
+    throw WorkerDeploymentException(
+      'The Worker was uploaded, but its health check did not become ready. $detail',
+    );
+  }
+
+  String _healthProgressSummary(int statusCode, Map<String, dynamic> data) {
+    if (data.isEmpty) {
+      if (statusCode == 404) return 'workers.dev route is still propagating…';
+      if (statusCode >= 500) return 'Cloudflare is still starting the Worker (HTTP $statusCode)…';
+      return 'HTTP $statusCode; waiting for the deployed Worker…';
+    }
+    if (data['databaseReachable'] == false) return 'Worker is online; waiting for the Turso connection…';
+    final missing = data['missingTables'];
+    if (data['schemaReady'] == false && missing is List && missing.isNotEmpty) {
+      return 'Worker is online; waiting for database schema readiness…';
+    }
+    if (data['realtimeSyncAvailable'] != true) return 'Worker is online; waiting for realtime sync binding…';
+    if (data['workerVersion'] != appVersion) return 'Cloudflare is still serving the previous Worker version…';
+    return 'Worker is online; waiting for the full capability check…';
+  }
+
+  String _healthDiagnostic({
+    required int statusCode,
+    required Map<String, dynamic> data,
+    required String body,
+  }) {
+    if (data.isNotEmpty) {
+      if (data['databaseReachable'] == false) {
+        final rawError = '${data['error'] ?? ''}'.trim();
+        final safeError = rawError
+            .replaceAll(RegExp(r'https?://[^\s]+'), '[database endpoint]')
+            .replaceAll(RegExp(r'libsql://[^\s]+'), '[database endpoint]')
+            .replaceAll(RegExp(r'Bearer\s+[A-Za-z0-9._-]+', caseSensitive: false), 'Bearer [redacted]')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+        return safeError.isEmpty
+            ? 'The Worker is online, but it cannot reach Turso. The in-app connection test passed, so Cloudflare may still be propagating the new Worker secrets.'
+            : 'The Worker is online, but its Turso connection failed: ${safeError.length > 220 ? '${safeError.substring(0, 220)}…' : safeError}';
+      }
+      final missing = data['missingTables'];
+      if (data['schemaReady'] == false && missing is List && missing.isNotEmpty) {
+        return 'The Worker is online, but these database tables are still missing: ${missing.join(', ')}.';
+      }
+      if (data['realtimeSyncAvailable'] != true) {
+        return 'The Worker is online, but the Cloudflare Durable Object binding for realtime sync is not active yet.';
+      }
+      if (data['workerVersion'] != appVersion) {
+        return 'Cloudflare is still serving Worker version ${data['workerVersion'] ?? 'legacy'} instead of $appVersion.';
+      }
+      return 'The Worker returned HTTP $statusCode, but its Koinly capability contract is not ready yet.';
+    }
+
+    if (statusCode == 404) {
+      return 'The workers.dev URL still returns HTTP 404. Cloudflare accepted the upload, but the public route did not finish propagating.';
+    }
+    if (statusCode >= 500) {
+      return 'The workers.dev URL returned HTTP $statusCode while the Worker was starting.';
+    }
+    final compactBody = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compactBody.isNotEmpty) {
+      final preview = compactBody.length > 180 ? '${compactBody.substring(0, 180)}…' : compactBody;
+      return 'The Worker health URL returned HTTP $statusCode instead of Koinly health JSON: $preview';
+    }
+    return 'The Worker health URL returned HTTP $statusCode.';
   }
 
   Map<String, dynamic> _decodeJson(String body) {

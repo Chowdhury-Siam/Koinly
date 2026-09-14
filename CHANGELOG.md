@@ -1,3 +1,10 @@
+## [1.0.1158] - 2026-09-14
+
+- Fixed first-time in-app Cloudflare deployments being reported as failed when the `workers.dev` route needed longer than one minute to finish propagating.
+- Worker health verification now waits substantially longer, reports intermediate propagation status, and preserves the actual HTTP/database/schema/runtime reason when a deployment never becomes healthy.
+- In-app deployments now bind Turso's equivalent HTTPS endpoint to the Cloudflare Worker runtime while continuing to accept the canonical `libsql://...turso.io` URL in the setup form.
+- Synchronized application and Worker version metadata to `1.0.1158+202`.
+
 ## [1.0.1157] - 2026-09-14
 
 - Fixed in-app Turso validation incorrectly rejecting valid database credentials with HTTP 404. Koinly now validates Turso through the same authenticated Hrana `/v2/pipeline` endpoint used for schema provisioning, using a read-only `SELECT 1` connection check.

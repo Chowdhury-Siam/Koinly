@@ -34,6 +34,10 @@ void main() {
     expect(service, contains("data['profileMediaSyncAvailable'] == true"));
     expect(service, contains("data['workerVersion'] == appVersion"));
     expect(service, contains("'KOINLY_WORKER_VERSION'"));
+    expect(service, contains('const maxAttempts = 24'));
+    expect(service, contains('Worker health check $attempt/$maxAttempts'));
+    expect(service, contains('_healthDiagnostic('));
+    expect(service, contains("'TURSO_DATABASE_URL', 'text': _tursoHttpBase(c.tursoDatabaseUrl)"));
     expect(service, contains('Worker deployed successfully.'));
   });
 
