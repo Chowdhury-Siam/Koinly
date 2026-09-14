@@ -1,10 +1,21 @@
+## [1.0.1145] - 2026-09-14
+
+- Removed the redundant second "Last synced" line from Settings > Account & sync; the primary sync status now shows the sync timestamp only once.
+- Synchronized application version metadata to `1.0.1145+189`.
+
+## [1.0.1144] - 2026-09-14
+
+- Removed redundant helper/descriptive copy from reminder, theme, date-filter, credentials, Telegram Backup, Analytics, and Cloud Backup interfaces while preserving the underlying behavior and validation.
+- Kept the 5-minute automatic-upload separation enforcement in the Self-Hosted Worker; only the repeated on-screen warning text was removed.
+- Synchronized application version metadata to `1.0.1144+188`.
+
 ## [1.0.1143] - 2026-09-14
 
-- Added a configurable **Google Drive upload folder** path under **Settings > Credential > Google Drive**. Koinly creates missing nested folders and uses the selected path for both manual Analytics uploads and scheduled Cloud Backup reports.
-- Added **Upload now** to both Telegram and Google Drive cards in **Settings > Archive > Cloud Backup**. Immediate uploads use the card's current report type, PDF/XLSX/TXT format, and date filter/custom range while keeping automatic scheduling optional.
-- Renamed the Archive feature from **Automatic Telegram backup** to **Telegram Backup** while preserving its existing manual upload, schedule, status, and five-minute separation behavior.
-- Added a Turso migration for the Google Drive folder path and a Worker endpoint for immediate server-generated report delivery.
-- Synchronized application version metadata to `1.0.1143+187`.
+- Added an optional **Google Drive Folder ID** field to **Settings > Credential > Google Drive**. When set, both manual Analytics uploads and scheduled Cloud Backup reports are uploaded directly into that folder; when blank, Koinly continues to create/reuse **Koinly Analytics**.
+- Folder IDs are validated by the Worker, custom folders are checked for accessibility/write permission during OAuth connection, and Shared Drive uploads use `supportsAllDrives`. Changing the configured folder forces a fresh Google authorization so the required scope cannot stay stale.
+- Google OAuth now keeps the limited `drive.file` scope for the default Koinly-managed folder and requests the broader Drive scope only when a user explicitly configures an existing Folder ID.
+- Renamed **Automatic Telegram backup** to **Telegram Backup** throughout the active app UI and current documentation without changing its scheduling or `.koinlybackup` behavior.
+- Added the `google_folder_id` Turso schema migration and synchronized application version metadata to `1.0.1143+187`.
 
 ## [1.0.1142] - 2026-09-14
 

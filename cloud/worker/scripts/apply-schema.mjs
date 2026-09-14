@@ -83,9 +83,9 @@ async function migrateAnalyticsUploadSettingsTable(client) {
   if (!table) return;
   const rows = (await client.execute("PRAGMA table_info('analytics_upload_settings')")).rows;
   const columns = new Set(rows.map((row) => String(row.name)));
-  if (!columns.has('google_folder_path')) {
-    await client.execute("ALTER TABLE analytics_upload_settings ADD COLUMN google_folder_path TEXT NOT NULL DEFAULT 'Koinly Analytics'");
-    console.log('Added configurable Google Drive upload folder support.');
+  if (!columns.has('google_folder_id')) {
+    await client.execute("ALTER TABLE analytics_upload_settings ADD COLUMN google_folder_id TEXT NOT NULL DEFAULT ''");
+    console.log('Added Google Drive folder ID support to Analytics upload settings.');
   }
 }
 

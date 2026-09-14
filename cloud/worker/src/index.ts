@@ -173,7 +173,6 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/telegram') return await uploadAnalyticsPdfToTelegram(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive') return await uploadAnalyticsPdfToGoogleDrive(request, env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/analytics-upload/schedules') return await analyticsPdfSchedules(db, auth);
-      if (request.method === 'POST' && url.pathname.startsWith('/v1/analytics-upload/send-now/')) return await sendAnalyticsReportNow(request, env, db, auth, url.pathname);
       if (request.method === 'POST' && url.pathname.startsWith('/v1/analytics-upload/schedules/')) return await saveAnalyticsPdfSchedule(request, env, db, auth, url.pathname);
 
       return json({ error: 'Not found.' }, 404);
@@ -389,7 +388,7 @@ type GoogleDriveAnalyticsSettings = {
   encryptedRefreshToken: string;
   refreshTokenIv: string;
   accountEmail: string;
-  folderPath: string;
+  folderId: string;
   connectedAt: number | null;
   lastUploadAt: number | null;
   lastError: string | null;
@@ -940,23 +939,8 @@ function publicTelegramBackupSettings(settings: TelegramBackupSettings): Record<
   };
 }
 
-const analyticsGoogleDriveDefaultFolderPath = 'Koinly Analytics';
+const analyticsGoogleDriveFolderName = 'Koinly Analytics';
 const analyticsReportMaxBytes = 10 * 1024 * 1024;
-
-function normalizeGoogleDriveFolderPath(value: unknown): string {
-  const raw = String(value ?? analyticsGoogleDriveDefaultFolderPath).trim().replace(/\\/g, '/');
-  const segments = raw.split('/').map(item => item.trim()).filter(Boolean);
-  if (segments.length === 0) return analyticsGoogleDriveDefaultFolderPath;
-  if (segments.length > 8) throw new HttpError(400, 'Google Drive folder path can contain at most 8 folders.');
-  for (const segment of segments) {
-    if (segment === '.' || segment === '..' || segment.length > 120 || /[\u0000-\u001F]/.test(segment)) {
-      throw new HttpError(400, 'Google Drive folder path contains an invalid folder name.');
-    }
-  }
-  const normalized = segments.join('/');
-  if (normalized.length > 480) throw new HttpError(400, 'Google Drive folder path is too long.');
-  return normalized;
-}
 
 async function googleDriveAnalyticsSettings(db: Client, auth: AuthContext): Promise<Response> {
   return privateJson({
@@ -978,9 +962,9 @@ async function saveGoogleDriveAnalyticsSettings(
     throw new HttpError(400, 'Enter a valid Google OAuth Web application Client ID.');
   }
 
-  const folderPath = normalizeGoogleDriveFolderPath(body.folderPath ?? existing.folderPath);
   const suppliedSecret = String(body.clientSecret ?? '').trim();
   if (suppliedSecret.length > 512) throw new HttpError(400, 'Google OAuth Client Secret is too long.');
+  const folderId = normalizeGoogleDriveFolderId(body.folderId ?? existing.folderId);
   let encryptedClientSecret = existing.encryptedClientSecret;
   let clientSecretIv = existing.clientSecretIv;
   if (suppliedSecret) {
@@ -993,11 +977,13 @@ async function saveGoogleDriveAnalyticsSettings(
   }
 
   const clientChanged = existing.clientId.length > 0 && existing.clientId !== clientId;
+  const folderChanged = existing.folderId !== folderId;
+  const authorizationChanged = clientChanged || folderChanged;
   const now = Date.now();
   await db.execute({
     sql: `INSERT INTO analytics_upload_settings(
             user_id, google_client_id, google_client_secret_encrypted, google_client_secret_iv,
-            google_refresh_token_encrypted, google_refresh_token_iv, google_account_email, google_folder_path,
+            google_refresh_token_encrypted, google_refresh_token_iv, google_account_email, google_folder_id,
             google_connected_at, google_last_upload_at, google_last_error, updated_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(user_id) DO UPDATE SET
@@ -1007,7 +993,7 @@ async function saveGoogleDriveAnalyticsSettings(
             google_refresh_token_encrypted = excluded.google_refresh_token_encrypted,
             google_refresh_token_iv = excluded.google_refresh_token_iv,
             google_account_email = excluded.google_account_email,
-            google_folder_path = excluded.google_folder_path,
+            google_folder_id = excluded.google_folder_id,
             google_connected_at = excluded.google_connected_at,
             google_last_upload_at = excluded.google_last_upload_at,
             google_last_error = NULL,
@@ -1017,12 +1003,12 @@ async function saveGoogleDriveAnalyticsSettings(
       clientId,
       encryptedClientSecret,
       clientSecretIv,
-      clientChanged ? null : (existing.encryptedRefreshToken || null),
-      clientChanged ? null : (existing.refreshTokenIv || null),
-      clientChanged ? '' : existing.accountEmail,
-      folderPath,
-      clientChanged ? null : existing.connectedAt,
-      clientChanged ? null : existing.lastUploadAt,
+      authorizationChanged ? null : (existing.encryptedRefreshToken || null),
+      authorizationChanged ? null : (existing.refreshTokenIv || null),
+      authorizationChanged ? '' : existing.accountEmail,
+      folderId,
+      authorizationChanged ? null : existing.connectedAt,
+      authorizationChanged ? null : existing.lastUploadAt,
       null,
       now,
     ],
@@ -1057,7 +1043,9 @@ async function googleDriveAnalyticsConnectUrl(
   authorization.searchParams.set('access_type', 'offline');
   authorization.searchParams.set('prompt', 'consent');
   authorization.searchParams.set('include_granted_scopes', 'true');
-  authorization.searchParams.set('scope', 'openid email https://www.googleapis.com/auth/drive.file');
+  authorization.searchParams.set('scope', settings.folderId
+    ? 'openid email https://www.googleapis.com/auth/drive'
+    : 'openid email https://www.googleapis.com/auth/drive.file');
   authorization.searchParams.set('state', state);
   return privateJson({ ok: true, authorizationUrl: authorization.toString(), redirectUri });
 }
@@ -1120,6 +1108,10 @@ async function googleDriveAnalyticsCallback(request: Request, env: Env, db: Clie
         accountEmail = cleanText(userInfo.email, 240);
       }
     } catch {}
+
+    if (settings.folderId) {
+      await googleDriveFolderById(accessToken, settings.folderId);
+    }
 
     const encryptedRefreshToken = await encryptWorkerSecret(env.JWT_SECRET, 'google-drive-refresh-token', refreshToken);
     const now = Date.now();
@@ -1202,8 +1194,8 @@ async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: C
   const attemptedAt = Date.now();
   try {
     const accessToken = await googleDriveAccessToken(env, settings);
-    const folderId = await ensureGoogleDriveFolderPath(accessToken, settings.folderPath);
-    const uploaded = await googleDriveUploadDocument(accessToken, folderId, report.fileName, report.bytes, report.mimeType);
+    const folder = await resolveGoogleAnalyticsFolder(accessToken, settings.folderId);
+    const uploaded = await googleDriveUploadDocument(accessToken, folder.id, report.fileName, report.bytes, report.mimeType);
     const completedAt = Date.now();
     await db.execute({
       sql: `UPDATE analytics_upload_settings
@@ -1214,8 +1206,8 @@ async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: C
       ok: true,
       destination: 'google-drive',
       fileName: report.fileName,
-      folderPath: settings.folderPath,
-      folderName: settings.folderPath,
+      folderName: folder.name,
+      folderId: folder.id,
       fileId: uploaded.id,
       webViewLink: uploaded.webViewLink,
       uploadedAt: completedAt,
@@ -1310,7 +1302,7 @@ async function analyticsReportRequest(request: Request): Promise<{ fileName: str
 async function readGoogleDriveAnalyticsSettings(db: Client, userId: string): Promise<GoogleDriveAnalyticsSettings> {
   const row = (await db.execute({
     sql: `SELECT user_id, google_client_id, google_client_secret_encrypted, google_client_secret_iv,
-                 google_refresh_token_encrypted, google_refresh_token_iv, google_account_email, google_folder_path,
+                 google_refresh_token_encrypted, google_refresh_token_iv, google_account_email, google_folder_id,
                  google_connected_at, google_last_upload_at, google_last_error
           FROM analytics_upload_settings WHERE user_id = ?`,
     args: [userId],
@@ -1326,7 +1318,7 @@ async function readGoogleDriveAnalyticsSettings(db: Client, userId: string): Pro
       encryptedRefreshToken: '',
       refreshTokenIv: '',
       accountEmail: '',
-      folderPath: analyticsGoogleDriveDefaultFolderPath,
+      folderId: '',
       connectedAt: null,
       lastUploadAt: null,
       lastError: null,
@@ -1347,7 +1339,7 @@ function googleDriveAnalyticsSettingsFromRow(row: Record<string, unknown>): Goog
     encryptedRefreshToken,
     refreshTokenIv: String(row.google_refresh_token_iv ?? ''),
     accountEmail: String(row.google_account_email ?? ''),
-    folderPath: normalizeGoogleDriveFolderPath(row.google_folder_path ?? analyticsGoogleDriveDefaultFolderPath),
+    folderId: String(row.google_folder_id ?? ''),
     connectedAt: nullableInteger(row.google_connected_at),
     lastUploadAt: nullableInteger(row.google_last_upload_at),
     lastError: row.google_last_error == null ? null : String(row.google_last_error),
@@ -1360,12 +1352,21 @@ function publicGoogleDriveAnalyticsSettings(settings: GoogleDriveAnalyticsSettin
     clientSecretConfigured: settings.clientSecretConfigured,
     connected: settings.connected,
     accountEmail: settings.accountEmail,
-    folderPath: settings.folderPath,
-    folderName: settings.folderPath,
+    folderId: settings.folderId,
+    folderName: settings.folderId ? 'Selected Google Drive folder' : analyticsGoogleDriveFolderName,
     connectedAt: settings.connectedAt,
     lastUploadAt: settings.lastUploadAt,
     lastError: settings.lastError,
   };
+}
+
+function normalizeGoogleDriveFolderId(value: unknown): string {
+  const folderId = String(value ?? '').trim();
+  if (!folderId) return '';
+  if (!/^[A-Za-z0-9_-]{10,200}$/.test(folderId)) {
+    throw new HttpError(400, 'Enter a valid Google Drive folder ID.');
+  }
+  return folderId;
 }
 
 function normalizeAnalyticsPdfDestination(value: unknown): AnalyticsPdfDestination {
@@ -1644,70 +1645,6 @@ async function saveAnalyticsPdfSchedule(
   return privateJson({ ok: true, schedule: publicAnalyticsPdfSchedule(await readAnalyticsPdfSchedule(db, auth.userId, destination)), minimumSpacingMinutes: 5 });
 }
 
-async function sendAnalyticsReportNow(
-  request: Request,
-  env: Env,
-  db: Client,
-  auth: AuthContext,
-  pathname: string,
-): Promise<Response> {
-  const destination = normalizeAnalyticsPdfDestination(pathname.split('/').pop());
-  const body = await readJson(request);
-  const existing = await readAnalyticsPdfSchedule(db, auth.userId, destination);
-  const reportVariant = normalizeAnalyticsPdfReportVariant(body.reportVariant ?? existing.reportVariant);
-  const fileFormat = normalizeAnalyticsReportFormat(body.fileFormat ?? existing.fileFormat);
-  const dateFilter = normalizeAnalyticsPdfDateFilter(body.dateFilter ?? existing.dateFilter);
-  const customStart = normalizeAnalyticsCustomDate(body.customStart ?? existing.customStart);
-  const customEnd = normalizeAnalyticsCustomDate(body.customEnd ?? existing.customEnd);
-  if (dateFilter === 'custom') {
-    if (!customStart || !customEnd) throw new HttpError(400, 'Choose both a custom start date and end date.');
-    if (compareDateOnly(customEnd, customStart) < 0) throw new HttpError(400, 'Custom range end date cannot be before the start date.');
-  }
-  const timezoneOffsetMinutes = integerInRange(body.timezoneOffsetMinutes, existing.timezoneOffsetMinutes, -840, 840, 'timezoneOffsetMinutes');
-  const settings: AnalyticsPdfScheduleSettings = {
-    ...existing,
-    destination,
-    enabled: false,
-    reportVariant,
-    fileFormat,
-    dateFilter,
-    customStart,
-    customEnd,
-    timezoneOffsetMinutes,
-  };
-
-  const generated = await buildScheduledAnalyticsPdf(db, auth.userId, settings, Date.now());
-  if (destination === 'telegram') {
-    const telegram = await readTelegramBackupSettings(db, auth.userId);
-    if (!telegram.encryptedToken || !telegram.chatId) throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential first.');
-    const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
-    await sendTelegramAnalyticsDocument(token, telegram.chatId, generated.fileName, generated.bytes, generated.caption, generated.mimeType);
-    return privateJson({ ok: true, destination: 'telegram', fileName: generated.fileName, format: fileFormat, uploadedAt: Date.now() });
-  }
-
-  const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
-  if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential first.');
-  const accessToken = await googleDriveAccessToken(env, drive);
-  const folderId = await ensureGoogleDriveFolderPath(accessToken, drive.folderPath);
-  const uploaded = await googleDriveUploadDocument(accessToken, folderId, generated.fileName, generated.bytes, generated.mimeType);
-  const completedAt = Date.now();
-  await db.execute({
-    sql: 'UPDATE analytics_upload_settings SET google_last_upload_at = ?, google_last_error = NULL, updated_at = ? WHERE user_id = ?',
-    args: [completedAt, completedAt, auth.userId],
-  });
-  return privateJson({
-    ok: true,
-    destination: 'google-drive',
-    fileName: generated.fileName,
-    format: fileFormat,
-    folderPath: drive.folderPath,
-    folderName: drive.folderPath,
-    fileId: uploaded.id,
-    webViewLink: uploaded.webViewLink,
-    uploadedAt: completedAt,
-  });
-}
-
 async function runDueAnalyticsPdfUploads(env: Env, db: Client): Promise<void> {
   const now = Date.now();
   const rows = (await db.execute({
@@ -1760,8 +1697,8 @@ async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: Anal
       const drive = await readGoogleDriveAnalyticsSettings(db, settings.userId);
       if (!drive.connected) throw new HttpError(400, 'Google Drive is no longer connected.');
       const accessToken = await googleDriveAccessToken(env, drive);
-      const folderId = await ensureGoogleDriveFolderPath(accessToken, drive.folderPath);
-      await googleDriveUploadDocument(accessToken, folderId, generated.fileName, generated.bytes, generated.mimeType);
+      const folder = await resolveGoogleAnalyticsFolder(accessToken, drive.folderId);
+      await googleDriveUploadDocument(accessToken, folder.id, generated.fileName, generated.bytes, generated.mimeType);
       await db.execute({
         sql: 'UPDATE analytics_upload_settings SET google_last_upload_at = ?, google_last_error = NULL, updated_at = ? WHERE user_id = ?',
         args: [Date.now(), Date.now(), settings.userId],
@@ -2365,52 +2302,69 @@ async function googleDriveAccessToken(env: Env, settings: GoogleDriveAnalyticsSe
   return accessToken;
 }
 
-async function ensureGoogleDriveFolderPath(accessToken: string, folderPath: string): Promise<string> {
-  const segments = normalizeGoogleDriveFolderPath(folderPath).split('/');
-  let parentId = 'root';
+async function resolveGoogleAnalyticsFolder(
+  accessToken: string,
+  configuredFolderId: string,
+): Promise<{ id: string; name: string }> {
+  const folderId = normalizeGoogleDriveFolderId(configuredFolderId);
+  if (folderId) return googleDriveFolderById(accessToken, folderId);
+  return ensureGoogleAnalyticsFolder(accessToken);
+}
 
-  const escapeQuery = (value: string) => value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-  for (const segment of segments) {
-    const query = `name = '${escapeQuery(segment)}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false and '${escapeQuery(parentId)}' in parents`;
-    const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
-    listUrl.searchParams.set('q', query);
-    listUrl.searchParams.set('spaces', 'drive');
-    listUrl.searchParams.set('fields', 'files(id,name)');
-    listUrl.searchParams.set('pageSize', '10');
-    const listResponse = await fetch(listUrl, {
-      headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
-    });
-    const listData = parseJsonRecord(await listResponse.text());
-    if (!listResponse.ok) throw new HttpError(502, googleDriveApiFailure(listResponse.status, listData));
-    const files = Array.isArray(listData.files) ? listData.files : [];
-    const existing = files.find(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id ?? '')) as Record<string, unknown> | undefined;
-    if (existing) {
-      parentId = String(existing.id);
-      continue;
+async function googleDriveFolderById(accessToken: string, folderId: string): Promise<{ id: string; name: string }> {
+  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}`);
+  url.searchParams.set('fields', 'id,name,mimeType,trashed,capabilities(canAddChildren)');
+  url.searchParams.set('supportsAllDrives', 'true');
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+  });
+  const data = parseJsonRecord(await response.text());
+  if (!response.ok) {
+    if (response.status === 404 || response.status === 403) {
+      throw new HttpError(400, 'The Google Drive folder ID is not accessible. Check the ID, folder permission, then reconnect Google Drive.');
     }
-
-    const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json; charset=UTF-8',
-        accept: 'application/json',
-      },
-      body: JSON.stringify({
-        name: segment,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [parentId],
-      }),
-    });
-    const createData = parseJsonRecord(await createResponse.text());
-    if (!createResponse.ok) throw new HttpError(502, googleDriveApiFailure(createResponse.status, createData));
-    const createdId = String(createData.id ?? '');
-    if (!createdId) throw new HttpError(502, 'Google Drive did not return the folder ID.');
-    parentId = createdId;
+    throw new HttpError(502, googleDriveApiFailure(response.status, data));
   }
+  if (String(data.mimeType ?? '') !== 'application/vnd.google-apps.folder' || data.trashed === true) {
+    throw new HttpError(400, 'The configured Google Drive Folder ID does not point to an active folder.');
+  }
+  const capabilities = data.capabilities;
+  if (capabilities && typeof capabilities === 'object' && (capabilities as Record<string, unknown>).canAddChildren === false) {
+    throw new HttpError(400, 'Koinly does not have permission to upload files into the configured Google Drive folder.');
+  }
+  return { id: String(data.id ?? folderId), name: cleanText(data.name, 240) || 'Google Drive folder' };
+}
 
-  return parentId;
+async function ensureGoogleAnalyticsFolder(accessToken: string): Promise<{ id: string; name: string }> {
+  const query = `name = '${analyticsGoogleDriveFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
+  listUrl.searchParams.set('q', query);
+  listUrl.searchParams.set('spaces', 'drive');
+  listUrl.searchParams.set('fields', 'files(id,name)');
+  listUrl.searchParams.set('pageSize', '10');
+  const listResponse = await fetch(listUrl, {
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+  });
+  const listData = parseJsonRecord(await listResponse.text());
+  if (!listResponse.ok) throw new HttpError(502, googleDriveApiFailure(listResponse.status, listData));
+  const files = Array.isArray(listData.files) ? listData.files : [];
+  const first = files.find(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id ?? '')) as Record<string, unknown> | undefined;
+  if (first) return { id: String(first.id), name: cleanText(first.name, 240) || analyticsGoogleDriveFolderName };
+
+  const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json; charset=UTF-8',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({ name: analyticsGoogleDriveFolderName, mimeType: 'application/vnd.google-apps.folder' }),
+  });
+  const createData = parseJsonRecord(await createResponse.text());
+  if (!createResponse.ok) throw new HttpError(502, googleDriveApiFailure(createResponse.status, createData));
+  const createdId = String(createData.id ?? '');
+  if (!createdId) throw new HttpError(502, 'Google Drive did not return the Analytics folder ID.');
+  return { id: createdId, name: cleanText(createData.name, 240) || analyticsGoogleDriveFolderName };
 }
 
 async function googleDriveUploadDocument(
@@ -2431,6 +2385,7 @@ async function googleDriveUploadDocument(
   const uploadUrl = new URL('https://www.googleapis.com/upload/drive/v3/files');
   uploadUrl.searchParams.set('uploadType', 'multipart');
   uploadUrl.searchParams.set('fields', 'id,name,webViewLink');
+  uploadUrl.searchParams.set('supportsAllDrives', 'true');
   const response = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
@@ -2799,6 +2754,10 @@ async function missingSchemaTables(db: Client): Promise<string[]> {
   if (!userColumns.has('username')) missing.push('users.username');
   if (!userColumns.has('recovery_key_hash')) missing.push('users.recovery_key_hash');
   if (!userColumns.has('session_version')) missing.push('users.session_version');
+  if (existing.has('analytics_upload_settings')) {
+    const analyticsUploadColumns = new Set((await db.execute("PRAGMA table_info('analytics_upload_settings')")).rows.map(row => String(row.name)));
+    if (!analyticsUploadColumns.has('google_folder_id')) missing.push('analytics_upload_settings.google_folder_id');
+  }
   return missing;
 }
 

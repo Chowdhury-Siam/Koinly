@@ -534,9 +534,10 @@ In **Settings > Credential > Google Drive**, create and connect your own OAuth 2
 2. Configure the OAuth consent screen. If the app remains in Testing, add the Google account you will use as a test user.
 3. Create an **OAuth 2.0 Client ID** with application type **Web application**.
 4. Copy the **Authorized redirect URI** shown in Koinly and add that exact URI to the Google OAuth client.
-5. Paste the Client ID and Client Secret into Koinly, choose the **Google Drive upload folder** path (for example `Koinly Analytics` or `Finance/Koinly`), select **Save and connect Google Drive**, then finish authorization in the browser.
+5. Paste the Client ID and Client Secret into Koinly. Optionally paste a **Google Drive Folder ID** if reports should go into a specific existing folder.
+6. Select **Save and connect Google Drive**, then finish authorization in the browser.
 
-Koinly requests only the `drive.file` scope. The Worker creates any missing folders in the configured path and uses that destination for both manual and scheduled report uploads. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
+If **Google Drive Folder ID** is blank, Koinly requests the limited `drive.file` scope and creates/reuses a dedicated **Koinly Analytics** folder. If a Folder ID is configured, Koinly requests the broader Drive scope needed to access that existing folder, verifies that the folder is active and writable during connection, and sends both manual and scheduled Analytics uploads there. The Folder ID is the value after `/folders/` in a Google Drive folder URL. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
 
 ### Archive
 
@@ -544,7 +545,7 @@ Backup and scheduled-delivery controls are grouped under **Settings > Archive**:
 
 - **Local** contains **Backup** for creating a `.koinlybackup` now and **Load backup** for merging a selected backup with the active device data.
 - **Automatic backup** keeps **Automatic local backup** and **Telegram Backup** together in one section. Local backup schedules device-folder backups; Telegram backup schedules `.koinlybackup` uploads through the credentials configured in **Settings > Credential**.
-- **Cloud** contains **Cloud Backup** for manual or scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
+- **Cloud** contains **Cloud Backup** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
 
 For **Telegram Backup**, choose daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date. **Upload backup now** remains available from that Archive page. The Worker creates the `.koinlybackup` from synchronized cloud data and sends it as a Telegram document.
 
@@ -552,7 +553,7 @@ For **Telegram Backup**, choose daily, weekly, or monthly frequency, exact deliv
 
 Open **Settings > Analytics** to choose the report date filter, report type, and output format: **PDF**, **XLSX**, or **TXT**. **Download**, **Upload Telegram**, and **Upload Drive** all use the selected format. Manual cloud uploads use the credentials already configured in **Settings > Credential**; Analytics does not contain credential/settings icons.
 
-Open **Settings > Archive > Cloud Backup** for immediate or automatic delivery. Each Telegram and Google Drive card has an **Upload now** action that uses the currently selected report type, format, and date filter without requiring the automatic schedule to be enabled. Each destination also has an independent automatic report schedule with:
+For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and Google Drive each have an independent report schedule with:
 
 - Summary or Transaction history report type;
 - output format (**PDF**, **XLSX**, or **TXT**);

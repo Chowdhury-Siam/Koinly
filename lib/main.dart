@@ -3624,13 +3624,13 @@ class AppController extends ChangeNotifier {
   Future<GoogleDriveAnalyticsSettings> saveGoogleDriveAnalyticsSettings({
     required String clientId,
     String clientSecret = '',
-    String folderPath = 'Koinly Analytics',
+    String folderId = '',
   }) {
     return _withSelfHostedSyncToken((api, accessToken) => api.saveGoogleDriveAnalyticsSettings(
           accessToken: accessToken,
           clientId: clientId,
           clientSecret: clientSecret,
-          folderPath: folderPath,
+          folderId: folderId,
         ));
   }
 
@@ -3648,17 +3648,6 @@ class AppController extends ChangeNotifier {
 
   Future<AnalyticsPdfScheduleSettings> saveAnalyticsPdfSchedule(AnalyticsPdfScheduleSettings settings) {
     return _withSelfHostedSyncToken((api, accessToken) => api.saveAnalyticsPdfSchedule(
-          accessToken: accessToken,
-          settings: settings.copyWith(timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes),
-        ));
-  }
-
-  Future<Map<String, dynamic>> sendAnalyticsReportNow(AnalyticsPdfScheduleSettings settings) async {
-    await syncToCloud(force: true, silent: false);
-    if (cloudSyncError != null) {
-      throw StateError('Could not sync local data before uploading the report: $cloudSyncError');
-    }
-    return _withSelfHostedSyncToken((api, accessToken) => api.sendAnalyticsReportNow(
           accessToken: accessToken,
           settings: settings.copyWith(timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes),
         ));
@@ -7436,8 +7425,10 @@ class _AppleWheelOptionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(option.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: titleStyle),
-                const SizedBox(height: 3),
-                Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                if (option.subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(option.subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: subtitleStyle),
+                ],
               ],
             ),
           ),
@@ -13553,7 +13544,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'today',
         title: 'Today',
-        subtitle: 'Only today',
+        subtitle: '',
         iconName: 'today',
         iconColor: kSleekAccentHex,
       );
@@ -13561,7 +13552,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'thisWeek',
         title: 'This Week',
-        subtitle: 'Current week',
+        subtitle: '',
         iconName: 'week',
         iconColor: '#A6E3A1',
       );
@@ -13569,7 +13560,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'thisMonth',
         title: 'This Month',
-        subtitle: 'Current month',
+        subtitle: '',
         iconName: 'month',
         iconColor: kSleekAccentHex,
       );
@@ -13577,7 +13568,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'thisYear',
         title: 'This Year',
-        subtitle: 'Current year',
+        subtitle: '',
         iconName: 'year',
         iconColor: '#FBC879',
       );
@@ -13585,7 +13576,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'allTime',
         title: 'All Time',
-        subtitle: 'Everything saved',
+        subtitle: '',
         iconName: 'all_time',
         iconColor: '#B4A5FF',
       );
@@ -13593,7 +13584,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
       return const SelectionOption(
         id: 'custom',
         title: 'Custom range',
-        subtitle: 'Choose start and end date',
+        subtitle: '',
         iconName: 'custom_range',
         iconColor: '#FFB5D0',
       );
@@ -13772,7 +13763,7 @@ List<SelectionOption> financialMonthOptions() {
     return SelectionOption(
       id: DateFormat('yyyy-MM').format(month),
       title: DateFormat('MMMM yyyy').format(month),
-      subtitle: index == 0 ? 'Current month' : 'Monthly health summary',
+      subtitle: 'Monthly health summary',
       iconName: 'month',
       iconColor: kSleekAccentHex,
     );
@@ -13787,7 +13778,7 @@ List<SelectionOption> financialYearOptions() {
     return SelectionOption(
       id: year.toString(),
       title: year.toString(),
-      subtitle: index == 0 ? 'Current year' : 'Yearly health summary',
+      subtitle: 'Yearly health summary',
       iconName: 'year',
       iconColor: '#FBC879',
     );
@@ -17148,11 +17139,6 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(state.cloudSyncStatusText, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                            const SizedBox(height: 4),
-                            Text(
-                              state.cloudSyncLastAt == null ? 'Not synced yet' : 'Last synced ${DateFormat('MMM d, yyyy HH:mm').format(state.cloudSyncLastAt!.toLocal())}',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                            ),
                           ],
                         ),
                       ),
@@ -17448,7 +17434,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                             setState(() => _settings = _copySettings(enabled: value));
                           },
                     title: const Text('Telegram Backup', style: TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: const Text('Uploads a .koinlybackup generated from the latest synchronized cloud data.'),
                   ),
                 ],
               ),
@@ -17474,11 +17459,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                     onPressed: _busy ? null : _pickTime,
                     icon: const Icon(Icons.schedule_rounded),
                     label: Text('Time · $time'),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Telegram Backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
                     const SizedBox(height: 12),
@@ -18518,7 +18498,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
       return const SelectionOption(
         id: 'system',
         title: 'System Default',
-        subtitle: 'Follow device setting',
+        subtitle: '',
         iconName: 'theme_system',
         iconColor: '#A6E3A1',
       );
@@ -18526,7 +18506,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
       return const SelectionOption(
         id: 'light',
         title: 'Light',
-        subtitle: 'Bright interface',
+        subtitle: '',
         iconName: 'theme_light',
         iconColor: '#FBC879',
       );
@@ -18534,7 +18514,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
       return const SelectionOption(
         id: 'dark',
         title: 'Dark',
-        subtitle: 'Low-light interface',
+        subtitle: '',
         iconName: 'theme_dark',
         iconColor: '#B4A5FF',
       );
@@ -18542,7 +18522,7 @@ SelectionOption optionFromThemePreference(ThemePreference theme) {
       return const SelectionOption(
         id: 'batterySaver',
         title: 'Battery Saver / System',
-        subtitle: 'Use system behavior',
+        subtitle: '',
         iconName: 'theme_battery',
         iconColor: kSleekAccentHex,
       );
@@ -19219,7 +19199,7 @@ class _ReminderSheetState extends State<ReminderSheet> {
       padding: const EdgeInsets.fromLTRB(18, 22, 18, 24),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('Daily reminder', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-        SwitchListTile(value: enabled, onChanged: (v) => setState(() => enabled = v), title: const Text('Enable reminder'), subtitle: const Text('Notification text: “Don’t forget to record your expenses”')),
+        SwitchListTile(value: enabled, onChanged: (v) => setState(() => enabled = v), title: const Text('Enable reminder')),
         OutlinedButton.icon(onPressed: () async { final t = await pickTime(context, time); if (t != null) setState(() => time = t); }, icon: const Icon(Icons.schedule_rounded), label: Text(time.format(context))),
         const SizedBox(height: 12),
         FilledButton(onPressed: () async { await state.setReminder(enabled, time); if (context.mounted) Navigator.pop(context); }, child: const Text('Save reminder')),

@@ -166,7 +166,7 @@ Authenticated app clients can send locally generated Analytics **PDF**, **XLSX**
 
 Automatic report schedules support Summary or Transaction history, PDF/XLSX/TXT output, Today/This Week/This Month/This Year/All Time/Custom Range date filters, daily/weekly/monthly cadence, and a local-clock delivery time. The Worker enforces at least five minutes between the enabled Telegram report, Google Drive report, and Telegram `.koinlybackup` times; conflicting changes return HTTP 409.
 
-Google Drive uses the user's own Google OAuth Web application. The Worker stores the OAuth Client Secret and refresh token encrypted with a key derived from `JWT_SECRET`, uses a signed ten-minute OAuth state token, requests `openid email https://www.googleapis.com/auth/drive.file`, creates/reuses a **Koinly Analytics** Drive folder, refreshes access tokens server-side, and uploads Analytics reports there. The callback route does not require an app bearer token because it validates the signed OAuth state instead.
+Google Drive uses the user's own Google OAuth Web application. The Worker stores the OAuth Client Secret and refresh token encrypted with a key derived from `JWT_SECRET` and uses a signed ten-minute OAuth state token. With no custom Folder ID it requests `openid email https://www.googleapis.com/auth/drive.file` and creates/reuses **Koinly Analytics**. When a Folder ID is configured it requests `openid email https://www.googleapis.com/auth/drive`, validates that the selected folder is accessible and writable, and sends manual and scheduled report uploads to that folder. The callback route does not require an app bearer token because it validates the signed OAuth state instead.
 
 Report payloads are limited to 10 MB and validated according to their format: PDF signature, XLSX ZIP signature, or UTF-8 TXT data, before any third-party upload. Account deletion removes the stored Analytics OAuth credentials but never deletes files already uploaded to Google Drive or Telegram.
 
@@ -218,8 +218,3 @@ For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** 
 `schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` migrates older email-based accounts and adds the recovery-key and session-version columns.
 
 For advanced deployment integrations, `scripts/prepare-secrets.mjs` reads `ADMIN_PASSWORD` and the other required values from the process environment and emits a JSON secrets payload containing only the derived verifier. The GitHub workflow validates the inputs before applying the schema, writes this payload to a restricted temporary file, unsets the original password before calling Wrangler, and removes the file afterward. Do not invoke it in a way that displays the secrets payload in logs.
-
-
-### Analytics destination updates
-
-Google Drive report uploads now use the per-user **Google Drive upload folder** path saved from Koinly Settings > Credential. The Worker creates missing nested folders with the existing `drive.file` authorization. Cloud Backup also exposes authenticated `POST /v1/analytics-upload/send-now/{telegram|googleDrive}` delivery for immediate server-generated PDF/XLSX/TXT reports using the supplied report/date settings.

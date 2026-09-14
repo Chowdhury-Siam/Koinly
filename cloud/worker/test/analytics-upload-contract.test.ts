@@ -12,11 +12,13 @@ test('analytics report upload contract supports PDF XLSX TXT with Telegram and G
   assert.match(source, /google-drive\/callback/);
   assert.match(source, /analyticsUploadAvailable:\s*true/);
   assert.match(source, /drive\.file/);
+  assert.match(source, /https:\/\/www\.googleapis\.com\/auth\/drive'/);
+  assert.match(source, /normalizeGoogleDriveFolderId/);
+  assert.match(source, /googleDriveFolderById/);
+  assert.match(source, /supportsAllDrives/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS analytics_upload_settings/);
   assert.match(schema, /google_refresh_token_encrypted/);
-  assert.match(schema, /google_folder_path/);
-  assert.match(source, /ensureGoogleDriveFolderPath/);
-  assert.match(source, /\/v1\/analytics-upload\/send-now\//);
+  assert.match(schema, /google_folder_id TEXT NOT NULL DEFAULT ''/);
   assert.match(workflow, /analyticsUploadAvailable == true/);
 });
 

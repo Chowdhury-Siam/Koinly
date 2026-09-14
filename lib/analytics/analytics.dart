@@ -9,7 +9,7 @@ extension AnalyticsPdfVariantLabel on AnalyticsPdfVariant {
       };
 
   String get description => switch (this) {
-        AnalyticsPdfVariant.summary => 'Detailed report for the selected date filter with comparison, activity, budgets, category breakdowns, and account balances.',
+        AnalyticsPdfVariant.summary => '',
         AnalyticsPdfVariant.transactionHistory => 'Complete transaction ledger for the selected date filter.',
       };
 }
@@ -1229,7 +1229,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         bytes: bytes,
       );
       if (!mounted) return;
-      final folder = result['folderPath']?.toString() ?? result['folderName']?.toString() ?? 'Koinly Analytics';
+      final folder = result['folderName']?.toString() ?? 'Koinly Analytics';
       showSnack(context, '${pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} ${reportFormat.label} uploaded to Google Drive • $folder');
     } catch (error) {
       if (!mounted) return;
@@ -1322,11 +1322,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('Report type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 3),
-                        Text(
-                          pdfVariant.description,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                        ),
+                        if (pdfVariant.description.trim().isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            pdfVariant.description,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                          ),
+                        ],
                       ]),
                     ),
                   ]),
@@ -1387,11 +1389,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Telegram and Google Drive uploads go directly through your Self-Hosted Sync Worker. Configure both integrations in Settings > Credential.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                  ),
                 ],
               ),
             ),
@@ -1414,7 +1411,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
   final _chatIdController = TextEditingController();
   final _clientIdController = TextEditingController();
   final _clientSecretController = TextEditingController();
-  final _driveFolderController = TextEditingController();
+  final _driveFolderIdController = TextEditingController();
 
   TelegramBackupSettings _telegram = const TelegramBackupSettings.defaults();
   GoogleDriveAnalyticsSettings _drive = const GoogleDriveAnalyticsSettings.defaults();
@@ -1436,7 +1433,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
     _chatIdController.dispose();
     _clientIdController.dispose();
     _clientSecretController.dispose();
-    _driveFolderController.dispose();
+    _driveFolderIdController.dispose();
     super.dispose();
   }
 
@@ -1470,7 +1467,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
         _drive = drive;
         _chatIdController.text = telegram.chatId;
         _clientIdController.text = drive.clientId;
-        _driveFolderController.text = drive.folderPath;
+        _driveFolderIdController.text = drive.folderId;
         _loadError = null;
         _loading = false;
       });
@@ -1559,50 +1556,6 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
     if (mounted) showSnack(context, 'Google OAuth redirect URI copied.');
   }
 
-  Future<void> _saveGoogleDriveSettings() async {
-    if (_busy) return;
-    final state = context.read<AppController>();
-    if (!_signedIn(state)) {
-      showSnack(context, 'Sign in to your Self-Hosted Sync Worker first.');
-      return;
-    }
-    if (_clientIdController.text.trim().isEmpty) {
-      showSnack(context, 'Enter the Google OAuth Client ID.');
-      return;
-    }
-    if (!_drive.clientSecretConfigured && _clientSecretController.text.trim().isEmpty) {
-      showSnack(context, 'Enter the Google OAuth Client Secret.');
-      return;
-    }
-    if (_driveFolderController.text.trim().isEmpty) {
-      showSnack(context, 'Enter a Google Drive upload folder.');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      final saved = await state.saveGoogleDriveAnalyticsSettings(
-        clientId: _clientIdController.text,
-        clientSecret: _clientSecretController.text,
-        folderPath: _driveFolderController.text,
-      );
-      if (!mounted) return;
-      _clientSecretController.clear();
-      setState(() {
-        _drive = saved;
-        _driveFolderController.text = saved.folderPath;
-        _clientSecretVisible = false;
-      });
-      showSnack(
-        context,
-        saved.connected ? 'Google Drive settings saved.' : 'Google Drive settings saved. Connect Drive to authorize uploads.',
-      );
-    } catch (error) {
-      if (mounted) showSnack(context, _analyticsUploadError(error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _connectGoogleDrive() async {
     if (_busy) return;
     final state = context.read<AppController>();
@@ -1618,22 +1571,15 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
       showSnack(context, 'Enter the Google OAuth Client Secret.');
       return;
     }
-    if (_driveFolderController.text.trim().isEmpty) {
-      showSnack(context, 'Enter a Google Drive upload folder.');
-      return;
-    }
     setState(() => _busy = true);
     try {
       final saved = await state.saveGoogleDriveAnalyticsSettings(
         clientId: _clientIdController.text,
         clientSecret: _clientSecretController.text,
-        folderPath: _driveFolderController.text,
+        folderId: _driveFolderIdController.text,
       );
       if (!mounted) return;
-      setState(() {
-        _drive = saved;
-        _driveFolderController.text = saved.folderPath;
-      });
+      setState(() => _drive = saved);
       _clientSecretController.clear();
       final result = await state.googleDriveAnalyticsConnectUrl();
       final rawUrl = result['authorizationUrl']?.toString() ?? '';
@@ -1889,33 +1835,23 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                         ),
                         const SizedBox(height: 10),
                         TextField(
-                          controller: _driveFolderController,
+                          controller: _driveFolderIdController,
                           enabled: !_busy,
                           autocorrect: false,
                           enableSuggestions: false,
                           decoration: const InputDecoration(
-                            labelText: 'Google Drive upload folder',
-                            hintText: 'Koinly Analytics or Finance/Koinly',
+                            labelText: 'Google Drive Folder ID (optional)',
+                            hintText: 'Leave blank to use Koinly Analytics',
                             prefixIcon: Icon(Icons.folder_rounded),
+                            helperText: 'Paste the folder ID from a Google Drive folder URL.',
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Choose a folder path inside My Drive. Koinly creates missing folders and uses the same destination for manual and automatic report uploads.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 12),
                         if (_drive.connected) ...[
                           FilledButton.icon(
-                            onPressed: _busy ? null : _saveGoogleDriveSettings,
-                            icon: _busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_rounded),
-                            label: const Text('Save Google Drive settings'),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
                             onPressed: _busy ? null : _connectGoogleDrive,
-                            icon: const Icon(Icons.sync_rounded),
-                            label: const Text('Reconnect Google Drive'),
+                            icon: _busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.sync_rounded),
+                            label: const Text('Save and reconnect Google Drive'),
                           ),
                           const SizedBox(height: 8),
                           OutlinedButton.icon(
@@ -1929,11 +1865,6 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                             icon: _busy ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.cloud_upload_rounded),
                             label: const Text('Save and connect Google Drive'),
                           ),
-                        const SizedBox(height: 10),
-                        Text(
-                          'Koinly keeps the Google OAuth Client Secret and refresh token encrypted in your Worker. These credentials are configured only on this page.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                        ),
                       ]),
                     ),
                   ],
@@ -2074,40 +2005,6 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
     }
   }
 
-  Future<void> _uploadReportNow(AnalyticsPdfScheduleDestination destination) async {
-    if (_busy) return;
-    final current = _schedule(destination);
-    final telegramReady = _telegram.tokenConfigured && _telegram.chatId.isNotEmpty;
-    if (destination == AnalyticsPdfScheduleDestination.telegram && !telegramReady) {
-      showSnack(context, 'Configure Telegram in Settings > Credential first.');
-      return;
-    }
-    if (destination == AnalyticsPdfScheduleDestination.googleDrive && !_drive.connected) {
-      showSnack(context, 'Connect Google Drive in Settings > Credential first.');
-      return;
-    }
-    if (current.dateFilter == AnalyticsPdfScheduleDateFilter.custom && (current.customStart == null || current.customEnd == null)) {
-      showSnack(context, 'Choose a custom start and end date before uploading the report.');
-      return;
-    }
-    setState(() => _busy = true);
-    try {
-      final result = await context.read<AppController>().sendAnalyticsReportNow(current);
-      if (!mounted) return;
-      final destinationName = destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive';
-      final fileName = result['fileName']?.toString();
-      final folderPath = result['folderPath']?.toString();
-      final suffix = destination == AnalyticsPdfScheduleDestination.googleDrive && folderPath != null && folderPath.isNotEmpty
-          ? ' • $folderPath'
-          : '';
-      showSnack(context, '${fileName?.isNotEmpty == true ? fileName! : 'Report'} uploaded to $destinationName$suffix');
-    } catch (error) {
-      if (mounted) showSnack(context, _analyticsUploadError(error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   String _weekdayLabel(int weekday) => const {
         DateTime.monday: 'Monday',
         DateTime.tuesday: 'Tuesday',
@@ -2128,18 +2025,18 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
       };
 
   SelectionOption _scheduleDateFilterOption(AnalyticsPdfScheduleDateFilter filter) => switch (filter) {
-        AnalyticsPdfScheduleDateFilter.today => const SelectionOption(id: 'today', title: 'Today', subtitle: 'Only today', iconName: 'today', iconColor: kSleekAccentHex),
-        AnalyticsPdfScheduleDateFilter.thisWeek => const SelectionOption(id: 'thisWeek', title: 'This Week', subtitle: 'Current week', iconName: 'week', iconColor: '#A6E3A1'),
-        AnalyticsPdfScheduleDateFilter.thisMonth => const SelectionOption(id: 'thisMonth', title: 'This Month', subtitle: 'Current month', iconName: 'month', iconColor: kSleekAccentHex),
-        AnalyticsPdfScheduleDateFilter.thisYear => const SelectionOption(id: 'thisYear', title: 'This Year', subtitle: 'Current year', iconName: 'year', iconColor: '#FBC879'),
-        AnalyticsPdfScheduleDateFilter.allTime => const SelectionOption(id: 'allTime', title: 'All Time', subtitle: 'Everything synchronized', iconName: 'all_time', iconColor: '#B4A5FF'),
-        AnalyticsPdfScheduleDateFilter.custom => const SelectionOption(id: 'custom', title: 'Custom range', subtitle: 'Choose start and end date', iconName: 'custom_range', iconColor: '#FFB5D0'),
+        AnalyticsPdfScheduleDateFilter.today => const SelectionOption(id: 'today', title: 'Today', subtitle: '', iconName: 'today', iconColor: kSleekAccentHex),
+        AnalyticsPdfScheduleDateFilter.thisWeek => const SelectionOption(id: 'thisWeek', title: 'This Week', subtitle: '', iconName: 'week', iconColor: '#A6E3A1'),
+        AnalyticsPdfScheduleDateFilter.thisMonth => const SelectionOption(id: 'thisMonth', title: 'This Month', subtitle: '', iconName: 'month', iconColor: kSleekAccentHex),
+        AnalyticsPdfScheduleDateFilter.thisYear => const SelectionOption(id: 'thisYear', title: 'This Year', subtitle: '', iconName: 'year', iconColor: '#FBC879'),
+        AnalyticsPdfScheduleDateFilter.allTime => const SelectionOption(id: 'allTime', title: 'All Time', subtitle: '', iconName: 'all_time', iconColor: '#B4A5FF'),
+        AnalyticsPdfScheduleDateFilter.custom => const SelectionOption(id: 'custom', title: 'Custom range', subtitle: '', iconName: 'custom_range', iconColor: '#FFB5D0'),
       };
 
   String _scheduleCustomRangeLabel(AnalyticsPdfScheduleSettings settings) {
     final start = settings.customStart;
     final end = settings.customEnd;
-    if (start == null || end == null) return 'Choose start and end date';
+    if (start == null || end == null) return 'Custom range';
     if (DateUtils.isSameDay(start, end)) return DateFormat('MMM d, yyyy').format(start);
     if (start.year == end.year) {
       return '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
@@ -2227,7 +2124,6 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                   _setSchedule(destination, settings.copyWith(enabled: value));
                 },
           title: const Text('Automatic report upload', style: TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: const Text('Generated from the latest data synchronized to your Self-Hosted Worker.'),
         ),
         const SizedBox(height: 8),
         SegmentedButton<AnalyticsPdfScheduleReportVariant>(
@@ -2316,11 +2212,6 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                   },
           ),
         ],
-        const SizedBox(height: 12),
-        Text(
-          'Telegram report, Google Drive report, and Telegram Backup times must all be at least 5 minutes apart.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-        ),
         const SizedBox(height: 10),
         Text('Last automatic upload: ${_scheduleStatusTime(settings.lastSentAt)}', style: const TextStyle(fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
@@ -2333,12 +2224,6 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
           Text(settings.lastError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.orangeAccent, fontWeight: FontWeight.w800)),
         ],
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _busy || !destinationReady ? null : () => _uploadReportNow(destination),
-          icon: const Icon(Icons.cloud_upload_rounded),
-          label: const Text('Upload now'),
-        ),
-        const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: _busy ? null : () => _savePdfSchedule(destination),
           icon: const Icon(Icons.save_rounded),
@@ -2356,7 +2241,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
 
     return PageScaffold(
       title: 'Cloud Backup',
-      subtitle: 'Manual and automatic report uploads',
+      subtitle: 'Automatic report uploads',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Refresh',
@@ -2382,7 +2267,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                         ]),
                         const SizedBox(height: 10),
                         Text(
-                          'Telegram and Google Drive report uploads run through your Self-Hosted Sync Worker.',
+                          'Automatic Telegram and Google Drive report uploads run through your Self-Hosted Sync Worker.',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 14),

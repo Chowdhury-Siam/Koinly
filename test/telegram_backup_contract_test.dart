@@ -18,7 +18,7 @@ void main() {
     expect(app, isNot(contains("Text('Telegram destination'")));
     expect(app, isNot(contains("label: const Text('Open Credential')")));
     expect(app, isNot(contains("tooltip: 'Telegram backup'")));
-    expect(app, contains('Telegram Backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.'));
+    expect(app, isNot(contains('must all be at least 5 minutes apart')));
     expect(app, contains('Upload backup now'));
     expect(app, contains('TelegramBackupFrequency.daily'));
     expect(app, contains('TelegramBackupFrequency.weekly'));
@@ -29,8 +29,7 @@ void main() {
     expect(analytics, contains("labelText: 'Group or channel Chat ID'"));
     expect(analytics, contains("labelText: 'Google OAuth Client ID'"));
     expect(analytics, contains("labelText: 'Google OAuth Client Secret'"));
-    expect(analytics, contains("labelText: 'Google Drive upload folder'"));
-    expect(analytics, contains("label: const Text('Upload now')"));
+    expect(analytics, contains("labelText: 'Google Drive Folder ID (optional)'"));
     expect(analytics, contains('Telegram credentials saved.'));
     expect(analytics, contains("title: 'Cloud Backup'"));
 
@@ -45,6 +44,7 @@ void main() {
       "labelText: 'Group or channel Chat ID'",
       "labelText: 'Google OAuth Client ID'",
       "labelText: 'Google OAuth Client Secret'",
+      "labelText: 'Google Drive Folder ID (optional)'",
     ]) {
       expect(credentialsUi, contains(field));
       expect(analyticsOutsideCredentials, isNot(contains(field)));
@@ -56,9 +56,6 @@ void main() {
     expect(api, contains('/v1/telegram-backup/settings'));
     expect(api, contains('/v1/telegram-backup/test'));
     expect(api, contains('/v1/telegram-backup/send-now'));
-    expect(api, contains('/v1/analytics-upload/send-now/'));
-    expect(worker, contains('/v1/analytics-upload/send-now/'));
-    expect(worker, contains('google_folder_path'));
     expect(worker, contains('sendDocument'));
     expect(worker, contains('telegram_backup_settings'));
     expect(worker, contains('telegramBackupFinanceRecordCount(database) === 0'));

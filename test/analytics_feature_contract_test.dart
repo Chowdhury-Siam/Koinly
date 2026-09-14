@@ -50,20 +50,18 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1143+187'));
+    expect(pubspec, contains('version: 1.0.1145+189'));
     expect(analytics, contains("title: 'Cloud Backup'"));
     expect(analytics, contains("title: const Text('Automatic report upload'"));
     expect(analytics, contains('settings.fileFormat'));
     expect(analytics, contains('fileFormat: value.first'));
-    expect(analytics, contains('must all be at least 5 minutes apart')); 
+    expect(analytics, isNot(contains('must all be at least 5 minutes apart'))); 
     expect(analytics, contains('AnalyticsPdfScheduleDateFilter.allTime'));
     expect(analytics, contains('AnalyticsPdfScheduleDateFilter.custom'));
     expect(analytics, contains("title: 'Choose Date Filter'"));
     expect(analytics, contains('pickCustomDateRange('));
     expect(analytics, isNot(contains('DropdownButtonFormField<AnalyticsPdfScheduleDateFilter>')));
     expect(analytics, contains('saveAnalyticsPdfSchedule'));
-    expect(analytics, contains("labelText: 'Google Drive upload folder'"));
-    expect(analytics, contains("label: const Text('Upload now')"));
     expect(main, contains('loadAnalyticsPdfSchedules'));
     expect(main, contains('saveAnalyticsPdfSchedule'));
   });

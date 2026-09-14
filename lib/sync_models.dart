@@ -269,7 +269,8 @@ class GoogleDriveAnalyticsSettings {
     required this.clientSecretConfigured,
     required this.connected,
     required this.accountEmail,
-    required this.folderPath,
+    required this.folderId,
+    required this.folderName,
     this.connectedAt,
     this.lastUploadAt,
     this.lastError,
@@ -280,7 +281,8 @@ class GoogleDriveAnalyticsSettings {
         clientSecretConfigured = false,
         connected = false,
         accountEmail = '',
-        folderPath = 'Koinly Analytics',
+        folderId = '',
+        folderName = 'Koinly Analytics',
         connectedAt = null,
         lastUploadAt = null,
         lastError = null;
@@ -289,8 +291,8 @@ class GoogleDriveAnalyticsSettings {
   final bool clientSecretConfigured;
   final bool connected;
   final String accountEmail;
-  final String folderPath;
-  String get folderName => folderPath;
+  final String folderId;
+  final String folderName;
   final DateTime? connectedAt;
   final DateTime? lastUploadAt;
   final String? lastError;
@@ -307,9 +309,8 @@ class GoogleDriveAnalyticsSettings {
       clientSecretConfigured: data['clientSecretConfigured'] == true,
       connected: data['connected'] == true,
       accountEmail: data['accountEmail']?.toString() ?? '',
-      folderPath: data['folderPath']?.toString().trim().isNotEmpty == true
-          ? data['folderPath'].toString()
-          : (data['folderName']?.toString().trim().isNotEmpty == true ? data['folderName'].toString() : 'Koinly Analytics'),
+      folderId: data['folderId']?.toString() ?? '',
+      folderName: data['folderName']?.toString().trim().isNotEmpty == true ? data['folderName'].toString() : 'Koinly Analytics',
       connectedAt: parseTime(data['connectedAt']),
       lastUploadAt: parseTime(data['lastUploadAt']),
       lastError: data['lastError']?.toString(),

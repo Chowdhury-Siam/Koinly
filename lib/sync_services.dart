@@ -454,15 +454,11 @@ class KoinlySyncApi {
     required String accessToken,
     required String clientId,
     String clientSecret = '',
-    String folderPath = 'Koinly Analytics',
+    String folderId = '',
   }) async {
     final data = await _post(
       '/v1/analytics-upload/google-drive/settings',
-      {
-        'clientId': clientId.trim(),
-        'clientSecret': clientSecret.trim(),
-        'folderPath': folderPath.trim(),
-      },
+      {'clientId': clientId.trim(), 'clientSecret': clientSecret.trim(), 'folderId': folderId.trim()},
       accessToken: accessToken,
     );
     return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
@@ -526,32 +522,6 @@ class KoinlySyncApi {
       accessToken: accessToken,
     );
     return AnalyticsPdfScheduleSettings.fromJson((data['schedule'] as Map? ?? const {}).cast<String, dynamic>());
-  }
-
-  Future<Map<String, dynamic>> sendAnalyticsReportNow({
-    required String accessToken,
-    required AnalyticsPdfScheduleSettings settings,
-  }) {
-    String? dateOnly(DateTime? value) {
-      if (value == null) return null;
-      final month = value.month.toString().padLeft(2, '0');
-      final day = value.day.toString().padLeft(2, '0');
-      return '${value.year}-$month-$day';
-    }
-
-    return _post(
-      '/v1/analytics-upload/send-now/${settings.destination.name}',
-      {
-        'reportVariant': settings.reportVariant.name,
-        'fileFormat': settings.fileFormat.name,
-        'dateFilter': settings.dateFilter.name,
-        'customStart': dateOnly(settings.customStart),
-        'customEnd': dateOnly(settings.customEnd),
-        'timezoneOffsetMinutes': settings.timezoneOffsetMinutes,
-      },
-      accessToken: accessToken,
-      timeout: const Duration(seconds: 90),
-    );
   }
 
   Future<Map<String, dynamic>> uploadAnalyticsPdfToTelegram({
