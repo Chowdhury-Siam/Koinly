@@ -41,6 +41,7 @@ const requiredTables = [
   'processed_operations',
   'rate_limits',
   'telegram_backup_settings',
+  'google_drive_backup_settings',
   'analytics_upload_settings',
   'analytics_pdf_schedules',
   'profile_media',
@@ -166,6 +167,9 @@ export default {
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/settings') return await saveTelegramBackupSettings(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/test') return await testTelegramBackup(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/telegram-backup/send-now') return await sendTelegramBackupNow(env, db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/google-drive-backup/settings') return await googleDriveBackupSettings(db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/google-drive-backup/settings') return await saveGoogleDriveBackupSettings(request, db, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/google-drive-backup/send-now') return await sendGoogleDriveBackupNow(env, db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/analytics-upload/google-drive/settings') return await googleDriveAnalyticsSettings(db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive/settings') return await saveGoogleDriveAnalyticsSettings(request, env, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/analytics-upload/google-drive/connect-url') return await googleDriveAnalyticsConnectUrl(request, env, db, auth);
@@ -195,13 +199,14 @@ export default {
 
   async scheduled(_controller: ScheduledController, env: Env, _context: ExecutionContext): Promise<void> {
     // A single five-minute cron checks all user-configured uploads. Schedule
-    // validation keeps Telegram report, Drive report, and Telegram backup jobs at
-    // least five minutes apart so they do not pile external requests into the
+    // validation keeps Telegram report, Drive report, Telegram backup, and
+    // Google Drive backup jobs at least five minutes apart so they do not pile external requests into the
     // same Cloudflare invocation.
     validateWorkerConfig(env);
     const db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     try {
       await runDueTelegramBackups(env, db);
+      await runDueGoogleDriveBackups(env, db);
       await runDueAnalyticsPdfUploads(env, db);
     } catch (error) {
       console.error('Scheduled upload run failed', databaseErrorMessage(error));
@@ -363,7 +368,7 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
   if (request.method === 'DELETE' && !match[2]) {
     // Delete children before their parent. The batch rolls back completely on any error.
     const results = await db.batch([
-      ...['profile_media_chunks', 'profile_media', 'analytics_pdf_schedules', 'analytics_upload_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
+      ...['profile_media_chunks', 'profile_media', 'analytics_pdf_schedules', 'analytics_upload_settings', 'google_drive_backup_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
@@ -422,6 +427,21 @@ type TelegramBackupSettings = {
   encryptedToken: string;
   tokenIv: string;
   chatId: string;
+  frequency: TelegramBackupFrequency;
+  hour: number;
+  minute: number;
+  weekday: number;
+  monthDay: number;
+  timezoneOffsetMinutes: number;
+  nextDueAt: number | null;
+  lastSentAt: number | null;
+  lastAttemptAt: number | null;
+  lastError: string | null;
+};
+
+type GoogleDriveBackupSettings = {
+  userId: string;
+  enabled: boolean;
   frequency: TelegramBackupFrequency;
   hour: number;
   minute: number;
@@ -733,6 +753,30 @@ async function buildTelegramBackupFile(db: Client, userId: string): Promise<{ fi
   return { fileName, contents: encodeKoinlyBackup(payload) };
 }
 
+async function buildGoogleDriveBackupFile(db: Client, userId: string): Promise<{ fileName: string; contents: string }> {
+  const snapshot = await readCloudFinanceSnapshot(db, userId);
+  const { database, preferences, financeRecordCount } = snapshot;
+  if (financeRecordCount === 0) {
+    throw new HttpError(
+      409,
+      'The cloud copy contains no finance records, so an empty Google Drive backup was not uploaded. Open Koinly on a device with your data, use Upload local changes once, then create the backup again.',
+    );
+  }
+  const createdAt = new Date();
+  const recordCounts = Object.fromEntries(telegramBackupEntityTables.map(table => [table, database[table].length]));
+  const payload = {
+    version: 7,
+    backup_type: 'google-drive-cloud',
+    created_at: createdAt.toISOString(),
+    database,
+    preferences,
+    record_counts: recordCounts,
+    finance_record_count: financeRecordCount,
+  };
+  const fileName = `koinly_drive_${compactUtcTimestamp(createdAt)}.koinlybackup`;
+  return { fileName, contents: encodeKoinlyBackup(payload) };
+}
+
 function applyTelegramBackupRows(
   rows: Array<Record<string, unknown>>,
   database: Record<string, Array<Record<string, unknown>>>,
@@ -939,7 +983,230 @@ function publicTelegramBackupSettings(settings: TelegramBackupSettings): Record<
   };
 }
 
+async function googleDriveBackupSettings(db: Client, auth: AuthContext): Promise<Response> {
+  return privateJson({ ok: true, settings: publicGoogleDriveBackupSettings(await readGoogleDriveBackupSettings(db, auth.userId)) });
+}
+
+async function saveGoogleDriveBackupSettings(request: Request, db: Client, auth: AuthContext): Promise<Response> {
+  const body = await readJson(request);
+  const existing = await readGoogleDriveBackupSettings(db, auth.userId);
+  const enabled = body.enabled === true;
+  const frequency = normalizeTelegramBackupFrequency(body.frequency ?? existing.frequency);
+  const hour = integerInRange(body.hour, existing.hour, 0, 23, 'hour');
+  const minute = integerInRange(body.minute, existing.minute, 0, 59, 'minute');
+  const weekday = integerInRange(body.weekday, existing.weekday, 1, 7, 'weekday');
+  const monthDay = integerInRange(body.monthDay, existing.monthDay, 1, 31, 'monthDay');
+  const timezoneOffsetMinutes = integerInRange(body.timezoneOffsetMinutes, existing.timezoneOffsetMinutes, -840, 840, 'timezoneOffsetMinutes');
+  if (enabled) {
+    const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential before enabling cloud backups.');
+  }
+  const candidate: GoogleDriveBackupSettings = {
+    userId: auth.userId,
+    enabled,
+    frequency,
+    hour,
+    minute,
+    weekday,
+    monthDay,
+    timezoneOffsetMinutes,
+    nextDueAt: enabled ? nextTelegramBackupDueAt({ frequency, hour, minute, weekday, monthDay, timezoneOffsetMinutes }, Date.now()) : null,
+    lastSentAt: existing.lastSentAt,
+    lastAttemptAt: existing.lastAttemptAt,
+    lastError: null,
+  };
+  await assertScheduledUploadSeparation(db, auth.userId, undefined, undefined, candidate);
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO google_drive_backup_settings(
+            user_id, enabled, frequency, hour, minute, weekday, month_day, timezone_offset_minutes,
+            next_due_at, last_sent_at, last_attempt_at, last_error, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            enabled = excluded.enabled,
+            frequency = excluded.frequency,
+            hour = excluded.hour,
+            minute = excluded.minute,
+            weekday = excluded.weekday,
+            month_day = excluded.month_day,
+            timezone_offset_minutes = excluded.timezone_offset_minutes,
+            next_due_at = excluded.next_due_at,
+            last_error = NULL,
+            updated_at = excluded.updated_at`,
+    args: [auth.userId, enabled ? 1 : 0, frequency, hour, minute, weekday, monthDay, timezoneOffsetMinutes,
+      candidate.nextDueAt, existing.lastSentAt, existing.lastAttemptAt, null, now],
+  });
+  return privateJson({ ok: true, settings: publicGoogleDriveBackupSettings(await readGoogleDriveBackupSettings(db, auth.userId)), minimumSpacingMinutes: 5 });
+}
+
+async function sendGoogleDriveBackupNow(env: Env, db: Client, auth: AuthContext): Promise<Response> {
+  const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
+  if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential first.');
+  const now = Date.now();
+  await db.execute({
+    sql: `INSERT INTO google_drive_backup_settings(user_id, updated_at)
+          VALUES (?, ?)
+          ON CONFLICT(user_id) DO NOTHING`,
+    args: [auth.userId, now],
+  });
+  const settings = await readGoogleDriveBackupSettings(db, auth.userId);
+  const result = await deliverGoogleDriveBackupForUser(env, db, auth.userId, settings, false);
+  return privateJson({ ok: true, ...result, settings: publicGoogleDriveBackupSettings(await readGoogleDriveBackupSettings(db, auth.userId)) });
+}
+
+async function runDueGoogleDriveBackups(env: Env, db: Client): Promise<void> {
+  const now = Date.now();
+  const rows = (await db.execute({
+    sql: `SELECT user_id, enabled, frequency, hour, minute, weekday, month_day, timezone_offset_minutes,
+                 next_due_at, last_sent_at, last_attempt_at, last_error
+          FROM google_drive_backup_settings
+          WHERE enabled = 1 AND next_due_at IS NOT NULL AND next_due_at <= ?
+          ORDER BY next_due_at
+          LIMIT 20`,
+    args: [now],
+  })).rows;
+  for (const row of rows) {
+    const settings = googleDriveBackupSettingsFromRow(row);
+    if (settings.nextDueAt == null) continue;
+    const claimedDueAt = settings.nextDueAt;
+    const nextDueAt = nextTelegramBackupDueAt(settings, now + 60_000);
+    const claimed = await db.execute({
+      sql: `UPDATE google_drive_backup_settings
+            SET next_due_at = ?, last_attempt_at = ?, updated_at = ?
+            WHERE user_id = ? AND enabled = 1 AND next_due_at = ?`,
+      args: [nextDueAt, now, now, settings.userId, claimedDueAt],
+    });
+    if (claimed.rowsAffected !== 1) continue;
+    settings.nextDueAt = nextDueAt;
+    settings.lastAttemptAt = now;
+    try {
+      await deliverGoogleDriveBackupForUser(env, db, settings.userId, settings, true);
+    } catch (error) {
+      console.error('Google Drive backup delivery failed', { userId: settings.userId, error: safeExternalUploadError(error) });
+    }
+  }
+}
+
+async function deliverGoogleDriveBackupForUser(
+  env: Env,
+  db: Client,
+  userId: string,
+  settings: GoogleDriveBackupSettings,
+  scheduled: boolean,
+): Promise<{ fileName: string; uploadedAt: number }> {
+  const attemptedAt = Date.now();
+  if (!scheduled) {
+    await db.execute({
+      sql: 'UPDATE google_drive_backup_settings SET last_attempt_at = ?, last_error = NULL, updated_at = ? WHERE user_id = ?',
+      args: [attemptedAt, attemptedAt, userId],
+    });
+  }
+  try {
+    const drive = await readGoogleDriveAnalyticsSettings(db, userId);
+    if (!drive.connected) throw new HttpError(400, 'Google Drive is no longer connected.');
+    const accessToken = await googleDriveAccessToken(env, drive);
+    const folder = await resolveGoogleBackupFolder(accessToken, drive.folderId);
+    const { fileName, contents } = await buildGoogleDriveBackupFile(db, userId);
+    const bytes = new Uint8Array(enc.encode(contents));
+    await googleDriveUploadDocument(accessToken, folder.id, fileName, bytes, 'application/octet-stream');
+    const uploadedAt = Date.now();
+    await db.execute({
+      sql: `UPDATE google_drive_backup_settings
+            SET last_sent_at = ?, last_attempt_at = ?, last_error = NULL, updated_at = ? WHERE user_id = ?`,
+      args: [uploadedAt, attemptedAt, uploadedAt, userId],
+    });
+    return { fileName, uploadedAt };
+  } catch (error) {
+    const message = safeExternalUploadError(error);
+    const failedAt = Date.now();
+    if (error instanceof HttpError && error.status === 401) {
+      await db.batch([
+        {
+          sql: `UPDATE analytics_upload_settings
+                SET google_refresh_token_encrypted = NULL, google_refresh_token_iv = NULL,
+                    google_account_email = '', google_connected_at = NULL, google_last_error = ?, updated_at = ?
+                WHERE user_id = ?`,
+          args: [message, failedAt, userId],
+        },
+        {
+          sql: `UPDATE google_drive_backup_settings
+                SET enabled = 0, next_due_at = NULL, last_attempt_at = ?, last_error = ?, updated_at = ?
+                WHERE user_id = ?`,
+          args: [attemptedAt, message, failedAt, userId],
+        },
+      ], 'write');
+    } else {
+      await db.execute({
+        sql: `UPDATE google_drive_backup_settings
+              SET last_attempt_at = ?, last_error = ?, updated_at = ? WHERE user_id = ?`,
+        args: [attemptedAt, message, failedAt, userId],
+      });
+    }
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(502, message);
+  }
+}
+
+async function readGoogleDriveBackupSettings(db: Client, userId: string): Promise<GoogleDriveBackupSettings> {
+  const row = (await db.execute({
+    sql: `SELECT user_id, enabled, frequency, hour, minute, weekday, month_day, timezone_offset_minutes,
+                 next_due_at, last_sent_at, last_attempt_at, last_error
+          FROM google_drive_backup_settings WHERE user_id = ?`,
+    args: [userId],
+  })).rows[0];
+  if (!row) {
+    return {
+      userId,
+      enabled: false,
+      frequency: 'daily',
+      hour: 2,
+      minute: 5,
+      weekday: 7,
+      monthDay: 1,
+      timezoneOffsetMinutes: 0,
+      nextDueAt: null,
+      lastSentAt: null,
+      lastAttemptAt: null,
+      lastError: null,
+    };
+  }
+  return googleDriveBackupSettingsFromRow(row);
+}
+
+function googleDriveBackupSettingsFromRow(row: Record<string, unknown>): GoogleDriveBackupSettings {
+  return {
+    userId: String(row.user_id ?? ''),
+    enabled: Number(row.enabled ?? 0) === 1,
+    frequency: normalizeTelegramBackupFrequency(row.frequency),
+    hour: integerInRange(row.hour, 2, 0, 23, 'hour'),
+    minute: integerInRange(row.minute, 5, 0, 59, 'minute'),
+    weekday: integerInRange(row.weekday, 7, 1, 7, 'weekday'),
+    monthDay: integerInRange(row.month_day, 1, 1, 31, 'monthDay'),
+    timezoneOffsetMinutes: integerInRange(row.timezone_offset_minutes, 0, -840, 840, 'timezoneOffsetMinutes'),
+    nextDueAt: nullableInteger(row.next_due_at),
+    lastSentAt: nullableInteger(row.last_sent_at),
+    lastAttemptAt: nullableInteger(row.last_attempt_at),
+    lastError: row.last_error == null ? null : String(row.last_error),
+  };
+}
+
+function publicGoogleDriveBackupSettings(settings: GoogleDriveBackupSettings): Record<string, unknown> {
+  return {
+    enabled: settings.enabled,
+    frequency: settings.frequency,
+    hour: settings.hour,
+    minute: settings.minute,
+    weekday: settings.weekday,
+    monthDay: settings.monthDay,
+    timezoneOffsetMinutes: settings.timezoneOffsetMinutes,
+    nextDueAt: settings.nextDueAt,
+    lastSentAt: settings.lastSentAt,
+    lastError: settings.lastError,
+  };
+}
+
 const analyticsGoogleDriveFolderName = 'Koinly Analytics';
+const backupGoogleDriveFolderName = 'Koinly Backup';
 const analyticsReportMaxBytes = 10 * 1024 * 1024;
 
 async function googleDriveAnalyticsSettings(db: Client, auth: AuthContext): Promise<Response> {
@@ -1166,6 +1433,12 @@ async function disconnectGoogleDriveAnalytics(env: Env, db: Client, auth: AuthCo
       sql: `UPDATE analytics_pdf_schedules
             SET enabled = 0, next_due_at = NULL, last_error = NULL, updated_at = ?
             WHERE user_id = ? AND destination = 'googleDrive'`,
+      args: [now, auth.userId],
+    },
+    {
+      sql: `UPDATE google_drive_backup_settings
+            SET enabled = 0, next_due_at = NULL, last_error = NULL, updated_at = ?
+            WHERE user_id = ?`,
       args: [now, auth.userId],
     },
   ], 'write');
@@ -1524,19 +1797,23 @@ async function assertScheduledUploadSeparation(
   userId: string,
   candidate?: AnalyticsPdfScheduleSettings,
   telegramBackupCandidate?: Pick<TelegramBackupSettings, 'enabled' | 'hour' | 'minute'>,
+  googleDriveBackupCandidate?: Pick<GoogleDriveBackupSettings, 'enabled' | 'hour' | 'minute'>,
 ): Promise<void> {
-  const [telegramSchedule, driveSchedule, storedBackup] = await Promise.all([
+  const [telegramSchedule, driveSchedule, storedTelegramBackup, storedDriveBackup] = await Promise.all([
     readAnalyticsPdfSchedule(db, userId, 'telegram'),
     readAnalyticsPdfSchedule(db, userId, 'googleDrive'),
     readTelegramBackupSettings(db, userId),
+    readGoogleDriveBackupSettings(db, userId),
   ]);
   const telegram = candidate?.destination === 'telegram' ? candidate : telegramSchedule;
   const drive = candidate?.destination === 'googleDrive' ? candidate : driveSchedule;
-  const backup = telegramBackupCandidate ?? storedBackup;
+  const telegramBackup = telegramBackupCandidate ?? storedTelegramBackup;
+  const driveBackup = googleDriveBackupCandidate ?? storedDriveBackup;
   const clocks: ScheduledClock[] = [
     { label: 'Telegram report', hour: telegram.hour, minute: telegram.minute, enabled: telegram.enabled },
     { label: 'Google Drive report', hour: drive.hour, minute: drive.minute, enabled: drive.enabled },
-    { label: 'Telegram backup', hour: backup.hour, minute: backup.minute, enabled: backup.enabled },
+    { label: 'Telegram backup', hour: telegramBackup.hour, minute: telegramBackup.minute, enabled: telegramBackup.enabled },
+    { label: 'Google Drive backup', hour: driveBackup.hour, minute: driveBackup.minute, enabled: driveBackup.enabled },
   ].filter(item => item.enabled);
 
   for (let i = 0; i < clocks.length; i += 1) {
@@ -1728,6 +2005,12 @@ async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: Anal
                 SET enabled = 0, next_due_at = NULL, last_attempt_at = ?, last_error = ?, updated_at = ?
                 WHERE user_id = ? AND destination = 'googleDrive'`,
           args: [attemptedAt, message, failedAt, settings.userId],
+        },
+        {
+          sql: `UPDATE google_drive_backup_settings
+                SET enabled = 0, next_due_at = NULL, last_error = ?, updated_at = ?
+                WHERE user_id = ?`,
+          args: [message, failedAt, settings.userId],
         },
       ], 'write');
     } else {
@@ -2311,6 +2594,15 @@ async function resolveGoogleAnalyticsFolder(
   return ensureGoogleAnalyticsFolder(accessToken);
 }
 
+async function resolveGoogleBackupFolder(
+  accessToken: string,
+  configuredFolderId: string,
+): Promise<{ id: string; name: string }> {
+  const folderId = normalizeGoogleDriveFolderId(configuredFolderId);
+  if (folderId) return googleDriveFolderById(accessToken, folderId);
+  return ensureGoogleBackupFolder(accessToken);
+}
+
 async function googleDriveFolderById(accessToken: string, folderId: string): Promise<{ id: string; name: string }> {
   const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(folderId)}`);
   url.searchParams.set('fields', 'id,name,mimeType,trashed,capabilities(canAddChildren)');
@@ -2365,6 +2657,38 @@ async function ensureGoogleAnalyticsFolder(accessToken: string): Promise<{ id: s
   const createdId = String(createData.id ?? '');
   if (!createdId) throw new HttpError(502, 'Google Drive did not return the Analytics folder ID.');
   return { id: createdId, name: cleanText(createData.name, 240) || analyticsGoogleDriveFolderName };
+}
+
+async function ensureGoogleBackupFolder(accessToken: string): Promise<{ id: string; name: string }> {
+  const query = `name = '${backupGoogleDriveFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const listUrl = new URL('https://www.googleapis.com/drive/v3/files');
+  listUrl.searchParams.set('q', query);
+  listUrl.searchParams.set('spaces', 'drive');
+  listUrl.searchParams.set('fields', 'files(id,name)');
+  listUrl.searchParams.set('pageSize', '10');
+  const listResponse = await fetch(listUrl, {
+    headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' },
+  });
+  const listData = parseJsonRecord(await listResponse.text());
+  if (!listResponse.ok) throw new HttpError(502, googleDriveApiFailure(listResponse.status, listData));
+  const files = Array.isArray(listData.files) ? listData.files : [];
+  const first = files.find(item => item && typeof item === 'object' && String((item as Record<string, unknown>).id ?? '')) as Record<string, unknown> | undefined;
+  if (first) return { id: String(first.id), name: cleanText(first.name, 240) || backupGoogleDriveFolderName };
+
+  const createResponse = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,name', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json; charset=UTF-8',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({ name: backupGoogleDriveFolderName, mimeType: 'application/vnd.google-apps.folder' }),
+  });
+  const createData = parseJsonRecord(await createResponse.text());
+  if (!createResponse.ok) throw new HttpError(502, googleDriveApiFailure(createResponse.status, createData));
+  const createdId = String(createData.id ?? '');
+  if (!createdId) throw new HttpError(502, 'Google Drive did not return the Backup folder ID.');
+  return { id: createdId, name: cleanText(createData.name, 240) || backupGoogleDriveFolderName };
 }
 
 async function googleDriveUploadDocument(
@@ -2670,6 +2994,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: false,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      googleDriveBackupAvailable: true,
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
@@ -2690,6 +3015,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      googleDriveBackupAvailable: true,
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
@@ -2704,6 +3030,7 @@ async function healthResponse(env: Env): Promise<Response> {
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
+      googleDriveBackupAvailable: true,
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,

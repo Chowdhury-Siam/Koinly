@@ -107,6 +107,26 @@ CREATE TABLE IF NOT EXISTS telegram_backup_settings (
 CREATE INDEX IF NOT EXISTS idx_telegram_backup_due
   ON telegram_backup_settings(enabled, next_due_at);
 
+CREATE TABLE IF NOT EXISTS google_drive_backup_settings (
+  user_id TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
+  frequency TEXT NOT NULL DEFAULT 'daily' CHECK(frequency IN ('daily', 'weekly', 'monthly')),
+  hour INTEGER NOT NULL DEFAULT 2 CHECK(hour BETWEEN 0 AND 23),
+  minute INTEGER NOT NULL DEFAULT 5 CHECK(minute BETWEEN 0 AND 59),
+  weekday INTEGER NOT NULL DEFAULT 7 CHECK(weekday BETWEEN 1 AND 7),
+  month_day INTEGER NOT NULL DEFAULT 1 CHECK(month_day BETWEEN 1 AND 31),
+  timezone_offset_minutes INTEGER NOT NULL DEFAULT 0 CHECK(timezone_offset_minutes BETWEEN -840 AND 840),
+  next_due_at INTEGER,
+  last_sent_at INTEGER,
+  last_attempt_at INTEGER,
+  last_error TEXT,
+  updated_at INTEGER NOT NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_google_drive_backup_due
+  ON google_drive_backup_settings(enabled, next_due_at);
+
 CREATE TABLE IF NOT EXISTS analytics_upload_settings (
   user_id TEXT PRIMARY KEY,
   google_client_id TEXT NOT NULL DEFAULT '',

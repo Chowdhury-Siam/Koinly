@@ -389,14 +389,6 @@ class _ProfileMediaCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          if (hasMedia) ...[
-            Text(
-              'You can reposition and crop the current media without choosing it again.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 16),
-          ],
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,

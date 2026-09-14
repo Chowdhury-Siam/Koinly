@@ -24,7 +24,7 @@ void main() {
     expect(find.text('Credential'), findsOneWidget);
     expect(find.text('Archive'), findsOneWidget);
     expect(find.text('Load backup'), findsNothing);
-    expect(find.text('Automatic local backup'), findsNothing);
+    expect(find.text('Local Backup'), findsNothing);
   });
 
   testWidgets('Profile keeps information and editable media framing only', (tester) async {
@@ -39,13 +39,13 @@ void main() {
   testWidgets('Archive owns backup and scheduled delivery controls', (tester) async {
     await pumpSettingsScreen(tester, const ArchiveSettingsScreen());
 
-    expect(find.text('Local'), findsOneWidget);
-    expect(find.text('Automatic backup'), findsOneWidget);
-    expect(find.text('Cloud'), findsOneWidget);
+    expect(find.text('Local'), findsNWidgets(2));
+    expect(find.text('Local backup File'), findsOneWidget);
+    expect(find.text('Cloud'), findsNWidgets(2));
     expect(find.text('Backup'), findsOneWidget);
-    expect(find.text('Automatic local backup'), findsOneWidget);
+    expect(find.text('Local Backup'), findsNothing);
     expect(find.text('Load backup'), findsOneWidget);
-    expect(find.text('Telegram Backup'), findsOneWidget);
+    expect(find.text('Telegram Backup'), findsNothing);
     expect(find.text('Cloud Backup'), findsOneWidget);
   });
 
@@ -53,7 +53,7 @@ void main() {
     await pumpSettingsScreen(tester, const AdvancedSettingsScreen());
 
     expect(find.text('Backup'), findsNothing);
-    expect(find.text('Automatic local backup'), findsNothing);
+    expect(find.text('Local Backup'), findsNothing);
     expect(find.text('Load backup'), findsNothing);
     expect(find.text('Data health'), findsOneWidget);
   });

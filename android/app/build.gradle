@@ -21,8 +21,8 @@ android {
         applicationId = "com.koinly.siam"
         minSdk = 23
         targetSdk = 36
-        versionCode = 188
-        versionName = "1.0.1145"
+        versionCode = 193
+        versionName = "1.0.1149"
         multiDexEnabled true
     }
 

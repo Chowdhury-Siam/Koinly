@@ -445,6 +445,46 @@ class KoinlySyncApi {
     );
   }
 
+  Future<GoogleDriveBackupSettings> googleDriveBackupSettings({required String accessToken}) async {
+    final data = await _get('/v1/google-drive-backup/settings', accessToken: accessToken);
+    return GoogleDriveBackupSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<GoogleDriveBackupSettings> saveGoogleDriveBackupSettings({
+    required String accessToken,
+    required bool enabled,
+    required TelegramBackupFrequency frequency,
+    required int hour,
+    required int minute,
+    required int weekday,
+    required int monthDay,
+    required int timezoneOffsetMinutes,
+  }) async {
+    final data = await _post(
+      '/v1/google-drive-backup/settings',
+      {
+        'enabled': enabled,
+        'frequency': frequency.name,
+        'hour': hour,
+        'minute': minute,
+        'weekday': weekday,
+        'monthDay': monthDay,
+        'timezoneOffsetMinutes': timezoneOffsetMinutes,
+      },
+      accessToken: accessToken,
+    );
+    return GoogleDriveBackupSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());
+  }
+
+  Future<Map<String, dynamic>> sendGoogleDriveBackupNow({required String accessToken}) {
+    return _post(
+      '/v1/google-drive-backup/send-now',
+      const {},
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 45),
+    );
+  }
+
   Future<GoogleDriveAnalyticsSettings> googleDriveAnalyticsSettings({required String accessToken}) async {
     final data = await _get('/v1/analytics-upload/google-drive/settings', accessToken: accessToken);
     return GoogleDriveAnalyticsSettings.fromJson((data['settings'] as Map? ?? const {}).cast<String, dynamic>());

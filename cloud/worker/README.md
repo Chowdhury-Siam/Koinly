@@ -49,7 +49,7 @@ For detailed steps, password changes, and troubleshooting, see [the main README'
 
 Account lists expose only IDs, usernames, creation/update timestamps, and status, with an exact total and 50 accounts per page. **Invited** means no device has signed in; **Active** means at least one has signed in historically, not that a session is online. The administrator is separate and excluded from this count.
 
-Creation and reset accept 8–256 character account passwords. Share new passwords privately. A reset immediately invalidates old access/refresh sessions. Confirmed deletion atomically removes the account, sync records, devices, sessions, Telegram backup settings, and Analytics upload credentials; existing local copies and files already sent to Telegram or Google Drive remain.
+Creation and reset accept 8–256 character account passwords. Share new passwords privately. A reset immediately invalidates old access/refresh sessions. Confirmed deletion atomically removes the account, sync records, devices, sessions, Telegram/Google Drive backup schedules, and Analytics upload credentials; existing local copies and files already sent to Telegram or Google Drive remain.
 
 Security details:
 
@@ -96,6 +96,7 @@ A ready Worker returns values equivalent to:
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
+  "googleDriveBackupAvailable": true,
   "analyticsUploadAvailable": true,
   "realtimeSyncAvailable": true,
   "profileMediaSyncAvailable": true,
@@ -132,6 +133,9 @@ A ready Worker returns values equivalent to:
 - `POST /v1/telegram-backup/settings`
 - `POST /v1/telegram-backup/test`
 - `POST /v1/telegram-backup/send-now`
+- `GET /v1/google-drive-backup/settings`
+- `POST /v1/google-drive-backup/settings`
+- `POST /v1/google-drive-backup/send-now`
 - `GET /v1/analytics-upload/google-drive/settings`
 - `POST /v1/analytics-upload/google-drive/settings`
 - `POST /v1/analytics-upload/google-drive/connect-url`
@@ -152,23 +156,23 @@ Profile photos, animated GIFs, and short profile videos use the authenticated `/
 
 `MAX_SYNC_BATCH_SIZE` defaults to `100`. `MAX_SYNC_REPLACE_SIZE` defaults to `25000`.
 
-## Telegram `.koinlybackup`
+## Cloud `.koinlybackup`
 
-`wrangler.self-hosted.toml` runs one five-minute scheduler that checks both automatic Analytics reports and scheduled Telegram backups. Users configure the optional Telegram bot from the authenticated Koinly app.
+`wrangler.self-hosted.toml` runs one five-minute scheduler that checks automatic Analytics reports plus Telegram and Google Drive `.koinlybackup` schedules. Credentials are configured only from the authenticated Koinly app.
 
-The Worker validates the destination, encrypts the bot token with AES-GCM, builds the `.koinlybackup` from synchronized entities, and refuses to send an empty finance backup. Any enabled Telegram backup time must be at least five minutes away from both automatic Analytics report upload times.
+The Worker builds compatible `.koinlybackup` files from synchronized entities and refuses to upload an empty finance backup. Telegram uses the encrypted bot token and destination. Google Drive uses the same OAuth connection configured under Credential; with a Folder ID it uploads there, otherwise it creates/reuses **Koinly Backup**.
 
-For channels, the bot must be an administrator with permission to post messages.
+All enabled external schedules—Telegram report, Google Drive report, Telegram backup, and Google Drive backup—must be at least five minutes apart. For Telegram channels, the bot must be an administrator with permission to post messages.
 
 ## Analytics report uploads
 
 Authenticated app clients can send locally generated Analytics **PDF**, **XLSX**, or **TXT** reports through `/v1/analytics-upload/*`. Telegram uploads reuse the encrypted Telegram-backup bot token and destination. The same API stores automatic Telegram and Google Drive report schedules, including the selected file format. Scheduled reports are generated server-side from the latest synchronized finance snapshot, so the Flutter app does not need to be running.
 
-Automatic report schedules support Summary or Transaction history, PDF/XLSX/TXT output, Today/This Week/This Month/This Year/All Time/Custom Range date filters, daily/weekly/monthly cadence, and a local-clock delivery time. The Worker enforces at least five minutes between the enabled Telegram report, Google Drive report, and Telegram `.koinlybackup` times; conflicting changes return HTTP 409.
+Automatic report schedules support Summary or Transaction history, PDF/XLSX/TXT output, Today/This Week/This Month/This Year/All Time/Custom Range date filters, daily/weekly/monthly cadence, and a local-clock delivery time. The Worker enforces at least five minutes between the enabled Telegram report, Google Drive report, Telegram `.koinlybackup`, and Google Drive `.koinlybackup` times; conflicting changes return HTTP 409.
 
 Google Drive uses the user's own Google OAuth Web application. The Worker stores the OAuth Client Secret and refresh token encrypted with a key derived from `JWT_SECRET` and uses a signed ten-minute OAuth state token. With no custom Folder ID it requests `openid email https://www.googleapis.com/auth/drive.file` and creates/reuses **Koinly Analytics**. When a Folder ID is configured it requests `openid email https://www.googleapis.com/auth/drive`, validates that the selected folder is accessible and writable, and sends manual and scheduled report uploads to that folder. The callback route does not require an app bearer token because it validates the signed OAuth state instead.
 
-Report payloads are limited to 10 MB and validated according to their format: PDF signature, XLSX ZIP signature, or UTF-8 TXT data, before any third-party upload. Account deletion removes the stored Analytics OAuth credentials but never deletes files already uploaded to Google Drive or Telegram.
+Report payloads are limited to 10 MB and validated according to their format: PDF signature, XLSX ZIP signature, or UTF-8 TXT data, before any third-party upload. Account deletion removes stored Analytics/Drive credentials and backup schedule rows but never deletes files already uploaded to Google Drive or Telegram.
 
 ## Troubleshooting
 

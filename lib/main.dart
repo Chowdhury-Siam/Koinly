@@ -2271,7 +2271,7 @@ class AppController extends ChangeNotifier {
   }
 
   String get nextAutoBackupLabel {
-    if (!autoBackupEnabled) return 'Automatic backup is off';
+    if (!autoBackupEnabled) return 'Local backup is off';
     if (automaticBackupDue) return 'Backup due now';
     final next = _nextAutoBackupSlot(DateTime.now());
     return 'Next ${DateFormat('MMM d, yyyy • h:mm a').format(next)}';
@@ -3615,6 +3615,38 @@ class AppController extends ChangeNotifier {
       throw StateError('Could not sync local data before creating the Telegram backup: $cloudSyncError');
     }
     return _withSelfHostedSyncToken((api, accessToken) => api.sendTelegramBackupNow(accessToken: accessToken));
+  }
+
+  Future<GoogleDriveBackupSettings> loadGoogleDriveBackupSettings() {
+    return _withSelfHostedSyncToken((api, accessToken) => api.googleDriveBackupSettings(accessToken: accessToken));
+  }
+
+  Future<GoogleDriveBackupSettings> saveGoogleDriveBackupSettings({
+    required bool enabled,
+    required TelegramBackupFrequency frequency,
+    required int hour,
+    required int minute,
+    required int weekday,
+    required int monthDay,
+  }) {
+    return _withSelfHostedSyncToken((api, accessToken) => api.saveGoogleDriveBackupSettings(
+          accessToken: accessToken,
+          enabled: enabled,
+          frequency: frequency,
+          hour: hour,
+          minute: minute,
+          weekday: weekday,
+          monthDay: monthDay,
+          timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+        ));
+  }
+
+  Future<Map<String, dynamic>> sendGoogleDriveBackupNow() async {
+    await syncToCloud(force: true, silent: false);
+    if (cloudSyncError != null) {
+      throw StateError('Could not sync local data before creating the Google Drive backup: $cloudSyncError');
+    }
+    return _withSelfHostedSyncToken((api, accessToken) => api.sendGoogleDriveBackupNow(accessToken: accessToken));
   }
 
   Future<GoogleDriveAnalyticsSettings> loadGoogleDriveAnalyticsSettings() {
@@ -17253,7 +17285,9 @@ class SelfHostedTelegramBackupScreen extends StatefulWidget {
 }
 
 class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBackupScreen> {
-  TelegramBackupSettings _settings = const TelegramBackupSettings.defaults();
+  TelegramBackupSettings _telegram = const TelegramBackupSettings.defaults();
+  GoogleDriveBackupSettings _drive = const GoogleDriveBackupSettings.defaults();
+  GoogleDriveAnalyticsSettings _driveCredentials = const GoogleDriveAnalyticsSettings.defaults();
   bool _loading = true;
   bool _busy = false;
 
@@ -17265,10 +17299,17 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
 
   Future<void> _load() async {
     try {
-      final settings = await context.read<AppController>().loadSelfHostedTelegramBackupSettings();
+      final state = context.read<AppController>();
+      final values = await Future.wait([
+        state.loadSelfHostedTelegramBackupSettings(),
+        state.loadGoogleDriveBackupSettings(),
+        state.loadGoogleDriveAnalyticsSettings(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _settings = settings;
+        _telegram = values[0] as TelegramBackupSettings;
+        _drive = values[1] as GoogleDriveBackupSettings;
+        _driveCredentials = values[2] as GoogleDriveAnalyticsSettings;
         _loading = false;
       });
     } catch (error) {
@@ -17279,41 +17320,106 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
       showSnack(
         context,
         normalized.contains('not found') || normalized.contains('404')
-            ? 'This self-hosted Worker is older than the Telegram-backup feature. Redeploy it from the latest Koinly workflow, then try again.'
+            ? 'Redeploy the latest Self-Hosted Sync Worker to use cloud backup scheduling.'
             : message,
       );
     }
   }
 
-  bool get _credentialsReady => _settings.tokenConfigured && _settings.chatId.trim().isNotEmpty;
+  bool get _telegramReady => _telegram.tokenConfigured && _telegram.chatId.trim().isNotEmpty;
+  bool get _driveReady => _driveCredentials.connected;
 
-  Future<void> _save() async {
-    if (_settings.enabled && !_credentialsReady) {
-      showSnack(context, 'Configure Telegram in Settings > Credential before enabling automatic backups.');
+  TelegramBackupSettings _copyTelegram({
+    bool? enabled,
+    TelegramBackupFrequency? frequency,
+    int? hour,
+    int? minute,
+    int? weekday,
+    int? monthDay,
+  }) {
+    return TelegramBackupSettings(
+      enabled: enabled ?? _telegram.enabled,
+      tokenConfigured: _telegram.tokenConfigured,
+      chatId: _telegram.chatId,
+      frequency: frequency ?? _telegram.frequency,
+      hour: hour ?? _telegram.hour,
+      minute: minute ?? _telegram.minute,
+      weekday: weekday ?? _telegram.weekday,
+      monthDay: monthDay ?? _telegram.monthDay,
+      timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+      nextDueAt: _telegram.nextDueAt,
+      lastSentAt: _telegram.lastSentAt,
+      lastError: _telegram.lastError,
+    );
+  }
+
+  GoogleDriveBackupSettings _copyDrive({
+    bool? enabled,
+    TelegramBackupFrequency? frequency,
+    int? hour,
+    int? minute,
+    int? weekday,
+    int? monthDay,
+  }) {
+    return GoogleDriveBackupSettings(
+      enabled: enabled ?? _drive.enabled,
+      frequency: frequency ?? _drive.frequency,
+      hour: hour ?? _drive.hour,
+      minute: minute ?? _drive.minute,
+      weekday: weekday ?? _drive.weekday,
+      monthDay: monthDay ?? _drive.monthDay,
+      timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
+      nextDueAt: _drive.nextDueAt,
+      lastSentAt: _drive.lastSentAt,
+      lastError: _drive.lastError,
+    );
+  }
+
+  Future<void> _pickTelegramTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _telegram.hour, minute: _telegram.minute),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _telegram = _copyTelegram(hour: picked.hour, minute: picked.minute));
+  }
+
+  Future<void> _pickDriveTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _drive.hour, minute: _drive.minute),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _drive = _copyDrive(hour: picked.hour, minute: picked.minute));
+  }
+
+  Future<void> _saveTelegram() async {
+    if (_telegram.enabled && !_telegramReady) {
+      showSnack(context, 'Configure Telegram in Settings > Credential before enabling cloud backups.');
       return;
     }
     setState(() => _busy = true);
     try {
       final state = context.read<AppController>();
-      if (_settings.enabled) {
+      if (_telegram.enabled) {
         await state.syncToCloud(force: true, silent: false);
         if (state.cloudSyncError != null) {
           throw StateError('Could not sync local data before enabling Telegram backups: ${state.cloudSyncError}');
         }
       }
-      final settings = await state.saveSelfHostedTelegramBackupSettings(
-        enabled: _settings.enabled,
+      final saved = await state.saveSelfHostedTelegramBackupSettings(
+        enabled: _telegram.enabled,
         botToken: '',
-        chatId: _settings.chatId,
-        frequency: _settings.frequency,
-        hour: _settings.hour,
-        minute: _settings.minute,
-        weekday: _settings.weekday,
-        monthDay: _settings.monthDay,
+        chatId: _telegram.chatId,
+        frequency: _telegram.frequency,
+        hour: _telegram.hour,
+        minute: _telegram.minute,
+        weekday: _telegram.weekday,
+        monthDay: _telegram.monthDay,
       );
       if (!mounted) return;
-      setState(() => _settings = settings);
-      showSnack(context, settings.enabled ? 'Telegram Backup schedule saved.' : 'Telegram Backup is off.');
+      setState(() => _telegram = saved);
+      showSnack(context, saved.enabled ? 'Telegram backup schedule saved.' : 'Telegram backup is off.');
     } catch (error) {
       if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
     } finally {
@@ -17321,8 +17427,40 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     }
   }
 
-  Future<void> _sendNow() async {
-    if (!_credentialsReady) {
+  Future<void> _saveDrive() async {
+    if (_drive.enabled && !_driveReady) {
+      showSnack(context, 'Connect Google Drive in Settings > Credential before enabling cloud backups.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final state = context.read<AppController>();
+      if (_drive.enabled) {
+        await state.syncToCloud(force: true, silent: false);
+        if (state.cloudSyncError != null) {
+          throw StateError('Could not sync local data before enabling Google Drive backups: ${state.cloudSyncError}');
+        }
+      }
+      final saved = await state.saveGoogleDriveBackupSettings(
+        enabled: _drive.enabled,
+        frequency: _drive.frequency,
+        hour: _drive.hour,
+        minute: _drive.minute,
+        weekday: _drive.weekday,
+        monthDay: _drive.monthDay,
+      );
+      if (!mounted) return;
+      setState(() => _drive = saved);
+      showSnack(context, saved.enabled ? 'Google Drive backup schedule saved.' : 'Google Drive backup is off.');
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _sendTelegramNow() async {
+    if (!_telegramReady) {
       showSnack(context, 'Configure Telegram in Settings > Credential first.');
       return;
     }
@@ -17339,48 +17477,22 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     }
   }
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: _settings.hour, minute: _settings.minute),
-    );
-    if (picked == null || !mounted) return;
-    setState(() => _settings = TelegramBackupSettings(
-          enabled: _settings.enabled,
-          tokenConfigured: _settings.tokenConfigured,
-          chatId: _settings.chatId,
-          frequency: _settings.frequency,
-          hour: picked.hour,
-          minute: picked.minute,
-          weekday: _settings.weekday,
-          monthDay: _settings.monthDay,
-          timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
-          nextDueAt: _settings.nextDueAt,
-          lastSentAt: _settings.lastSentAt,
-          lastError: _settings.lastError,
-        ));
-  }
-
-  TelegramBackupSettings _copySettings({
-    bool? enabled,
-    TelegramBackupFrequency? frequency,
-    int? weekday,
-    int? monthDay,
-  }) {
-    return TelegramBackupSettings(
-      enabled: enabled ?? _settings.enabled,
-      tokenConfigured: _settings.tokenConfigured,
-      chatId: _settings.chatId,
-      frequency: frequency ?? _settings.frequency,
-      hour: _settings.hour,
-      minute: _settings.minute,
-      weekday: weekday ?? _settings.weekday,
-      monthDay: monthDay ?? _settings.monthDay,
-      timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes,
-      nextDueAt: _settings.nextDueAt,
-      lastSentAt: _settings.lastSentAt,
-      lastError: _settings.lastError,
-    );
+  Future<void> _sendDriveNow() async {
+    if (!_driveReady) {
+      showSnack(context, 'Connect Google Drive in Settings > Credential first.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await context.read<AppController>().sendGoogleDriveBackupNow();
+      if (!mounted) return;
+      showSnack(context, 'Backup uploaded to Google Drive.');
+      await _load();
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   String _weekdayLabel(int weekday) => const {
@@ -17398,130 +17510,205 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
     return DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
   }
 
+  Widget _scheduleControls({
+    required TelegramBackupFrequency frequency,
+    required int hour,
+    required int minute,
+    required int weekday,
+    required int monthDay,
+    required VoidCallback pickTime,
+    required ValueChanged<TelegramBackupFrequency> onFrequency,
+    required ValueChanged<int> onWeekday,
+    required ValueChanged<int> onMonthDay,
+  }) {
+    final time = TimeOfDay(hour: hour, minute: minute).format(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('When to upload', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 12),
+        SegmentedButton<TelegramBackupFrequency>(
+          segments: const [
+            ButtonSegment(value: TelegramBackupFrequency.daily, label: Text('Daily')),
+            ButtonSegment(value: TelegramBackupFrequency.weekly, label: Text('Weekly')),
+            ButtonSegment(value: TelegramBackupFrequency.monthly, label: Text('Monthly')),
+          ],
+          selected: {frequency},
+          onSelectionChanged: _busy ? null : (value) => onFrequency(value.first),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : pickTime,
+          icon: const Icon(Icons.schedule_rounded),
+          label: Text('Time · $time'),
+        ),
+        if (frequency == TelegramBackupFrequency.weekly) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: weekday,
+            decoration: const InputDecoration(labelText: 'Day of week', prefixIcon: Icon(Icons.calendar_view_week_rounded)),
+            items: List.generate(7, (index) {
+              final day = index + 1;
+              return DropdownMenuItem(value: day, child: Text(_weekdayLabel(day)));
+            }),
+            onChanged: _busy ? null : (value) { if (value != null) onWeekday(value); },
+          ),
+        ],
+        if (frequency == TelegramBackupFrequency.monthly) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            value: monthDay,
+            decoration: const InputDecoration(labelText: 'Day of month', prefixIcon: Icon(Icons.calendar_month_rounded)),
+            items: List.generate(31, (index) => DropdownMenuItem(value: index + 1, child: Text('Day ${index + 1}'))),
+            onChanged: _busy ? null : (value) { if (value != null) onMonthDay(value); },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _statusCard({
+    required bool enabled,
+    required DateTime? lastSentAt,
+    required DateTime? nextDueAt,
+    required String? lastError,
+    required bool ready,
+    required VoidCallback uploadNow,
+  }) {
+    return ExpressiveCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Text('Last uploaded: ${_formatServerTime(lastSentAt)}', style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('Next scheduled: ${enabled ? _formatServerTime(nextDueAt) : 'Automatic upload is off'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+          if ((lastError ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(lastError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy || !ready ? null : uploadNow,
+            icon: const Icon(Icons.cloud_upload_rounded),
+            label: const Text('Upload backup now'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const PageScaffold(
-        title: 'Telegram Backup',
+        title: 'Cloud',
         subtitle: 'Archive',
         child: KoinlyPageLoader(),
       );
     }
 
-    final time = TimeOfDay(hour: _settings.hour, minute: _settings.minute).format(context);
     return PageScaffold(
-      title: 'Telegram Backup',
+      title: 'Cloud',
       subtitle: 'Archive',
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SectionHeader('Telegram'),
             ExpressiveCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    value: _settings.enabled,
-                    onChanged: _busy
-                        ? null
-                        : (value) {
-                            if (value && !_credentialsReady) {
-                              showSnack(context, 'Configure Telegram in Settings > Credential first.');
-                              return;
-                            }
-                            setState(() => _settings = _copySettings(enabled: value));
-                          },
-                    title: const Text('Telegram Backup', style: TextStyle(fontWeight: FontWeight.w900)),
-                  ),
-                ],
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _telegram.enabled,
+                onChanged: _busy
+                    ? null
+                    : (value) {
+                        if (value && !_telegramReady) {
+                          showSnack(context, 'Configure Telegram in Settings > Credential first.');
+                          return;
+                        }
+                        setState(() => _telegram = _copyTelegram(enabled: value));
+                      },
+                title: const Text('Telegram', style: TextStyle(fontWeight: FontWeight.w900)),
               ),
             ),
             const SizedBox(height: 12),
             ExpressiveCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('When to upload', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 12),
-                  SegmentedButton<TelegramBackupFrequency>(
-                    segments: const [
-                      ButtonSegment(value: TelegramBackupFrequency.daily, label: Text('Daily')),
-                      ButtonSegment(value: TelegramBackupFrequency.weekly, label: Text('Weekly')),
-                      ButtonSegment(value: TelegramBackupFrequency.monthly, label: Text('Monthly')),
-                    ],
-                    selected: {_settings.frequency},
-                    onSelectionChanged: _busy ? null : (value) => setState(() => _settings = _copySettings(frequency: value.first)),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _pickTime,
-                    icon: const Icon(Icons.schedule_rounded),
-                    label: Text('Time · $time'),
-                  ),
-                  if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      value: _settings.weekday,
-                      decoration: const InputDecoration(labelText: 'Day of week', prefixIcon: Icon(Icons.calendar_view_week_rounded)),
-                      items: List.generate(7, (index) {
-                        final weekday = index + 1;
-                        return DropdownMenuItem(value: weekday, child: Text(_weekdayLabel(weekday)));
-                      }),
-                      onChanged: _busy
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              setState(() => _settings = _copySettings(weekday: value));
-                            },
-                    ),
-                  ],
-                  if (_settings.frequency == TelegramBackupFrequency.monthly) ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<int>(
-                      value: _settings.monthDay,
-                      decoration: const InputDecoration(labelText: 'Day of month', prefixIcon: Icon(Icons.calendar_month_rounded)),
-                      items: List.generate(31, (index) => DropdownMenuItem(value: index + 1, child: Text('Day ${index + 1}'))),
-                      onChanged: _busy
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              setState(() => _settings = _copySettings(monthDay: value));
-                            },
-                    ),
-                  ],
-                ],
+              child: _scheduleControls(
+                frequency: _telegram.frequency,
+                hour: _telegram.hour,
+                minute: _telegram.minute,
+                weekday: _telegram.weekday,
+                monthDay: _telegram.monthDay,
+                pickTime: _pickTelegramTime,
+                onFrequency: (value) => setState(() => _telegram = _copyTelegram(frequency: value)),
+                onWeekday: (value) => setState(() => _telegram = _copyTelegram(weekday: value)),
+                onMonthDay: (value) => setState(() => _telegram = _copyTelegram(monthDay: value)),
               ),
             ),
             const SizedBox(height: 12),
-            ExpressiveCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Status', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  Text('Last uploaded: ${_formatServerTime(_settings.lastSentAt)}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Text('Next scheduled: ${_settings.enabled ? _formatServerTime(_settings.nextDueAt) : 'Automatic upload is off'}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                  if ((_settings.lastError ?? '').trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(_settings.lastError!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800)),
-                  ],
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy || !_credentialsReady ? null : _sendNow,
-                    icon: const Icon(Icons.send_rounded),
-                    label: const Text('Upload backup now'),
-                  ),
-                ],
-              ),
+            _statusCard(
+              enabled: _telegram.enabled,
+              lastSentAt: _telegram.lastSentAt,
+              nextDueAt: _telegram.nextDueAt,
+              lastError: _telegram.lastError,
+              ready: _telegramReady,
+              uploadNow: _sendTelegramNow,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: _busy ? null : _save,
+              onPressed: _busy ? null : _saveTelegram,
               icon: _busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.save_rounded),
-              label: const Text('Save automatic backup schedule'),
+              label: const Text('Save Telegram backup schedule'),
+            ),
+            const SizedBox(height: 22),
+            const SectionHeader('Google Drive'),
+            ExpressiveCard(
+              child: SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _drive.enabled,
+                onChanged: _busy
+                    ? null
+                    : (value) {
+                        if (value && !_driveReady) {
+                          showSnack(context, 'Connect Google Drive in Settings > Credential first.');
+                          return;
+                        }
+                        setState(() => _drive = _copyDrive(enabled: value));
+                      },
+                title: const Text('Google Drive', style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExpressiveCard(
+              child: _scheduleControls(
+                frequency: _drive.frequency,
+                hour: _drive.hour,
+                minute: _drive.minute,
+                weekday: _drive.weekday,
+                monthDay: _drive.monthDay,
+                pickTime: _pickDriveTime,
+                onFrequency: (value) => setState(() => _drive = _copyDrive(frequency: value)),
+                onWeekday: (value) => setState(() => _drive = _copyDrive(weekday: value)),
+                onMonthDay: (value) => setState(() => _drive = _copyDrive(monthDay: value)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _statusCard(
+              enabled: _drive.enabled,
+              lastSentAt: _drive.lastSentAt,
+              nextDueAt: _drive.nextDueAt,
+              lastError: _drive.lastError,
+              ready: _driveReady,
+              uploadNow: _sendDriveNow,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _busy ? null : _saveDrive,
+              icon: _busy ? const KoinlyInlineLoader(size: 18) : const Icon(Icons.save_rounded),
+              label: const Text('Save Google Drive backup schedule'),
             ),
           ],
         ),
@@ -19295,7 +19482,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
     if (!mounted) return;
     if (enabled && state.autoBackupError != null && state.autoBackupError!.isNotEmpty) {
       setState(() => saving = false);
-      showSnack(context, 'Automatic backup could not write to the selected location.');
+      showSnack(context, 'Local backup could not write to the selected location.');
       return;
     }
     Navigator.pop(context);
@@ -19316,7 +19503,7 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
             children: [
               Expanded(
                 child: Text(
-                  'Automatic local backup',
+                  'Local',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
@@ -19478,29 +19665,27 @@ class ArchiveSettingsScreen extends StatelessWidget {
           SettingsTile(
             icon: Icons.backup_rounded,
             title: 'Backup',
-            subtitle: 'Create a Koinly backup file now',
             color: '#86E3CE',
             onTap: () => runBackupFlow(context, state),
           ),
           SettingsTile(
             icon: Icons.file_open_rounded,
             title: 'Load backup',
-            subtitle: 'Pick a backup file and merge it with this device',
             color: '#B4A5FF',
             onTap: () => runLoadBackupFlow(context, state),
           ),
-          const SectionHeader('Automatic backup'),
+          const SectionHeader('Local backup File'),
           SettingsTile(
             icon: Icons.history_toggle_off_rounded,
-            title: 'Automatic local backup',
+            title: 'Local',
             subtitle: state.automaticBackupSettingsSummary,
             color: '#7FE7D4',
             onTap: () => showAutomaticBackupSheet(context),
           ),
           SettingsTile(
-            icon: Icons.send_rounded,
-            title: 'Telegram Backup',
-            subtitle: signedIn ? 'Schedule .koinlybackup delivery through your Worker' : 'Sign in to use Telegram backup',
+            icon: Icons.cloud_sync_rounded,
+            title: 'Cloud',
+            subtitle: signedIn ? null : 'Sign in to use cloud backup',
             color: '#86E3CE',
             onTap: () => Navigator.push(
               context,
@@ -19511,7 +19696,6 @@ class ArchiveSettingsScreen extends StatelessWidget {
           SettingsTile(
             icon: Icons.cloud_upload_rounded,
             title: 'Cloud Backup',
-            subtitle: 'Schedule Analytics reports for Telegram and Google Drive',
             color: '#9AD0F5',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloudBackupScreen())),
           ),

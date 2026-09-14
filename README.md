@@ -20,7 +20,7 @@
 
 | Start here | Self-hosted sync | App & backups | Developers |
 | --- | --- | --- | --- |
-| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[Administration portal](#worker-administration-portal)<br>[7. Credentials & Archive](#optional-telegram-cloud-backup) | [8. Automatic local backup](#automatic-local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
+| [1. What is Koinly?](#what-is-koinly)<br>[2. Features](#features)<br>[3. Getting started](#getting-started) | [4. What self-hosted sync means](#optional-self-hosted-sync)<br>[5. Deploy your Worker](#deploy-your-self-hosted-worker)<br>[6. Connect Koinly](#connect-koinly-to-your-worker)<br>[Administration portal](#worker-administration-portal)<br>[7. Credentials & Archive](#optional-telegram-cloud-backup) | [8. Local](#local-backup)<br>[9. Data safety](#data-safety-and-security)<br>[12. Troubleshooting](#troubleshooting) | [10. Build from source](#build-from-source)<br>[11. Worker development](#worker-development)<br>[13. Project structure](#project-structure)<br>[14. License](#license) |
 
 ---
 
@@ -68,7 +68,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Merge-based restore instead of destructive replacement
 - Automatic category deduplication while restoring or syncing
 - Restore-or-Start-New onboarding
-- Automatic local backups on a daily, weekly, or monthly schedule
+- Local `.koinlybackup` scheduling on a daily, weekly, or monthly schedule
 - User-selected Android backup folder using the system folder picker
 - Optional deletion of the previous automatic backup after a new backup succeeds
 - Privacy-safe diagnostics in **Advanced settings > Data health**
@@ -534,20 +534,20 @@ In **Settings > Credential > Google Drive**, create and connect your own OAuth 2
 2. Configure the OAuth consent screen. If the app remains in Testing, add the Google account you will use as a test user.
 3. Create an **OAuth 2.0 Client ID** with application type **Web application**.
 4. Copy the **Authorized redirect URI** shown in Koinly and add that exact URI to the Google OAuth client.
-5. Paste the Client ID and Client Secret into Koinly. Optionally paste a **Google Drive Folder ID** if reports should go into a specific existing folder.
+5. Paste the Client ID and Client Secret into Koinly. Optionally paste a **Google Drive Folder ID** if reports and cloud backup files should go into a specific existing folder.
 6. Select **Save and connect Google Drive**, then finish authorization in the browser.
 
-If **Google Drive Folder ID** is blank, Koinly requests the limited `drive.file` scope and creates/reuses a dedicated **Koinly Analytics** folder. If a Folder ID is configured, Koinly requests the broader Drive scope needed to access that existing folder, verifies that the folder is active and writable during connection, and sends both manual and scheduled Analytics uploads there. The Folder ID is the value after `/folders/` in a Google Drive folder URL. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
+If **Google Drive Folder ID** is blank, Koinly requests the limited `drive.file` scope and creates/reuses a dedicated **Koinly Analytics** folder. If a Folder ID is configured, Koinly requests the broader Drive scope needed to access that existing folder, verifies that the folder is active and writable during connection, and sends manual/scheduled Analytics uploads and Google Drive `.koinlybackup` files there. The Folder ID is the value after `/folders/` in a Google Drive folder URL. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
 
 ### Archive
 
 Backup and scheduled-delivery controls are grouped under **Settings > Archive**:
 
 - **Local** contains **Backup** for creating a `.koinlybackup` now and **Load backup** for merging a selected backup with the active device data.
-- **Automatic backup** keeps **Automatic local backup** and **Telegram Backup** together in one section. Local backup schedules device-folder backups; Telegram backup schedules `.koinlybackup` uploads through the credentials configured in **Settings > Credential**.
-- **Cloud** contains **Cloud Backup** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
+- **Local backup File** contains **Local** and **Cloud**. **Local** schedules device-folder `.koinlybackup` files. **Cloud** schedules `.koinlybackup` delivery to Telegram and Google Drive through the credentials configured in **Settings > Credential**.
+- **Cloud** (the lower Archive group) contains **Cloud Backup** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
 
-For **Telegram Backup**, choose daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date. **Upload backup now** remains available from that Archive page. The Worker creates the `.koinlybackup` from synchronized cloud data and sends it as a Telegram document.
+In **Archive > Cloud**, Telegram and Google Drive have independent `.koinlybackup` schedules. Each destination supports daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date, plus **Upload backup now**. The Worker packages the latest synchronized cloud data. Google Drive uses the configured Folder ID when present; otherwise it creates/reuses a dedicated **Koinly Backup** folder.
 
 ### Analytics report uploads and Cloud Backup
 
@@ -563,16 +563,16 @@ For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and
 
 The Worker generates scheduled reports in the selected format from the latest synchronized cloud data, so the app does not need to remain open. **Custom range** uses the same centered Start/End calendar interaction as transaction date ranges and repeats the exact saved range on the chosen schedule.
 
-Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across automatic Telegram report, automatic Google Drive report, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
+Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across Telegram report, Google Drive report, Telegram `.koinlybackup`, and Google Drive `.koinlybackup` schedules. For example, `03:00`, `03:05`, `03:10`, and `03:15` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
 
 > Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the current Analytics upload and scheduling endpoints are installed.
 
 ---
 
 <a id="automatic-local-backup"></a>
-## 8. Automatic local backup
+## 8. Local
 
-Open **Settings > Archive > Automatic local backup**.
+Open **Settings > Archive > Local**.
 
 You can choose:
 
@@ -823,13 +823,13 @@ To create a separate account, sign in to your Worker's `/profile` website and se
 
 1. Make sure the latest Worker is deployed.
 2. In Koinly, use **Upload local changes** once.
-3. Open Telegram backup and try **Upload backup now** again.
+3. Open **Archive > Cloud > Telegram** and try **Upload backup now** again.
 
 The Worker rejects an empty finance backup instead of intentionally sending an empty file.
 
 ## 12.8 Android automatic folder backup fails
 
-Open **Automatic local backup**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission and re-registers the native background job.
+Open **Archive > Local**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission and re-registers the native background job.
 
 If an OEM battery manager has explicitly restricted Koinly, allow background activity for the app. A manual Android **Force stop** suspends scheduled WorkManager jobs until the app is launched again.
 

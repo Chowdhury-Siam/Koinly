@@ -1,3 +1,26 @@
+## [1.0.1149] - 2026-09-14
+
+- Reorganized Archive backup-file scheduling: **Automatic backup** is now **Local backup File**, **Local Backup** is now **Local**, and **Telegram Backup** is now **Cloud**.
+- Expanded **Archive > Cloud** so `.koinlybackup` files can be scheduled or uploaded manually to either Telegram or Google Drive using credentials from **Settings > Credential**.
+- Added an independent Google Drive `.koinlybackup` schedule. Telegram backup, Google Drive backup, Telegram report, and Google Drive report schedules are all enforced at least 5 minutes apart.
+- Google Drive backup uses the configured Drive Folder ID when present; otherwise the Worker creates/reuses a dedicated **Koinly Backup** folder.
+- Synchronized application version metadata to `1.0.1149+193`.
+
+## [1.0.1148] - 2026-09-14
+
+- Removed redundant helper copy from Archive backup tiles and Profile media.
+- Synchronized application version metadata to `1.0.1148+192`.
+
+## [1.0.1147] - 2026-09-14
+
+- Renamed **Automatic local backup** to **Local Backup** throughout the active app UI and current documentation without changing backup scheduling or behavior.
+- Synchronized application version metadata to `1.0.1147+191`.
+
+## [1.0.1146] - 2026-09-14
+
+- Removed the Google Drive Folder ID instructional helper copy from Settings > Credential without changing folder selection behavior.
+- Synchronized application version metadata to `1.0.1146+190`.
+
 ## [1.0.1145] - 2026-09-14
 
 - Removed the redundant second "Last synced" line from Settings > Account & sync; the primary sync status now shows the sync timestamp only once.

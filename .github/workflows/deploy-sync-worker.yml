@@ -136,7 +136,7 @@ jobs:
               echo "Health check attempt $attempt/18 could not reach the Worker (curl exit $curl_exit). Waiting for workers.dev TLS/route propagation..."
             elif ! jq -e 'type == "object"' "$health_file" >/dev/null 2>&1; then
               echo "Health check attempt $attempt/18 returned a non-JSON response (HTTP $http_status). Waiting for the new deployment..."
-            elif jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .analyticsUploadAvailable == true and .realtimeSyncAvailable == true and .profileMediaSyncAvailable == true' "$health_file" >/dev/null; then
+            elif jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .googleDriveBackupAvailable == true and .analyticsUploadAvailable == true and .realtimeSyncAvailable == true and .profileMediaSyncAvailable == true' "$health_file" >/dev/null; then
               health_ready=1
               break
             else

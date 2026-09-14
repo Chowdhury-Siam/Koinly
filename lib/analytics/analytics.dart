@@ -1843,7 +1843,6 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                             labelText: 'Google Drive Folder ID (optional)',
                             hintText: 'Leave blank to use Koinly Analytics',
                             prefixIcon: Icon(Icons.folder_rounded),
-                            helperText: 'Paste the folder ID from a Google Drive folder URL.',
                           ),
                         ),
                         const SizedBox(height: 12),

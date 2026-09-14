@@ -13,7 +13,7 @@ void main() {
     final selfHostedWrangler = File('cloud/worker/wrangler.self-hosted.toml').readAsStringSync();
 
     expect(app, contains("title: 'Archive'"));
-    expect(app, contains("title: 'Telegram Backup'"));
+    expect(app, contains("title: 'Cloud'"));
     expect(app, contains('SelfHostedTelegramBackupScreen'));
     expect(app, isNot(contains("Text('Telegram destination'")));
     expect(app, isNot(contains("label: const Text('Open Credential')")));
@@ -56,6 +56,8 @@ void main() {
     expect(api, contains('/v1/telegram-backup/settings'));
     expect(api, contains('/v1/telegram-backup/test'));
     expect(api, contains('/v1/telegram-backup/send-now'));
+    expect(api, contains('/v1/google-drive-backup/settings'));
+    expect(api, contains('/v1/google-drive-backup/send-now'));
     expect(worker, contains('sendDocument'));
     expect(worker, contains('telegram_backup_settings'));
     expect(worker, contains('telegramBackupFinanceRecordCount(database) === 0'));
@@ -68,6 +70,8 @@ void main() {
     expect(app, contains("await database.writeSyncState('serverCursor', '0');"));
     expect(app, contains('This backup contains no finance records.'));
     expect(schema, contains('CREATE TABLE IF NOT EXISTS telegram_backup_settings'));
+    expect(schema, contains('CREATE TABLE IF NOT EXISTS google_drive_backup_settings'));
+    expect(worker, contains("label: 'Google Drive backup'"));
     expect(selfHostedWrangler, contains('crons = ["*/5 * * * *"]'));
     expect(workflow, contains('--config wrangler.self-hosted.toml'));
     expect(workflow, contains('.telegramBackupAvailable == true'));

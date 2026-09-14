@@ -12,12 +12,14 @@ test('automatic Analytics report schedules share the five-minute Worker cron', (
   assert.match(source, /\/v1\/analytics-upload\/schedules/);
   assert.match(source, /runDueAnalyticsPdfUploads/);
   assert.match(source, /Automatic uploads must be at least 5 minutes apart/);
+  assert.match(source, /Google Drive backup/);
   assert.match(source, /Telegram report/);
   assert.match(source, /Google Drive report/);
   assert.match(source, /Telegram backup/);
   assert.match(source, /buildScheduledAnalyticsPdf/);
   assert.match(source, /buildSimpleTextPdf/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS analytics_pdf_schedules/);
+  assert.match(schema, /CREATE TABLE IF NOT EXISTS google_drive_backup_settings/);
   assert.match(schema, /destination IN \('telegram', 'googleDrive'\)/);
   assert.match(schema, /date_filter IN \('today', 'thisWeek', 'thisMonth', 'thisYear', 'allTime', 'custom'\)/);
   assert.match(schema, /custom_start TEXT/);
