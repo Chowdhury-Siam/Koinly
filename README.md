@@ -544,16 +544,16 @@ If **Google Drive Folder ID** is blank, Koinly requests the limited `drive.file`
 Backup and scheduled-delivery controls are grouped under **Settings > Archive**:
 
 - **Local** contains **Backup** for creating a `.koinlybackup` now and **Load backup** for merging a selected backup with the active device data.
-- **Local backup File** contains **Local** and **Cloud**. **Local** schedules device-folder `.koinlybackup` files. **Cloud** schedules `.koinlybackup` delivery to Telegram and Google Drive through the credentials configured in **Settings > Credential**.
-- **Cloud** (the lower Archive group) contains **Cloud Backup** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
+- **Local backup file** contains **Local** and **Cloud**. **Local** schedules device-folder `.koinlybackup` files. **Cloud** schedules `.koinlybackup` delivery to Telegram and Google Drive through the credentials configured in **Settings > Credential**.
+- **Analytics backup** contains **Cloud** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
 
-In **Archive > Cloud**, Telegram and Google Drive have independent `.koinlybackup` schedules. Each destination supports daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date, plus **Upload backup now**. The Worker packages the latest synchronized cloud data. Google Drive uses the configured Folder ID when present; otherwise it creates/reuses a dedicated **Koinly Backup** folder.
+In **Archive > Local backup file > Cloud**, Telegram and Google Drive have independent `.koinlybackup` schedules. Each destination supports daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date, plus **Upload backup now**. The Worker packages the latest synchronized cloud data. Google Drive uses the configured Folder ID when present; otherwise it creates/reuses a dedicated **Koinly Backup** folder.
 
-### Analytics report uploads and Cloud Backup
+### Analytics backup
 
 Open **Settings > Analytics** to choose the report date filter, report type, and output format: **PDF**, **XLSX**, or **TXT**. **Download**, **Upload Telegram**, and **Upload Drive** all use the selected format. Manual cloud uploads use the credentials already configured in **Settings > Credential**; Analytics does not contain credential/settings icons.
 
-For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and Google Drive each have an independent report schedule with:
+For automatic delivery, open **Settings > Archive > Analytics backup > Cloud**. Telegram and Google Drive each have an independent report schedule with:
 
 - Summary or Transaction history report type;
 - output format (**PDF**, **XLSX**, or **TXT**);
@@ -823,7 +823,7 @@ To create a separate account, sign in to your Worker's `/profile` website and se
 
 1. Make sure the latest Worker is deployed.
 2. In Koinly, use **Upload local changes** once.
-3. Open **Archive > Cloud > Telegram** and try **Upload backup now** again.
+3. Open **Archive > Local backup file > Cloud > Telegram** and try **Upload backup now** again.
 
 The Worker rejects an empty finance backup instead of intentionally sending an empty file.
 

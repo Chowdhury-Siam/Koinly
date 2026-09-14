@@ -28,8 +28,28 @@ jobs:
   # restricted to the canonical repository so fork pushes and manual runs
   # cannot spend Actions minutes building Koinly application packages.
   build-apks:
-    name: Build ARM32, ARM64, and universal APKs
+    name: Build Android ${{ matrix.label }} APK
     if: github.repository == 'Chowdhury-Siam/Koinly'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - variant: universal
+            label: universal
+            target_platform: android-arm,android-arm64
+            source_apk: app-release.apk
+            split_per_abi: false
+          - variant: arm32
+            label: ARM32
+            target_platform: android-arm
+            source_apk: app-armeabi-v7a-release.apk
+            split_per_abi: true
+          - variant: arm64
+            label: ARM64
+            target_platform: android-arm64
+            source_apk: app-arm64-v8a-release.apk
+            split_per_abi: true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,10 +68,7 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Ensure Android SDK 36 and NDK 28
+      - name: Verify preinstalled Android SDK 36 and NDK 28
         shell: bash
         run: |
           packages=()
@@ -139,11 +156,10 @@ jobs:
           sed -i -E "s/versionName = \"[^\"]+\"/versionName = \"${VERSION_NAME}\"/" android/app/build.gradle
           grep -nE "^(version:)|versionCode|versionName" pubspec.yaml android/app/build.gradle
 
-      - name: Show Flutter version
-        run: flutter --version
-
       - name: Install dependencies
-        run: flutter pub get
+        shell: bash
+        run: |
+          flutter pub get --offline || flutter pub get
 
       - name: Prepare artifact folder
         run: mkdir -p artifacts
@@ -202,31 +218,28 @@ jobs:
           echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Build universal APK
+      # Build each APK flavor in its own matrix runner. The previous workflow built
+      # the universal APK and then rebuilt both ABIs again for split APKs in one job.
+      # Running these independent release builds concurrently cuts Android wall-clock
+      # time while preserving the same three standalone installable APK outputs.
+      - name: Build ${{ matrix.label }} APK
+        shell: bash
         run: |
+          extra_args=()
+          if [ "${{ matrix.split_per_abi }}" = "true" ]; then
+            extra_args+=(--split-per-abi)
+          fi
           flutter build apk \
             --release \
-            --target-platform android-arm,android-arm64 \
+            "${extra_args[@]}" \
+            --target-platform "${{ matrix.target_platform }}" \
             --build-name="$KOINLY_APP_VERSION_NAME" \
             --build-number="$KOINLY_APP_BUILD_NUMBER" \
             --no-pub \
             --no-tree-shake-icons \
             --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME"
-          cp build/app/outputs/flutter-apk/app-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-universal.apk"
-
-      - name: Build ARM32 and ARM64 split APKs
-        run: |
-          flutter build apk \
-            --release \
-            --split-per-abi \
-            --target-platform android-arm,android-arm64 \
-            --build-name="$KOINLY_APP_VERSION_NAME" \
-            --build-number="$KOINLY_APP_BUILD_NUMBER" \
-            --no-pub \
-            --no-tree-shake-icons \
-            --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME"
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm32.apk"
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-arm64.apk"
+          cp "build/app/outputs/flutter-apk/${{ matrix.source_apk }}" \
+            "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-${{ matrix.variant }}.apk"
 
       - name: List APK artifacts
         run: ls -lh artifacts
@@ -243,11 +256,11 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk"
           done
 
-      - name: Upload release APKs
+      - name: Upload ${{ matrix.label }} APK
         uses: actions/upload-artifact@v5
         with:
-          name: koinly-android-release-assets
-          path: artifacts/*.apk
+          name: koinly-android-${{ matrix.variant }}
+          path: artifacts/Koinly-v*-${{ matrix.variant }}.apk
           if-no-files-found: error
           compression-level: 0
 
@@ -825,21 +838,27 @@ jobs:
       - name: Generate macOS platform files
         run: flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 
-      - name: Restore macOS dependency and incremental build caches
+      # Keep immutable dependency caches separate from the rolling Xcode/Flutter
+      # build cache. This avoids re-uploading pub/CocoaPods data on every commit
+      # while still restoring the latest incremental macOS compilation state.
+      - name: Restore macOS dependency cache
         uses: actions/cache@v4
         with:
           path: |
             .pub-cache
             ~/Library/Caches/CocoaPods
             macos/Pods
-            build/macos
-          key: koinly-macos-arm64-build-${{ hashFiles('pubspec.lock') }}-${{ github.sha }}
+          key: koinly-macos-deps-${{ runner.arch }}-${{ env.FLUTTER_VERSION }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: |
-            koinly-macos-arm64-build-${{ hashFiles('pubspec.lock') }}-
-            koinly-macos-arm64-build-
+            koinly-macos-deps-${{ runner.arch }}-${{ env.FLUTTER_VERSION }}-
 
-      - name: Show Flutter version
-        run: flutter --version
+      - name: Restore macOS incremental build cache
+        uses: actions/cache@v4
+        with:
+          path: build/macos
+          key: koinly-macos-build-${{ runner.arch }}-${{ env.FLUTTER_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            koinly-macos-build-${{ runner.arch }}-${{ env.FLUTTER_VERSION }}-
 
       - name: Apply Koinly macOS identity, permissions, and icon
         shell: bash
@@ -891,7 +910,7 @@ jobs:
           source = Path('assets/icons/app_icon.png')
           iconset = Path('macos/Runner/Assets.xcassets/AppIcon.appiconset')
           contents = json.loads((iconset / 'Contents.json').read_text())
-          generated = set()
+          jobs = {}
           for item in contents.get('images', []):
               filename = item.get('filename')
               logical_size = item.get('size', '').split('x', 1)[0]
@@ -899,16 +918,28 @@ jobs:
               if not filename or not logical_size:
                   continue
               pixels = int(round(float(logical_size) * float(scale or '1')))
+              jobs[filename] = pixels
+          if not jobs:
+              raise SystemExit('No macOS AppIcon images were generated from Contents.json')
+
+          # Several AppIcon slots resolve to the same backing filename. Generate each
+          # file only once, and let sips process the distinct sizes concurrently.
+          from concurrent.futures import ThreadPoolExecutor
+
+          def render(job):
+              filename, pixels = job
               target = iconset / filename
               subprocess.run(
                   ['sips', '-s', 'format', 'png', '-z', str(pixels), str(pixels), str(source), '--out', str(target)],
                   check=True,
                   stdout=subprocess.DEVNULL,
+                  stderr=subprocess.DEVNULL,
               )
-              generated.add(filename)
-          if not generated:
-              raise SystemExit('No macOS AppIcon images were generated from Contents.json')
-          print('Generated macOS icons:', ', '.join(sorted(generated)))
+              return filename
+
+          with ThreadPoolExecutor(max_workers=min(6, len(jobs))) as pool:
+              generated = sorted(pool.map(render, jobs.items()))
+          print('Generated macOS icons:', ', '.join(generated))
           PYICON
 
       - name: Read app version
@@ -926,11 +957,15 @@ jobs:
           echo "KOINLY_APP_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
 
       - name: Install Flutter dependencies
-        run: flutter pub get
+        shell: bash
+        run: |
+          flutter pub get --offline || flutter pub get
 
       - name: Build universal macOS release
+        env:
+          COMPILER_INDEX_STORE_ENABLE: "NO"
         run: |
-          flutter build macos --release --no-pub \
+          flutter build macos --release --no-pub --no-tree-shake-icons \
             --dart-define=KOINLY_APP_VERSION="$KOINLY_APP_VERSION_NAME"
 
       - name: Verify Intel and Apple Silicon slices
@@ -1039,9 +1074,28 @@ jobs:
           ditto "$KOINLY_MACOS_APP" "$STAGE/Koinly.app"
           ln -s /Applications "$STAGE/Applications"
           DMG="artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-macos-universal.dmg"
-          hdiutil create -volname "Koinly" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
-          ditto -c -k --sequesterRsrc --keepParent "$KOINLY_MACOS_APP" \
-            "artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-macos-universal.zip"
+          ZIP="artifacts/Koinly-v${KOINLY_APP_VERSION_NAME}-macos-universal.zip"
+
+          # DMG creation and ZIP packaging are independent. Run them concurrently,
+          # and use fast zlib compression for the DMG to reduce release latency
+          # without changing its compatibility or install flow.
+          (
+            hdiutil create \
+              -volname "Koinly" \
+              -srcfolder "$STAGE" \
+              -ov \
+              -format UDZO \
+              -imagekey zlib-level=1 \
+              "$DMG"
+          ) &
+          dmg_pid=$!
+          (
+            ditto -c -k --sequesterRsrc --keepParent "$KOINLY_MACOS_APP" "$ZIP"
+          ) &
+          zip_pid=$!
+
+          wait "$dmg_pid"
+          wait "$zip_pid"
           ls -lh artifacts
 
       - name: Upload macOS release artifacts
@@ -1079,8 +1133,9 @@ jobs:
       - name: Download APK artifacts
         uses: actions/download-artifact@v5
         with:
-          name: koinly-android-release-assets
+          pattern: koinly-android-*
           path: release-assets
+          merge-multiple: true
 
       - name: Download Windows installer artifact
         uses: actions/download-artifact@v5

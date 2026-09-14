@@ -1,3 +1,17 @@
+## [1.0.1151] - 2026-09-14
+
+- Renamed **Local backup File** to **Local backup file** in Archive.
+- Renamed the Archive **Cloud** section to **Analytics backup**, and renamed the analytics **Cloud Backup** entry/page to **Cloud**.
+- Added outside **On/Off** indicators to both Archive cloud entries: backup-file cloud delivery and analytics-report cloud delivery. The indicators refresh from the Worker and refresh again after returning from either cloud settings page.
+- Synchronized application version metadata to `1.0.1151+195`.
+
+## [1.0.1150] - 2026-09-14
+
+- Reduced Android release wall-clock time by building the universal, ARM32, and ARM64 APKs concurrently instead of rebuilding the ABI outputs sequentially in one job, while using the GitHub runner's preinstalled Android toolchain and cache-first Dart dependency resolution.
+- Reduced macOS release overhead with separated dependency/build caches, deduplicated parallel AppIcon generation, disabled compiler indexing during release compilation, and concurrent fast-compression DMG/ZIP packaging.
+- Preserved the existing three standalone Android APKs and universal Intel + Apple Silicon macOS release outputs.
+- Synchronized application version metadata to `1.0.1150+194`.
+
 ## [1.0.1149] - 2026-09-14
 
 - Reorganized Archive backup-file scheduling: **Automatic backup** is now **Local backup File**, **Local Backup** is now **Local**, and **Telegram Backup** is now **Cloud**.

@@ -40,13 +40,15 @@ void main() {
     await pumpSettingsScreen(tester, const ArchiveSettingsScreen());
 
     expect(find.text('Local'), findsNWidgets(2));
-    expect(find.text('Local backup File'), findsOneWidget);
+    expect(find.text('Local backup file'), findsOneWidget);
     expect(find.text('Cloud'), findsNWidgets(2));
     expect(find.text('Backup'), findsOneWidget);
     expect(find.text('Local Backup'), findsNothing);
     expect(find.text('Load backup'), findsOneWidget);
     expect(find.text('Telegram Backup'), findsNothing);
-    expect(find.text('Cloud Backup'), findsOneWidget);
+    expect(find.text('Analytics backup'), findsOneWidget);
+    expect(find.text('Cloud Backup'), findsNothing);
+    expect(find.text('Off'), findsNWidgets(3));
   });
 
   testWidgets('Advanced settings no longer contains backup controls', (tester) async {

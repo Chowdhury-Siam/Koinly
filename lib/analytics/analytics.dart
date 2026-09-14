@@ -2239,7 +2239,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
     final telegramReady = _telegram.tokenConfigured && _telegram.chatId.isNotEmpty;
 
     return PageScaffold(
-      title: 'Cloud Backup',
+      title: 'Cloud',
       subtitle: 'Automatic report uploads',
       actions: [
         IconButton.filledTonal(

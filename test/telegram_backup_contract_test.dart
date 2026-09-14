@@ -31,7 +31,7 @@ void main() {
     expect(analytics, contains("labelText: 'Google OAuth Client Secret'"));
     expect(analytics, contains("labelText: 'Google Drive Folder ID (optional)'"));
     expect(analytics, contains('Telegram credentials saved.'));
-    expect(analytics, contains("title: 'Cloud Backup'"));
+    expect(analytics, contains("title: 'Cloud'"));
 
     final credentialsStart = analytics.indexOf('class CredentialsScreen');
     final cloudBackupStart = analytics.indexOf('class CloudBackupScreen');

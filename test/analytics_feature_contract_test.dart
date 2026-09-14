@@ -50,8 +50,8 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1148+192'));
-    expect(analytics, contains("title: 'Cloud Backup'"));
+    expect(pubspec, contains('version: 1.0.1151+195'));
+    expect(analytics, contains("title: 'Cloud'"));
     expect(analytics, contains("title: const Text('Automatic report upload'"));
     expect(analytics, contains('settings.fileFormat'));
     expect(analytics, contains('fileFormat: value.first'));

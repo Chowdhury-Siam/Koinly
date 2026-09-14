@@ -19646,13 +19646,79 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
   }
 }
 
-class ArchiveSettingsScreen extends StatelessWidget {
+class ArchiveSettingsScreen extends StatefulWidget {
   const ArchiveSettingsScreen({super.key});
+
+  @override
+  State<ArchiveSettingsScreen> createState() => _ArchiveSettingsScreenState();
+}
+
+class _ArchiveSettingsScreenState extends State<ArchiveSettingsScreen> {
+  bool _cloudBackupEnabled = false;
+  bool _analyticsBackupEnabled = false;
+  bool _loadingCloudIndicators = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshCloudIndicators());
+  }
+
+  bool _signedIn(AppController state) =>
+      state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
+
+  Future<void> _refreshCloudIndicators() async {
+    if (!mounted || _loadingCloudIndicators) return;
+    final state = context.read<AppController>();
+    if (!_signedIn(state)) {
+      if (_cloudBackupEnabled || _analyticsBackupEnabled) {
+        setState(() {
+          _cloudBackupEnabled = false;
+          _analyticsBackupEnabled = false;
+        });
+      }
+      return;
+    }
+
+    _loadingCloudIndicators = true;
+    try {
+      final values = await Future.wait([
+        state.loadSelfHostedTelegramBackupSettings(),
+        state.loadGoogleDriveBackupSettings(),
+        state.loadAnalyticsPdfSchedules(),
+      ]);
+      if (!mounted) return;
+      final telegram = values[0] as TelegramBackupSettings;
+      final drive = values[1] as GoogleDriveBackupSettings;
+      final analyticsSchedules = values[2] as Map<AnalyticsPdfScheduleDestination, AnalyticsPdfScheduleSettings>;
+      setState(() {
+        _cloudBackupEnabled = telegram.enabled || drive.enabled;
+        _analyticsBackupEnabled = analyticsSchedules.values.any((settings) => settings.enabled);
+      });
+    } catch (_) {
+      // Keep the last known indicators when the Worker cannot be reached.
+    } finally {
+      _loadingCloudIndicators = false;
+    }
+  }
+
+  Future<void> _openBackupCloud(bool signedIn) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => signedIn ? const SelfHostedTelegramBackupScreen() : const MultiDeviceSyncScreen()),
+    );
+    if (mounted) await _refreshCloudIndicators();
+  }
+
+  Future<void> _openAnalyticsCloud() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const CloudBackupScreen()));
+    if (mounted) await _refreshCloudIndicators();
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty && state.selfHostedSyncApiBaseUrl.isNotEmpty;
+    final signedIn = _signedIn(state);
     return PageScaffold(
       title: 'Archive',
       subtitle: 'Backup and scheduled delivery',
@@ -19661,45 +19727,43 @@ class ArchiveSettingsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          const SectionHeader('Local'),
-          SettingsTile(
-            icon: Icons.backup_rounded,
-            title: 'Backup',
-            color: '#86E3CE',
-            onTap: () => runBackupFlow(context, state),
-          ),
-          SettingsTile(
-            icon: Icons.file_open_rounded,
-            title: 'Load backup',
-            color: '#B4A5FF',
-            onTap: () => runLoadBackupFlow(context, state),
-          ),
-          const SectionHeader('Local backup File'),
-          SettingsTile(
-            icon: Icons.history_toggle_off_rounded,
-            title: 'Local',
-            subtitle: state.automaticBackupSettingsSummary,
-            color: '#7FE7D4',
-            onTap: () => showAutomaticBackupSheet(context),
-          ),
-          SettingsTile(
-            icon: Icons.cloud_sync_rounded,
-            title: 'Cloud',
-            subtitle: signedIn ? null : 'Sign in to use cloud backup',
-            color: '#86E3CE',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => signedIn ? const SelfHostedTelegramBackupScreen() : const MultiDeviceSyncScreen()),
+            const SectionHeader('Local'),
+            SettingsTile(
+              icon: Icons.backup_rounded,
+              title: 'Backup',
+              color: '#86E3CE',
+              onTap: () => runBackupFlow(context, state),
             ),
-          ),
-          const SectionHeader('Cloud'),
-          SettingsTile(
-            icon: Icons.cloud_upload_rounded,
-            title: 'Cloud Backup',
-            color: '#9AD0F5',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloudBackupScreen())),
-          ),
-        ],
+            SettingsTile(
+              icon: Icons.file_open_rounded,
+              title: 'Load backup',
+              color: '#B4A5FF',
+              onTap: () => runLoadBackupFlow(context, state),
+            ),
+            const SectionHeader('Local backup file'),
+            SettingsTile(
+              icon: Icons.history_toggle_off_rounded,
+              title: 'Local',
+              subtitle: state.automaticBackupSettingsSummary,
+              color: '#7FE7D4',
+              onTap: () => showAutomaticBackupSheet(context),
+            ),
+            SettingsTile(
+              icon: Icons.cloud_sync_rounded,
+              title: 'Cloud',
+              subtitle: signedIn && _cloudBackupEnabled ? 'On' : 'Off',
+              color: '#86E3CE',
+              onTap: () => _openBackupCloud(signedIn),
+            ),
+            const SectionHeader('Analytics backup'),
+            SettingsTile(
+              icon: Icons.cloud_upload_rounded,
+              title: 'Cloud',
+              subtitle: signedIn && _analyticsBackupEnabled ? 'On' : 'Off',
+              color: '#9AD0F5',
+              onTap: _openAnalyticsCloud,
+            ),
+          ],
         ),
       ),
     );
