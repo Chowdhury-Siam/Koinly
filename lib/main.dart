@@ -19744,7 +19744,7 @@ class _ArchiveSettingsScreenState extends State<ArchiveSettingsScreen> {
             SettingsTile(
               icon: Icons.history_toggle_off_rounded,
               title: 'Local',
-              subtitle: state.automaticBackupSettingsSummary,
+              subtitle: state.autoBackupEnabled ? 'On' : 'Off',
               color: '#7FE7D4',
               onTap: () => showAutomaticBackupSheet(context),
             ),

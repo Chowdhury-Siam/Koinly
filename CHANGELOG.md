@@ -1,3 +1,8 @@
+## [1.0.1152] - 2026-09-14
+
+- Simplified **Archive > Local backup file > Local** so its outside status now shows only **On** or **Off**, matching the cloud backup indicators.
+- Synchronized application version metadata to `1.0.1152+196`.
+
 ## [1.0.1151] - 2026-09-14
 
 - Renamed **Local backup File** to **Local backup file** in Archive.
