@@ -295,6 +295,7 @@ class WorkerDeploymentService {
   static const _cloudflareApi = 'https://api.cloudflare.com/client/v4';
   static const _bundleAsset = 'assets/worker/koinly_sync_worker.js';
   static const _schemaAsset = 'cloud/worker/schema.sql';
+  static const _initialDurableObjectMigrationTag = 'v1-realtime-sync-hub';
 
   void close() => _client.close();
 
@@ -324,7 +325,7 @@ class WorkerDeploymentService {
 
     onProgress('Uploading Koinly Sync Worker…');
     final bundle = await _loadWorkerBundle();
-    await _uploadWorker(config, bundle, passwordHash, lifecycle);
+    await _uploadWorker(config, bundle, passwordHash, lifecycle, onProgress: onProgress);
 
     onProgress('Enabling workers.dev URL…');
     await _enableWorkerSubdomain(config);
@@ -692,7 +693,7 @@ class WorkerDeploymentService {
     if (response.statusCode == 404) {
       return const {
         'migrations': {
-          'new_tag': 'v1-realtime-sync-hub',
+          'new_tag': _initialDurableObjectMigrationTag,
           'new_sqlite_classes': ['SyncHub'],
         },
       };
@@ -703,8 +704,8 @@ class WorkerDeploymentService {
     }
     final result = data['result'];
     if (result is Map) {
-      // Preserve an exports-managed Worker if an advanced/current Cloudflare
-      // deployment has already migrated away from legacy migration tags.
+      // Preserve Workers that already use Cloudflare's declarative exports flow.
+      // Cloudflare does not support switching such a Worker back to migrations.
       final exports = result['exports'];
       if (exports is Map && exports['SyncHub'] is Map) {
         final existing = exports['SyncHub'] as Map;
@@ -715,20 +716,106 @@ class WorkerDeploymentService {
           },
         };
       }
-      final migrationTag = '${result['migration_tag'] ?? ''}'.trim();
-      final migrations = result['migrations'];
-      final configuredTag = migrations is Map ? '${migrations['new_tag'] ?? ''}'.trim() : '';
-      if (migrationTag.isNotEmpty || configuredTag.isNotEmpty) return const {};
     }
+
+    // Script settings do not reliably expose the currently applied Durable
+    // Object migration tag. The versions API does, so resolve the latest
+    // version detail before uploading an update. Cloudflare requires old_tag
+    // to match the current tag on every subsequent migration-backed upload.
+    final versionTag = await _currentDurableObjectMigrationTag(c);
+    if (versionTag != null && versionTag.isNotEmpty) {
+      return {
+        'migrations': {'old_tag': versionTag},
+      };
+    }
+
+    // Older API responses sometimes include migration metadata directly in
+    // settings. Keep this as a compatibility fallback.
+    final settingsTag = _findMigrationTag(data);
+    if (settingsTag != null && settingsTag.isNotEmpty) {
+      return {
+        'migrations': {'old_tag': settingsTag},
+      };
+    }
+
     return const {
       'migrations': {
-        'new_tag': 'v1-realtime-sync-hub',
+        'new_tag': _initialDurableObjectMigrationTag,
         'new_sqlite_classes': ['SyncHub'],
       },
     };
   }
 
-  Future<void> _uploadWorker(
+  Future<String?> _currentDurableObjectMigrationTag(WorkerDeploymentConfig c) async {
+    final base = '$_cloudflareApi/accounts/${c.cloudflareAccountId}/workers/scripts/${Uri.encodeComponent(c.workerName)}/versions';
+    final listResponse = await _client
+        .get(Uri.parse('$base?per_page=1'), headers: _cfHeaders(c))
+        .timeout(const Duration(seconds: 30));
+    if (listResponse.statusCode == 404) return null;
+    final listData = _decodeJson(listResponse.body);
+    if (listResponse.statusCode < 200 || listResponse.statusCode >= 300 || listData['success'] != true) {
+      // Version inspection is an optimization. If Cloudflare does not expose
+      // it for this token/account shape, the upload path below can still
+      // recover from the authoritative migration precondition response.
+      return null;
+    }
+
+    final directTag = _findMigrationTag(listData);
+    if (directTag != null && directTag.isNotEmpty) return directTag;
+
+    final result = listData['result'];
+    if (result is! List || result.isEmpty || result.first is! Map) return null;
+    final versionId = '${(result.first as Map)['id'] ?? ''}'.trim();
+    if (versionId.isEmpty) return null;
+
+    final detailResponse = await _client
+        .get(Uri.parse('$base/${Uri.encodeComponent(versionId)}'), headers: _cfHeaders(c))
+        .timeout(const Duration(seconds: 30));
+    final detailData = _decodeJson(detailResponse.body);
+    if (detailResponse.statusCode < 200 || detailResponse.statusCode >= 300 || detailData['success'] != true) {
+      return null;
+    }
+    return _findMigrationTag(detailData);
+  }
+
+  String? _findMigrationTag(Object? value) {
+    if (value is Map) {
+      final tag = '${value['migration_tag'] ?? ''}'.trim();
+      if (tag.isNotEmpty) return tag;
+      final migrations = value['migrations'];
+      if (migrations is Map) {
+        final newTag = '${migrations['new_tag'] ?? ''}'.trim();
+        if (newTag.isNotEmpty) return newTag;
+      }
+      for (final child in value.values) {
+        final nested = _findMigrationTag(child);
+        if (nested != null && nested.isNotEmpty) return nested;
+      }
+    } else if (value is List) {
+      for (final child in value) {
+        final nested = _findMigrationTag(child);
+        if (nested != null && nested.isNotEmpty) return nested;
+      }
+    }
+    return null;
+  }
+
+  String? _expectedMigrationTagFromCloudflareError(Map<String, dynamic> data) {
+    final parts = <String>[];
+    final errors = data['errors'];
+    if (errors is List) {
+      for (final error in errors) {
+        if (error is Map) parts.add('${error['message'] ?? ''}');
+      }
+    }
+    parts.add('${data['message'] ?? ''}');
+    final combined = parts.join('\n');
+    final match = RegExp(r"""expected tag(?: is)?\s*["']([^"']+)["']""", caseSensitive: false).firstMatch(combined);
+    final tag = match?.group(1)?.trim() ?? '';
+    return tag.isEmpty ? null : tag;
+  }
+
+  Future<http.Response> _sendWorkerUpload(
     WorkerDeploymentConfig c,
     String bundle,
     String adminPasswordHash,
@@ -772,8 +859,40 @@ class WorkerDeploymentService {
       ));
 
     final streamed = await _client.send(request).timeout(const Duration(minutes: 2));
-    final response = await http.Response.fromStream(streamed);
-    final data = _decodeJson(response.body);
+    return http.Response.fromStream(streamed);
+  }
+
+  Future<void> _uploadWorker(
+    WorkerDeploymentConfig c,
+    String bundle,
+    String adminPasswordHash,
+    Map<String, Object?> lifecycle, {
+    WorkerDeploymentProgress? onProgress,
+  }) async {
+    var effectiveLifecycle = lifecycle;
+    var response = await _sendWorkerUpload(c, bundle, adminPasswordHash, effectiveLifecycle);
+    var data = _decodeJson(response.body);
+
+    if (response.statusCode < 200 || response.statusCode >= 300 || data['success'] != true) {
+      // Cloudflare protects Durable Object state with an optimistic migration
+      // precondition. If an older Koinly/Wrangler deployment already created
+      // SyncHub, Cloudflare tells us the exact current tag. Retry once using
+      // that tag as old_tag instead of forcing the user to delete/recreate the
+      // Worker (which could orphan Durable Object state).
+      final expectedTag = _expectedMigrationTagFromCloudflareError(data);
+      final isExportsFlow = effectiveLifecycle.containsKey('exports');
+      final currentMigrations = effectiveLifecycle['migrations'];
+      final currentOldTag = currentMigrations is Map ? '${currentMigrations['old_tag'] ?? ''}'.trim() : '';
+      if (!isExportsFlow && expectedTag != null && expectedTag != currentOldTag) {
+        onProgress?.call('Cloudflare migration state changed; retrying the Worker update safely…');
+        effectiveLifecycle = {
+          'migrations': {'old_tag': expectedTag},
+        };
+        response = await _sendWorkerUpload(c, bundle, adminPasswordHash, effectiveLifecycle);
+        data = _decodeJson(response.body);
+      }
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300 || data['success'] != true) {
       throw WorkerDeploymentException('Cloudflare Worker upload failed: ${_cloudflareError(data, response.statusCode)}');
     }

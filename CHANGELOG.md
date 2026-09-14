@@ -1,3 +1,10 @@
+## [1.0.1159] - 2026-09-14
+
+- Fixed in-app Cloudflare Worker updates failing when an existing `SyncHub` Durable Object had already applied the `v1-realtime-sync-hub` migration.
+- Koinly now reads the latest Cloudflare Worker version detail to recover the currently applied Durable Object migration tag and sends it back as `old_tag` on subsequent uploads, preserving the existing namespace and data.
+- Added a one-time safe retry when Cloudflare reports a migration-tag precondition mismatch, using Cloudflare's expected tag instead of requiring the Worker to be deleted or recreated.
+- Synchronized application and Worker version metadata to `1.0.1159+203`.
+
 ## [1.0.1158] - 2026-09-14
 
 - Fixed first-time in-app Cloudflare deployments being reported as failed when the `workers.dev` route needed longer than one minute to finish propagating.

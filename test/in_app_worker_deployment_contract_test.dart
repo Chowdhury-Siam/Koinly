@@ -25,8 +25,13 @@ void main() {
     expect(service, isNot(contains("_tursoHttpBase(c.tursoDatabaseUrl)}/version")));
     expect(service, contains(r'workers/scripts/${Uri.encodeComponent(c.workerName)}'));
     expect(service, contains("'durable_object_namespace'"));
-    expect(service, contains("'new_tag': 'v1-realtime-sync-hub'"));
+    expect(service, contains("_initialDurableObjectMigrationTag = 'v1-realtime-sync-hub'"));
     expect(service, contains("'new_sqlite_classes': ['SyncHub']"));
+    expect(service, contains("'old_tag': versionTag"));
+    expect(service, contains('/versions'));
+    expect(service, contains("value['migration_tag']"));
+    expect(service, contains('_expectedMigrationTagFromCloudflareError'));
+    expect(service, contains('retrying the Worker update safely'));
     expect(service, contains("/subdomain'"));
     expect(service, contains("/schedules'"));
     expect(service, contains("'cron': '*/5 * * * *'"));
