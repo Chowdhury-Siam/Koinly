@@ -6,7 +6,7 @@ const source = fs.readFileSync(new URL('../src/index.ts', import.meta.url), 'utf
 const schema = fs.readFileSync(new URL('../schema.sql', import.meta.url), 'utf8');
 const workflow = fs.readFileSync(new URL('../../../.github/workflows/deploy-sync-worker.yml', import.meta.url), 'utf8');
 
-test('analytics PDF upload contract is deployed with Telegram and Google Drive support', () => {
+test('analytics report upload contract supports PDF XLSX TXT with Telegram and Google Drive', () => {
   assert.match(source, /\/v1\/analytics-upload\/telegram/);
   assert.match(source, /\/v1\/analytics-upload\/google-drive/);
   assert.match(source, /google-drive\/callback/);
@@ -17,9 +17,12 @@ test('analytics PDF upload contract is deployed with Telegram and Google Drive s
   assert.match(workflow, /analyticsUploadAvailable == true/);
 });
 
-test('analytics upload secrets are encrypted and PDF size is bounded', () => {
+test('analytics upload secrets are encrypted and report size is bounded', () => {
   assert.match(source, /encryptWorkerSecret\(env\.JWT_SECRET, 'google-drive-client-secret'/);
   assert.match(source, /encryptWorkerSecret\(env\.JWT_SECRET, 'google-drive-refresh-token'/);
-  assert.match(source, /analyticsPdfMaxBytes = 10 \* 1024 \* 1024/);
+  assert.match(source, /analyticsReportMaxBytes = 10 \* 1024 \* 1024/);
+  assert.match(source, /\(pdf\|xlsx\|txt\)/);
+  assert.match(source, /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(source, /text\/plain/);
   assert.match(source, /Configure Telegram credentials in Settings > Credential first/);
 });

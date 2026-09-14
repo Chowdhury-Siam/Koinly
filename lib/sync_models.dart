@@ -106,13 +106,15 @@ class TelegramBackupSettings {
 
 enum AnalyticsPdfScheduleDestination { telegram, googleDrive }
 enum AnalyticsPdfScheduleReportVariant { summary, transactionHistory }
-enum AnalyticsPdfScheduleDateFilter { today, thisWeek, thisMonth, thisYear, allTime }
+enum AnalyticsReportFormat { pdf, xlsx, txt }
+enum AnalyticsPdfScheduleDateFilter { today, thisWeek, thisMonth, thisYear, allTime, custom }
 
 class AnalyticsPdfScheduleSettings {
   const AnalyticsPdfScheduleSettings({
     required this.destination,
     required this.enabled,
     required this.reportVariant,
+    required this.fileFormat,
     required this.dateFilter,
     required this.frequency,
     required this.hour,
@@ -120,6 +122,8 @@ class AnalyticsPdfScheduleSettings {
     required this.weekday,
     required this.monthDay,
     required this.timezoneOffsetMinutes,
+    this.customStart,
+    this.customEnd,
     this.nextDueAt,
     this.lastSentAt,
     this.lastError,
@@ -129,6 +133,7 @@ class AnalyticsPdfScheduleSettings {
       : destination = destination,
         enabled = false,
         reportVariant = AnalyticsPdfScheduleReportVariant.summary,
+        fileFormat = AnalyticsReportFormat.pdf,
         dateFilter = AnalyticsPdfScheduleDateFilter.thisMonth,
         frequency = TelegramBackupFrequency.daily,
         hour = destination == AnalyticsPdfScheduleDestination.telegram ? 3 : 4,
@@ -136,6 +141,8 @@ class AnalyticsPdfScheduleSettings {
         weekday = DateTime.sunday,
         monthDay = 1,
         timezoneOffsetMinutes = 0,
+        customStart = null,
+        customEnd = null,
         nextDueAt = null,
         lastSentAt = null,
         lastError = null;
@@ -143,6 +150,7 @@ class AnalyticsPdfScheduleSettings {
   final AnalyticsPdfScheduleDestination destination;
   final bool enabled;
   final AnalyticsPdfScheduleReportVariant reportVariant;
+  final AnalyticsReportFormat fileFormat;
   final AnalyticsPdfScheduleDateFilter dateFilter;
   final TelegramBackupFrequency frequency;
   final int hour;
@@ -150,6 +158,8 @@ class AnalyticsPdfScheduleSettings {
   final int weekday;
   final int monthDay;
   final int timezoneOffsetMinutes;
+  final DateTime? customStart;
+  final DateTime? customEnd;
   final DateTime? nextDueAt;
   final DateTime? lastSentAt;
   final String? lastError;
@@ -157,6 +167,7 @@ class AnalyticsPdfScheduleSettings {
   AnalyticsPdfScheduleSettings copyWith({
     bool? enabled,
     AnalyticsPdfScheduleReportVariant? reportVariant,
+    AnalyticsReportFormat? fileFormat,
     AnalyticsPdfScheduleDateFilter? dateFilter,
     TelegramBackupFrequency? frequency,
     int? hour,
@@ -164,6 +175,9 @@ class AnalyticsPdfScheduleSettings {
     int? weekday,
     int? monthDay,
     int? timezoneOffsetMinutes,
+    DateTime? customStart,
+    DateTime? customEnd,
+    bool clearCustomRange = false,
     DateTime? nextDueAt,
     bool clearNextDueAt = false,
     DateTime? lastSentAt,
@@ -172,6 +186,7 @@ class AnalyticsPdfScheduleSettings {
         destination: destination,
         enabled: enabled ?? this.enabled,
         reportVariant: reportVariant ?? this.reportVariant,
+        fileFormat: fileFormat ?? this.fileFormat,
         dateFilter: dateFilter ?? this.dateFilter,
         frequency: frequency ?? this.frequency,
         hour: hour ?? this.hour,
@@ -179,6 +194,8 @@ class AnalyticsPdfScheduleSettings {
         weekday: weekday ?? this.weekday,
         monthDay: monthDay ?? this.monthDay,
         timezoneOffsetMinutes: timezoneOffsetMinutes ?? this.timezoneOffsetMinutes,
+        customStart: clearCustomRange ? null : (customStart ?? this.customStart),
+        customEnd: clearCustomRange ? null : (customEnd ?? this.customEnd),
         nextDueAt: clearNextDueAt ? null : (nextDueAt ?? this.nextDueAt),
         lastSentAt: lastSentAt ?? this.lastSentAt,
         lastError: lastError ?? this.lastError,
@@ -198,6 +215,12 @@ class AnalyticsPdfScheduleSettings {
       return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
     }
 
+    DateTime? parseDate(dynamic value) {
+      final parsed = DateTime.tryParse(value?.toString() ?? '');
+      if (parsed == null) return null;
+      return DateTime(parsed.year, parsed.month, parsed.day);
+    }
+
     final destination = enumValue(
       AnalyticsPdfScheduleDestination.values,
       data['destination']?.toString() ?? '',
@@ -210,6 +233,11 @@ class AnalyticsPdfScheduleSettings {
         AnalyticsPdfScheduleReportVariant.values,
         data['reportVariant']?.toString() ?? '',
         AnalyticsPdfScheduleReportVariant.summary,
+      ),
+      fileFormat: enumValue(
+        AnalyticsReportFormat.values,
+        data['fileFormat']?.toString() ?? '',
+        AnalyticsReportFormat.pdf,
       ),
       dateFilter: enumValue(
         AnalyticsPdfScheduleDateFilter.values,
@@ -226,6 +254,8 @@ class AnalyticsPdfScheduleSettings {
       weekday: ((data['weekday'] as num?)?.toInt() ?? DateTime.sunday).clamp(DateTime.monday, DateTime.sunday).toInt(),
       monthDay: ((data['monthDay'] as num?)?.toInt() ?? 1).clamp(1, 31).toInt(),
       timezoneOffsetMinutes: ((data['timezoneOffsetMinutes'] as num?)?.toInt() ?? 0).clamp(-840, 840).toInt(),
+      customStart: parseDate(data['customStart']),
+      customEnd: parseDate(data['customEnd']),
       nextDueAt: parseTime(data['nextDueAt']),
       lastSentAt: parseTime(data['lastSentAt']),
       lastError: data['lastError']?.toString(),

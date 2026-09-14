@@ -40,6 +40,7 @@ void main() {
     await pumpSettingsScreen(tester, const ArchiveSettingsScreen());
 
     expect(find.text('Local'), findsOneWidget);
+    expect(find.text('Automatic backup'), findsOneWidget);
     expect(find.text('Cloud'), findsOneWidget);
     expect(find.text('Backup'), findsOneWidget);
     expect(find.text('Automatic local backup'), findsOneWidget);

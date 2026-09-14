@@ -1,3 +1,43 @@
+## [1.0.1142] - 2026-09-14
+
+- Added **PDF**, **XLSX**, and **TXT** as selectable Analytics report formats for both Summary and Transaction history exports.
+- Manual Analytics download, Telegram upload, and Google Drive upload now use the selected report format and correct filename/MIME type.
+- Added a per-destination file-format selector to **Settings > Archive > Cloud Backup** so Telegram and Google Drive schedules can independently generate PDF, XLSX, or TXT reports.
+- Extended the Self-Hosted Sync Worker and Turso schedule schema to persist report format, generate scheduled XLSX/TXT reports, validate manual uploads by format, and default existing schedules safely to PDF.
+- Preserved the existing date filters, custom ranges, schedule cadence, and pairwise five-minute separation across Telegram reports, Google Drive reports, and Telegram `.koinlybackup` uploads.
+- Synchronized application version metadata to `1.0.1142+186`.
+
+## [1.0.1141] - 2026-09-14
+
+- Removed the redundant instructional copy from **Archive > Automatic local backup**, including the folder, retention, encrypted-file, and reopen-to-catch-up explanations.
+- Replaced Android's foreground/resume-only automatic local backup behavior with a native Android WorkManager job so due local backups can be created while the Koinly UI is closed.
+- The background worker reads the current SQLite data and saved backup preferences, writes the same version-7 encrypted `.koinlybackup` format through the persisted Android Storage Access Framework folder grant, applies the existing latest-only/history retention choice, and reports last-backup/error state back to the app.
+- Non-Android automatic local backup behavior remains unchanged.
+- Synchronized application version metadata to `1.0.1141+185`.
+
+## [1.0.1140] - 2026-09-14
+
+- Replaced custom date-range flows with one centered Koinly range popup that reuses the transaction editor's **Use range** interaction: select Start/End inside the same calendar and apply the range once.
+- Applied the centered custom-range picker globally to the main date filter, Analytics, the default date filter in Settings, and automatic Analytics PDF schedules.
+- Replaced the automatic PDF date-filter dropdown with the centered **Choose Date Filter** popup and added **Custom range** alongside Today, This Week, This Month, This Year, and All Time.
+- Added Worker/Turso support for persisted custom start/end dates so scheduled Telegram and Google Drive PDFs use the exact selected custom range.
+- Added a safe schema migration for existing `analytics_pdf_schedules` tables while preserving current schedules and the five-minute automatic-upload separation rule.
+- Synchronized application version metadata to `1.0.1140+184`.
+
+## [1.0.1139] - 2026-09-14
+
+- Reorganized **Settings > Archive** so **Automatic local backup** and **Automatic Telegram backup** now appear together under one **Automatic backup** section.
+- Kept manual **Backup** and **Load backup** together under **Local**, while **Cloud Backup** remains under **Cloud**.
+- No backup behavior, credentials, schedules, or five-minute cloud-upload separation rules were changed.
+- Synchronized application version metadata to `1.0.1139+183`.
+
+## [1.0.1138] - 2026-09-14
+
+- Removed the redundant **Telegram destination** credential/status card from **Archive > Automatic Telegram backup**.
+- Automatic Telegram backup continues to use the Telegram bot credentials configured exclusively in **Settings > Credential**.
+- Kept the existing credential validation, schedule controls, status, manual backup action, and five-minute automatic-upload separation rules unchanged.
+- Synchronized application version metadata to `1.0.1138+182`.
+
 ## [1.0.1137] - 2026-09-14
 
 - Reorganized Settings into **General**, **Data & cloud**, and **App** groups so related controls are easier to locate.

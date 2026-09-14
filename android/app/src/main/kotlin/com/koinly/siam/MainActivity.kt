@@ -101,6 +101,14 @@ class MainActivity: FlutterFragmentActivity() {
                         }
                     }
                 }
+                "syncAutomaticBackup" -> {
+                    try {
+                        AutomaticBackupScheduler.sync(this)
+                        result.success(null)
+                    } catch (error: Exception) {
+                        result.error("automatic_backup_schedule_failed", error.message ?: "Could not schedule automatic backup.", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

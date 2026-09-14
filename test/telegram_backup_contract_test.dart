@@ -15,8 +15,10 @@ void main() {
     expect(app, contains("title: 'Archive'"));
     expect(app, contains("title: 'Automatic Telegram backup'"));
     expect(app, contains('SelfHostedTelegramBackupScreen'));
+    expect(app, isNot(contains("Text('Telegram destination'")));
+    expect(app, isNot(contains("label: const Text('Open Credential')")));
     expect(app, isNot(contains("tooltip: 'Telegram backup'")));
-    expect(app, contains('Automatic Telegram backup, Telegram PDF, and Google Drive PDF times must all be at least 5 minutes apart.'));
+    expect(app, contains('Automatic Telegram backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.'));
     expect(app, contains('Upload backup now'));
     expect(app, contains('TelegramBackupFrequency.daily'));
     expect(app, contains('TelegramBackupFrequency.weekly'));

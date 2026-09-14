@@ -21,8 +21,8 @@ android {
         applicationId = "com.koinly.siam"
         minSdk = 23
         targetSdk = 36
-        versionCode = 181
-        versionName = "1.0.1137"
+        versionCode = 186
+        versionName = "1.0.1142"
         multiDexEnabled true
     }
 
@@ -82,4 +82,5 @@ flutter {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "androidx.core:core-ktx:1.13.1"
+    implementation "androidx.work:work-runtime-ktx:2.10.2"
 }

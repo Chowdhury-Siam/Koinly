@@ -17,6 +17,10 @@ void main() {
     expect(source, contains('timeRangeEnabled'));
     expect(source, contains('dateRangeEnabled'));
     expect(source, contains('endOn: hasEffectiveRange ? selectedEndDate : null'));
+    expect(source, contains('Future<DateTimeRange?> pickCustomDateRange('));
+    expect(source, contains('rangeOnly: true'));
+    expect(source, contains("title = 'Select custom range'"));
+    expect(source, contains("title: 'Custom range'"));
   });
 
   test('new transaction amount uses a focus-aware placeholder instead of a real zero', () {

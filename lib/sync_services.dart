@@ -495,12 +495,22 @@ class KoinlySyncApi {
     required String accessToken,
     required AnalyticsPdfScheduleSettings settings,
   }) async {
+    String? dateOnly(DateTime? value) {
+      if (value == null) return null;
+      final month = value.month.toString().padLeft(2, '0');
+      final day = value.day.toString().padLeft(2, '0');
+      return '${value.year}-$month-$day';
+    }
+
     final data = await _post(
       '/v1/analytics-upload/schedules/${settings.destination.name}',
       {
         'enabled': settings.enabled,
         'reportVariant': settings.reportVariant.name,
+        'fileFormat': settings.fileFormat.name,
         'dateFilter': settings.dateFilter.name,
+        'customStart': dateOnly(settings.customStart),
+        'customEnd': dateOnly(settings.customEnd),
         'frequency': settings.frequency.name,
         'hour': settings.hour,
         'minute': settings.minute,

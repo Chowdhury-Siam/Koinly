@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('settings exposes date-filtered analytics and PDF export', () {
+  test('settings exposes date-filtered analytics and PDF XLSX TXT export', () {
     final main = File('lib/main.dart').readAsStringSync();
     final analytics = File('lib/analytics/analytics.dart').readAsStringSync();
     final pubspec = File('pubspec.yaml').readAsStringSync();
@@ -17,9 +17,13 @@ void main() {
     expect(analytics, contains('DateRangeType.allTime'));
     expect(analytics, contains('class AnalyticsSnapshot'));
     expect(analytics, contains("title: 'Analytics'"));
-    expect(analytics, contains("label: const Text('Download PDF')"));
+    expect(analytics, contains("Text('Download \${reportFormat.label}')"));
     expect(analytics, isNot(contains("label: const Text('Share PDF')")));
+    expect(analytics, contains('buildAnalyticsReport('));
     expect(analytics, contains('AnalyticsPdfService.build'));
+    expect(analytics, contains('AnalyticsReportFormat.xlsx'));
+    expect(analytics, contains('AnalyticsReportFormat.txt'));
+    expect(analytics, contains("Text('File format'"));
     expect(analytics, isNot(contains('shareAnalyticsPdf(')));
     expect(analytics, contains("label: const Text('Upload Telegram')"));
     expect(analytics, contains("label: const Text('Upload Drive')"));
@@ -46,11 +50,17 @@ void main() {
     expect(analytics, isNot(contains("const SectionHeader('Current account snapshot')")));
 
     expect(pubspec, contains('pdf: ^3.13.0'));
-    expect(pubspec, contains('version: 1.0.1137+181'));
+    expect(pubspec, contains('version: 1.0.1142+186'));
     expect(analytics, contains("title: 'Cloud Backup'"));
-    expect(analytics, contains("title: const Text('Automatic PDF upload'"));
-    expect(analytics, contains('must be at least 5 minutes apart'));
+    expect(analytics, contains("title: const Text('Automatic report upload'"));
+    expect(analytics, contains('settings.fileFormat'));
+    expect(analytics, contains('fileFormat: value.first'));
+    expect(analytics, contains('must all be at least 5 minutes apart')); 
     expect(analytics, contains('AnalyticsPdfScheduleDateFilter.allTime'));
+    expect(analytics, contains('AnalyticsPdfScheduleDateFilter.custom'));
+    expect(analytics, contains("title: 'Choose Date Filter'"));
+    expect(analytics, contains('pickCustomDateRange('));
+    expect(analytics, isNot(contains('DropdownButtonFormField<AnalyticsPdfScheduleDateFilter>')));
     expect(analytics, contains('saveAnalyticsPdfSchedule'));
     expect(main, contains('loadAnalyticsPdfSchedules'));
     expect(main, contains('saveAnalyticsPdfSchedule'));

@@ -1980,7 +1980,11 @@ class AppController extends ChangeNotifier {
       _schedulePendingSyncRetry(immediate: true);
       _startCloudAutoPull();
     }
-    unawaited(runAutomaticBackupIfDue());
+    if (Platform.isAndroid) {
+      unawaited(_syncAndroidAutomaticBackupWorker());
+    } else {
+      unawaited(runAutomaticBackupIfDue());
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -2190,7 +2194,8 @@ class AppController extends ChangeNotifier {
     lastAutoBackupPath = await prefs.getString('lastAutoBackupPath', '');
     final autoBackupAtRaw = await prefs.getString('lastAutoBackupAt', '');
     lastAutoBackupAt = autoBackupAtRaw.isEmpty ? null : DateTime.tryParse(autoBackupAtRaw);
-    autoBackupError = null;
+    final backgroundBackupError = await prefs.getString('autoBackupBackgroundError', '');
+    autoBackupError = backgroundBackupError.trim().isEmpty ? null : backgroundBackupError.trim();
     if (Platform.isAndroid && autoBackupDirectoryUri.trim().isEmpty && autoBackupDirectoryPath.trim().isNotEmpty) {
       // Raw /storage/... paths are not writable under Android scoped storage.
       // Keep automatic backup enabled, but require the user to re-select the
@@ -2315,7 +2320,10 @@ class AppController extends ChangeNotifier {
   void _scheduleAutomaticBackupTimer() {
     _autoBackupTimer?.cancel();
     _autoBackupTimer = null;
-    if (!autoBackupEnabled || loading) return;
+    // Android uses a native WorkManager job so automatic local backups keep
+    // running after the Flutter process is closed. Other platforms retain the
+    // in-process timer while Koinly is running.
+    if (Platform.isAndroid || !autoBackupEnabled || loading) return;
     final now = DateTime.now();
     final next = _nextAutoBackupSlot(now);
     var delay = next.difference(now);
@@ -2323,6 +2331,33 @@ class AppController extends ChangeNotifier {
     _autoBackupTimer = Timer(delay + const Duration(seconds: 1), () {
       unawaited(runAutomaticBackupIfDue());
     });
+  }
+
+  Future<void> _syncAndroidAutomaticBackupWorker() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await AndroidSafBackupStore.syncAutomaticBackgroundBackup();
+    } catch (error) {
+      final text = error is PlatformException ? (error.message ?? error.code) : error.toString();
+      autoBackupError = text
+          .replaceFirst('PlatformException: ', '')
+          .replaceFirst('Bad state: ', '')
+          .trim();
+      await prefs.setString('autoBackupBackgroundError', autoBackupError ?? '');
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshAutomaticBackupState() async {
+    if (!Platform.isAndroid) return;
+    final shared = await prefs.prefs;
+    await shared.reload();
+    lastAutoBackupPath = shared.getString('lastAutoBackupPath') ?? '';
+    final rawAt = shared.getString('lastAutoBackupAt') ?? '';
+    lastAutoBackupAt = rawAt.isEmpty ? null : DateTime.tryParse(rawAt);
+    final rawError = shared.getString('autoBackupBackgroundError') ?? '';
+    autoBackupError = rawError.trim().isEmpty ? null : rawError.trim();
+    notifyListeners();
   }
 
   Future<String?> runAutomaticBackupIfDue({bool force = false}) async {
@@ -2345,6 +2380,7 @@ class AppController extends ChangeNotifier {
       autoBackupError = null;
       await prefs.setString('lastAutoBackupPath', lastAutoBackupPath);
       await prefs.setString('lastAutoBackupAt', lastAutoBackupAt!.toIso8601String());
+      await prefs.setString('autoBackupBackgroundError', '');
       notifyListeners();
       return location;
     } catch (error) {
@@ -2353,6 +2389,7 @@ class AppController extends ChangeNotifier {
           .replaceFirst('FileSystemException: ', '')
           .replaceFirst('Bad state: ', '')
           .trim();
+      await prefs.setString('autoBackupBackgroundError', autoBackupError ?? '');
       notifyListeners();
       return null;
     } finally {
@@ -2400,7 +2437,15 @@ class AppController extends ChangeNotifier {
     await prefs.setString('autoBackupDirectoryPath', autoBackupDirectoryPath);
     await prefs.setString('autoBackupDirectoryUri', autoBackupDirectoryUri);
     await prefs.setString('autoBackupDirectoryLabel', autoBackupDirectoryLabel);
+    await prefs.setString('autoBackupBackgroundError', '');
     notifyListeners();
+    if (Platform.isAndroid) {
+      if (autoBackupEnabled && shouldSeedBackup) {
+        await runAutomaticBackupIfDue(force: true);
+      }
+      await _syncAndroidAutomaticBackupWorker();
+      return;
+    }
     if (autoBackupEnabled) {
       await runAutomaticBackupIfDue(force: shouldSeedBackup);
     } else {
@@ -4984,7 +5029,14 @@ class AppController extends ChangeNotifier {
       case DateRangeType.allTime:
         return const DateRange(null, null, 'All time');
       case DateRangeType.custom:
-        return DateRange(customStart, customEnd?.add(const Duration(days: 1)), 'Custom');
+        final start = customStart;
+        final end = customEnd ?? start;
+        final label = start == null
+            ? 'Custom range'
+            : end == null || DateUtils.isSameDay(start, end)
+                ? DateFormat('MMM d, yyyy').format(start)
+                : '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+        return DateRange(start, end?.add(const Duration(days: 1)), label);
     }
   }
 
@@ -5078,6 +5130,11 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> setDateRange(DateRangeType type, {DateTime? start, DateTime? end}) async {
+    if (type == DateRangeType.custom && start != null && end != null && end.isBefore(start)) {
+      final swap = start;
+      start = end;
+      end = swap;
+    }
     dateRangeType = type;
     customStart = start;
     customEnd = end;
@@ -5941,7 +5998,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
       unawaited(controller.resumePendingAndroidInstallIfAllowed());
       unawaited(controller.syncCloudChangesIfIdle(force: true));
       unawaited(controller.refreshLoanReminders());
-      unawaited(controller.runAutomaticBackupIfDue());
+      if (Platform.isAndroid) {
+        unawaited(controller.refreshAutomaticBackupState());
+      } else {
+        unawaited(controller.runAutomaticBackupIfDue());
+      }
       unawaited(controller.processDueSubscriptions());
       _scheduleAutomaticUpdateCheck();
     }
@@ -7419,6 +7480,40 @@ Future<TransactionDateSelection?> pickTransactionDateSelection(
   );
 }
 
+/// Global custom-range picker used by every Koinly date filter.
+///
+/// It deliberately reuses the same centered start/end calendar interaction as
+/// the transaction editor's `Use range` mode so custom ranges behave
+/// consistently throughout the app instead of opening two native date dialogs.
+Future<DateTimeRange?> pickCustomDateRange(
+  BuildContext context, {
+  DateTime? start,
+  DateTime? end,
+  String title = 'Select custom range',
+}) async {
+  final today = DateTime.now();
+  final initialStartRaw = start ?? today;
+  final initialStart = DateTime(initialStartRaw.year, initialStartRaw.month, initialStartRaw.day);
+  final initialEndRaw = end ?? initialStart;
+  final normalizedEnd = DateTime(initialEndRaw.year, initialEndRaw.month, initialEndRaw.day);
+  final initialEnd = normalizedEnd.isBefore(initialStart) ? initialStart : normalizedEnd;
+  final selection = await showKoinlyPopup<TransactionDateSelection>(
+    context,
+    maxWidth: 470,
+    maxHeight: 700,
+    child: _CenteredDateRangePicker(
+      initialRange: DateTimeRange(start: initialStart, end: initialEnd),
+      initialUseRange: true,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      rangeOnly: true,
+      title: title,
+    ),
+  );
+  if (selection == null) return null;
+  return DateTimeRange(start: selection.start, end: selection.end);
+}
+
 enum _RangeEndpoint { start, end }
 
 class _CenteredDateRangePicker extends StatefulWidget {
@@ -7427,12 +7522,16 @@ class _CenteredDateRangePicker extends StatefulWidget {
     required this.initialUseRange,
     required this.firstDate,
     required this.lastDate,
+    this.rangeOnly = false,
+    this.title,
   });
 
   final DateTimeRange initialRange;
   final bool initialUseRange;
   final DateTime firstDate;
   final DateTime lastDate;
+  final bool rangeOnly;
+  final String? title;
 
   @override
   State<_CenteredDateRangePicker> createState() => _CenteredDateRangePickerState();
@@ -7449,14 +7548,14 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
     super.initState();
     _start = widget.initialRange.start;
     _end = widget.initialRange.end;
-    _useRange = widget.initialUseRange;
+    _useRange = widget.rangeOnly || widget.initialUseRange;
     if (!_useRange) _end = _start;
   }
 
   DateTime get _activeDate => _activeEndpoint == _RangeEndpoint.start ? _start : _end;
 
   void _setRangeMode(bool value) {
-    if (_useRange == value) return;
+    if (widget.rangeOnly || _useRange == value) return;
     setState(() {
       _useRange = value;
       _activeEndpoint = _RangeEndpoint.start;
@@ -7521,7 +7620,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
               const SizedBox(width: 44),
               Expanded(
                 child: Text(
-                  _useRange ? 'Select transaction date range' : 'Select transaction date',
+                  widget.title ?? (_useRange ? 'Select transaction date range' : 'Select transaction date'),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
@@ -7546,15 +7645,24 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
                 style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 16),
-              SleekPillSelector<bool>(
-                options: const [
-                  SleekPillOption(value: false, label: 'Single date', icon: Icons.calendar_today_rounded),
-                  SleekPillOption(value: true, label: 'Use range', icon: Icons.date_range_rounded),
-                ],
-                selected: _useRange,
-                onChanged: _setRangeMode,
-              ),
-              const SizedBox(height: 14),
+              if (!widget.rangeOnly) ...[
+                SleekPillSelector<bool>(
+                  options: const [
+                    SleekPillOption(value: false, label: 'Single date', icon: Icons.calendar_today_rounded),
+                    SleekPillOption(value: true, label: 'Use range', icon: Icons.date_range_rounded),
+                  ],
+                  selected: _useRange,
+                  onChanged: _setRangeMode,
+                ),
+                const SizedBox(height: 14),
+              ] else ...[
+                Text(
+                  'Choose the start date, then the end date.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 14),
+              ],
               if (_useRange)
                 Row(
                   children: [
@@ -13413,10 +13521,13 @@ Future<void> showDateRangeSheet(BuildContext context) async {
   );
 
   if (selected == DateRangeType.custom) {
-    final start = await pickDate(context, state.customStart ?? DateTime.now());
-    if (!context.mounted || start == null) return;
-    final end = await pickDate(context, state.customEnd ?? start);
-    await state.setDateRange(selected, start: start, end: end ?? start);
+    final range = await pickCustomDateRange(
+      context,
+      start: state.customStart,
+      end: state.customEnd,
+    );
+    if (!context.mounted || range == null) return;
+    await state.setDateRange(selected, start: range.start, end: range.end);
     return;
   }
 
@@ -13468,7 +13579,7 @@ SelectionOption optionFromDateRangeType(DateRangeType type) {
     case DateRangeType.custom:
       return const SelectionOption(
         id: 'custom',
-        title: 'Custom',
+        title: 'Custom range',
         subtitle: 'Choose start and end date',
         iconName: 'custom_range',
         iconColor: '#FFB5D0',
@@ -16100,8 +16211,8 @@ class SettingsScreen extends StatelessWidget {
             const SectionHeader('Data & cloud'),
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             SettingsTile(icon: Icons.key_rounded, title: 'Credential', subtitle: 'Telegram bot and Google Drive', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()))),
-            SettingsTile(icon: Icons.inventory_2_rounded, title: 'Archive', subtitle: 'Local backup, Telegram backup, and cloud PDF schedules', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchiveSettingsScreen()))),
-            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered summaries and PDF reports', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+            SettingsTile(icon: Icons.inventory_2_rounded, title: 'Archive', subtitle: 'Local backup, Telegram backup, and cloud report schedules', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchiveSettingsScreen()))),
+            SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered reports in PDF, XLSX, or TXT', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
             const SectionHeader('App'),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, account order, and data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
@@ -17311,40 +17422,6 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(children: [
-                    iconBubble(context, 'send', '#86E3CE', size: 48),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('Telegram destination', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 2),
-                        Text(
-                          _credentialsReady ? 'Credentials ready • ${_settings.chatId}' : 'Not configured',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                        ),
-                      ]),
-                    ),
-                    Icon(_credentialsReady ? Icons.check_circle_rounded : Icons.key_rounded, color: _credentialsReady ? kSleekAccent : kSleekMuted),
-                  ]),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            await Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()));
-                            if (mounted) await _load();
-                          },
-                    icon: const Icon(Icons.key_rounded),
-                    label: const Text('Open Credential'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            ExpressiveCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
                     value: _settings.enabled,
@@ -17387,7 +17464,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Automatic Telegram backup, Telegram PDF, and Google Drive PDF times must all be at least 5 minutes apart.',
+                    'Automatic Telegram backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
@@ -18475,7 +18552,7 @@ String _dateRangeLabel(DateRangeType type) {
     case DateRangeType.thisMonth: return 'This Month';
     case DateRangeType.thisYear: return 'This Year';
     case DateRangeType.allTime: return 'All Time';
-    case DateRangeType.custom: return 'Custom';
+    case DateRangeType.custom: return 'Custom range';
   }
 }
 
@@ -19259,7 +19336,6 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
             value: enabled,
             onChanged: saving ? null : (value) => setState(() => enabled = value),
             title: const Text('Back up automatically', style: TextStyle(fontWeight: FontWeight.w900)),
-            subtitle: const Text('Creates encrypted .koinlybackup files on this device.'),
           ),
           const SectionHeader('When to back up'),
           SleekPillSelector<AutoBackupFrequency>(
@@ -19319,9 +19395,6 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
               value: deleteOlderBackups,
               onChanged: saving ? null : (value) => setState(() => deleteOlderBackups = value),
               title: const Text('Delete older automatic backups', style: TextStyle(fontWeight: FontWeight.w900)),
-              subtitle: const Text(
-                'When on, Koinly deletes previous automatic backups after a new one is saved, so only the latest automatic backup remains. Turn it off to keep backup history.',
-              ),
             ),
           ),
           const SectionHeader('Where to back up'),
@@ -19351,13 +19424,6 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
                   icon: const Icon(Icons.drive_folder_upload_rounded),
                   label: const Text('Choose folder'),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  Platform.isAndroid
-                      ? 'Choose a parent location once. Koinly creates and uses Koinly/Backup there, with persistent Android folder access for scheduled backups.'
-                      : 'Choose a parent location. Koinly creates and uses a Koinly/Backup folder there.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-                ),
               ],
             ),
           ),
@@ -19380,11 +19446,6 @@ class _AutomaticBackupSheetState extends State<_AutomaticBackupSheet> {
               style: const TextStyle(color: kSleekExpense, fontWeight: FontWeight.w800),
             ),
           ],
-          const SizedBox(height: 10),
-          Text(
-            'If Koinly is closed at the scheduled time, the missed backup is created the next time the app opens or resumes.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
-          ),
           const SizedBox(height: 18),
           Row(
             children: [
@@ -19429,20 +19490,20 @@ class ArchiveSettingsScreen extends StatelessWidget {
             onTap: () => runBackupFlow(context, state),
           ),
           SettingsTile(
-            icon: Icons.history_toggle_off_rounded,
-            title: 'Automatic local backup',
-            subtitle: state.automaticBackupSettingsSummary,
-            color: '#7FE7D4',
-            onTap: () => showAutomaticBackupSheet(context),
-          ),
-          SettingsTile(
             icon: Icons.file_open_rounded,
             title: 'Load backup',
             subtitle: 'Pick a backup file and merge it with this device',
             color: '#B4A5FF',
             onTap: () => runLoadBackupFlow(context, state),
           ),
-          const SectionHeader('Cloud'),
+          const SectionHeader('Automatic backup'),
+          SettingsTile(
+            icon: Icons.history_toggle_off_rounded,
+            title: 'Automatic local backup',
+            subtitle: state.automaticBackupSettingsSummary,
+            color: '#7FE7D4',
+            onTap: () => showAutomaticBackupSheet(context),
+          ),
           SettingsTile(
             icon: Icons.send_rounded,
             title: 'Automatic Telegram backup',
@@ -19453,10 +19514,11 @@ class ArchiveSettingsScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => signedIn ? const SelfHostedTelegramBackupScreen() : const MultiDeviceSyncScreen()),
             ),
           ),
+          const SectionHeader('Cloud'),
           SettingsTile(
             icon: Icons.cloud_upload_rounded,
             title: 'Cloud Backup',
-            subtitle: 'Schedule Analytics PDFs for Telegram and Google Drive',
+            subtitle: 'Schedule Analytics reports for Telegram and Google Drive',
             color: '#9AD0F5',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CloudBackupScreen())),
           ),

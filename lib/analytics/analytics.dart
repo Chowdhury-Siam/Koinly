@@ -21,7 +21,7 @@ extension AnalyticsDateFilterLabel on DateRangeType {
         DateRangeType.thisMonth => 'This Month',
         DateRangeType.thisYear => 'This Year',
         DateRangeType.allTime => 'All Time',
-        DateRangeType.custom => 'Custom',
+        DateRangeType.custom => 'Custom Range',
       };
 }
 
@@ -654,25 +654,460 @@ class AnalyticsPdfService {
   }
 }
 
-Future<String?> downloadAnalyticsPdf(
+
+extension AnalyticsReportFormatPresentation on AnalyticsReportFormat {
+  String get label => switch (this) {
+        AnalyticsReportFormat.pdf => 'PDF',
+        AnalyticsReportFormat.xlsx => 'XLSX',
+        AnalyticsReportFormat.txt => 'TXT',
+      };
+
+  String get extension => name;
+
+  String get mimeType => switch (this) {
+        AnalyticsReportFormat.pdf => 'application/pdf',
+        AnalyticsReportFormat.xlsx => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        AnalyticsReportFormat.txt => 'text/plain',
+      };
+}
+
+String analyticsReportFileName(
+  AnalyticsSnapshot snapshot, {
+  AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary,
+  AnalyticsReportFormat format = AnalyticsReportFormat.pdf,
+}) {
+  final stamp = _analyticsPdfDateStamp(snapshot);
+  final base = variant == AnalyticsPdfVariant.transactionHistory
+      ? 'Koinly-Transaction-History-$stamp'
+      : 'Koinly-Analytics-${snapshot.dateFilter.name}-$stamp';
+  return '$base.${format.extension}';
+}
+
+String _analyticsReportMoney(AppController state, double value) {
+  final formatter = NumberFormat('#,##0.##');
+  final sign = value < 0 ? '-' : '';
+  return '$sign${state.currencyCode} ${formatter.format(value.abs())}';
+}
+
+String _analyticsTransactionTitle(AppController state, MoneyTransaction tx) {
+  final savedTitle = tx.title.trim();
+  if (tx.type == MoneyTransactionType.transfer) {
+    final from = state.accountOf(tx.fromAccountId)?.name ?? 'Unknown account';
+    final to = tx.toAccountId == null ? 'Unknown account' : (state.accountOf(tx.toAccountId!)?.name ?? 'Unknown account');
+    return '$from -> $to';
+  }
+  if (savedTitle.isNotEmpty) return savedTitle;
+  return state.categoryOf(tx.categoryId)?.name ?? 'Uncategorized';
+}
+
+List<MoneyTransaction> _analyticsReportTransactions(AnalyticsSnapshot snapshot) =>
+    List<MoneyTransaction>.of(snapshot.transactions)..sort((a, b) => b.listOn.compareTo(a.listOn));
+
+Uint8List _analyticsTextReport(AppController state, AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant) {
+  final lines = <String>[];
+  final generated = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+  if (variant == AnalyticsPdfVariant.transactionHistory) {
+    final transactions = _analyticsReportTransactions(snapshot);
+    final income = transactions.where((tx) => tx.countsAsIncome).fold<double>(0, (sum, tx) => sum + tx.amount);
+    final expense = transactions.where((tx) => tx.countsAsExpense).fold<double>(0, (sum, tx) => sum + tx.amount);
+    final transfers = transactions.where((tx) => tx.type == MoneyTransactionType.transfer).toList(growable: false);
+    final transferVolume = transfers.fold<double>(0, (sum, tx) => sum + tx.amount);
+    lines
+      ..add('Koinly Transaction History')
+      ..add('${snapshot.filterLabel} | ${snapshot.range.label}')
+      ..add('Generated $generated | App version $appVersion')
+      ..add('')
+      ..add('Transactions: ${transactions.length}')
+      ..add('Income: ${_analyticsReportMoney(state, income)}')
+      ..add('Expense: ${_analyticsReportMoney(state, expense)}')
+      ..add('Net cash flow: ${_analyticsReportMoney(state, income - expense)}')
+      ..add('Transfers: ${transfers.length} (${_analyticsReportMoney(state, transferVolume)})')
+      ..add('');
+    if (transactions.isEmpty) {
+      lines.add('No transactions match the selected date filter.');
+    } else {
+      for (final tx in transactions) {
+        final start = DateFormat('yyyy-MM-dd HH:mm').format(tx.createdOn);
+        final end = DateFormat('yyyy-MM-dd HH:mm').format(tx.effectiveEndOn);
+        final category = state.categoryOf(tx.categoryId)?.name ?? 'Uncategorized';
+        final from = state.accountOf(tx.fromAccountId)?.name ?? 'Unknown account';
+        final to = tx.toAccountId == null ? '' : (state.accountOf(tx.toAccountId!)?.name ?? 'Unknown account');
+        final signedAmount = switch (tx.type) {
+          MoneyTransactionType.income => tx.amount,
+          MoneyTransactionType.expense => -tx.amount,
+          MoneyTransactionType.transfer => tx.amount,
+        };
+        lines
+          ..add('Start: $start${tx.effectiveEndOn == tx.createdOn ? '' : ' | End: $end'}')
+          ..add('Type: ${tx.displayType} | Amount: ${_analyticsReportMoney(state, signedAmount)}')
+          ..add('Title: ${_analyticsTransactionTitle(state, tx)}')
+          ..add('Category: $category | From: $from${to.isEmpty ? '' : ' | To: $to'}${tx.excludeFromReports ? ' | Excluded from reports' : ''}');
+        if (tx.notes.trim().isNotEmpty) lines.add('Notes: ${tx.notes.trim()}');
+        lines.add('');
+      }
+    }
+  } else {
+    lines
+      ..add('Koinly Analytics')
+      ..add('${snapshot.filterLabel} summary | ${snapshot.range.label}')
+      ..add('Generated $generated | App version $appVersion')
+      ..add('')
+      ..add('Income: ${_analyticsReportMoney(state, snapshot.income)}')
+      ..add('Expense: ${_analyticsReportMoney(state, snapshot.expense)}')
+      ..add('Net cash flow: ${_analyticsReportMoney(state, snapshot.net)}')
+      ..add('Transactions: ${snapshot.transactionCount}')
+      ..add('Average income / day: ${_analyticsReportMoney(state, snapshot.averageIncomePerDay)}')
+      ..add('Average expense / day: ${_analyticsReportMoney(state, snapshot.averageExpensePerDay)}');
+    if (snapshot.compareWithPrevious) {
+      lines
+        ..add('')
+        ..add('Compared with previous period')
+        ..add('Income: ${_analyticsComparisonLabel(snapshot.income, snapshot.previousIncome)}')
+        ..add('Expense: ${_analyticsComparisonLabel(snapshot.expense, snapshot.previousExpense)}')
+        ..add('Net cash flow: ${_analyticsComparisonLabel(snapshot.net, snapshot.previousNet)}');
+    }
+    lines
+      ..add('')
+      ..add('Activity')
+      ..add('Income transactions: ${snapshot.incomeCount}')
+      ..add('Expense transactions: ${snapshot.expenseCount}')
+      ..add('Transfers: ${snapshot.transferCount} (${_analyticsReportMoney(state, snapshot.transferVolume)})')
+      ..add('Savings in: ${_analyticsReportMoney(state, snapshot.savingsIn)}')
+      ..add('Savings out: ${_analyticsReportMoney(state, snapshot.savingsOut)}')
+      ..add('Loan records started: ${snapshot.newLoanCount}')
+      ..add('Repayments: ${snapshot.repaymentCount} (${_analyticsReportMoney(state, snapshot.repaymentTotal)})');
+    if (snapshot.budgetCount > 0) {
+      lines
+        ..add('Relevant budgets: ${snapshot.budgetCount}')
+        ..add('Budget spend: ${_analyticsReportMoney(state, snapshot.budgetSpent)} of ${_analyticsReportMoney(state, snapshot.budgetLimit)}');
+    }
+    void appendCategories(String title, List<AnalyticsCategoryItem> items) {
+      lines
+        ..add('')
+        ..add(title);
+      if (items.isEmpty) {
+        lines.add('No activity in this period.');
+      } else {
+        for (final item in items.take(8)) {
+          lines.add('${item.name} | ${(item.share * 100).toStringAsFixed(1)}% | ${_analyticsReportMoney(state, item.amount)}');
+        }
+      }
+    }
+    appendCategories('Top expense categories', snapshot.expenseCategories);
+    appendCategories('Top income categories', snapshot.incomeCategories);
+    lines
+      ..add('')
+      ..add('Current account balances')
+      ..add('Account balances are a current snapshot, not historical balances for the selected period.');
+    for (final account in state.accounts) {
+      lines.add('${account.name}: ${_analyticsReportMoney(state, account.amount)}');
+    }
+  }
+  return Uint8List.fromList(utf8.encode('${lines.join('\n')}\n'));
+}
+
+class _AnalyticsXlsxSheet {
+  const _AnalyticsXlsxSheet(this.name, this.rows, {this.headerRows = const <int>{}});
+  final String name;
+  final List<List<Object?>> rows;
+  final Set<int> headerRows;
+}
+
+String _xlsxXmlEscape(String value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+
+String _xlsxColumnName(int index) {
+  var value = index + 1;
+  final chars = <int>[];
+  while (value > 0) {
+    value -= 1;
+    chars.add(65 + value % 26);
+    value ~/= 26;
+  }
+  return String.fromCharCodes(chars.reversed);
+}
+
+String _xlsxCellXml(Object? value, int row, int column, {bool bold = false}) {
+  final ref = '${_xlsxColumnName(column)}$row';
+  final style = bold ? ' s="1"' : '';
+  if (value is num && value.isFinite) return '<c r="$ref"$style><v>$value</v></c>';
+  if (value is bool) return '<c r="$ref"$style t="b"><v>${value ? 1 : 0}</v></c>';
+  final text = _xlsxXmlEscape(value?.toString() ?? '');
+  return '<c r="$ref"$style t="inlineStr"><is><t xml:space="preserve">$text</t></is></c>';
+}
+
+int _zipCrc32(Uint8List data) {
+  var crc = 0xffffffff;
+  for (final byte in data) {
+    crc ^= byte;
+    for (var bit = 0; bit < 8; bit++) {
+      crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xedb88320 : crc >> 1;
+    }
+  }
+  return (crc ^ 0xffffffff) & 0xffffffff;
+}
+
+void _writeUint16(BytesBuilder target, int value) {
+  final data = ByteData(2)..setUint16(0, value, Endian.little);
+  target.add(data.buffer.asUint8List());
+}
+
+void _writeUint32(BytesBuilder target, int value) {
+  final data = ByteData(4)..setUint32(0, value, Endian.little);
+  target.add(data.buffer.asUint8List());
+}
+
+Uint8List _zipStored(Map<String, Uint8List> entries) {
+  final output = BytesBuilder(copy: false);
+  final central = BytesBuilder(copy: false);
+  var offset = 0;
+  for (final entry in entries.entries) {
+    final name = Uint8List.fromList(utf8.encode(entry.key));
+    final data = entry.value;
+    final crc = _zipCrc32(data);
+    final local = BytesBuilder(copy: false);
+    _writeUint32(local, 0x04034b50);
+    _writeUint16(local, 20);
+    _writeUint16(local, 0x0800);
+    _writeUint16(local, 0);
+    _writeUint16(local, 0);
+    _writeUint16(local, 0);
+    _writeUint32(local, crc);
+    _writeUint32(local, data.length);
+    _writeUint32(local, data.length);
+    _writeUint16(local, name.length);
+    _writeUint16(local, 0);
+    local.add(name);
+    final localBytes = local.takeBytes();
+    output
+      ..add(localBytes)
+      ..add(data);
+
+    _writeUint32(central, 0x02014b50);
+    _writeUint16(central, 20);
+    _writeUint16(central, 20);
+    _writeUint16(central, 0x0800);
+    _writeUint16(central, 0);
+    _writeUint16(central, 0);
+    _writeUint16(central, 0);
+    _writeUint32(central, crc);
+    _writeUint32(central, data.length);
+    _writeUint32(central, data.length);
+    _writeUint16(central, name.length);
+    _writeUint16(central, 0);
+    _writeUint16(central, 0);
+    _writeUint16(central, 0);
+    _writeUint16(central, 0);
+    _writeUint32(central, 0);
+    _writeUint32(central, offset);
+    central.add(name);
+    offset += localBytes.length + data.length;
+  }
+  final centralBytes = central.takeBytes();
+  output.add(centralBytes);
+  _writeUint32(output, 0x06054b50);
+  _writeUint16(output, 0);
+  _writeUint16(output, 0);
+  _writeUint16(output, entries.length);
+  _writeUint16(output, entries.length);
+  _writeUint32(output, centralBytes.length);
+  _writeUint32(output, offset);
+  _writeUint16(output, 0);
+  return output.takeBytes();
+}
+
+Uint8List _buildAnalyticsXlsx(List<_AnalyticsXlsxSheet> sheets) {
+  String safeSheetName(String value) {
+    final clean = value.replaceAll(RegExp(r'[\\/:*?\[\]]'), ' ').trim();
+    final fallback = clean.isEmpty ? 'Sheet' : clean;
+    return fallback.substring(0, math.min(31, fallback.length));
+  }
+
+  final normalized = <_AnalyticsXlsxSheet>[];
+  final used = <String>{};
+  for (var i = 0; i < sheets.length; i++) {
+    final name = safeSheetName(sheets[i].name);
+    var candidate = name;
+    var suffix = 2;
+    while (used.contains(candidate.toLowerCase())) {
+      final tail = ' $suffix';
+      candidate = '${name.substring(0, math.min(name.length, 31 - tail.length))}$tail';
+      suffix += 1;
+    }
+    used.add(candidate.toLowerCase());
+    normalized.add(_AnalyticsXlsxSheet(candidate, sheets[i].rows, headerRows: sheets[i].headerRows));
+  }
+
+  final workbookSheets = StringBuffer();
+  final workbookRels = StringBuffer();
+  final contentTypes = StringBuffer()
+    ..write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>')
+    ..write('<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">')
+    ..write('<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>')
+    ..write('<Default Extension="xml" ContentType="application/xml"/>')
+    ..write('<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>')
+    ..write('<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>');
+  final entries = <String, Uint8List>{};
+  for (var i = 0; i < normalized.length; i++) {
+    final sheet = normalized[i];
+    final id = i + 1;
+    workbookSheets.write('<sheet name="${_xlsxXmlEscape(sheet.name)}" sheetId="$id" r:id="rId$id"/>');
+    workbookRels.write('<Relationship Id="rId$id" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet$id.xml"/>');
+    contentTypes.write('<Override PartName="/xl/worksheets/sheet$id.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>');
+    final body = StringBuffer('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>');
+    for (var rowIndex = 0; rowIndex < sheet.rows.length; rowIndex++) {
+      final rowNumber = rowIndex + 1;
+      body.write('<row r="$rowNumber">');
+      final row = sheet.rows[rowIndex];
+      for (var column = 0; column < row.length; column++) {
+        body.write(_xlsxCellXml(row[column], rowNumber, column, bold: sheet.headerRows.contains(rowIndex)));
+      }
+      body.write('</row>');
+    }
+    body.write('</sheetData></worksheet>');
+    entries['xl/worksheets/sheet$id.xml'] = Uint8List.fromList(utf8.encode(body.toString()));
+  }
+  contentTypes.write('</Types>');
+  workbookRels.write('<Relationship Id="rId${normalized.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>');
+  entries['[Content_Types].xml'] = Uint8List.fromList(utf8.encode(contentTypes.toString()));
+  entries['_rels/.rels'] = Uint8List.fromList(utf8.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'));
+  entries['xl/workbook.xml'] = Uint8List.fromList(utf8.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>$workbookSheets</sheets></workbook>'));
+  entries['xl/_rels/workbook.xml.rels'] = Uint8List.fromList(utf8.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">$workbookRels</Relationships>'));
+  entries['xl/styles.xml'] = Uint8List.fromList(utf8.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><sz val="11"/><name val="Aptos"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'));
+  return _zipStored(entries);
+}
+
+Uint8List _analyticsXlsxReport(AppController state, AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant) {
+  final generated = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+  if (variant == AnalyticsPdfVariant.transactionHistory) {
+    final transactions = _analyticsReportTransactions(snapshot);
+    final rows = <List<Object?>>[
+      ['Koinly Transaction History'],
+      ['Date filter', snapshot.filterLabel],
+      ['Range', snapshot.range.label],
+      ['Generated', generated],
+      ['App version', appVersion],
+      [],
+      ['Start', 'End', 'Type', 'Amount', 'Currency', 'Title', 'Category', 'From account', 'To account', 'Notes', 'Excluded from reports'],
+    ];
+    for (final tx in transactions) {
+      final amount = switch (tx.type) {
+        MoneyTransactionType.income => tx.amount,
+        MoneyTransactionType.expense => -tx.amount,
+        MoneyTransactionType.transfer => tx.amount,
+      };
+      rows.add([
+        DateFormat('yyyy-MM-dd HH:mm').format(tx.createdOn),
+        DateFormat('yyyy-MM-dd HH:mm').format(tx.effectiveEndOn),
+        tx.displayType,
+        amount,
+        state.currencyCode,
+        _analyticsTransactionTitle(state, tx),
+        state.categoryOf(tx.categoryId)?.name ?? 'Uncategorized',
+        state.accountOf(tx.fromAccountId)?.name ?? 'Unknown account',
+        tx.toAccountId == null ? '' : (state.accountOf(tx.toAccountId!)?.name ?? 'Unknown account'),
+        tx.notes.trim(),
+        tx.excludeFromReports,
+      ]);
+    }
+    return _buildAnalyticsXlsx([_AnalyticsXlsxSheet('Transactions', rows, headerRows: const {0, 6})]);
+  }
+
+  final summaryRows = <List<Object?>>[
+    ['Koinly Analytics'],
+    ['Date filter', snapshot.filterLabel],
+    ['Range', snapshot.range.label],
+    ['Generated', generated],
+    ['App version', appVersion],
+    ['Currency', state.currencyCode],
+    [],
+    ['Metric', 'Value'],
+    ['Income', snapshot.income],
+    ['Expense', snapshot.expense],
+    ['Net cash flow', snapshot.net],
+    ['Transactions', snapshot.transactionCount],
+    ['Average income / day', snapshot.averageIncomePerDay],
+    ['Average expense / day', snapshot.averageExpensePerDay],
+    [],
+    ['Activity', 'Value'],
+    ['Income transactions', snapshot.incomeCount],
+    ['Expense transactions', snapshot.expenseCount],
+    ['Transfers', snapshot.transferCount],
+    ['Transfer volume', snapshot.transferVolume],
+    ['Savings in', snapshot.savingsIn],
+    ['Savings out', snapshot.savingsOut],
+    ['Loan records started', snapshot.newLoanCount],
+    ['Repayments', snapshot.repaymentCount],
+    ['Repayment total', snapshot.repaymentTotal],
+    ['Relevant budgets', snapshot.budgetCount],
+    ['Budget limit', snapshot.budgetLimit],
+    ['Budget spent', snapshot.budgetSpent],
+  ];
+  final headerRows = <int>{0, 7, 15};
+  if (snapshot.compareWithPrevious) {
+    final comparisonHeader = summaryRows.length + 1;
+    summaryRows.addAll([
+      [],
+      ['Compared with previous period', 'Change'],
+      ['Income', _analyticsComparisonLabel(snapshot.income, snapshot.previousIncome)],
+      ['Expense', _analyticsComparisonLabel(snapshot.expense, snapshot.previousExpense)],
+      ['Net cash flow', _analyticsComparisonLabel(snapshot.net, snapshot.previousNet)],
+    ]);
+    headerRows.add(comparisonHeader);
+  }
+  final expenseRows = <List<Object?>>[['Category', 'Amount', 'Share %']];
+  expenseRows.addAll(snapshot.expenseCategories.map((item) => [item.name, item.amount, item.share * 100]));
+  final incomeRows = <List<Object?>>[['Category', 'Amount', 'Share %']];
+  incomeRows.addAll(snapshot.incomeCategories.map((item) => [item.name, item.amount, item.share * 100]));
+  final accountRows = <List<Object?>>[['Account', 'Balance', 'Currency']];
+  accountRows.addAll(state.accounts.map((account) => [account.name, account.amount, state.currencyCode]));
+  return _buildAnalyticsXlsx([
+    _AnalyticsXlsxSheet('Summary', summaryRows, headerRows: headerRows),
+    _AnalyticsXlsxSheet('Expense categories', expenseRows, headerRows: const {0}),
+    _AnalyticsXlsxSheet('Income categories', incomeRows, headerRows: const {0}),
+    _AnalyticsXlsxSheet('Accounts', accountRows, headerRows: const {0}),
+  ]);
+}
+
+Future<Uint8List> buildAnalyticsReport(
+  AppController state,
+  AnalyticsSnapshot snapshot, {
+  required AnalyticsPdfVariant variant,
+  required AnalyticsReportFormat format,
+}) async {
+  return switch (format) {
+    AnalyticsReportFormat.pdf => AnalyticsPdfService.build(state, snapshot, variant: variant),
+    AnalyticsReportFormat.xlsx => _analyticsXlsxReport(state, snapshot, variant),
+    AnalyticsReportFormat.txt => _analyticsTextReport(state, snapshot, variant),
+  };
+}
+
+Future<String?> downloadAnalyticsReport(
   BuildContext context,
   AppController state,
   AnalyticsSnapshot snapshot, {
   AnalyticsPdfVariant variant = AnalyticsPdfVariant.summary,
+  AnalyticsReportFormat format = AnalyticsReportFormat.pdf,
 }) async {
   try {
-    final bytes = await AnalyticsPdfService.build(state, snapshot, variant: variant);
-    final fileName = analyticsPdfFileName(snapshot, variant: variant);
+    final bytes = await buildAnalyticsReport(state, snapshot, variant: variant, format: format);
+    final fileName = analyticsReportFileName(snapshot, variant: variant, format: format);
     try {
       final savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: variant == AnalyticsPdfVariant.summary ? 'Save Koinly analytics PDF' : 'Save Koinly transaction history PDF',
+        dialogTitle: variant == AnalyticsPdfVariant.summary
+            ? 'Save Koinly analytics ${format.label}'
+            : 'Save Koinly transaction history ${format.label}',
         fileName: fileName,
         type: FileType.custom,
-        allowedExtensions: const ['pdf'],
+        allowedExtensions: [format.extension],
         bytes: bytes,
       );
       if (savedPath == null) return null;
-      if (context.mounted) showSnack(context, variant == AnalyticsPdfVariant.summary ? 'Analytics PDF saved.' : 'Transaction history PDF saved.');
+      if (context.mounted) showSnack(context, '${variant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} ${format.label} saved.');
       return savedPath;
     } catch (_) {
       final documents = await getApplicationDocumentsDirectory();
@@ -680,11 +1115,11 @@ Future<String?> downloadAnalyticsPdf(
       await directory.create(recursive: true);
       final file = File(p.join(directory.path, fileName));
       await file.writeAsBytes(bytes, flush: true);
-      if (context.mounted) showSnack(context, 'PDF saved to ${file.path}.');
+      if (context.mounted) showSnack(context, '${format.label} saved to ${file.path}.');
       return file.path;
     }
   } catch (_) {
-    if (context.mounted) showSnack(context, 'Could not create the PDF.');
+    if (context.mounted) showSnack(context, 'Could not create the ${format.label} report.');
     return null;
   }
 }
@@ -695,11 +1130,12 @@ String _analyticsUploadError(Object error) {
   return text.isEmpty ? 'The upload failed.' : text;
 }
 
-String _analyticsTelegramCaption(AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant) {
-  return switch (variant) {
-    AnalyticsPdfVariant.summary => 'Koinly ${snapshot.filterLabel} Analytics\n${snapshot.range.label}',
-    AnalyticsPdfVariant.transactionHistory => 'Koinly Transaction History\n${snapshot.range.label}',
+String _analyticsTelegramCaption(AnalyticsSnapshot snapshot, AnalyticsPdfVariant variant, AnalyticsReportFormat format) {
+  final title = switch (variant) {
+    AnalyticsPdfVariant.summary => 'Koinly ${snapshot.filterLabel} Analytics',
+    AnalyticsPdfVariant.transactionHistory => 'Koinly Transaction History',
   };
+  return '$title • ${format.label}\n${snapshot.range.label}';
 }
 
 class AnalyticsScreen extends StatefulWidget {
@@ -715,6 +1151,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   DateTime? customEnd;
   bool exporting = false;
   AnalyticsPdfVariant pdfVariant = AnalyticsPdfVariant.summary;
+  AnalyticsReportFormat reportFormat = AnalyticsReportFormat.pdf;
 
   Future<void> _chooseDateFilter() async {
     final selectedId = await showAppleWheelSelectionSheet(
@@ -731,14 +1168,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
 
     if (selected == DateRangeType.custom) {
-      final start = await pickDate(context, customStart ?? DateTime.now());
-      if (!mounted || start == null) return;
-      final end = await pickDate(context, customEnd ?? start);
-      if (!mounted || end == null) return;
+      final range = await pickCustomDateRange(
+        context,
+        start: customStart,
+        end: customEnd,
+      );
+      if (!mounted || range == null) return;
       setState(() {
         dateFilter = DateRangeType.custom;
-        customStart = start;
-        customEnd = end;
+        customStart = range.start;
+        customEnd = range.end;
       });
       return;
     }
@@ -750,7 +1189,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      await downloadAnalyticsPdf(context, state, snapshot, variant: pdfVariant);
+      await downloadAnalyticsReport(context, state, snapshot, variant: pdfVariant, format: reportFormat);
     } finally {
       if (mounted) setState(() => exporting = false);
     }
@@ -760,13 +1199,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      final bytes = await AnalyticsPdfService.build(state, snapshot, variant: pdfVariant);
+      final bytes = await buildAnalyticsReport(state, snapshot, variant: pdfVariant, format: reportFormat);
       await state.uploadAnalyticsPdfToTelegram(
-        fileName: analyticsPdfFileName(snapshot, variant: pdfVariant),
+        fileName: analyticsReportFileName(snapshot, variant: pdfVariant, format: reportFormat),
         bytes: bytes,
-        caption: _analyticsTelegramCaption(snapshot, pdfVariant),
+        caption: _analyticsTelegramCaption(snapshot, pdfVariant, reportFormat),
       );
-      if (mounted) showSnack(context, pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics PDF uploaded to Telegram.' : 'Transaction history PDF uploaded to Telegram.');
+      if (mounted) showSnack(context, '${pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} ${reportFormat.label} uploaded to Telegram.');
     } catch (error) {
       if (!mounted) return;
       final message = _analyticsUploadError(error);
@@ -784,14 +1223,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     if (exporting) return;
     setState(() => exporting = true);
     try {
-      final bytes = await AnalyticsPdfService.build(state, snapshot, variant: pdfVariant);
+      final bytes = await buildAnalyticsReport(state, snapshot, variant: pdfVariant, format: reportFormat);
       final result = await state.uploadAnalyticsPdfToGoogleDrive(
-        fileName: analyticsPdfFileName(snapshot, variant: pdfVariant),
+        fileName: analyticsReportFileName(snapshot, variant: pdfVariant, format: reportFormat),
         bytes: bytes,
       );
       if (!mounted) return;
       final folder = result['folderName']?.toString() ?? 'Koinly Analytics';
-      showSnack(context, '${pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} PDF uploaded to Google Drive • $folder');
+      showSnack(context, '${pdfVariant == AnalyticsPdfVariant.summary ? 'Analytics' : 'Transaction history'} ${reportFormat.label} uploaded to Google Drive • $folder');
     } catch (error) {
       if (!mounted) return;
       final message = _analyticsUploadError(error);
@@ -871,7 +1310,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               const SizedBox(width: 10),
               Expanded(child: MiniMetric('Expense / day', state.format(snapshot.averageExpensePerDay), Icons.trending_down_rounded)),
             ]),
-            const SectionHeader('PDF report'),
+            const SectionHeader('Report'),
             ExpressiveCard(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -882,7 +1321,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('PDF report type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                        Text('Report type', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 3),
                         Text(
                           pdfVariant.description,
@@ -910,12 +1349,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     ),
                   ],
                   const SizedBox(height: 14),
+                  Text('File format', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  SegmentedButton<AnalyticsReportFormat>(
+                    segments: const [
+                      ButtonSegment(value: AnalyticsReportFormat.pdf, label: Text('PDF')),
+                      ButtonSegment(value: AnalyticsReportFormat.xlsx, label: Text('XLSX')),
+                      ButtonSegment(value: AnalyticsReportFormat.txt, label: Text('TXT')),
+                    ],
+                    selected: {reportFormat},
+                    onSelectionChanged: exporting ? null : (value) => setState(() => reportFormat = value.first),
+                  ),
+                  const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
                       onPressed: exporting ? null : () => _download(state, snapshot),
                       icon: exporting ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download_rounded),
-                      label: const Text('Download PDF'),
+                      label: Text('Download ${reportFormat.label}'),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1169,7 +1620,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
       final next = await context.read<AppController>().disconnectGoogleDriveAnalytics();
       if (!mounted) return;
       setState(() => _drive = next);
-      showSnack(context, 'Google Drive disconnected. Automatic Drive PDF upload was turned off.');
+      showSnack(context, 'Google Drive disconnected. Automatic Drive report upload was turned off.');
     } catch (error) {
       if (mounted) showSnack(context, _analyticsUploadError(error));
     } finally {
@@ -1248,7 +1699,7 @@ class _CredentialsScreenState extends State<CredentialsScreen> {
                               Text(
                                 _telegram.tokenConfigured && _telegram.chatId.isNotEmpty
                                     ? 'Configured • ${_telegram.chatId}'
-                                    : 'Used for automatic backups and PDF delivery',
+                                    : 'Used for automatic backups and report delivery',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                               ),
                             ]),
@@ -1473,7 +1924,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
       final message = _analyticsUploadError(error);
       setState(() {
         _loadError = message == 'Not found.'
-            ? 'Redeploy the latest Self-Hosted Sync Worker to use automatic cloud PDF uploads.'
+            ? 'Redeploy the latest Self-Hosted Sync Worker to use automatic cloud report uploads.'
             : message;
         _loading = false;
       });
@@ -1515,11 +1966,15 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
     final current = _schedule(destination);
     final telegramReady = _telegram.tokenConfigured && _telegram.chatId.isNotEmpty;
     if (current.enabled && destination == AnalyticsPdfScheduleDestination.telegram && !telegramReady) {
-      showSnack(context, 'Configure Telegram in Settings > Credential before enabling automatic PDF uploads.');
+      showSnack(context, 'Configure Telegram in Settings > Credential before enabling automatic report uploads.');
       return;
     }
     if (current.enabled && destination == AnalyticsPdfScheduleDestination.googleDrive && !_drive.connected) {
-      showSnack(context, 'Connect Google Drive in Settings > Credential before enabling automatic PDF uploads.');
+      showSnack(context, 'Connect Google Drive in Settings > Credential before enabling automatic report uploads.');
+      return;
+    }
+    if (current.dateFilter == AnalyticsPdfScheduleDateFilter.custom && (current.customStart == null || current.customEnd == null)) {
+      showSnack(context, 'Choose a custom start and end date before saving the report schedule.');
       return;
     }
     setState(() => _busy = true);
@@ -1530,8 +1985,8 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
       showSnack(
         context,
         saved.enabled
-            ? '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF schedule saved.'
-            : '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic PDF upload is off.',
+            ? '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic report schedule saved.'
+            : '${destination == AnalyticsPdfScheduleDestination.telegram ? 'Telegram' : 'Google Drive'} automatic report upload is off.',
       );
       await _load();
     } catch (error) {
@@ -1557,7 +2012,61 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         AnalyticsPdfScheduleDateFilter.thisMonth => 'This Month',
         AnalyticsPdfScheduleDateFilter.thisYear => 'This Year',
         AnalyticsPdfScheduleDateFilter.allTime => 'All Time',
+        AnalyticsPdfScheduleDateFilter.custom => 'Custom Range',
       };
+
+  SelectionOption _scheduleDateFilterOption(AnalyticsPdfScheduleDateFilter filter) => switch (filter) {
+        AnalyticsPdfScheduleDateFilter.today => const SelectionOption(id: 'today', title: 'Today', subtitle: 'Only today', iconName: 'today', iconColor: kSleekAccentHex),
+        AnalyticsPdfScheduleDateFilter.thisWeek => const SelectionOption(id: 'thisWeek', title: 'This Week', subtitle: 'Current week', iconName: 'week', iconColor: '#A6E3A1'),
+        AnalyticsPdfScheduleDateFilter.thisMonth => const SelectionOption(id: 'thisMonth', title: 'This Month', subtitle: 'Current month', iconName: 'month', iconColor: kSleekAccentHex),
+        AnalyticsPdfScheduleDateFilter.thisYear => const SelectionOption(id: 'thisYear', title: 'This Year', subtitle: 'Current year', iconName: 'year', iconColor: '#FBC879'),
+        AnalyticsPdfScheduleDateFilter.allTime => const SelectionOption(id: 'allTime', title: 'All Time', subtitle: 'Everything synchronized', iconName: 'all_time', iconColor: '#B4A5FF'),
+        AnalyticsPdfScheduleDateFilter.custom => const SelectionOption(id: 'custom', title: 'Custom range', subtitle: 'Choose start and end date', iconName: 'custom_range', iconColor: '#FFB5D0'),
+      };
+
+  String _scheduleCustomRangeLabel(AnalyticsPdfScheduleSettings settings) {
+    final start = settings.customStart;
+    final end = settings.customEnd;
+    if (start == null || end == null) return 'Choose start and end date';
+    if (DateUtils.isSameDay(start, end)) return DateFormat('MMM d, yyyy').format(start);
+    if (start.year == end.year) {
+      return '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+    }
+    return '${DateFormat('MMM d, yyyy').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+  }
+
+  Future<void> _pickScheduleDateFilter(AnalyticsPdfScheduleDestination destination) async {
+    final current = _schedule(destination);
+    final selectedId = await showAppleWheelSelectionSheet(
+      context,
+      title: 'Choose Date Filter',
+      selectedId: current.dateFilter.name,
+      options: AnalyticsPdfScheduleDateFilter.values.map(_scheduleDateFilterOption).toList(growable: false),
+    );
+    if (!mounted || selectedId == null) return;
+    final selected = AnalyticsPdfScheduleDateFilter.values.firstWhere(
+      (value) => value.name == selectedId,
+      orElse: () => current.dateFilter,
+    );
+    if (selected == AnalyticsPdfScheduleDateFilter.custom) {
+      final range = await pickCustomDateRange(
+        context,
+        start: current.customStart,
+        end: current.customEnd,
+      );
+      if (!mounted || range == null) return;
+      _setSchedule(
+        destination,
+        current.copyWith(
+          dateFilter: selected,
+          customStart: range.start,
+          customEnd: range.end,
+        ),
+      );
+      return;
+    }
+    _setSchedule(destination, current.copyWith(dateFilter: selected));
+  }
 
   String _scheduleStatusTime(DateTime? value) =>
       value == null ? 'Not yet' : DateFormat('MMM d, yyyy • h:mm a').format(value.toLocal());
@@ -1605,7 +2114,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                   }
                   _setSchedule(destination, settings.copyWith(enabled: value));
                 },
-          title: const Text('Automatic PDF upload', style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text('Automatic report upload', style: TextStyle(fontWeight: FontWeight.w900)),
           subtitle: const Text('Generated from the latest data synchronized to your Self-Hosted Worker.'),
         ),
         const SizedBox(height: 8),
@@ -1618,17 +2127,37 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
           onSelectionChanged: _busy ? null : (value) => _setSchedule(destination, settings.copyWith(reportVariant: value.first)),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<AnalyticsPdfScheduleDateFilter>(
-          value: settings.dateFilter,
-          decoration: const InputDecoration(labelText: 'Date filter', prefixIcon: Icon(Icons.date_range_rounded)),
-          items: AnalyticsPdfScheduleDateFilter.values
-              .map((value) => DropdownMenuItem(value: value, child: Text(_scheduleDateFilterLabel(value))))
-              .toList(growable: false),
-          onChanged: _busy
-              ? null
-              : (value) {
-                  if (value != null) _setSchedule(destination, settings.copyWith(dateFilter: value));
-                },
+        Text('File format', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        SegmentedButton<AnalyticsReportFormat>(
+          segments: const [
+            ButtonSegment(value: AnalyticsReportFormat.pdf, label: Text('PDF')),
+            ButtonSegment(value: AnalyticsReportFormat.xlsx, label: Text('XLSX')),
+            ButtonSegment(value: AnalyticsReportFormat.txt, label: Text('TXT')),
+          ],
+          selected: {settings.fileFormat},
+          onSelectionChanged: _busy ? null : (value) => _setSchedule(destination, settings.copyWith(fileFormat: value.first)),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : () => _pickScheduleDateFilter(destination),
+          icon: const Icon(Icons.date_range_rounded),
+          label: Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Date filter · ${_scheduleDateFilterLabel(settings.dateFilter)}'),
+                if (settings.dateFilter == AnalyticsPdfScheduleDateFilter.custom)
+                  Text(
+                    _scheduleCustomRangeLabel(settings),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                  ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         SegmentedButton<TelegramBackupFrequency>(
@@ -1677,7 +2206,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         ],
         const SizedBox(height: 12),
         Text(
-          'Telegram PDF, Google Drive PDF, and Automatic Telegram backup times must all be at least 5 minutes apart.',
+          'Telegram report, Google Drive report, and Automatic Telegram backup times must all be at least 5 minutes apart.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 10),
@@ -1695,7 +2224,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
         FilledButton.icon(
           onPressed: _busy ? null : () => _savePdfSchedule(destination),
           icon: const Icon(Icons.save_rounded),
-          label: const Text('Save automatic PDF schedule'),
+          label: const Text('Save automatic report schedule'),
         ),
       ]),
     );
@@ -1709,7 +2238,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
 
     return PageScaffold(
       title: 'Cloud Backup',
-      subtitle: 'Automatic PDF uploads',
+      subtitle: 'Automatic report uploads',
       actions: [
         IconButton.filledTonal(
           tooltip: 'Refresh',
@@ -1735,7 +2264,7 @@ class _CloudBackupScreenState extends State<CloudBackupScreen> {
                         ]),
                         const SizedBox(height: 10),
                         Text(
-                          'Automatic Telegram and Google Drive PDF uploads run through your Self-Hosted Sync Worker.',
+                          'Automatic Telegram and Google Drive report uploads run through your Self-Hosted Sync Worker.',
                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 14),

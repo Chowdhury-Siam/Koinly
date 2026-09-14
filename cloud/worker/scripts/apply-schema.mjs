@@ -30,10 +30,12 @@ const client = createClient({
 
 try {
   await migrateLegacyUsersTable(client);
+  await migrateAnalyticsPdfSchedulesTable(client);
   for (const statement of statements) {
     await client.execute(statement);
   }
   await migrateLegacyUsersTable(client);
+  await migrateAnalyticsPdfSchedulesTable(client);
   console.log(`Applied Turso schema successfully (${statements.length} statements).`);
 } finally {
   client.close();
@@ -71,6 +73,63 @@ async function migrateLegacyUsersTable(client) {
     await client.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
     console.log('Added account session revocation support.');
   }
+}
+
+
+async function migrateAnalyticsPdfSchedulesTable(client) {
+  const table = (await client.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'analytics_pdf_schedules'")).rows[0];
+  if (!table) return;
+
+  const tableSql = String(table.sql ?? '');
+  const rows = (await client.execute("PRAGMA table_info('analytics_pdf_schedules')")).rows;
+  const columns = new Set(rows.map((row) => String(row.name)));
+  const supportsCustom = tableSql.includes("'custom'") && columns.has('custom_start') && columns.has('custom_end');
+  const supportsFormats = columns.has('file_format') && tableSql.includes("'xlsx'") && tableSql.includes("'txt'");
+  if (supportsCustom && supportsFormats) return;
+
+  const customStart = columns.has('custom_start') ? 'custom_start' : 'NULL';
+  const customEnd = columns.has('custom_end') ? 'custom_end' : 'NULL';
+  const fileFormat = columns.has('file_format') ? 'file_format' : "'pdf'";
+  await client.batch([
+    'DROP INDEX IF EXISTS idx_analytics_pdf_schedule_due',
+    'DROP TABLE IF EXISTS analytics_pdf_schedules_v1142',
+    `CREATE TABLE analytics_pdf_schedules_v1142 (
+      user_id TEXT NOT NULL,
+      destination TEXT NOT NULL CHECK(destination IN ('telegram', 'googleDrive')),
+      enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
+      report_variant TEXT NOT NULL DEFAULT 'summary' CHECK(report_variant IN ('summary', 'transactionHistory')),
+      file_format TEXT NOT NULL DEFAULT 'pdf' CHECK(file_format IN ('pdf', 'xlsx', 'txt')),
+      date_filter TEXT NOT NULL DEFAULT 'thisMonth' CHECK(date_filter IN ('today', 'thisWeek', 'thisMonth', 'thisYear', 'allTime', 'custom')),
+      custom_start TEXT,
+      custom_end TEXT,
+      frequency TEXT NOT NULL DEFAULT 'daily' CHECK(frequency IN ('daily', 'weekly', 'monthly')),
+      hour INTEGER NOT NULL DEFAULT 3 CHECK(hour BETWEEN 0 AND 23),
+      minute INTEGER NOT NULL DEFAULT 0 CHECK(minute BETWEEN 0 AND 59),
+      weekday INTEGER NOT NULL DEFAULT 7 CHECK(weekday BETWEEN 1 AND 7),
+      month_day INTEGER NOT NULL DEFAULT 1 CHECK(month_day BETWEEN 1 AND 31),
+      timezone_offset_minutes INTEGER NOT NULL DEFAULT 0 CHECK(timezone_offset_minutes BETWEEN -840 AND 840),
+      next_due_at INTEGER,
+      last_sent_at INTEGER,
+      last_attempt_at INTEGER,
+      last_error TEXT,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY(user_id, destination),
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )`,
+    `INSERT INTO analytics_pdf_schedules_v1142(
+        user_id, destination, enabled, report_variant, file_format, date_filter, custom_start, custom_end, frequency,
+        hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+        last_sent_at, last_attempt_at, last_error, updated_at
+      )
+      SELECT user_id, destination, enabled, report_variant, ${fileFormat}, date_filter, ${customStart}, ${customEnd}, frequency,
+        hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
+        last_sent_at, last_attempt_at, last_error, updated_at
+      FROM analytics_pdf_schedules`,
+    'DROP TABLE analytics_pdf_schedules',
+    'ALTER TABLE analytics_pdf_schedules_v1142 RENAME TO analytics_pdf_schedules',
+    'CREATE INDEX IF NOT EXISTS idx_analytics_pdf_schedule_due ON analytics_pdf_schedules(enabled, next_due_at)',
+  ], 'write');
+  console.log('Upgraded Analytics report schedules for PDF, XLSX, TXT, and centered custom date ranges.');
 }
 
 async function userColumns(client) {

@@ -53,4 +53,8 @@ class AndroidSafBackupStore {
   static Future<void> deleteFile({required String uri, required String name}) async {
     await _channel.invokeMethod<void>('deleteFile', {'uri': uri, 'name': name});
   }
+
+  static Future<void> syncAutomaticBackgroundBackup() async {
+    await _channel.invokeMethod<void>('syncAutomaticBackup');
+  }
 }

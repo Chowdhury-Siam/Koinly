@@ -195,7 +195,7 @@ export default {
 
   async scheduled(_controller: ScheduledController, env: Env, _context: ExecutionContext): Promise<void> {
     // A single five-minute cron checks all user-configured uploads. Schedule
-    // validation keeps Telegram PDF, Drive PDF, and Telegram backup jobs at
+    // validation keeps Telegram report, Drive report, and Telegram backup jobs at
     // least five minutes apart so they do not pile external requests into the
     // same Cloudflare invocation.
     validateWorkerConfig(env);
@@ -214,7 +214,8 @@ export default {
 type TelegramBackupFrequency = 'daily' | 'weekly' | 'monthly';
 type AnalyticsPdfDestination = 'telegram' | 'googleDrive';
 type AnalyticsPdfReportVariant = 'summary' | 'transactionHistory';
-type AnalyticsPdfDateFilter = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'allTime';
+type AnalyticsReportFormat = 'pdf' | 'xlsx' | 'txt';
+type AnalyticsPdfDateFilter = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'allTime' | 'custom';
 
 const adminCookie = '__Host-koinly-admin';
 const adminSessionSeconds = 3600;
@@ -397,7 +398,10 @@ type AnalyticsPdfScheduleSettings = {
   destination: AnalyticsPdfDestination;
   enabled: boolean;
   reportVariant: AnalyticsPdfReportVariant;
+  fileFormat: AnalyticsReportFormat;
   dateFilter: AnalyticsPdfDateFilter;
+  customStart: string | null;
+  customEnd: string | null;
   frequency: TelegramBackupFrequency;
   hour: number;
   minute: number;
@@ -485,7 +489,7 @@ async function saveTelegramBackupSettings(request: Request, env: Env, db: Client
   if (enabled && !chatId) throw new HttpError(400, 'Enter a Telegram group or channel Chat ID before enabling backups.');
   const telegramPdfSchedule = await readAnalyticsPdfSchedule(db, auth.userId, 'telegram');
   if (telegramPdfSchedule.enabled && (!encryptedToken || !chatId)) {
-    throw new HttpError(409, 'Keep the Telegram bot token and destination configured while automatic Telegram PDF uploads are enabled.');
+    throw new HttpError(409, 'Keep the Telegram bot token and destination configured while automatic Telegram report uploads are enabled.');
   }
 
   await assertScheduledUploadSeparation(db, auth.userId, undefined, { enabled, hour, minute });
@@ -808,9 +812,10 @@ async function sendTelegramAnalyticsDocument(
   fileName: string,
   bytes: Uint8Array<ArrayBuffer>,
   caption: string,
+  mimeType = analyticsReportMimeType(fileName),
 ): Promise<void> {
-  if (bytes.byteLength > analyticsPdfMaxBytes) throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
-  await sendTelegramDocument(token, chatId, fileName, new Blob([bytes], { type: 'application/pdf' }), caption);
+  if (bytes.byteLength > analyticsReportMaxBytes) throw new HttpError(413, 'Analytics report must be 10 MB or smaller.');
+  await sendTelegramDocument(token, chatId, fileName, new Blob([bytes], { type: mimeType }), caption);
 }
 
 async function sendTelegramDocument(
@@ -934,7 +939,7 @@ function publicTelegramBackupSettings(settings: TelegramBackupSettings): Record<
 }
 
 const analyticsGoogleDriveFolderName = 'Koinly Analytics';
-const analyticsPdfMaxBytes = 10 * 1024 * 1024;
+const analyticsReportMaxBytes = 10 * 1024 * 1024;
 
 async function googleDriveAnalyticsSettings(db: Client, auth: AuthContext): Promise<Response> {
   return privateJson({
@@ -1107,7 +1112,7 @@ async function googleDriveAnalyticsCallback(request: Request, env: Env, db: Clie
     });
     return googleDriveCallbackPage(
       'Google Drive connected',
-      accountEmail ? `Koinly can now upload Analytics PDFs to ${accountEmail}. You can return to the app.` : 'Koinly can now upload Analytics PDFs to Google Drive. You can return to the app.',
+      accountEmail ? `Koinly can now upload Analytics reports to ${accountEmail}. You can return to the app.` : 'Koinly can now upload Analytics reports to Google Drive. You can return to the app.',
       true,
       200,
     );
@@ -1159,26 +1164,26 @@ async function disconnectGoogleDriveAnalytics(env: Env, db: Client, auth: AuthCo
 }
 
 async function uploadAnalyticsPdfToTelegram(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
-  const pdf = await analyticsPdfRequest(request);
+  const report = await analyticsReportRequest(request);
   const telegram = await readTelegramBackupSettings(db, auth.userId);
   if (!telegram.encryptedToken || !telegram.chatId) {
     throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential first.');
   }
   const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
-  const caption = pdf.caption || `Koinly Analytics\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`;
-  await sendTelegramAnalyticsDocument(token, telegram.chatId, pdf.fileName, pdf.bytes, caption);
-  return privateJson({ ok: true, destination: 'telegram', fileName: pdf.fileName, sentAt: Date.now() });
+  const caption = report.caption || `Koinly Analytics\n${new Date().toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`;
+  await sendTelegramAnalyticsDocument(token, telegram.chatId, report.fileName, report.bytes, caption, report.mimeType);
+  return privateJson({ ok: true, destination: 'telegram', fileName: report.fileName, format: report.format, sentAt: Date.now() });
 }
 
 async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: Client, auth: AuthContext): Promise<Response> {
-  const pdf = await analyticsPdfRequest(request);
+  const report = await analyticsReportRequest(request);
   const settings = await readGoogleDriveAnalyticsSettings(db, auth.userId);
   if (!settings.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential first.');
   const attemptedAt = Date.now();
   try {
     const accessToken = await googleDriveAccessToken(env, settings);
     const folderId = await ensureGoogleAnalyticsFolder(accessToken);
-    const uploaded = await googleDriveUploadPdf(accessToken, folderId, pdf.fileName, pdf.bytes);
+    const uploaded = await googleDriveUploadDocument(accessToken, folderId, report.fileName, report.bytes, report.mimeType);
     const completedAt = Date.now();
     await db.execute({
       sql: `UPDATE analytics_upload_settings
@@ -1188,7 +1193,7 @@ async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: C
     return privateJson({
       ok: true,
       destination: 'google-drive',
-      fileName: pdf.fileName,
+      fileName: report.fileName,
       folderName: analyticsGoogleDriveFolderName,
       fileId: uploaded.id,
       webViewLink: uploaded.webViewLink,
@@ -1215,29 +1220,70 @@ async function uploadAnalyticsPdfToGoogleDrive(request: Request, env: Env, db: C
   }
 }
 
-async function analyticsPdfRequest(request: Request): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string }> {
+function analyticsReportFormatFromFileName(fileName: string): AnalyticsReportFormat {
+  const match = /\.([A-Za-z0-9]+)$/.exec(fileName);
+  return normalizeAnalyticsReportFormat(match?.[1] ?? '');
+}
+
+function analyticsReportMimeType(value: string | AnalyticsReportFormat): string {
+  const format = value === 'pdf' || value === 'xlsx' || value === 'txt' ? value : analyticsReportFormatFromFileName(value);
+  if (format === 'pdf') return 'application/pdf';
+  if (format === 'xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  return 'text/plain';
+}
+
+function indexOfAscii(bytes: Uint8Array<ArrayBuffer>, needle: string): number {
+  const target = new TextEncoder().encode(needle);
+  if (target.byteLength === 0 || target.byteLength > bytes.byteLength) return -1;
+  outer: for (let offset = 0; offset <= bytes.byteLength - target.byteLength; offset += 1) {
+    for (let index = 0; index < target.byteLength; index += 1) {
+      if (bytes[offset + index] !== target[index]) continue outer;
+    }
+    return offset;
+  }
+  return -1;
+}
+
+async function analyticsReportRequest(request: Request): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string; format: AnalyticsReportFormat; mimeType: string }> {
   const body = await readJson(request);
   const fileName = cleanText(body.fileName, 140);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,130}\.pdf$/i.test(fileName)) {
-    throw new HttpError(400, 'Analytics PDF filename is invalid.');
+  if (!/^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,130}\.(pdf|xlsx|txt)$/i.test(fileName)) {
+    throw new HttpError(400, 'Analytics report filename must end in .pdf, .xlsx, or .txt.');
   }
+  const format = analyticsReportFormatFromFileName(fileName);
   const contentBase64 = typeof body.contentBase64 === 'string' ? body.contentBase64 : '';
-  if (!contentBase64 || contentBase64.length > Math.ceil(analyticsPdfMaxBytes * 4 / 3) + 16) {
-    throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
+  if (!contentBase64 || contentBase64.length > Math.ceil(analyticsReportMaxBytes * 4 / 3) + 16) {
+    throw new HttpError(413, 'Analytics report must be 10 MB or smaller.');
   }
   let bytes: Uint8Array<ArrayBuffer>;
   try {
     bytes = bytesFromBase64(contentBase64);
   } catch {
-    throw new HttpError(400, 'Analytics PDF payload is invalid.');
+    throw new HttpError(400, 'Analytics report payload is invalid.');
   }
-  if (bytes.byteLength === 0 || bytes.byteLength > analyticsPdfMaxBytes) {
-    throw new HttpError(413, 'Analytics PDF must be 10 MB or smaller.');
+  if (bytes.byteLength === 0 || bytes.byteLength > analyticsReportMaxBytes) {
+    throw new HttpError(413, 'Analytics report must be 10 MB or smaller.');
   }
-  if (bytes.byteLength < 5 || String.fromCharCode(...Array.from(bytes.subarray(0, 5))) !== '%PDF-') {
-    throw new HttpError(400, 'The uploaded Analytics document is not a valid PDF.');
+  if (format === 'pdf') {
+    if (bytes.byteLength < 5 || String.fromCharCode(...Array.from(bytes.subarray(0, 5))) !== '%PDF-') {
+      throw new HttpError(400, 'The uploaded Analytics document is not a valid PDF.');
+    }
+  } else if (format === 'xlsx') {
+    const hasZipHeader = bytes.byteLength >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+    const workbookIndex = indexOfAscii(bytes, 'xl/workbook.xml');
+    const contentTypesIndex = indexOfAscii(bytes, '[Content_Types].xml');
+    if (!hasZipHeader || workbookIndex < 0 || contentTypesIndex < 0) {
+      throw new HttpError(400, 'The uploaded Analytics document is not a valid XLSX workbook.');
+    }
+  } else {
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      if (decoded.includes('\u0000')) throw new Error('binary');
+    } catch {
+      throw new HttpError(400, 'The uploaded Analytics document is not valid UTF-8 text.');
+    }
   }
-  return { fileName, bytes, caption: cleanText(body.caption, 512) };
+  return { fileName, bytes, caption: cleanText(body.caption, 512), format, mimeType: analyticsReportMimeType(format) };
 }
 
 async function readGoogleDriveAnalyticsSettings(db: Client, userId: string): Promise<GoogleDriveAnalyticsSettings> {
@@ -1301,21 +1347,43 @@ function publicGoogleDriveAnalyticsSettings(settings: GoogleDriveAnalyticsSettin
 function normalizeAnalyticsPdfDestination(value: unknown): AnalyticsPdfDestination {
   const normalized = String(value ?? '').trim();
   if (normalized === 'telegram' || normalized === 'googleDrive') return normalized;
-  throw new HttpError(400, 'Analytics PDF destination must be Telegram or Google Drive.');
+  throw new HttpError(400, 'Analytics report destination must be Telegram or Google Drive.');
 }
 
 function normalizeAnalyticsPdfReportVariant(value: unknown): AnalyticsPdfReportVariant {
   const normalized = String(value ?? '').trim();
   if (normalized === 'summary' || normalized === 'transactionHistory') return normalized;
-  throw new HttpError(400, 'PDF report type must be Summary or Transaction history.');
+  throw new HttpError(400, 'Analytics report type must be Summary or Transaction history.');
+}
+
+function normalizeAnalyticsReportFormat(value: unknown): AnalyticsReportFormat {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === 'pdf' || normalized === 'xlsx' || normalized === 'txt') return normalized;
+  throw new HttpError(400, 'Analytics report format must be PDF, XLSX, or TXT.');
 }
 
 function normalizeAnalyticsPdfDateFilter(value: unknown): AnalyticsPdfDateFilter {
   const normalized = String(value ?? '').trim();
-  if (normalized === 'today' || normalized === 'thisWeek' || normalized === 'thisMonth' || normalized === 'thisYear' || normalized === 'allTime') {
+  if (normalized === 'today' || normalized === 'thisWeek' || normalized === 'thisMonth' || normalized === 'thisYear' || normalized === 'allTime' || normalized === 'custom') {
     return normalized;
   }
-  throw new HttpError(400, 'Automatic PDF date filter must be Today, This Week, This Month, This Year, or All Time.');
+  throw new HttpError(400, 'Automatic report date filter must be Today, This Week, This Month, This Year, All Time, or Custom Range.');
+}
+
+function normalizeAnalyticsCustomDate(value: unknown): string | null {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new HttpError(400, 'Custom range dates must use YYYY-MM-DD.');
+  const [year, month, day] = raw.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    throw new HttpError(400, 'Custom range contains an invalid calendar date.');
+  }
+  return raw;
+}
+
+function compareDateOnly(first: string, second: string): number {
+  return first === second ? 0 : first < second ? -1 : 1;
 }
 
 function defaultAnalyticsPdfSchedule(userId: string, destination: AnalyticsPdfDestination): AnalyticsPdfScheduleSettings {
@@ -1324,7 +1392,10 @@ function defaultAnalyticsPdfSchedule(userId: string, destination: AnalyticsPdfDe
     destination,
     enabled: false,
     reportVariant: 'summary',
+    fileFormat: 'pdf',
     dateFilter: 'thisMonth',
+    customStart: null,
+    customEnd: null,
     frequency: 'daily',
     hour: destination === 'telegram' ? 3 : 4,
     minute: 0,
@@ -1345,7 +1416,10 @@ function analyticsPdfScheduleFromRow(row: Record<string, unknown>): AnalyticsPdf
     destination,
     enabled: Number(row.enabled ?? 0) === 1,
     reportVariant: normalizeAnalyticsPdfReportVariant(row.report_variant),
+    fileFormat: normalizeAnalyticsReportFormat(row.file_format ?? 'pdf'),
     dateFilter: normalizeAnalyticsPdfDateFilter(row.date_filter),
+    customStart: normalizeAnalyticsCustomDate(row.custom_start),
+    customEnd: normalizeAnalyticsCustomDate(row.custom_end),
     frequency: normalizeTelegramBackupFrequency(row.frequency),
     hour: integerInRange(row.hour, destination === 'telegram' ? 3 : 4, 0, 23, 'hour'),
     minute: integerInRange(row.minute, 0, 0, 59, 'minute'),
@@ -1361,7 +1435,7 @@ function analyticsPdfScheduleFromRow(row: Record<string, unknown>): AnalyticsPdf
 
 async function readAnalyticsPdfSchedule(db: Client, userId: string, destination: AnalyticsPdfDestination): Promise<AnalyticsPdfScheduleSettings> {
   const row = (await db.execute({
-    sql: `SELECT user_id, destination, enabled, report_variant, date_filter, frequency,
+    sql: `SELECT user_id, destination, enabled, report_variant, file_format, date_filter, custom_start, custom_end, frequency,
                  hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
                  last_sent_at, last_attempt_at, last_error
           FROM analytics_pdf_schedules
@@ -1376,7 +1450,10 @@ function publicAnalyticsPdfSchedule(settings: AnalyticsPdfScheduleSettings): Rec
     destination: settings.destination,
     enabled: settings.enabled,
     reportVariant: settings.reportVariant,
+    fileFormat: settings.fileFormat,
     dateFilter: settings.dateFilter,
+    customStart: settings.customStart,
+    customEnd: settings.customEnd,
     frequency: settings.frequency,
     hour: settings.hour,
     minute: settings.minute,
@@ -1432,8 +1509,8 @@ async function assertScheduledUploadSeparation(
   const drive = candidate?.destination === 'googleDrive' ? candidate : driveSchedule;
   const backup = telegramBackupCandidate ?? storedBackup;
   const clocks: ScheduledClock[] = [
-    { label: 'Telegram PDF', hour: telegram.hour, minute: telegram.minute, enabled: telegram.enabled },
-    { label: 'Google Drive PDF', hour: drive.hour, minute: drive.minute, enabled: drive.enabled },
+    { label: 'Telegram report', hour: telegram.hour, minute: telegram.minute, enabled: telegram.enabled },
+    { label: 'Google Drive report', hour: drive.hour, minute: drive.minute, enabled: drive.enabled },
     { label: 'Telegram backup', hour: backup.hour, minute: backup.minute, enabled: backup.enabled },
   ].filter(item => item.enabled);
 
@@ -1461,7 +1538,14 @@ async function saveAnalyticsPdfSchedule(
   const existing = await readAnalyticsPdfSchedule(db, auth.userId, destination);
   const enabled = body.enabled === true;
   const reportVariant = normalizeAnalyticsPdfReportVariant(body.reportVariant ?? existing.reportVariant);
+  const fileFormat = normalizeAnalyticsReportFormat(body.fileFormat ?? existing.fileFormat);
   const dateFilter = normalizeAnalyticsPdfDateFilter(body.dateFilter ?? existing.dateFilter);
+  const customStart = normalizeAnalyticsCustomDate(body.customStart ?? existing.customStart);
+  const customEnd = normalizeAnalyticsCustomDate(body.customEnd ?? existing.customEnd);
+  if (dateFilter === 'custom') {
+    if (!customStart || !customEnd) throw new HttpError(400, 'Choose both a custom start date and end date.');
+    if (compareDateOnly(customEnd, customStart) < 0) throw new HttpError(400, 'Custom range end date cannot be before the start date.');
+  }
   const frequency = normalizeTelegramBackupFrequency(body.frequency ?? existing.frequency);
   const hour = integerInRange(body.hour, existing.hour, 0, 23, 'hour');
   const minute = integerInRange(body.minute, existing.minute, 0, 59, 'minute');
@@ -1472,12 +1556,12 @@ async function saveAnalyticsPdfSchedule(
   if (enabled && destination === 'telegram') {
     const telegram = await readTelegramBackupSettings(db, auth.userId);
     if (!telegram.encryptedToken || !telegram.chatId) {
-      throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential before enabling automatic PDF uploads.');
+      throw new HttpError(400, 'Configure Telegram credentials in Settings > Credential before enabling automatic report uploads.');
     }
   }
   if (enabled && destination === 'googleDrive') {
     const drive = await readGoogleDriveAnalyticsSettings(db, auth.userId);
-    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential before enabling automatic PDF uploads.');
+    if (!drive.connected) throw new HttpError(400, 'Connect Google Drive in Settings > Credential before enabling automatic report uploads.');
   }
 
   const candidate: AnalyticsPdfScheduleSettings = {
@@ -1485,7 +1569,10 @@ async function saveAnalyticsPdfSchedule(
     destination,
     enabled,
     reportVariant,
+    fileFormat,
     dateFilter,
+    customStart,
+    customEnd,
     frequency,
     hour,
     minute,
@@ -1504,14 +1591,17 @@ async function saveAnalyticsPdfSchedule(
   const now = Date.now();
   await db.execute({
     sql: `INSERT INTO analytics_pdf_schedules(
-            user_id, destination, enabled, report_variant, date_filter, frequency,
+            user_id, destination, enabled, report_variant, file_format, date_filter, custom_start, custom_end, frequency,
             hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
             last_sent_at, last_attempt_at, last_error, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(user_id, destination) DO UPDATE SET
             enabled = excluded.enabled,
             report_variant = excluded.report_variant,
+            file_format = excluded.file_format,
             date_filter = excluded.date_filter,
+            custom_start = excluded.custom_start,
+            custom_end = excluded.custom_end,
             frequency = excluded.frequency,
             hour = excluded.hour,
             minute = excluded.minute,
@@ -1522,7 +1612,7 @@ async function saveAnalyticsPdfSchedule(
             last_error = NULL,
             updated_at = excluded.updated_at`,
     args: [
-      auth.userId, destination, enabled ? 1 : 0, reportVariant, dateFilter, frequency,
+      auth.userId, destination, enabled ? 1 : 0, reportVariant, fileFormat, dateFilter, customStart, customEnd, frequency,
       hour, minute, weekday, monthDay, timezoneOffsetMinutes, candidate.nextDueAt,
       existing.lastSentAt, existing.lastAttemptAt, null, now,
     ],
@@ -1533,7 +1623,7 @@ async function saveAnalyticsPdfSchedule(
 async function runDueAnalyticsPdfUploads(env: Env, db: Client): Promise<void> {
   const now = Date.now();
   const rows = (await db.execute({
-    sql: `SELECT user_id, destination, enabled, report_variant, date_filter, frequency,
+    sql: `SELECT user_id, destination, enabled, report_variant, file_format, date_filter, custom_start, custom_end, frequency,
                  hour, minute, weekday, month_day, timezone_offset_minutes, next_due_at,
                  last_sent_at, last_attempt_at, last_error
           FROM analytics_pdf_schedules
@@ -1560,7 +1650,7 @@ async function runDueAnalyticsPdfUploads(env: Env, db: Client): Promise<void> {
     try {
       await deliverScheduledAnalyticsPdf(env, db, settings);
     } catch (error) {
-      console.error('Scheduled Analytics PDF delivery failed', {
+      console.error('Scheduled Analytics report delivery failed', {
         userId: settings.userId,
         destination: settings.destination,
         error: safeExternalUploadError(error),
@@ -1577,13 +1667,13 @@ async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: Anal
       const telegram = await readTelegramBackupSettings(db, settings.userId);
       if (!telegram.encryptedToken || !telegram.chatId) throw new HttpError(400, 'Telegram credentials are incomplete. Configure them in Settings > Credential.');
       const token = await decryptTelegramBotToken(env.JWT_SECRET, telegram.encryptedToken, telegram.tokenIv);
-      await sendTelegramAnalyticsDocument(token, telegram.chatId, generated.fileName, generated.bytes, generated.caption);
+      await sendTelegramAnalyticsDocument(token, telegram.chatId, generated.fileName, generated.bytes, generated.caption, generated.mimeType);
     } else {
       const drive = await readGoogleDriveAnalyticsSettings(db, settings.userId);
       if (!drive.connected) throw new HttpError(400, 'Google Drive is no longer connected.');
       const accessToken = await googleDriveAccessToken(env, drive);
       const folderId = await ensureGoogleAnalyticsFolder(accessToken);
-      await googleDriveUploadPdf(accessToken, folderId, generated.fileName, generated.bytes);
+      await googleDriveUploadDocument(accessToken, folderId, generated.fileName, generated.bytes, generated.mimeType);
       await db.execute({
         sql: 'UPDATE analytics_upload_settings SET google_last_upload_at = ?, google_last_error = NULL, updated_at = ? WHERE user_id = ?',
         args: [Date.now(), Date.now(), settings.userId],
@@ -1630,7 +1720,13 @@ async function deliverScheduledAnalyticsPdf(env: Env, db: Client, settings: Anal
 
 type ScheduledAnalyticsRange = { startMs: number | null; endMs: number | null; label: string; stamp: string; dayCount: number };
 
-function scheduledAnalyticsRange(filter: AnalyticsPdfDateFilter, nowMs: number, offsetMinutes: number): ScheduledAnalyticsRange {
+function scheduledAnalyticsRange(
+  filter: AnalyticsPdfDateFilter,
+  nowMs: number,
+  offsetMinutes: number,
+  customStart: string | null = null,
+  customEnd: string | null = null,
+): ScheduledAnalyticsRange {
   const offsetMs = offsetMinutes * 60_000;
   const localNow = new Date(nowMs + offsetMs);
   const y = localNow.getUTCFullYear();
@@ -1642,6 +1738,21 @@ function scheduledAnalyticsRange(filter: AnalyticsPdfDateFilter, nowMs: number, 
     return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, '0')}-${String(value.getUTCDate()).padStart(2, '0')}`;
   };
   if (filter === 'allTime') return { startMs: null, endMs: null, label: 'All time', stamp: 'all-time', dayCount: 1 };
+  if (filter === 'custom') {
+    if (!customStart || !customEnd) throw new HttpError(400, 'Automatic report custom range is incomplete.');
+    const [sy, sm, sd] = customStart.split('-').map(Number);
+    const [ey, em, ed] = customEnd.split('-').map(Number);
+    const start = localMidnightUtc(sy, sm - 1, sd);
+    const end = localMidnightUtc(ey, em - 1, ed + 1);
+    if (end <= start) throw new HttpError(400, 'Automatic report custom range is invalid.');
+    return {
+      startMs: start,
+      endMs: end,
+      label: customStart === customEnd ? customStart : `${customStart} - ${customEnd}`,
+      stamp: customStart === customEnd ? customStart : `${customStart}_to_${customEnd}`,
+      dayCount: Math.max(1, Math.round((end - start) / 86_400_000)),
+    };
+  }
   if (filter === 'today') {
     const start = localMidnightUtc(y, m, d);
     const end = localMidnightUtc(y, m, d + 1);
@@ -1713,9 +1824,10 @@ function previousScheduledRange(range: ScheduledAnalyticsRange): ScheduledAnalyt
 }
 
 function scheduledAnalyticsFileName(settings: AnalyticsPdfScheduleSettings, range: ScheduledAnalyticsRange): string {
+  const extension = settings.fileFormat;
   return settings.reportVariant === 'transactionHistory'
-    ? `Koinly-Transaction-History-${range.stamp}.pdf`
-    : `Koinly-Analytics-${settings.dateFilter}-${range.stamp}.pdf`;
+    ? `Koinly-Transaction-History-${range.stamp}.${extension}`
+    : `Koinly-Analytics-${settings.dateFilter}-${range.stamp}.${extension}`;
 }
 
 async function buildScheduledAnalyticsPdf(
@@ -1723,12 +1835,12 @@ async function buildScheduledAnalyticsPdf(
   userId: string,
   settings: AnalyticsPdfScheduleSettings,
   nowMs: number,
-): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string }> {
+): Promise<{ fileName: string; bytes: Uint8Array<ArrayBuffer>; caption: string; mimeType: string }> {
   const snapshot = await readCloudFinanceSnapshot(db, userId);
   if (snapshot.financeRecordCount === 0) {
-    throw new HttpError(409, 'The cloud copy contains no finance data. Upload local changes before automatic Analytics PDFs can be generated.');
+    throw new HttpError(409, 'The cloud copy contains no finance data. Upload local changes before automatic Analytics reports can be generated.');
   }
-  const range = scheduledAnalyticsRange(settings.dateFilter, nowMs, settings.timezoneOffsetMinutes);
+  const range = scheduledAnalyticsRange(settings.dateFilter, nowMs, settings.timezoneOffsetMinutes, settings.customStart, settings.customEnd);
   const transactions = snapshot.database.transactions
     .filter(row => scheduledRangeContains(range, transactionEffectiveTimestamp(row)))
     .sort((a, b) => transactionEffectiveTimestamp(b) - transactionEffectiveTimestamp(a));
@@ -1910,19 +2022,161 @@ async function buildScheduledAnalyticsPdf(
     lines.push('Transfers are not counted as income or expense. This automatic report is generated from the latest finance data synchronized to the Self-Hosted Worker.');
   }
 
-  const bytes = buildSimpleTextPdf(lines);
-  if (bytes.byteLength > analyticsPdfMaxBytes) throw new HttpError(413, 'The generated Analytics PDF is too large to upload safely.');
+  const bytes = settings.fileFormat === 'pdf'
+    ? buildSimpleTextPdf(lines)
+    : settings.fileFormat === 'xlsx'
+      ? buildSimpleXlsxFromLines(lines, settings.reportVariant === 'transactionHistory' ? 'Transactions' : 'Summary')
+      : ownedUtf8(`${lines.join('\n')}\n`);
+  if (bytes.byteLength > analyticsReportMaxBytes) throw new HttpError(413, 'The generated Analytics report is too large to upload safely.');
   return {
     fileName: scheduledAnalyticsFileName(settings, range),
     bytes,
+    mimeType: analyticsReportMimeType(settings.fileFormat),
     caption: settings.reportVariant === 'transactionHistory'
-      ? `Koinly Transaction History\n${range.label}`
-      : `Koinly ${scheduledDateFilterLabel(settings.dateFilter)} Analytics\n${range.label}`,
+      ? `Koinly Transaction History • ${settings.fileFormat.toUpperCase()}\n${range.label}`
+      : `Koinly ${scheduledDateFilterLabel(settings.dateFilter)} Analytics • ${settings.fileFormat.toUpperCase()}\n${range.label}`,
   };
 }
 
 function scheduledDateFilterLabel(filter: AnalyticsPdfDateFilter): string {
-  return ({ today: 'Today', thisWeek: 'This Week', thisMonth: 'This Month', thisYear: 'This Year', allTime: 'All Time' } as const)[filter];
+  return ({ today: 'Today', thisWeek: 'This Week', thisMonth: 'This Month', thisYear: 'This Year', allTime: 'All Time', custom: 'Custom Range' } as const)[filter];
+}
+
+function ownedUtf8(value: string): Uint8Array<ArrayBuffer> {
+  const encoded = new TextEncoder().encode(value);
+  const owned = new Uint8Array(new ArrayBuffer(encoded.byteLength));
+  owned.set(encoded);
+  return owned;
+}
+
+function xmlEscape(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function xlsxColumnName(index: number): string {
+  let value = index + 1;
+  let result = '';
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+function crc32(data: Uint8Array<ArrayBuffer>): number {
+  let crc = 0xffffffff;
+  for (const byte of data) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 1) !== 0 ? ((crc >>> 1) ^ 0xedb88320) : (crc >>> 1);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipU16(value: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(2));
+  new DataView(bytes.buffer).setUint16(0, value, true);
+  return bytes;
+}
+
+function zipU32(value: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(4));
+  new DataView(bytes.buffer).setUint32(0, value >>> 0, true);
+  return bytes;
+}
+
+function concatOwned(parts: Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer> {
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const output = new Uint8Array(new ArrayBuffer(total));
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.byteLength;
+  }
+  return output;
+}
+
+function buildStoredZip(entries: Array<{ name: string; data: Uint8Array<ArrayBuffer> }>): Uint8Array<ArrayBuffer> {
+  const locals: Uint8Array<ArrayBuffer>[] = [];
+  const centrals: Uint8Array<ArrayBuffer>[] = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = ownedUtf8(entry.name);
+    const checksum = crc32(entry.data);
+    const local = concatOwned([
+      zipU32(0x04034b50), zipU16(20), zipU16(0x0800), zipU16(0), zipU16(0), zipU16(0),
+      zipU32(checksum), zipU32(entry.data.byteLength), zipU32(entry.data.byteLength),
+      zipU16(name.byteLength), zipU16(0), name, entry.data,
+    ]);
+    locals.push(local);
+    const central = concatOwned([
+      zipU32(0x02014b50), zipU16(20), zipU16(20), zipU16(0x0800), zipU16(0), zipU16(0), zipU16(0),
+      zipU32(checksum), zipU32(entry.data.byteLength), zipU32(entry.data.byteLength),
+      zipU16(name.byteLength), zipU16(0), zipU16(0), zipU16(0), zipU16(0), zipU32(0), zipU32(offset), name,
+    ]);
+    centrals.push(central);
+    offset += local.byteLength;
+  }
+  const centralDirectory = concatOwned(centrals);
+  const end = concatOwned([
+    zipU32(0x06054b50), zipU16(0), zipU16(0), zipU16(entries.length), zipU16(entries.length),
+    zipU32(centralDirectory.byteLength), zipU32(offset), zipU16(0),
+  ]);
+  return concatOwned([...locals, centralDirectory, end]);
+}
+
+export function buildSimpleXlsxFromLines(sourceLines: string[], sheetName: string): Uint8Array<ArrayBuffer> {
+  const safeSheetName = (sheetName.replace(/[\\/:*?\[\]]/g, ' ').trim() || 'Report').slice(0, 31);
+  const rows = sourceLines.map(line => {
+    if (!line) return [] as string[];
+    if (line.includes(' | ')) return line.split(' | ');
+    const split = line.indexOf(': ');
+    if (split > 0) return [line.slice(0, split), line.slice(split + 2)];
+    return [line];
+  });
+  const sheetXml = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'];
+  rows.forEach((row, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    sheetXml.push(`<row r="${rowNumber}">`);
+    row.forEach((cell, columnIndex) => {
+      const ref = `${xlsxColumnName(columnIndex)}${rowNumber}`;
+      const style = rowIndex === 0 ? ' s="1"' : '';
+      sheetXml.push(`<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEscape(cell)}</t></is></c>`);
+    });
+    sheetXml.push('</row>');
+  });
+  sheetXml.push('</sheetData></worksheet>');
+
+  return buildStoredZip([
+    {
+      name: '[Content_Types].xml',
+      data: ownedUtf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'),
+    },
+    {
+      name: '_rels/.rels',
+      data: ownedUtf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+    },
+    {
+      name: 'xl/workbook.xml',
+      data: ownedUtf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`),
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      data: ownedUtf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'),
+    },
+    {
+      name: 'xl/styles.xml',
+      data: ownedUtf8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><sz val="11"/><name val="Aptos"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'),
+    },
+    { name: 'xl/worksheets/sheet1.xml', data: ownedUtf8(sheetXml.join('')) },
+  ]);
 }
 
 function buildSimpleTextPdf(sourceLines: string[]): Uint8Array<ArrayBuffer> {
@@ -2055,17 +2309,18 @@ async function ensureGoogleAnalyticsFolder(accessToken: string): Promise<string>
   return folderId;
 }
 
-async function googleDriveUploadPdf(
+async function googleDriveUploadDocument(
   accessToken: string,
   folderId: string,
   fileName: string,
   bytes: Uint8Array<ArrayBuffer>,
+  mimeType = analyticsReportMimeType(fileName),
 ): Promise<{ id: string; webViewLink: string }> {
   const boundary = `koinly_${crypto.randomUUID().replace(/-/g, '')}`;
-  const metadata = JSON.stringify({ name: fileName, parents: [folderId], mimeType: 'application/pdf' });
+  const metadata = JSON.stringify({ name: fileName, parents: [folderId], mimeType });
   const body = new Blob([
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
-    `--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`,
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`,
     bytes,
     `\r\n--${boundary}--`,
   ]);

@@ -58,7 +58,7 @@ You do not need to write Cloudflare or Turso code yourself.
 - Recurring subscriptions with scheduled date/time, price, category, spending account, daily/weekly/monthly/yearly repeat, automatic transaction recording, and manual “Add now”
 - Cash-flow trends, category analysis, balances, and net results
 - Analytics summaries driven by the same **Choose Date Filter** flow used elsewhere in Koinly: Today, This Week, This Month, This Year, All Time, or a Custom date range
-- Two Analytics PDF report types: a detailed filtered Summary and a filtered Transaction history ledger, with direct and scheduled Self-Hosted Worker uploads to Telegram and Google Drive
+- Analytics reports support **PDF**, **XLSX**, and **TXT** in both Summary and Transaction history variants, with direct and scheduled Self-Hosted Worker uploads to Telegram and Google Drive
 - Search and filters for account, category, type, and date
 - Quick account/category creation from transaction pickers
 
@@ -510,7 +510,7 @@ Optional command-line instructions and implementation details are in the [Worker
 ---
 
 <a id="optional-telegram-cloud-backup"></a>
-## 7. Credentials, Telegram backup, and cloud PDF backup
+## 7. Credentials, Telegram backup, and cloud report backup
 
 Cloud delivery is available only when using your self-hosted Worker.
 
@@ -536,34 +536,33 @@ In **Settings > Credential > Google Drive**, create and connect your own OAuth 2
 4. Copy the **Authorized redirect URI** shown in Koinly and add that exact URI to the Google OAuth client.
 5. Paste the Client ID and Client Secret into Koinly, select **Save and connect Google Drive**, then finish authorization in the browser.
 
-Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for PDFs uploaded by the app. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
+Koinly requests only the `drive.file` scope and creates a dedicated **Koinly Analytics** folder for reports uploaded by the app. The Worker encrypts the Google OAuth Client Secret and refresh token before storing them in Turso.
 
 ### Archive
 
 Backup and scheduled-delivery controls are grouped under **Settings > Archive**:
 
-- **Backup** creates a `.koinlybackup` file now.
-- **Automatic local backup** controls scheduled device-folder backups.
-- **Load backup** merges a selected `.koinlybackup` with the active device data.
-- **Automatic Telegram backup** schedules `.koinlybackup` uploads through the Telegram credentials configured in **Settings > Credential**.
-- **Cloud Backup** schedules Analytics PDF delivery to Telegram and Google Drive.
+- **Local** contains **Backup** for creating a `.koinlybackup` now and **Load backup** for merging a selected backup with the active device data.
+- **Automatic backup** keeps **Automatic local backup** and **Automatic Telegram backup** together in one section. Local backup schedules device-folder backups; Telegram backup schedules `.koinlybackup` uploads through the credentials configured in **Settings > Credential**.
+- **Cloud** contains **Cloud Backup** for scheduled Analytics report delivery to Telegram and Google Drive in PDF, XLSX, or TXT.
 
 For **Automatic Telegram backup**, choose daily, weekly, or monthly frequency, exact delivery time, and the applicable weekday/month date. **Upload backup now** remains available from that Archive page. The Worker creates the `.koinlybackup` from synchronized cloud data and sends it as a Telegram document.
 
-### Analytics PDF uploads and Cloud Backup
+### Analytics report uploads and Cloud Backup
 
-Open **Settings > Analytics** to choose the report date filter and PDF type. Manual **Upload Telegram** and **Upload Drive** actions use the credentials already configured in **Settings > Credential**; Analytics no longer contains credential/settings icons.
+Open **Settings > Analytics** to choose the report date filter, report type, and output format: **PDF**, **XLSX**, or **TXT**. **Download**, **Upload Telegram**, and **Upload Drive** all use the selected format. Manual cloud uploads use the credentials already configured in **Settings > Credential**; Analytics does not contain credential/settings icons.
 
-For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and Google Drive each have an independent PDF schedule with:
+For automatic delivery, open **Settings > Archive > Cloud Backup**. Telegram and Google Drive each have an independent report schedule with:
 
 - Summary or Transaction history report type;
-- rolling date filter (**Today**, **This Week**, **This Month**, **This Year**, or **All Time**);
+- output format (**PDF**, **XLSX**, or **TXT**);
+- date filter (**Today**, **This Week**, **This Month**, **This Year**, **All Time**, or a fixed **Custom range**);
 - daily, weekly, or monthly cadence; and
 - delivery time.
 
-The Worker generates scheduled PDFs from the latest synchronized cloud data, so the app does not need to remain open. A fixed **Custom** date range is intentionally not offered for recurring reports.
+The Worker generates scheduled reports in the selected format from the latest synchronized cloud data, so the app does not need to remain open. **Custom range** uses the same centered Start/End calendar interaction as transaction date ranges and repeats the exact saved range on the chosen schedule.
 
-Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across automatic Telegram PDF, automatic Google Drive PDF, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
+Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across automatic Telegram report, automatic Google Drive report, and automatic Telegram `.koinlybackup` uploads. For example, `03:00`, `03:05`, and `03:10` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
 
 > Existing Worker owners must redeploy the latest **Deploy Self-Hosted Sync Worker** workflow once so the current Analytics upload and scheduling endpoints are installed.
 
@@ -582,7 +581,7 @@ You can choose:
 - destination folder; and
 - whether the previous automatic backup is deleted after a new one succeeds.
 
-On Android, Koinly uses the system folder picker and creates/uses a `Koinly/Backup` folder under the selected location.
+On Android, automatic local backups run through a native WorkManager job using the persisted folder permission from the system folder picker. A due backup can therefore be created while the Koinly UI is closed, and the resulting file is written to the selected `Koinly/Backup` location.
 
 ---
 
@@ -829,7 +828,9 @@ The Worker rejects an empty finance backup instead of intentionally sending an e
 
 ## 12.8 Android automatic folder backup fails
 
-Open **Automatic local backup**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission.
+Open **Automatic local backup**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission and re-registers the native background job.
+
+If an OEM battery manager has explicitly restricted Koinly, allow background activity for the app. A manual Android **Force stop** suspends scheduled WorkManager jobs until the app is launched again.
 
 ---
 
