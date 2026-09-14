@@ -30,6 +30,8 @@ void main() {
     expect(workflow, contains('health_ready=0'));
     expect(workflow, contains('for attempt in {1..18}; do'));
     expect(workflow, contains('.profileMediaSyncAvailable == true'));
+    expect(workflow, contains('.workerVersion == $worker_version'));
+    expect(workflow, contains('Verify Worker version matches the app release'));
     expect(workflow, contains('the newly deployed capability contract is not ready yet'));
     expect(workflow, contains('health_ready=1'));
   });

@@ -6,7 +6,7 @@ void main() {
   test('Account & sync exposes in-app Worker deployment and auto-configures URL', () {
     final main = File('lib/main.dart').readAsStringSync();
 
-    expect(main, contains("label: const Text('Deploy Database')"));
+    expect(main, contains("'Deploy Database'"));
     expect(main, contains('class WorkerDeploymentScreen extends StatefulWidget'));
     expect(main, contains('Navigator.push<String>'));
     expect(main, contains('text: workerUrl'));
@@ -28,10 +28,12 @@ void main() {
     expect(service, contains("'cron': '*/5 * * * *'"));
     expect(service, contains("data['analyticsUploadAvailable'] == true"));
     expect(service, contains("data['profileMediaSyncAvailable'] == true"));
+    expect(service, contains("data['workerVersion'] == appVersion"));
+    expect(service, contains("'KOINLY_WORKER_VERSION'"));
     expect(service, contains('Worker deployed successfully.'));
   });
 
-  test('deployment credentials are session-only and administrator password is hashed locally', () {
+  test('deployment credentials use secure storage for automatic Worker updates', () {
     final service = File('lib/worker_deployment.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
 
@@ -39,10 +41,14 @@ void main() {
     expect(service, isNot(contains("'ADMIN_PASSWORD', 'text'")));
     expect(service, contains('_pbkdf2HmacSha256'));
     expect(service, contains(r'pbkdf2\$100000\$'));
-    expect(service, contains('100000'));
-    expect(main, contains('Sensitive values are used only for this deployment session and are not saved by Koinly.'));
-    expect(service, isNot(contains('SharedPreferences')));
-    expect(service, isNot(contains('FlutterSecureStorage')));
+    expect(service, contains('FlutterSecureStorage'));
+    expect(service, contains('koinly_worker_auto_deployment_profile_v1'));
+    expect(service, contains('WorkerAutoUpdateService'));
+    expect(service, contains("decoded['workerVersion']"));
+    expect(main, contains("title: const Text('Automatic Worker updates'"));
+    expect(main, contains("label: const Text('Forget saved deployment credentials')"));
+    expect(main, contains('checkForAutomaticWorkerUpdate()'));
+    expect(main, contains('Automatic Worker update failed:'));
   });
 
   test('release builds embed a Worker bundle generated from current Worker source', () {
@@ -60,5 +66,6 @@ void main() {
     expect(builder, contains('koinly_sync_worker.js'));
     expect(pubspec, contains('    - assets/worker/'));
     expect(pubspec, contains('    - cloud/worker/schema.sql'));
+    expect(workflow, contains("'cloud/worker/wrangler.self-hosted.toml'"));
   });
 }

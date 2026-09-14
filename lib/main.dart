@@ -1895,6 +1895,9 @@ class AppController extends ChangeNotifier {
   String syncDeviceId = '';
   String syncStatus = 'Offline';
   bool syncAuthBusy = false;
+  bool workerAutoUpdateBusy = false;
+  String workerAutoUpdateStatus = '';
+  String? workerAutoUpdateError;
   final GithubUpdateService updateService = GithubUpdateService();
   UpdateCheckOutcome updateCheckOutcome = UpdateCheckOutcome.noReleaseAvailable;
   bool updateCheckBusy = false;
@@ -1981,10 +1984,59 @@ class AppController extends ChangeNotifier {
       _schedulePendingSyncRetry(immediate: true);
       _startCloudAutoPull();
     }
+    if (selfHostedSyncApiBaseUrl.isNotEmpty) {
+      unawaited(checkForAutomaticWorkerUpdate());
+    }
     if (Platform.isAndroid) {
       unawaited(_syncAndroidAutomaticBackupWorker());
     } else {
       unawaited(runAutomaticBackupIfDue());
+    }
+  }
+
+  void clearWorkerAutoUpdateMessage() {
+    if (workerAutoUpdateStatus.isEmpty && workerAutoUpdateError == null) return;
+    workerAutoUpdateStatus = '';
+    workerAutoUpdateError = null;
+    notifyListeners();
+  }
+
+  Future<void> checkForAutomaticWorkerUpdate() async {
+    if (workerAutoUpdateBusy || selfHostedSyncApiBaseUrl.trim().isEmpty) return;
+    workerAutoUpdateBusy = true;
+    workerAutoUpdateError = null;
+    workerAutoUpdateStatus = 'Checking Worker version…';
+    notifyListeners();
+
+    final updater = WorkerAutoUpdateService();
+    try {
+      final result = await updater.checkAndUpdate(
+        activeWorkerUrl: selfHostedSyncApiBaseUrl,
+        onProgress: (message) {
+          workerAutoUpdateStatus = message;
+          notifyListeners();
+        },
+      );
+      switch (result.outcome) {
+        case WorkerAutoUpdateOutcome.updated:
+          workerAutoUpdateStatus = result.message;
+          break;
+        case WorkerAutoUpdateOutcome.noSavedDeployment:
+        case WorkerAutoUpdateOutcome.inactiveDeployment:
+        case WorkerAutoUpdateOutcome.alreadyCurrent:
+          workerAutoUpdateStatus = '';
+          break;
+      }
+    } on WorkerDeploymentException catch (error) {
+      workerAutoUpdateStatus = '';
+      workerAutoUpdateError = 'Automatic Worker update failed: ${error.message}';
+    } catch (_) {
+      workerAutoUpdateStatus = '';
+      workerAutoUpdateError = 'Automatic Worker update failed. Open Deploy Database to verify the saved deployment credentials and retry.';
+    } finally {
+      updater.close();
+      workerAutoUpdateBusy = false;
+      notifyListeners();
     }
   }
 
@@ -16903,6 +16955,7 @@ class WorkerDeploymentScreen extends StatefulWidget {
 }
 
 class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
+  final _credentialStore = WorkerDeploymentCredentialStore();
   final _workerNameController = TextEditingController(text: 'koinly-sync');
   final _accountIdController = TextEditingController();
   final _cloudflareTokenController = TextEditingController();
@@ -16917,8 +16970,72 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
   bool _jwtVisible = false;
   bool _adminPasswordVisible = false;
   bool _deploying = false;
+  bool _autoUpdateEnabled = true;
+  bool _loadingSavedDeployment = true;
+  WorkerDeploymentProfile? _savedDeployment;
   String? _error;
   final List<String> _progress = <String>[];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadSavedDeployment());
+  }
+
+  Future<void> _loadSavedDeployment() async {
+    final profile = await _credentialStore.read();
+    if (!mounted) return;
+    if (profile != null) {
+      _savedDeployment = profile;
+      _workerNameController.text = profile.workerName;
+      _accountIdController.text = profile.cloudflareAccountId;
+      _cloudflareTokenController.text = profile.cloudflareApiToken;
+      _tursoUrlController.text = profile.tursoDatabaseUrl;
+      _tursoTokenController.text = profile.tursoAuthToken;
+      _jwtSecretController.text = profile.jwtSecret;
+      _adminUsernameController.text = profile.adminUsername;
+    }
+    setState(() => _loadingSavedDeployment = false);
+  }
+
+  Future<void> _setAutoUpdateEnabled(bool value) async {
+    if (value) {
+      if (mounted) setState(() => _autoUpdateEnabled = true);
+      return;
+    }
+    try {
+      await _credentialStore.clear();
+      if (!mounted) return;
+      setState(() {
+        _autoUpdateEnabled = false;
+        _savedDeployment = null;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _autoUpdateEnabled = true;
+        _error = 'Could not disable automatic Worker updates because the saved secure deployment profile could not be removed.';
+      });
+    }
+  }
+
+  Future<void> _forgetSavedDeployment() async {
+    try {
+      await _credentialStore.clear();
+      if (!mounted) return;
+      setState(() {
+        _savedDeployment = null;
+        _autoUpdateEnabled = false;
+        _error = null;
+        _progress.add('Saved deployment credentials removed from this device.');
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not remove the saved deployment credentials from secure storage.');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -16991,6 +17108,9 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
 
     final service = WorkerDeploymentService();
     try {
+      final savedPasswordHash = _adminPasswordController.text.isEmpty
+          ? (_savedDeployment?.adminPasswordHash ?? '')
+          : '';
       final result = await service.deploy(
         WorkerDeploymentConfig(
           workerName: _workerNameController.text,
@@ -17001,6 +17121,7 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
           jwtSecret: _jwtSecretController.text,
           adminUsername: _adminUsernameController.text,
           adminPassword: _adminPasswordController.text,
+          adminPasswordHash: savedPasswordHash,
         ),
         onProgress: (message) {
           if (!mounted) return;
@@ -17009,8 +17130,44 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
           });
         },
       );
+      final profile = WorkerDeploymentProfile(
+        workerName: _workerNameController.text.trim().toLowerCase(),
+        cloudflareAccountId: _accountIdController.text.trim(),
+        cloudflareApiToken: _cloudflareTokenController.text.trim(),
+        tursoDatabaseUrl: _tursoUrlController.text.trim(),
+        tursoAuthToken: _tursoTokenController.text.trim(),
+        jwtSecret: _jwtSecretController.text.trim(),
+        adminUsername: _adminUsernameController.text.trim().toLowerCase(),
+        adminPasswordHash: result.adminPasswordHash,
+        workerUrl: result.workerUrl,
+        workerVersion: result.workerVersion,
+      );
+      var automaticUpdatesSaved = false;
+      String? automaticUpdateWarning;
+      if (_autoUpdateEnabled) {
+        try {
+          await _credentialStore.write(profile);
+          automaticUpdatesSaved = true;
+        } catch (_) {
+          automaticUpdateWarning = 'Worker deployed, but this device could not save the secure deployment profile. Automatic Worker updates are unavailable until you deploy again from a device with secure credential storage.';
+        }
+      } else {
+        try {
+          await _credentialStore.clear();
+        } catch (_) {}
+      }
       if (!mounted) return;
-      setState(() => _progress.add('Worker URL: ${result.workerUrl}'));
+      _adminPasswordController.clear();
+      setState(() {
+        _savedDeployment = automaticUpdatesSaved ? profile : null;
+        _progress.add('Worker URL: ${result.workerUrl}');
+        if (automaticUpdatesSaved) {
+          _progress.add('Automatic Worker updates enabled on this device.');
+        }
+        if (automaticUpdateWarning != null) {
+          _progress.add(automaticUpdateWarning);
+        }
+      });
       await Future<void>.delayed(const Duration(milliseconds: 850));
       if (mounted) Navigator.pop(context, result.workerUrl);
     } on WorkerDeploymentException catch (error) {
@@ -17090,7 +17247,7 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
                 children: [
                   Text('3. Enter deployment values', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  Text('Sensitive values are used only for this deployment session and are not saved by Koinly.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
+                  Text('Koinly can securely save the deployment credentials on this device so the Worker can update automatically after future app updates. The administrator password itself is never saved.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 14),
                   TextField(
                     contextMenuBuilder: koinlyTextFieldContextMenu,
@@ -17154,7 +17311,33 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
                     decoration: const InputDecoration(labelText: 'Administrator username', prefixIcon: Icon(Icons.admin_panel_settings_rounded)),
                   ),
                   const SizedBox(height: 12),
-                  _secretField(controller: _adminPasswordController, label: 'Administrator password', icon: Icons.lock_rounded, visible: _adminPasswordVisible, onToggle: () => setState(() => _adminPasswordVisible = !_adminPasswordVisible), hint: '12–256 characters'),
+                  _secretField(
+                    controller: _adminPasswordController,
+                    label: 'Administrator password',
+                    icon: Icons.lock_rounded,
+                    visible: _adminPasswordVisible,
+                    onToggle: () => setState(() => _adminPasswordVisible = !_adminPasswordVisible),
+                    hint: _savedDeployment == null ? '12–256 characters' : 'Leave blank to keep the current password',
+                  ),
+                  const SizedBox(height: 10),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    value: _autoUpdateEnabled,
+                    onChanged: _deploying || _loadingSavedDeployment ? null : (value) => unawaited(_setAutoUpdateEnabled(value)),
+                    title: const Text('Automatic Worker updates', style: TextStyle(fontWeight: FontWeight.w900)),
+                    subtitle: const Text('Securely keep the deployment credentials on this device and redeploy only when the installed Koinly app contains a newer Worker.'),
+                  ),
+                  if (_savedDeployment != null) ...[
+                    const SizedBox(height: 4),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _deploying ? null : _forgetSavedDeployment,
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Forget saved deployment credentials'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -17249,6 +17432,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       MaterialPageRoute(builder: (_) => const WorkerDeploymentScreen()),
     );
     if (!mounted || workerUrl == null || workerUrl.trim().isEmpty) return;
+    context.read<AppController>().clearWorkerAutoUpdateMessage();
     _workerUrlController.value = _workerUrlController.value.copyWith(
       text: workerUrl,
       selection: TextSelection.collapsed(offset: workerUrl.length),
@@ -17427,7 +17611,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final signedIn = state.cloudSyncEnabled && state.syncAccountUsername.isNotEmpty;
-    final busy = state.cloudSyncOperationBusy || _endpointBusy;
+    final busy = state.cloudSyncOperationBusy || _endpointBusy || state.workerAutoUpdateBusy;
     const uploadButtonLabel = 'Upload local changes';
     final backendConfigured = _isWorkerActive(state);
     return PageScaffold(
@@ -17469,9 +17653,33 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
                     onPressed: busy ? null : _openWorkerDeployment,
-                    icon: const Icon(Icons.rocket_launch_rounded),
-                    label: const Text('Deploy Database'),
+                    icon: state.workerAutoUpdateBusy
+                        ? const KoinlyInlineLoader(size: 18)
+                        : const Icon(Icons.rocket_launch_rounded),
+                    label: Text(state.workerAutoUpdateBusy ? 'Updating Worker…' : 'Deploy Database'),
                   ),
+                  if (state.workerAutoUpdateStatus.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      state.workerAutoUpdateStatus,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                  if (state.workerAutoUpdateError != null && state.workerAutoUpdateError!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      state.workerAutoUpdateError!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800),
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: state.workerAutoUpdateBusy ? null : () => unawaited(state.checkForAutomaticWorkerUpdate()),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Retry Worker update'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -1,3 +1,12 @@
+## [1.0.1156] - 2026-09-14
+
+- Added automatic self-hosted Worker updates for Workers deployed through **Settings > Account & sync > Deploy Database**.
+- The app can now securely retain the Cloudflare/Turso deployment profile on-device, while storing only the derived administrator password verifier rather than the raw administrator password.
+- On the first launch after a newer Koinly app update, Koinly compares the active Worker's reported version with the Worker bundled into the app and redeploys only when the bundled Worker is newer.
+- Added Worker version reporting to `/health`, automatic update progress/error reporting in **Account & sync**, retry support, and a control to forget saved deployment credentials.
+- GitHub-based Worker deployment now verifies that its Worker version matches the app release version before deployment.
+- Updated the README and Worker documentation for the automatic redeployment flow and synchronized application version metadata to `1.0.1156+200`.
+
 ## [1.0.1155] - 2026-09-14
 
 - Added **Settings > Account & sync > Deploy Database** as a second self-hosted Worker deployment path alongside GitHub Actions.

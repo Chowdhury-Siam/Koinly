@@ -32,7 +32,7 @@ The original administrator password stays in GitHub's encrypted secret storage. 
 
 ## Administration portal
 
-**Existing self-hosted Worker owners MUST redeploy after updating.** The current deployment provisions the `SyncHub` SQLite-backed Durable Object used for realtime WebSocket sync notifications, while preserving existing Turso data and accounts. Apply the latest schema first (the GitHub workflow does this automatically). App updates alone do not update a deployed Worker.
+**Existing self-hosted Worker owners must keep the Worker current.** GitHub-based deployments redeploy automatically when the fork receives the updated project. Workers deployed from Koinly's **Deploy Database** screen can also update automatically after future app updates when **Automatic Worker updates** is enabled; the app securely retains the deployment profile on that device and redeploys only when its embedded Worker is newer. Existing Turso data and accounts are preserved.
 
 Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
 
@@ -93,6 +93,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
+  "workerVersion": "1.0.1156",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,

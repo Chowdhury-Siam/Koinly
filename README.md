@@ -301,7 +301,7 @@ Choose the remaining three values from the checklist in Section 4.1:
 - **`ADMIN_USERNAME`:** Choose a lowercase username such as `worker-admin`. Use 3–32 letters, numbers, dots, dashes, or underscores, starting and ending with a letter or number.
 - **`ADMIN_PASSWORD`:** Choose a strong, unique password of 12–256 characters and save it in your password manager. This is the password you will enter when signing in to `/profile`.
 
-Enter these values in the deployment method you choose. Both methods derive the administrator password verifier before deployment, so the raw administrator password is not stored in the account database. The in-app method keeps the entered deployment credentials only for the active deployment operation; the GitHub method keeps them in encrypted repository secrets.
+Enter these values in the deployment method you choose. Both methods derive the administrator password verifier before deployment, so the raw administrator password is not stored in the account database. When **Automatic Worker updates** is enabled in the in-app deployment page, Koinly stores the Cloudflare/Turso deployment credentials and the derived administrator password verifier in the device's secure credential store so it can update that same Worker after future app updates. The raw administrator password itself is never saved. The GitHub method keeps its deployment values in encrypted repository secrets.
 
 Use different values for `JWT_SECRET` and `ADMIN_PASSWORD`, and do not reuse your GitHub, Cloudflare, or Koinly account password.
 
@@ -401,11 +401,22 @@ After you have the values from Sections 5.2–5.7:
 5. Select **Deploy Worker**.
 6. Keep the page open while Koinly validates Cloudflare and Turso, applies the current database schema, uploads the Worker, enables its `workers.dev` route, configures the five-minute scheduler, and waits for the Worker health check.
 7. If a step fails, the deployment page shows the error there so you can correct the value and retry.
-8. When deployment succeeds, Koinly returns to **Account & sync**, automatically fills the **Cloudflare Worker URL**, and validates that Worker for use by the app.
+8. Leave **Automatic Worker updates** enabled if you want this device to keep the Worker current after future Koinly app updates.
+9. When deployment succeeds, Koinly returns to **Account & sync**, automatically fills the **Cloudflare Worker URL**, and validates that Worker for use by the app.
 
-The Cloudflare API token, Turso token, JWT secret, and administrator password are **not saved by the app**. They are kept only for the active deployment operation. Koinly derives the administrator password verifier locally; the raw administrator password is not uploaded as a Worker secret. Cloudflare receives the Worker secrets needed by the deployed service.
+With **Automatic Worker updates** enabled, Koinly saves the deployment profile in the platform secure credential store. This includes the Cloudflare API token, Turso token, JWT secret, Worker/account identifiers, and the already-derived administrator password verifier. The raw administrator password is never saved. On a later Koinly app version, the app checks the active Worker's `/health` version and redeploys only when the embedded Worker is newer. If the active Worker URL has been changed to a different Worker, the saved deployment profile is not used automatically. You can disable this behavior or remove the saved deployment profile from **Deploy Database** at any time.
+
+Cloudflare still receives the Worker secrets required by the deployed service. If secure credential storage is unavailable on the device, the Worker can still be deployed manually, but automatic future redeployment cannot be enabled on that device.
 
 The release workflow embeds the matching deployable Worker bundle into official Koinly builds. If a source build reports that the deployable bundle is missing, build the app through the repository release workflow or run `npm run bundle:app` inside `cloud/worker` before building Flutter.
+
+### 5.10.1 Automatic Worker updates
+
+Automatic Worker updating applies only to the Worker deployed from that device through **Deploy Database** with **Automatic Worker updates** enabled. After a newer Koinly app version is installed and opened, Koinly checks the saved deployment profile and the active Worker URL. If they match, it reads the Worker's reported version from `/health`. A current Worker is left untouched; an older or legacy Worker is redeployed with the Worker bundle embedded in the installed app, the existing Turso database, and the same Worker identity.
+
+The update runs in the background so app startup is not blocked. **Account & sync** shows progress while a Worker update is running and displays a retryable error if Cloudflare, Turso, network, or credential validation fails. The existing deployed Worker is not deleted when an update attempt fails.
+
+Users who first deployed with Koinly `1.0.1155` or earlier must open **Deploy Database** once on `1.0.1156` or later and complete a deployment with **Automatic Worker updates** enabled so the secure deployment profile can be created.
 
 ---
 
@@ -441,7 +452,7 @@ When two signed-in devices are open, the Worker uses an authenticated Durable Ob
 
 Manage your Worker's accounts through a private web dashboard. Administrator access is included in the normal setup in Sections 4 and 5; use the `ADMIN_USERNAME` and `ADMIN_PASSWORD` you saved there.
 
-> **Existing Worker owners:** when a Koinly update includes Worker changes, redeploy the Worker using either **Settings > Account & sync > Deploy Database** or **Actions > Deploy Self-Hosted Sync Worker**. Updating only the app does not update an already deployed Worker. Keep the same Worker name, Turso database, and `JWT_SECRET` so the existing backend continues to use the same identity and encrypted data.
+> **Existing Worker owners:** Workers deployed through **Deploy Database** can now update automatically after future Koinly app updates when **Automatic Worker updates** is enabled and the saved deployment profile still matches the active Worker URL. Koinly compares the Worker's reported version with the Worker bundled into the installed app and redeploys only when the bundled Worker is newer. GitHub-based deployments continue to redeploy automatically when the fork receives the updated project. Keep the same Worker name, Turso database, and `JWT_SECRET` so the existing backend continues to use the same identity and encrypted data.
 
 The administrator login manages the Worker. Sync accounts are the accounts people use to sign in to Koinly; they are listed in the dashboard. Your administrator login is separate and is not included in that count.
 
@@ -571,7 +582,7 @@ The Worker generates scheduled reports in the selected format from the latest sy
 
 Every enabled automatic cloud upload must be at least **5 minutes** away from every other one. This is enforced pairwise across Telegram report, Google Drive report, Telegram `.koinlybackup`, and Google Drive `.koinlybackup` schedules. For example, `03:00`, `03:05`, `03:10`, and `03:15` are valid; `03:00` and `03:04` are rejected. The same rule also handles midnight correctly.
 
-> Existing Worker owners should redeploy the Worker after updating when the release includes Worker changes. Use either **Deploy Database** in Koinly or **Deploy Self-Hosted Sync Worker** on GitHub.
+> If the Worker was originally deployed through **Deploy Database** with automatic updates enabled, Koinly handles newer Worker redeployment on the first launch of the updated app. GitHub-based deployments continue to update through the deployment workflow. If an automatic update fails, open **Settings > Account & sync** to see the error and retry or refresh the saved deployment credentials.
 
 ---
 

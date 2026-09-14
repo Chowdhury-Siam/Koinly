@@ -6,8 +6,12 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
+import 'app_config.dart';
+import 'update_service.dart';
 
 class WorkerDeploymentConfig {
   const WorkerDeploymentConfig({
@@ -18,7 +22,8 @@ class WorkerDeploymentConfig {
     required this.tursoAuthToken,
     required this.jwtSecret,
     required this.adminUsername,
-    required this.adminPassword,
+    this.adminPassword = '',
+    this.adminPasswordHash = '',
   });
 
   final String workerName;
@@ -29,11 +34,19 @@ class WorkerDeploymentConfig {
   final String jwtSecret;
   final String adminUsername;
   final String adminPassword;
+  final String adminPasswordHash;
 }
 
 class WorkerDeploymentResult {
-  const WorkerDeploymentResult({required this.workerUrl});
+  const WorkerDeploymentResult({
+    required this.workerUrl,
+    required this.adminPasswordHash,
+    required this.workerVersion,
+  });
+
   final String workerUrl;
+  final String adminPasswordHash;
+  final String workerVersion;
 }
 
 class WorkerDeploymentException implements Exception {
@@ -44,6 +57,236 @@ class WorkerDeploymentException implements Exception {
 }
 
 typedef WorkerDeploymentProgress = void Function(String message);
+
+class WorkerDeploymentProfile {
+  const WorkerDeploymentProfile({
+    required this.workerName,
+    required this.cloudflareAccountId,
+    required this.cloudflareApiToken,
+    required this.tursoDatabaseUrl,
+    required this.tursoAuthToken,
+    required this.jwtSecret,
+    required this.adminUsername,
+    required this.adminPasswordHash,
+    required this.workerUrl,
+    required this.workerVersion,
+  });
+
+  final String workerName;
+  final String cloudflareAccountId;
+  final String cloudflareApiToken;
+  final String tursoDatabaseUrl;
+  final String tursoAuthToken;
+  final String jwtSecret;
+  final String adminUsername;
+  final String adminPasswordHash;
+  final String workerUrl;
+  final String workerVersion;
+
+  WorkerDeploymentConfig toDeploymentConfig() => WorkerDeploymentConfig(
+        workerName: workerName,
+        cloudflareAccountId: cloudflareAccountId,
+        cloudflareApiToken: cloudflareApiToken,
+        tursoDatabaseUrl: tursoDatabaseUrl,
+        tursoAuthToken: tursoAuthToken,
+        jwtSecret: jwtSecret,
+        adminUsername: adminUsername,
+        adminPasswordHash: adminPasswordHash,
+      );
+
+  WorkerDeploymentProfile copyWith({String? workerUrl, String? workerVersion}) => WorkerDeploymentProfile(
+        workerName: workerName,
+        cloudflareAccountId: cloudflareAccountId,
+        cloudflareApiToken: cloudflareApiToken,
+        tursoDatabaseUrl: tursoDatabaseUrl,
+        tursoAuthToken: tursoAuthToken,
+        jwtSecret: jwtSecret,
+        adminUsername: adminUsername,
+        adminPasswordHash: adminPasswordHash,
+        workerUrl: workerUrl ?? this.workerUrl,
+        workerVersion: workerVersion ?? this.workerVersion,
+      );
+
+  Map<String, Object?> toJson() => {
+        'version': 1,
+        'workerName': workerName,
+        'cloudflareAccountId': cloudflareAccountId,
+        'cloudflareApiToken': cloudflareApiToken,
+        'tursoDatabaseUrl': tursoDatabaseUrl,
+        'tursoAuthToken': tursoAuthToken,
+        'jwtSecret': jwtSecret,
+        'adminUsername': adminUsername,
+        'adminPasswordHash': adminPasswordHash,
+        'workerUrl': workerUrl,
+        'workerVersion': workerVersion,
+      };
+
+  static WorkerDeploymentProfile? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    String value(String key) => '${raw[key] ?? ''}'.trim();
+    final profile = WorkerDeploymentProfile(
+      workerName: value('workerName'),
+      cloudflareAccountId: value('cloudflareAccountId'),
+      cloudflareApiToken: value('cloudflareApiToken'),
+      tursoDatabaseUrl: value('tursoDatabaseUrl'),
+      tursoAuthToken: value('tursoAuthToken'),
+      jwtSecret: value('jwtSecret'),
+      adminUsername: value('adminUsername'),
+      adminPasswordHash: value('adminPasswordHash'),
+      workerUrl: value('workerUrl'),
+      workerVersion: value('workerVersion'),
+    );
+    if (profile.workerName.isEmpty ||
+        profile.cloudflareAccountId.isEmpty ||
+        profile.cloudflareApiToken.isEmpty ||
+        profile.tursoDatabaseUrl.isEmpty ||
+        profile.tursoAuthToken.isEmpty ||
+        profile.jwtSecret.isEmpty ||
+        profile.adminUsername.isEmpty ||
+        profile.adminPasswordHash.isEmpty ||
+        profile.workerUrl.isEmpty) {
+      return null;
+    }
+    return profile;
+  }
+}
+
+class WorkerDeploymentCredentialStore {
+  WorkerDeploymentCredentialStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
+
+  static const _profileKey = 'koinly_worker_auto_deployment_profile_v1';
+  final FlutterSecureStorage _storage;
+
+  Future<WorkerDeploymentProfile?> read() async {
+    try {
+      final encoded = await _storage.read(key: _profileKey);
+      if (encoded == null || encoded.trim().isEmpty) return null;
+      return WorkerDeploymentProfile.fromJson(jsonDecode(encoded));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> write(WorkerDeploymentProfile profile) async {
+    await _storage.write(key: _profileKey, value: jsonEncode(profile.toJson()));
+  }
+
+  Future<void> clear() => _storage.delete(key: _profileKey);
+}
+
+enum WorkerAutoUpdateOutcome { noSavedDeployment, inactiveDeployment, alreadyCurrent, updated }
+
+class WorkerAutoUpdateResult {
+  const WorkerAutoUpdateResult(this.outcome, {this.message = '', this.workerUrl = ''});
+
+  final WorkerAutoUpdateOutcome outcome;
+  final String message;
+  final String workerUrl;
+}
+
+class WorkerAutoUpdateService {
+  WorkerAutoUpdateService({
+    WorkerDeploymentCredentialStore? credentialStore,
+    http.Client? client,
+  })  : _credentialStore = credentialStore ?? WorkerDeploymentCredentialStore(),
+        _client = client ?? http.Client();
+
+  final WorkerDeploymentCredentialStore _credentialStore;
+  final http.Client _client;
+
+  void close() => _client.close();
+
+  Future<WorkerAutoUpdateResult> checkAndUpdate({
+    required String activeWorkerUrl,
+    WorkerDeploymentProgress? onProgress,
+  }) async {
+    final profile = await _credentialStore.read();
+    if (profile == null) {
+      return const WorkerAutoUpdateResult(WorkerAutoUpdateOutcome.noSavedDeployment);
+    }
+
+    final active = _normalizeWorkerUrl(activeWorkerUrl);
+    final saved = _normalizeWorkerUrl(profile.workerUrl);
+    if (active.isEmpty || active != saved) {
+      return const WorkerAutoUpdateResult(
+        WorkerAutoUpdateOutcome.inactiveDeployment,
+        message: 'Automatic Worker update skipped because this device is using a different Worker.',
+      );
+    }
+
+    final installedVersion = SemanticVersion.tryParse(appVersion);
+    final savedVersion = SemanticVersion.tryParse(profile.workerVersion);
+    if (installedVersion != null && savedVersion != null && savedVersion.compareTo(installedVersion) >= 0) {
+      return WorkerAutoUpdateResult(
+        WorkerAutoUpdateOutcome.alreadyCurrent,
+        message: 'Worker is already current.',
+        workerUrl: profile.workerUrl,
+      );
+    }
+
+    onProgress?.call('Checking Worker version…');
+    final remoteVersion = await _fetchWorkerVersion(profile.workerUrl);
+    final remoteSemantic = SemanticVersion.tryParse(remoteVersion ?? '');
+    if (installedVersion != null && remoteSemantic != null && remoteSemantic.compareTo(installedVersion) >= 0) {
+      try {
+        await _credentialStore.write(profile.copyWith(workerVersion: remoteVersion));
+      } catch (_) {
+        // The remote Worker is already current, so a secure-storage refresh
+        // failure must not turn a healthy deployment into an update failure.
+      }
+      return WorkerAutoUpdateResult(
+        WorkerAutoUpdateOutcome.alreadyCurrent,
+        message: 'Worker is already current.',
+        workerUrl: profile.workerUrl,
+      );
+    }
+
+    onProgress?.call('A newer Koinly Worker is available. Updating automatically…');
+    final deployment = WorkerDeploymentService(client: _client);
+    final result = await deployment.deploy(
+      profile.toDeploymentConfig(),
+      onProgress: onProgress ?? (_) {},
+    );
+    var profileSaved = true;
+    try {
+      await _credentialStore.write(profile.copyWith(
+        workerUrl: result.workerUrl,
+        workerVersion: result.workerVersion,
+      ));
+    } catch (_) {
+      profileSaved = false;
+    }
+    return WorkerAutoUpdateResult(
+      WorkerAutoUpdateOutcome.updated,
+      message: profileSaved
+          ? 'Worker updated automatically to ${result.workerVersion}.'
+          : 'Worker updated automatically to ${result.workerVersion}, but the secure deployment profile could not be refreshed. Future automatic updates may require Deploy Database.',
+      workerUrl: result.workerUrl,
+    );
+  }
+
+  Future<String?> _fetchWorkerVersion(String workerUrl) async {
+    try {
+      final response = await _client
+          .get(Uri.parse('${_normalizeWorkerUrl(workerUrl)}/health'), headers: const {'accept': 'application/json'})
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) return null;
+      final value = '${decoded['workerVersion'] ?? ''}'.trim();
+      return value.isEmpty || value == 'legacy' ? null : value;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+String _normalizeWorkerUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return '';
+  final withoutSlash = trimmed.replaceFirst(RegExp(r'/+$'), '');
+  return withoutSlash.toLowerCase();
+}
 
 class WorkerDeploymentService {
   WorkerDeploymentService({http.Client? client}) : _client = client ?? http.Client();
@@ -72,7 +315,9 @@ class WorkerDeploymentService {
     await _applySchema(config);
 
     onProgress('Preparing secure administrator credentials…');
-    final passwordHash = await compute(_pbkdf2PasswordHash, config.adminPassword);
+    final passwordHash = config.adminPasswordHash.trim().isNotEmpty
+        ? config.adminPasswordHash.trim()
+        : await compute(_pbkdf2PasswordHash, config.adminPassword);
 
     onProgress('Preparing Worker runtime…');
     final lifecycle = await _durableObjectLifecycleMetadata(config);
@@ -92,7 +337,11 @@ class WorkerDeploymentService {
     await _waitForHealthyWorker(workerUrl);
 
     onProgress('Worker deployed successfully.');
-    return WorkerDeploymentResult(workerUrl: workerUrl);
+    return WorkerDeploymentResult(
+      workerUrl: workerUrl,
+      adminPasswordHash: passwordHash,
+      workerVersion: appVersion,
+    );
   }
 
   WorkerDeploymentConfig _normalized(WorkerDeploymentConfig c) => WorkerDeploymentConfig(
@@ -104,6 +353,7 @@ class WorkerDeploymentService {
         jwtSecret: c.jwtSecret.trim(),
         adminUsername: c.adminUsername.trim().toLowerCase(),
         adminPassword: c.adminPassword,
+        adminPasswordHash: c.adminPasswordHash.trim(),
       );
 
   void _validate(WorkerDeploymentConfig c) {
@@ -122,7 +372,11 @@ class WorkerDeploymentService {
     if (!RegExp(r'^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$').hasMatch(c.adminUsername)) {
       throw const WorkerDeploymentException('Administrator username must be 3–32 lowercase letters, numbers, dots, dashes, or underscores.');
     }
-    if (c.adminPassword.length < 12 || c.adminPassword.length > 256) {
+    final passwordHashValid = RegExp(r'^pbkdf2\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$').hasMatch(c.adminPasswordHash);
+    if (c.adminPasswordHash.isNotEmpty && !passwordHashValid) {
+      throw const WorkerDeploymentException('Saved administrator credentials are invalid. Enter the administrator password again.');
+    }
+    if (c.adminPasswordHash.isEmpty && (c.adminPassword.length < 12 || c.adminPassword.length > 256)) {
       throw const WorkerDeploymentException('Administrator password must contain 12–256 characters.');
     }
   }
@@ -444,6 +698,7 @@ class WorkerDeploymentService {
         {'type': 'plain_text', 'name': 'REFRESH_TOKEN_TTL_SECONDS', 'text': '2592000'},
         {'type': 'plain_text', 'name': 'MAX_SYNC_BATCH_SIZE', 'text': '100'},
         {'type': 'plain_text', 'name': 'MAX_SYNC_REPLACE_SIZE', 'text': '25000'},
+        {'type': 'plain_text', 'name': 'KOINLY_WORKER_VERSION', 'text': appVersion},
         {'type': 'durable_object_namespace', 'name': 'SYNC_HUB', 'class_name': 'SyncHub'},
       ],
       ...lifecycle,
@@ -511,14 +766,17 @@ class WorkerDeploymentService {
               data['googleDriveBackupAvailable'] == true &&
               data['analyticsUploadAvailable'] == true &&
               data['realtimeSyncAvailable'] == true &&
-              data['profileMediaSyncAvailable'] == true) {
+              data['profileMediaSyncAvailable'] == true &&
+              data['workerVersion'] == appVersion) {
             return;
           }
           final missing = data['missingTables'];
           lastError = WorkerDeploymentException(
             missing is List && missing.isNotEmpty
                 ? 'Worker is online, but the database schema is missing: ${missing.join(', ')}.'
-                : 'Worker is online, but its health check is not ready yet.',
+                : data['workerVersion'] != appVersion
+                    ? 'Worker is online, but Cloudflare is still serving Worker version ${data['workerVersion'] ?? 'legacy'} instead of $appVersion.'
+                    : 'Worker is online, but its health check is not ready yet.',
           );
         }
       } catch (error) {

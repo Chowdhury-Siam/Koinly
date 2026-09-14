@@ -11,6 +11,7 @@ type Env = {
   REFRESH_TOKEN_TTL_SECONDS?: string;
   MAX_SYNC_BATCH_SIZE?: string;
   MAX_SYNC_REPLACE_SIZE?: string;
+  KOINLY_WORKER_VERSION?: string;
   SYNC_HUB?: DurableObjectNamespace;
 };
 
@@ -2963,6 +2964,7 @@ function rootResponse(env: Env): Response {
     ok: true,
     service: 'koinly-sync',
     configured: isWorkerConfigured(env),
+    workerVersion: env.KOINLY_WORKER_VERSION ?? 'legacy',
     registrationMode: 'first-user',
     endpoints: {
       profile: '/profile',
@@ -2991,6 +2993,7 @@ async function healthResponse(env: Env): Promise<Response> {
     return json({
       ok: false,
       service: 'koinly-sync',
+      workerVersion: env.KOINLY_WORKER_VERSION ?? 'legacy',
       configured: false,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
@@ -3012,6 +3015,7 @@ async function healthResponse(env: Env): Promise<Response> {
     return json({
       ok: schemaReady,
       service: 'koinly-sync',
+      workerVersion: env.KOINLY_WORKER_VERSION ?? 'legacy',
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,
@@ -3027,6 +3031,7 @@ async function healthResponse(env: Env): Promise<Response> {
     return json({
       ok: false,
       service: 'koinly-sync',
+      workerVersion: env.KOINLY_WORKER_VERSION ?? 'legacy',
       configured: true,
       registrationMode: 'first-user',
       telegramBackupAvailable: true,

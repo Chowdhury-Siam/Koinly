@@ -36,6 +36,19 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Verify Worker version matches the app release
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_VERSION="$(awk '/^version:/ { print $2; exit }' ../../pubspec.yaml)"
+          APP_VERSION="${APP_VERSION%%+*}"
+          WORKER_VERSION="$(sed -n 's/^KOINLY_WORKER_VERSION = "\([^"]*\)"/\1/p' wrangler.self-hosted.toml | head -n 1)"
+          if [ -z "$WORKER_VERSION" ] || [ "$WORKER_VERSION" != "$APP_VERSION" ]; then
+            echo "::error::KOINLY_WORKER_VERSION ($WORKER_VERSION) must match pubspec app version ($APP_VERSION)."
+            exit 1
+          fi
+          echo "KOINLY_WORKER_VERSION=$WORKER_VERSION" >> "$GITHUB_ENV"
+
       - name: Check self-hosted deployment secrets
         run: |
           missing=0
@@ -136,7 +149,7 @@ jobs:
               echo "Health check attempt $attempt/18 could not reach the Worker (curl exit $curl_exit). Waiting for workers.dev TLS/route propagation..."
             elif ! jq -e 'type == "object"' "$health_file" >/dev/null 2>&1; then
               echo "Health check attempt $attempt/18 returned a non-JSON response (HTTP $http_status). Waiting for the new deployment..."
-            elif jq -e '.service == "koinly-sync" and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .googleDriveBackupAvailable == true and .analyticsUploadAvailable == true and .realtimeSyncAvailable == true and .profileMediaSyncAvailable == true' "$health_file" >/dev/null; then
+            elif jq -e --arg worker_version "$KOINLY_WORKER_VERSION" '.service == "koinly-sync" and .workerVersion == $worker_version and .ok == true and .databaseReachable == true and .schemaReady == true and .registrationMode == "first-user" and .telegramBackupAvailable == true and .googleDriveBackupAvailable == true and .analyticsUploadAvailable == true and .realtimeSyncAvailable == true and .profileMediaSyncAvailable == true' "$health_file" >/dev/null; then
               health_ready=1
               break
             else
