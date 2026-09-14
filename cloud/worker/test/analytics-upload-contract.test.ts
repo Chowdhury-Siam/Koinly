@@ -14,6 +14,9 @@ test('analytics report upload contract supports PDF XLSX TXT with Telegram and G
   assert.match(source, /drive\.file/);
   assert.match(schema, /CREATE TABLE IF NOT EXISTS analytics_upload_settings/);
   assert.match(schema, /google_refresh_token_encrypted/);
+  assert.match(schema, /google_folder_path/);
+  assert.match(source, /ensureGoogleDriveFolderPath/);
+  assert.match(source, /\/v1\/analytics-upload\/send-now\//);
   assert.match(workflow, /analyticsUploadAvailable == true/);
 });
 

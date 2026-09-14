@@ -1,3 +1,11 @@
+## [1.0.1143] - 2026-09-14
+
+- Added a configurable **Google Drive upload folder** path under **Settings > Credential > Google Drive**. Koinly creates missing nested folders and uses the selected path for both manual Analytics uploads and scheduled Cloud Backup reports.
+- Added **Upload now** to both Telegram and Google Drive cards in **Settings > Archive > Cloud Backup**. Immediate uploads use the card's current report type, PDF/XLSX/TXT format, and date filter/custom range while keeping automatic scheduling optional.
+- Renamed the Archive feature from **Automatic Telegram backup** to **Telegram Backup** while preserving its existing manual upload, schedule, status, and five-minute separation behavior.
+- Added a Turso migration for the Google Drive folder path and a Worker endpoint for immediate server-generated report delivery.
+- Synchronized application version metadata to `1.0.1143+187`.
+
 ## [1.0.1142] - 2026-09-14
 
 - Added **PDF**, **XLSX**, and **TXT** as selectable Analytics report formats for both Summary and Transaction history exports.

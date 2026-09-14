@@ -45,7 +45,7 @@ void main() {
     expect(find.text('Backup'), findsOneWidget);
     expect(find.text('Automatic local backup'), findsOneWidget);
     expect(find.text('Load backup'), findsOneWidget);
-    expect(find.text('Automatic Telegram backup'), findsOneWidget);
+    expect(find.text('Telegram Backup'), findsOneWidget);
     expect(find.text('Cloud Backup'), findsOneWidget);
   });
 

@@ -218,3 +218,8 @@ For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** 
 `schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` migrates older email-based accounts and adds the recovery-key and session-version columns.
 
 For advanced deployment integrations, `scripts/prepare-secrets.mjs` reads `ADMIN_PASSWORD` and the other required values from the process environment and emits a JSON secrets payload containing only the derived verifier. The GitHub workflow validates the inputs before applying the schema, writes this payload to a restricted temporary file, unsets the original password before calling Wrangler, and removes the file afterward. Do not invoke it in a way that displays the secrets payload in logs.
+
+
+### Analytics destination updates
+
+Google Drive report uploads now use the per-user **Google Drive upload folder** path saved from Koinly Settings > Credential. The Worker creates missing nested folders with the existing `drive.file` authorization. Cloud Backup also exposes authenticated `POST /v1/analytics-upload/send-now/{telegram|googleDrive}` delivery for immediate server-generated PDF/XLSX/TXT reports using the supplied report/date settings.

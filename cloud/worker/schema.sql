@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS analytics_upload_settings (
   google_refresh_token_encrypted TEXT,
   google_refresh_token_iv TEXT,
   google_account_email TEXT NOT NULL DEFAULT '',
+  google_folder_path TEXT NOT NULL DEFAULT 'Koinly Analytics',
   google_connected_at INTEGER,
   google_last_upload_at INTEGER,
   google_last_error TEXT,

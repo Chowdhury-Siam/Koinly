@@ -3624,11 +3624,13 @@ class AppController extends ChangeNotifier {
   Future<GoogleDriveAnalyticsSettings> saveGoogleDriveAnalyticsSettings({
     required String clientId,
     String clientSecret = '',
+    String folderPath = 'Koinly Analytics',
   }) {
     return _withSelfHostedSyncToken((api, accessToken) => api.saveGoogleDriveAnalyticsSettings(
           accessToken: accessToken,
           clientId: clientId,
           clientSecret: clientSecret,
+          folderPath: folderPath,
         ));
   }
 
@@ -3646,6 +3648,17 @@ class AppController extends ChangeNotifier {
 
   Future<AnalyticsPdfScheduleSettings> saveAnalyticsPdfSchedule(AnalyticsPdfScheduleSettings settings) {
     return _withSelfHostedSyncToken((api, accessToken) => api.saveAnalyticsPdfSchedule(
+          accessToken: accessToken,
+          settings: settings.copyWith(timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes),
+        ));
+  }
+
+  Future<Map<String, dynamic>> sendAnalyticsReportNow(AnalyticsPdfScheduleSettings settings) async {
+    await syncToCloud(force: true, silent: false);
+    if (cloudSyncError != null) {
+      throw StateError('Could not sync local data before uploading the report: $cloudSyncError');
+    }
+    return _withSelfHostedSyncToken((api, accessToken) => api.sendAnalyticsReportNow(
           accessToken: accessToken,
           settings: settings.copyWith(timezoneOffsetMinutes: DateTime.now().timeZoneOffset.inMinutes),
         ));
@@ -17314,7 +17327,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
       );
       if (!mounted) return;
       setState(() => _settings = settings);
-      showSnack(context, settings.enabled ? 'Automatic Telegram backup schedule saved.' : 'Automatic Telegram backup is off.');
+      showSnack(context, settings.enabled ? 'Telegram Backup schedule saved.' : 'Telegram Backup is off.');
     } catch (error) {
       if (mounted) showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
     } finally {
@@ -17403,7 +17416,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
   Widget build(BuildContext context) {
     if (_loading) {
       return const PageScaffold(
-        title: 'Automatic Telegram backup',
+        title: 'Telegram Backup',
         subtitle: 'Archive',
         child: KoinlyPageLoader(),
       );
@@ -17411,7 +17424,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
 
     final time = TimeOfDay(hour: _settings.hour, minute: _settings.minute).format(context);
     return PageScaffold(
-      title: 'Automatic Telegram backup',
+      title: 'Telegram Backup',
       subtitle: 'Archive',
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 36),
@@ -17434,7 +17447,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                             }
                             setState(() => _settings = _copySettings(enabled: value));
                           },
-                    title: const Text('Automatic Telegram backup', style: TextStyle(fontWeight: FontWeight.w900)),
+                    title: const Text('Telegram Backup', style: TextStyle(fontWeight: FontWeight.w900)),
                     subtitle: const Text('Uploads a .koinlybackup generated from the latest synchronized cloud data.'),
                   ),
                 ],
@@ -17464,7 +17477,7 @@ class _SelfHostedTelegramBackupScreenState extends State<SelfHostedTelegramBacku
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Automatic Telegram backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.',
+                    'Telegram Backup, Telegram report, and Google Drive report times must all be at least 5 minutes apart.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
                   ),
                   if (_settings.frequency == TelegramBackupFrequency.weekly) ...[
@@ -19506,7 +19519,7 @@ class ArchiveSettingsScreen extends StatelessWidget {
           ),
           SettingsTile(
             icon: Icons.send_rounded,
-            title: 'Automatic Telegram backup',
+            title: 'Telegram Backup',
             subtitle: signedIn ? 'Schedule .koinlybackup delivery through your Worker' : 'Sign in to use Telegram backup',
             color: '#86E3CE',
             onTap: () => Navigator.push(

@@ -30,11 +30,13 @@ const client = createClient({
 
 try {
   await migrateLegacyUsersTable(client);
+  await migrateAnalyticsUploadSettingsTable(client);
   await migrateAnalyticsPdfSchedulesTable(client);
   for (const statement of statements) {
     await client.execute(statement);
   }
   await migrateLegacyUsersTable(client);
+  await migrateAnalyticsUploadSettingsTable(client);
   await migrateAnalyticsPdfSchedulesTable(client);
   console.log(`Applied Turso schema successfully (${statements.length} statements).`);
 } finally {
@@ -75,6 +77,17 @@ async function migrateLegacyUsersTable(client) {
   }
 }
 
+
+async function migrateAnalyticsUploadSettingsTable(client) {
+  const table = (await client.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'analytics_upload_settings'")).rows[0];
+  if (!table) return;
+  const rows = (await client.execute("PRAGMA table_info('analytics_upload_settings')")).rows;
+  const columns = new Set(rows.map((row) => String(row.name)));
+  if (!columns.has('google_folder_path')) {
+    await client.execute("ALTER TABLE analytics_upload_settings ADD COLUMN google_folder_path TEXT NOT NULL DEFAULT 'Koinly Analytics'");
+    console.log('Added configurable Google Drive upload folder support.');
+  }
+}
 
 async function migrateAnalyticsPdfSchedulesTable(client) {
   const table = (await client.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'analytics_pdf_schedules'")).rows[0];
