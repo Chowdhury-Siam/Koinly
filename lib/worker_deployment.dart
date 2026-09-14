@@ -404,12 +404,59 @@ class WorkerDeploymentService {
   String _tursoHttpBase(String libsqlUrl) => libsqlUrl.replaceFirst(RegExp(r'^libsql://'), 'https://').replaceFirst(RegExp(r'/$'), '');
 
   Future<void> _checkTurso(WorkerDeploymentConfig c) async {
-    final response = await _client.get(
-      Uri.parse('${_tursoHttpBase(c.tursoDatabaseUrl)}/version'),
-      headers: {'authorization': 'Bearer ${c.tursoAuthToken}'},
+    // Turso/libSQL's remote database API is the Hrana HTTP pipeline endpoint.
+    // There is no guaranteed `/version` route on a Turso database host, so a
+    // GET there can return 404 even when both the database URL and auth token
+    // are completely valid. Verify the exact API Koinly will use instead with
+    // a read-only SELECT.
+    final response = await _client.post(
+      Uri.parse('${_tursoHttpBase(c.tursoDatabaseUrl)}/v2/pipeline'),
+      headers: {
+        'authorization': 'Bearer ${c.tursoAuthToken}',
+        'content-type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: jsonEncode({
+        'baton': null,
+        'requests': [
+          {
+            'type': 'execute',
+            'stmt': {
+              'sql': 'SELECT 1 AS koinly_connection_test',
+              'want_rows': true,
+            },
+          },
+          {'type': 'close'},
+        ],
+      }),
     ).timeout(const Duration(seconds: 30));
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw WorkerDeploymentException('Could not authenticate with the Turso database (HTTP ${response.statusCode}). Check the database URL and database auth token.');
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        throw WorkerDeploymentException(
+          'Turso rejected the database auth token (HTTP ${response.statusCode}). Check the database auth token and try again.',
+        );
+      }
+      if (response.statusCode == 404) {
+        throw const WorkerDeploymentException(
+          'Turso could not find that database endpoint. Re-copy the libsql:// database URL from Turso and try again.',
+        );
+      }
+      throw WorkerDeploymentException(
+        'Could not connect to the Turso database (HTTP ${response.statusCode}). Check the database URL and database auth token.',
+      );
+    }
+
+    final data = _decodeJson(response.body);
+    final rawResults = data['results'];
+    if (rawResults is! List || rawResults.isEmpty) {
+      throw const WorkerDeploymentException('Turso returned an invalid connection-check response.');
+    }
+    for (final entry in rawResults) {
+      if (entry is! Map || entry['type'] != 'error') continue;
+      final error = entry['error'];
+      final message = error is Map ? '${error['message'] ?? 'Database error'}'.trim() : 'Database error';
+      throw WorkerDeploymentException('Turso connection check failed: $message');
     }
   }
 
@@ -591,7 +638,10 @@ class WorkerDeploymentService {
       for (final statement in statements)
         {
           'type': 'execute',
-          'stmt': {'sql': statement},
+          'stmt': {
+            'sql': statement,
+            'want_rows': true,
+          },
         },
       {'type': 'close'},
     ];
@@ -601,7 +651,7 @@ class WorkerDeploymentService {
         'authorization': 'Bearer ${c.tursoAuthToken}',
         'content-type': 'application/json',
       },
-      body: jsonEncode({'requests': requests}),
+      body: jsonEncode({'baton': null, 'requests': requests}),
     ).timeout(const Duration(seconds: 45));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw WorkerDeploymentException('Turso schema update failed (HTTP ${response.statusCode}).');

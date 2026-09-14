@@ -19,6 +19,10 @@ void main() {
     final service = File('lib/worker_deployment.dart').readAsStringSync();
 
     expect(service, contains("'/v2/pipeline'"));
+    expect(service, contains('SELECT 1 AS koinly_connection_test'));
+    expect(service, contains("'baton': null"));
+    expect(service, contains("'want_rows': true"));
+    expect(service, isNot(contains("_tursoHttpBase(c.tursoDatabaseUrl)}/version")));
     expect(service, contains(r'workers/scripts/${Uri.encodeComponent(c.workerName)}'));
     expect(service, contains("'durable_object_namespace'"));
     expect(service, contains("'new_tag': 'v1-realtime-sync-hub'"));

@@ -1,3 +1,10 @@
+## [1.0.1157] - 2026-09-14
+
+- Fixed in-app Turso validation incorrectly rejecting valid database credentials with HTTP 404. Koinly now validates Turso through the same authenticated Hrana `/v2/pipeline` endpoint used for schema provisioning, using a read-only `SELECT 1` connection check.
+- Improved Turso deployment errors so authentication failures, missing database endpoints, and other HTTP failures are reported separately.
+- Added a deployment contract regression check that prevents the unsupported Turso `/version` probe from returning.
+- Synchronized application and Worker version metadata to `1.0.1157+201`.
+
 ## [1.0.1156] - 2026-09-14
 
 - Added automatic self-hosted Worker updates for Workers deployed through **Settings > Account & sync > Deploy Database**.
