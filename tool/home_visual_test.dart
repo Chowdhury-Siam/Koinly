@@ -1,4 +1,4 @@
-// Render the production Home widgets with isolated, deterministic sample data.
+// Render production Home/Loans widgets with isolated sample data, including hover.
 // Run: flutter test --no-pub tool/home_visual_test.dart
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:koinly/main.dart';
+import 'package:koinly/app_config.dart';
 import 'package:koinly/models.dart' as models;
 
 class _PreviewController extends AppController {
@@ -105,13 +106,38 @@ void main() {
             reason: 'Desktop category spending belongs in the right column.');
       }
       final boundary = captureKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      await tester.runAsync(() async {
-        final image = await boundary.toImage();
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        final output = Directory('build/ui-comparison')..createSync(recursive: true);
-        await File('${output.path}/home-${size.width.toInt()}.png').writeAsBytes(bytes!.buffer.asUint8List());
-        image.dispose();
-      });
+      Future<void> capture(String name) async {
+        await tester.runAsync(() async {
+          final image = await boundary.toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          final output = Directory('build/ui-comparison')..createSync(recursive: true);
+          await File('${output.path}/$name-${size.width.toInt()}.png').writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      await capture('home');
+      if (size.width >= 900) {
+        final accountCard = find.descendant(
+          of: find.byType(HomeNavigationTile).first,
+          matching: find.byType(ExpressiveCard),
+        );
+        final rect = tester.getRect(accountCard);
+        final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
+        await mouse.addPointer(location: Offset.zero);
+        await mouse.moveTo(Offset(rect.left + 5, rect.center.dy));
+        await tester.pumpAndSettle();
+        await capture('home-hover');
+        await mouse.removePointer();
+        controller.selectTabIndex(kLoansTabIndex);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        final portfolio = find.ancestor(of: find.text('Portfolio'), matching: find.byType(ExpressiveCard));
+        expect(portfolio, findsOneWidget);
+        final card = tester.widget<ExpressiveCard>(portfolio);
+        final context = tester.element(portfolio);
+        expect(card.color ?? Theme.of(context).colorScheme.surfaceContainer, kSleekSurfaceContainer);
+        await capture('loans');
+      }
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
     });

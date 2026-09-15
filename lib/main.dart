@@ -7059,6 +7059,8 @@ class ExpressiveCard extends StatelessWidget {
     this.color,
     this.radius = 26,
     this.surfaceTint = true,
+    this.onTap,
+    this.onLongPress,
   });
 
   final Widget child;
@@ -7066,6 +7068,8 @@ class ExpressiveCard extends StatelessWidget {
   final Color? color;
   final double radius;
   final bool surfaceTint;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -7106,7 +7110,16 @@ class ExpressiveCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(radius),
       child: Material(
         type: MaterialType.transparency,
-        child: Padding(padding: padding, child: child),
+        // Include the content padding in the ink surface, so a hovered card
+        // has one outline rather than an inset, independently rounded pill.
+        child: onTap == null && onLongPress == null
+            ? Padding(padding: padding, child: child)
+            : InkWell(
+                borderRadius: BorderRadius.circular(radius),
+                onTap: onTap,
+                onLongPress: onLongPress,
+                child: Padding(padding: padding, child: child),
+              ),
       ),
     );
     if (reducedMotion) {
@@ -9714,6 +9727,7 @@ class HomeNavigationTile extends StatelessWidget {
       scale: .985,
       child: ExpressiveCard(
        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+       onTap: onTap,
        child: ListTile(
          contentPadding: EdgeInsets.zero,
          minTileHeight: 71,
@@ -9733,7 +9747,6 @@ class HomeNavigationTile extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ],
         ),
-        onTap: onTap,
       ),
     ),
     );
@@ -10291,6 +10304,7 @@ class AccountTile extends StatelessWidget {
       child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       radius: 24,
+      onTap: onTap,
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         leading: iconBubble(context, account.iconName, account.iconColor, size: 46),
@@ -10313,7 +10327,6 @@ class AccountTile extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ],
         ),
-        onTap: onTap,
       ),
     ),
     );
@@ -11702,13 +11715,13 @@ class CategoryTile extends StatelessWidget {
       child: ExpressiveCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       radius: 24,
+      onTap: onTap,
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         leading: iconBubble(context, category.iconName, category.iconColor),
         title: Text(category.name, style: const TextStyle(fontWeight: FontWeight.w800)),
         subtitle: Text(enumName(category.type)),
         trailing: trailing,
-        onTap: onTap,
       ),
     ),
     );
@@ -11934,16 +11947,14 @@ class PlannedPurchaseTile extends StatelessWidget {
 
     final card = ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+      onTap: () => showPlannedPurchaseEditor(context, item: item),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           iconBubble(context, iconName, iconColor),
           const SizedBox(width: 14),
           Expanded(
-            child: MotionInkWell(
-              borderRadius: BorderRadius.circular(18),
-              onTap: () => showPlannedPurchaseEditor(context, item: item),
-              child: Padding(
+            child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -11967,7 +11978,6 @@ class PlannedPurchaseTile extends StatelessWidget {
                   ],
                 ),
               ),
-            ),
           ),
         ],
       ),
@@ -13188,6 +13198,7 @@ class TransactionTile extends StatelessWidget {
       child: ExpressiveCard(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         radius: 24,
+        onTap: () => showTransactionEditor(context, transaction: tx),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: tx.type == MoneyTransactionType.transfer
@@ -13204,7 +13215,6 @@ class TransactionTile extends StatelessWidget {
             '$amountPrefix${state.format(tx.amount)}',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900, color: amountColor),
           ),
-          onTap: () => showTransactionEditor(context, transaction: tx),
         ),
       ),
     );
@@ -16019,20 +16029,14 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: ExpressiveCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Material(
-                color: Colors.transparent,
-                child: MotionInkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: interactive && slice.category != null
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              onTap: interactive && slice.category != null
                       ? () => Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: slice.category!)),
                           )
                       : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                    child: Row(
+              child: Row(
                       children: [
                         iconBubble(context, slice.iconName, colorToHex(color), size: 50),
                         const SizedBox(width: 14),
@@ -16065,9 +16069,6 @@ class _CategoryBreakdownCardState extends State<CategoryBreakdownCard> {
                         ],
                       ],
                     ),
-                  ),
-                ),
-              ),
             ),
           );
         }),
@@ -16304,10 +16305,8 @@ class BudgetProgressTile extends StatelessWidget {
     final ratio = progress.ratio;
     final color = ratio >= 1 ? Colors.red : ratio >= .8 ? Colors.deepOrange : ratio >= .5 ? Colors.orange : Colors.green;
     return ExpressiveCard(
-      child: MotionInkWell(
-        borderRadius: BorderRadius.circular(28),
-        onTap: onTap,
-        child: Column(
+      onTap: onTap,
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
@@ -16322,7 +16321,6 @@ class BudgetProgressTile extends StatelessWidget {
             Text('${state.format(progress.spent)} spent of ${state.format(progress.budget.amount)}'),
           ],
         ),
-      ),
     );
   }
 }
@@ -16487,6 +16485,7 @@ class SettingsTile extends StatelessWidget {
         scale: .987,
         child: ExpressiveCard(
           padding: EdgeInsets.symmetric(horizontal: 16, vertical: hasSubtitle ? 12 : 14),
+          onTap: onTap,
           child: ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Container(
@@ -16507,7 +16506,6 @@ class SettingsTile extends StatelessWidget {
                 )
               : null,
           trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
-            onTap: onTap,
           ),
         ),
       ),
@@ -18630,13 +18628,11 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
           children: [
             ExpressiveCard(
               padding: const EdgeInsets.all(18),
-              child: MotionInkWell(
-                borderRadius: BorderRadius.circular(22),
-                onTap: () => Navigator.push(
+              onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SyncDatabaseMethodListScreen()),
                 ),
-                child: Row(
+              child: Row(
                   children: [
                     Container(
                       width: 48,
@@ -18657,7 +18653,6 @@ class SyncDatabaseMethodsScreen extends StatelessWidget {
                     Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ],
                 ),
-              ),
             ),
           ],
         ),

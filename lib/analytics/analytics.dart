@@ -1263,13 +1263,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ExpressiveCard(
-              padding: EdgeInsets.zero,
-              child: MotionInkWell(
-                onTap: exporting ? null : _chooseDateFilter,
-                borderRadius: BorderRadius.circular(24),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Row(children: [
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              onTap: exporting ? null : _chooseDateFilter,
+              child: Row(children: [
                     iconBubble(context, 'custom_range', '#B4A5FF', size: 44),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1287,8 +1283,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(width: 8),
                     const Icon(Icons.chevron_right_rounded),
                   ]),
-                ),
-              ),
             ),
             const SectionHeader('Overview'),
             Row(children: [

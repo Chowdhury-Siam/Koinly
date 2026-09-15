@@ -187,7 +187,6 @@ class _LoanSummaryHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
     return ExpressiveCard(
-      color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0B281D) : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -237,6 +236,7 @@ class _LoanTile extends StatelessWidget {
         scale: .985,
         child: ExpressiveCard(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoanDetailScreen(loanId: loan.id))),
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: iconBubble(context, loan.isLent ? 'gift' : 'cash', loan.isLent ? '#27D17F' : '#FF5353', size: 48),
@@ -267,7 +267,6 @@ class _LoanTile extends StatelessWidget {
                 Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ],
             ),
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => LoanDetailScreen(loanId: loan.id))),
           ),
         ),
       ),
