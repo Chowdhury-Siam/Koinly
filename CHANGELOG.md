@@ -1,3 +1,10 @@
+## [1.0.1161] - 2026-09-15
+
+- Added encrypted deployment-value recovery for Workers deployed from Koinly. After reinstalling the app, paste and validate the same Worker URL and sign in with the first sync account; Koinly restores the saved Cloudflare/Turso/JWT deployment profile to secure storage automatically.
+- Restricted deployment recovery to the first sync account and encrypted the remote recovery payload before storing it in Turso. The raw administrator password is still never stored or recoverable.
+- Kept automatic Worker updates working after reinstall by restoring the deployment profile before checking the Worker version.
+- Updated the README and Worker documentation and synchronized application/Worker version metadata to `1.0.1161+205`.
+
 ## [1.0.1160] - 2026-09-15
 
 - Fresh self-hosted Workers now allow the first Koinly sync account to be created directly from **Account & sync**, even when `/profile` administrator credentials are configured.

@@ -234,6 +234,46 @@ class KoinlySyncApi {
     await _post('/v1/auth/logout', {'refreshToken': refreshToken}, accessToken: accessToken);
   }
 
+  Future<void> saveDeploymentRecoveryProfile({
+    required String accessToken,
+    required Map<String, dynamic> profile,
+  }) async {
+    await _post(
+      '/v1/deployment-recovery/profile',
+      {'profile': profile},
+      accessToken: accessToken,
+      timeout: const Duration(seconds: 30),
+    );
+  }
+
+  Future<Map<String, dynamic>?> loadDeploymentRecoveryProfile({required String accessToken}) async {
+    try {
+      final data = await _get('/v1/deployment-recovery/profile', accessToken: accessToken);
+      final profile = data['profile'];
+      return profile is Map ? profile.cast<String, dynamic>() : null;
+    } on CloudSyncException catch (error) {
+      if (error.code == 'DEPLOYMENT_RECOVERY_NOT_FOUND' ||
+          error.code == 'DEPLOYMENT_RECOVERY_NO_OWNER' ||
+          error.code == 'DEPLOYMENT_RECOVERY_OWNER_REQUIRED') {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteDeploymentRecoveryProfile({required String accessToken}) async {
+    try {
+      await _delete('/v1/deployment-recovery/profile', accessToken: accessToken);
+    } on CloudSyncException catch (error) {
+      if (error.code == 'DEPLOYMENT_RECOVERY_NOT_FOUND' ||
+          error.code == 'DEPLOYMENT_RECOVERY_NO_OWNER' ||
+          error.code == 'DEPLOYMENT_RECOVERY_OWNER_REQUIRED') {
+        return;
+      }
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>> push({required String accessToken, required List<Map<String, dynamic>> operations}) {
     return _post('/v1/sync/push', {'operations': operations}, accessToken: accessToken);
   }

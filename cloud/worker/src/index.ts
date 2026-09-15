@@ -128,6 +128,9 @@ export default {
       const auth = await requireAuth(request, env, db);
       if (request.method === 'POST' && url.pathname === '/v1/auth/logout') return await logout(request, db, auth);
       if (request.method === 'POST' && url.pathname === '/v1/auth/recovery-key') return await rotateRecoveryKey(env, db, auth);
+      if (request.method === 'GET' && url.pathname === '/v1/deployment-recovery/profile') return await deploymentRecoveryProfile(db, env, auth);
+      if (request.method === 'POST' && url.pathname === '/v1/deployment-recovery/profile') return await saveDeploymentRecoveryProfile(request, db, env, auth);
+      if (request.method === 'DELETE' && url.pathname === '/v1/deployment-recovery/profile') return await deleteDeploymentRecoveryProfile(db, auth);
       if (request.method === 'GET' && url.pathname === '/v1/sync/live') return await openLiveSync(request, env, auth);
       if (request.method === 'POST' && url.pathname === '/v1/sync/initial') {
         const response = await initialSync(request, db, auth);
@@ -344,15 +347,20 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
     const username = normalizeUsername(body.username);
     const password = profilePassword(body.password);
     const now = Date.now();
+    const newUserId = crypto.randomUUID();
     const [result] = await db.batch([
       {
         sql: `INSERT INTO users(id, username, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
               ON CONFLICT(username) DO NOTHING`,
-        args: [crypto.randomUUID(), username, await hashPassword(password, env.JWT_SECRET), now, now],
+        args: [newUserId, username, await hashPassword(password, env.JWT_SECRET), now, now],
       },
       { sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('registration_closed', '1')`, args: [] },
     ], 'write');
     if (!result.rowsAffected) throw new HttpError(409, 'Duplicate username. That username is already in use.');
+    await db.execute({
+      sql: `INSERT OR IGNORE INTO worker_state(key, value) VALUES ('deployment_owner_user_id', ?)`,
+      args: [newUserId],
+    });
     return privateJson({ ok: true, message: 'Account created.' }, 201);
   }
   const match = /^\/profile\/api\/accounts\/([A-Za-z0-9._:-]{3,120})(\/password)?$/.exec(url.pathname);
@@ -377,6 +385,21 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
+    const owner = await db.execute({
+      sql: `SELECT value FROM worker_state WHERE key = 'deployment_owner_user_id'`,
+      args: [],
+    });
+    if (String(owner.rows[0]?.value ?? '') === userId) {
+      await db.batch(
+        [
+          { sql: `DELETE FROM worker_state WHERE key = 'deployment_owner_user_id'`, args: [] },
+          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_ciphertext'`, args: [] },
+          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_iv'`, args: [] },
+          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_updated_at'`, args: [] },
+        ],
+        'write',
+      );
+    }
     return privateJson({ ok: true, message: 'Account deleted.' });
   }
   throw new HttpError(405, 'Method not allowed.');
@@ -2985,6 +3008,7 @@ function rootResponse(env: Env): Response {
       pull: 'GET /v1/sync/pull?cursor=0&limit=100',
       status: 'GET /v1/sync/status',
       profileMedia: '/v1/profile-media/*',
+      deploymentRecovery: '/v1/deployment-recovery/profile',
       telegramBackup: '/v1/telegram-backup/*',
       analyticsUpload: '/v1/analytics-upload/*',
     },
@@ -3005,6 +3029,7 @@ async function healthResponse(env: Env): Promise<Response> {
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
+      deploymentRecoveryAvailable: false,
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -3016,6 +3041,14 @@ async function healthResponse(env: Env): Promise<Response> {
     db = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     const missingTables = await missingSchemaTables(db);
     const schemaReady = missingTables.length === 0;
+    let deploymentRecoveryAvailable = false;
+    if (!missingTables.includes('worker_state')) {
+      const recoveryState = await db.execute({
+        sql: `SELECT value FROM worker_state WHERE key = 'deployment_recovery_ciphertext' LIMIT 1`,
+        args: [],
+      });
+      deploymentRecoveryAvailable = Boolean(String(recoveryState.rows[0]?.value ?? '').trim());
+    }
     return json({
       ok: schemaReady,
       service: 'koinly-sync',
@@ -3027,6 +3060,7 @@ async function healthResponse(env: Env): Promise<Response> {
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
+      deploymentRecoveryAvailable,
       databaseReachable: true,
       schemaReady,
       missingTables,
@@ -3043,6 +3077,7 @@ async function healthResponse(env: Env): Promise<Response> {
       analyticsUploadAvailable: true,
       realtimeSyncAvailable: Boolean(env.SYNC_HUB),
       profileMediaSyncAvailable: true,
+      deploymentRecoveryAvailable: false,
       databaseReachable: false,
       schemaReady: false,
       missingTables: requiredTables,
@@ -3136,6 +3171,10 @@ export async function register(request: Request, env: Env, db: Client): Promise<
       args: [userId, username, passwordHash, recoveryKeyHash, now, now],
     });
     await transaction.execute({
+      sql: `INSERT OR IGNORE INTO worker_state(key, value) VALUES ('deployment_owner_user_id', ?)`,
+      args: [userId],
+    });
+    await transaction.execute({
       sql: 'INSERT INTO devices(id, user_id, name, platform, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)',
       args: [deviceId, userId, deviceName, platform, now, now],
     });
@@ -3152,6 +3191,179 @@ export async function register(request: Request, env: Env, db: Client): Promise<
     transaction.close();
   }
   return issueTokens(env, db, { userId, username, deviceId }, recoveryKey);
+}
+
+
+async function deploymentRecoveryOwnerUserId(db: Client): Promise<string> {
+  const owner = await db.execute({
+    sql: `SELECT value FROM worker_state WHERE key = 'deployment_owner_user_id'`,
+    args: [],
+  });
+  const configured = String(owner.rows[0]?.value ?? '').trim();
+  if (configured) return configured;
+
+  const firstUser = await db.execute({
+    sql: `SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1`,
+    args: [],
+  });
+  const userId = String(firstUser.rows[0]?.id ?? '').trim();
+  if (!userId) throw new HttpError(404, 'No sync account exists yet.', 'DEPLOYMENT_RECOVERY_NO_OWNER');
+  await db.execute({
+    sql: `INSERT OR IGNORE INTO worker_state(key, value) VALUES ('deployment_owner_user_id', ?)`,
+    args: [userId],
+  });
+  return userId;
+}
+
+async function requireDeploymentRecoveryOwner(db: Client, auth: AuthContext): Promise<void> {
+  const ownerUserId = await deploymentRecoveryOwnerUserId(db);
+  if (ownerUserId !== auth.userId) {
+    throw new HttpError(
+      403,
+      'Deployment values can only be recovered by the first Koinly sync account.',
+      'DEPLOYMENT_RECOVERY_OWNER_REQUIRED',
+    );
+  }
+}
+
+function deploymentRecoveryProfilePayload(raw: unknown): Record<string, string | number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new HttpError(400, 'Deployment recovery profile is missing.');
+  }
+  const source = raw as Record<string, unknown>;
+  const value = (key: string, max = 4096): string => {
+    const result = String(source[key] ?? '').trim();
+    if (!result || result.length > max) throw new HttpError(400, `Invalid deployment recovery field: ${key}.`);
+    return result;
+  };
+  const workerName = value('workerName', 63).toLowerCase();
+  const cloudflareAccountId = value('cloudflareAccountId', 64);
+  const cloudflareApiToken = value('cloudflareApiToken', 4096);
+  const tursoDatabaseUrl = value('tursoDatabaseUrl', 2048);
+  const tursoAuthToken = value('tursoAuthToken', 4096);
+  const jwtSecret = value('jwtSecret', 1024);
+  const adminUsername = value('adminUsername', 120).toLowerCase();
+  const adminPasswordHash = value('adminPasswordHash', 256);
+  const workerUrl = value('workerUrl', 2048);
+  const workerVersion = value('workerVersion', 64);
+
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(workerName)) {
+    throw new HttpError(400, 'Invalid Worker name in the deployment recovery profile.');
+  }
+  if (!/^[A-Fa-f0-9]{32}$/.test(cloudflareAccountId)) {
+    throw new HttpError(400, 'Invalid Cloudflare Account ID in the deployment recovery profile.');
+  }
+  if (!/^libsql:\/\/[A-Za-z0-9.-]+\.turso\.io\/?$/.test(tursoDatabaseUrl)) {
+    throw new HttpError(400, 'Invalid Turso database URL in the deployment recovery profile.');
+  }
+  if (jwtSecret.length < 32) throw new HttpError(400, 'Invalid JWT secret in the deployment recovery profile.');
+  if (!/^pbkdf2\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/.test(adminPasswordHash)) {
+    throw new HttpError(400, 'Invalid administrator password verifier in the deployment recovery profile.');
+  }
+  let parsedWorkerUrl: URL;
+  try {
+    parsedWorkerUrl = new URL(workerUrl);
+  } catch {
+    throw new HttpError(400, 'Invalid Worker URL in the deployment recovery profile.');
+  }
+  if (parsedWorkerUrl.protocol !== 'https:' || parsedWorkerUrl.username || parsedWorkerUrl.password ||
+      parsedWorkerUrl.pathname !== '/' || parsedWorkerUrl.search || parsedWorkerUrl.hash) {
+    throw new HttpError(400, 'Invalid Worker URL in the deployment recovery profile.');
+  }
+
+  return {
+    version: 1,
+    workerName,
+    cloudflareAccountId,
+    cloudflareApiToken,
+    tursoDatabaseUrl,
+    tursoAuthToken,
+    jwtSecret,
+    adminUsername,
+    adminPasswordHash,
+    workerUrl: workerUrl.replace(/\/+$/, ''),
+    workerVersion,
+  };
+}
+
+async function saveDeploymentRecoveryProfile(
+  request: Request,
+  db: Client,
+  env: Env,
+  auth: AuthContext,
+): Promise<Response> {
+  await requireDeploymentRecoveryOwner(db, auth);
+  const body = await readJson(request);
+  const profile = deploymentRecoveryProfilePayload(body.profile);
+  const encrypted = await encryptWorkerSecret(
+    env.JWT_SECRET,
+    'deployment-recovery-v1',
+    JSON.stringify(profile),
+  );
+  await db.batch(
+    [
+      {
+        sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('deployment_recovery_ciphertext', ?)`,
+        args: [encrypted.ciphertext],
+      },
+      {
+        sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('deployment_recovery_iv', ?)`,
+        args: [encrypted.iv],
+      },
+      {
+        sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('deployment_recovery_updated_at', ?)`,
+        args: [String(Date.now())],
+      },
+    ],
+    'write',
+  );
+  return privateJson({ ok: true, saved: true });
+}
+
+async function deploymentRecoveryProfile(db: Client, env: Env, auth: AuthContext): Promise<Response> {
+  await requireDeploymentRecoveryOwner(db, auth);
+  const rows = await db.execute({
+    sql: `SELECT key, value FROM worker_state
+          WHERE key IN ('deployment_recovery_ciphertext', 'deployment_recovery_iv', 'deployment_recovery_updated_at')`,
+    args: [],
+  });
+  const values = new Map<string, string>();
+  for (const row of rows.rows) values.set(String(row.key), String(row.value));
+  const ciphertext = values.get('deployment_recovery_ciphertext') ?? '';
+  const iv = values.get('deployment_recovery_iv') ?? '';
+  if (!ciphertext || !iv) {
+    throw new HttpError(404, 'No deployment recovery profile has been saved yet.', 'DEPLOYMENT_RECOVERY_NOT_FOUND');
+  }
+  const plaintext = await decryptWorkerSecret(
+    env.JWT_SECRET,
+    'deployment-recovery-v1',
+    ciphertext,
+    iv,
+    'The saved deployment recovery profile can no longer be decrypted. Redeploy once from a device that still has the deployment values.',
+  );
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(plaintext);
+  } catch {
+    throw new HttpError(503, 'The saved deployment recovery profile is damaged.');
+  }
+  return privateJson({
+    profile: deploymentRecoveryProfilePayload(decoded),
+    updatedAt: Number(values.get('deployment_recovery_updated_at') ?? 0),
+  });
+}
+
+async function deleteDeploymentRecoveryProfile(db: Client, auth: AuthContext): Promise<Response> {
+  await requireDeploymentRecoveryOwner(db, auth);
+  await db.batch(
+    [
+      { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_ciphertext'`, args: [] },
+      { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_iv'`, args: [] },
+      { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_updated_at'`, args: [] },
+    ],
+    'write',
+  );
+  return privateJson({ ok: true, deleted: true });
 }
 
 

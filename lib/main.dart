@@ -1985,7 +1985,10 @@ class AppController extends ChangeNotifier {
       _startCloudAutoPull();
     }
     if (selfHostedSyncApiBaseUrl.isNotEmpty) {
-      unawaited(checkForAutomaticWorkerUpdate());
+      unawaited(() async {
+        await synchronizeWorkerDeploymentRecoveryProfile();
+        await checkForAutomaticWorkerUpdate();
+      }());
     }
     if (Platform.isAndroid) {
       unawaited(_syncAndroidAutomaticBackupWorker());
@@ -1999,6 +2002,80 @@ class AppController extends ChangeNotifier {
     workerAutoUpdateStatus = '';
     workerAutoUpdateError = null;
     notifyListeners();
+  }
+
+  Future<bool> synchronizeWorkerDeploymentRecoveryProfile() async {
+    if (!cloudSyncEnabled ||
+        syncAccessToken.trim().isEmpty ||
+        cloudSyncApiBaseUrl.trim().isEmpty) {
+      return false;
+    }
+
+    final currentUrl = CloudSyncService.normalizeApiBaseUrl(cloudSyncApiBaseUrl);
+    final store = WorkerDeploymentCredentialStore();
+    final api = KoinlySyncApi(baseUrl: currentUrl);
+    final local = await store.read();
+
+    if (local != null &&
+        CloudSyncService.normalizeApiBaseUrl(local.workerUrl) == currentUrl) {
+      try {
+        await api.saveDeploymentRecoveryProfile(
+          accessToken: syncAccessToken,
+          profile: local.toJson().cast<String, dynamic>(),
+        );
+      } catch (_) {
+        // Deployment recovery is a convenience layer. Authentication and sync
+        // must keep working even if this optional encrypted vault is unavailable.
+      }
+      return false;
+    }
+
+    try {
+      final recoveredJson = await api.loadDeploymentRecoveryProfile(accessToken: syncAccessToken);
+      final recovered = WorkerDeploymentProfile.fromJson(recoveredJson);
+      if (recovered == null ||
+          CloudSyncService.normalizeApiBaseUrl(recovered.workerUrl) != currentUrl) {
+        return false;
+      }
+      await store.write(recovered);
+      workerAutoUpdateError = null;
+      workerAutoUpdateStatus = 'Deployment values restored securely from this Worker.';
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> publishWorkerDeploymentRecoveryProfile(WorkerDeploymentProfile profile) async {
+    if (!cloudSyncEnabled ||
+        syncAccessToken.trim().isEmpty ||
+        cloudSyncApiBaseUrl.trim().isEmpty ||
+        CloudSyncService.normalizeApiBaseUrl(profile.workerUrl) !=
+            CloudSyncService.normalizeApiBaseUrl(cloudSyncApiBaseUrl)) {
+      return false;
+    }
+    try {
+      await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).saveDeploymentRecoveryProfile(
+        accessToken: syncAccessToken,
+        profile: profile.toJson().cast<String, dynamic>(),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> forgetWorkerDeploymentRecoveryProfile() async {
+    if (cloudSyncEnabled && syncAccessToken.trim().isNotEmpty && cloudSyncApiBaseUrl.trim().isNotEmpty) {
+      try {
+        await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl)
+            .deleteDeploymentRecoveryProfile(accessToken: syncAccessToken);
+      } catch (_) {
+        // Always honor the local forget request even when the Worker is offline.
+      }
+    }
+    await WorkerDeploymentCredentialStore().clear();
   }
 
   Future<void> checkForAutomaticWorkerUpdate() async {
@@ -2020,6 +2097,7 @@ class AppController extends ChangeNotifier {
       switch (result.outcome) {
         case WorkerAutoUpdateOutcome.updated:
           workerAutoUpdateStatus = result.message;
+          await synchronizeWorkerDeploymentRecoveryProfile();
           break;
         case WorkerAutoUpdateOutcome.noSavedDeployment:
         case WorkerAutoUpdateOutcome.inactiveDeployment:
@@ -3828,6 +3906,10 @@ class AppController extends ChangeNotifier {
             )
           : await api.login(username: username, password: password, deviceId: syncDeviceId, deviceName: _deviceName(), platform: _platformName());
       await _saveSyncSession(session);
+      final deploymentValuesRestored = await synchronizeWorkerDeploymentRecoveryProfile();
+      if (deploymentValuesRestored) {
+        unawaited(checkForAutomaticWorkerUpdate());
+      }
       await database.writeSyncState('serverCursor', '0');
       if (!register || !deferInitialDataSync) {
         newSyncAccountAwaitingSetupChoice = false;
@@ -17004,7 +17086,7 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
       return;
     }
     try {
-      await _credentialStore.clear();
+      await context.read<AppController>().forgetWorkerDeploymentRecoveryProfile();
       if (!mounted) return;
       setState(() {
         _autoUpdateEnabled = false;
@@ -17022,13 +17104,13 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
 
   Future<void> _forgetSavedDeployment() async {
     try {
-      await _credentialStore.clear();
+      await context.read<AppController>().forgetWorkerDeploymentRecoveryProfile();
       if (!mounted) return;
       setState(() {
         _savedDeployment = null;
         _autoUpdateEnabled = false;
         _error = null;
-        _progress.add('Saved deployment credentials removed from this device.');
+        _progress.add('Saved deployment credentials removed from this device and Worker recovery vault.');
       });
     } catch (_) {
       if (mounted) {
@@ -17155,6 +17237,9 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
         try {
           await _credentialStore.clear();
         } catch (_) {}
+      }
+      if (automaticUpdatesSaved && mounted) {
+        await context.read<AppController>().publishWorkerDeploymentRecoveryProfile(profile);
       }
       if (!mounted) return;
       _adminPasswordController.clear();
@@ -17506,6 +17591,8 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       );
     }
     if (mounted && state.cloudSyncError == null) {
+      final deploymentValuesRestored =
+          state.workerAutoUpdateStatus.contains('Deployment values restored');
       _passwordController.clear();
       showSnack(
         context,
@@ -17513,7 +17600,9 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
             ? onboardingAuthFlow
                 ? 'Account created. Choose Restore backup or Start new.'
                 : 'Account created. Sync started.'
-            : 'Signed in. Cloud data loaded.',
+            : deploymentValuesRestored
+                ? 'Signed in. Cloud data loaded and deployment values restored.'
+                : 'Signed in. Cloud data loaded.',
       );
       if (register && onboardingAuthFlow) {
         if (mounted) Navigator.pop(context, true);

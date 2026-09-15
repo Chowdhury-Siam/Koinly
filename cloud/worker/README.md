@@ -32,7 +32,7 @@ The original administrator password stays in GitHub's encrypted secret storage. 
 
 ## Administration portal
 
-**Existing self-hosted Worker owners must keep the Worker current.** GitHub-based deployments redeploy automatically when the fork receives the updated project. Workers deployed from Koinly's **Deploy Database** screen can also update automatically after future app updates when **Automatic Worker updates** is enabled; the app securely retains the deployment profile on that device and redeploys only when its embedded Worker is newer. Existing Turso data and accounts are preserved.
+**Existing self-hosted Worker owners must keep the Worker current.** GitHub-based deployments redeploy automatically when the fork receives the updated project. Workers deployed from Koinly's **Deploy Database** screen can also update automatically after future app updates when **Automatic Worker updates** is enabled. Koinly keeps the deployment profile in the device secure store and, after the first sync account exists, keeps an encrypted recovery copy in `worker_state`. Only the first sync account can retrieve that copy. After reinstalling Koinly, paste the same Worker URL and sign in with that first account to restore the deployment values automatically. Existing Turso data and accounts are preserved.
 
 Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
 
@@ -77,6 +77,14 @@ All routes are under `/profile` so the existing app API's wildcard CORS never ap
 | POST | `/profile/api/accounts/:id/password` | `{ "password": "..." }`; resets password and revokes credentials |
 | DELETE | `/profile/api/accounts/:id` | Permanently deletes account and related cloud data |
 
+Authenticated app recovery endpoints:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/v1/deployment-recovery/profile` | First sync account restores the encrypted in-app deployment profile |
+| POST | `/v1/deployment-recovery/profile` | First sync account refreshes the encrypted recovery profile |
+| DELETE | `/v1/deployment-recovery/profile` | First sync account removes the recovery profile |
+
 Errors return `{ "error": "..." }`: 400 invalid input, 401 invalid login/expired session, 403 rejected origin, 404 missing account, 409 duplicate username, 413 oversized request, 415 unsupported content type, 429 too many attempts, or 503 configuration/database failure. The UI presents errors and success messages and confirms deletion before sending it.
 
 ## Health check
@@ -93,7 +101,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
-  "workerVersion": "1.0.1160",
+  "workerVersion": "1.0.1161",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,

@@ -91,6 +91,15 @@ INSERT OR IGNORE INTO worker_state(key, value)
 SELECT 'registration_closed', '1'
 WHERE EXISTS (SELECT 1 FROM users);
 
+-- The first sync account owns deployment-value recovery. Existing databases
+-- are upgraded by assigning the oldest account, matching the historical
+-- first-owner registration rule.
+INSERT OR IGNORE INTO worker_state(key, value)
+SELECT 'deployment_owner_user_id', id
+FROM users
+ORDER BY created_at ASC, id ASC
+LIMIT 1;
+
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id, device_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id, last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sync_changes_user_sequence ON sync_changes(user_id, sequence);

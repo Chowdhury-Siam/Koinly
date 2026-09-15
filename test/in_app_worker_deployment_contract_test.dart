@@ -66,6 +66,27 @@ void main() {
     expect(main, contains("label: const Text('Forget saved deployment credentials')"));
     expect(main, contains('checkForAutomaticWorkerUpdate()'));
     expect(main, contains('Automatic Worker update failed:'));
+    expect(main, contains('synchronizeWorkerDeploymentRecoveryProfile()'));
+    expect(main, contains('Deployment values restored securely from this Worker.'));
+    expect(service, contains('WorkerDeploymentProfile'));
+  });
+
+  test('deployment values can be recovered after reinstall once the owner signs in', () {
+    final main = File('lib/main.dart').readAsStringSync();
+    final sync = File('lib/sync_services.dart').readAsStringSync();
+    final worker = File('cloud/worker/src/index.ts').readAsStringSync();
+    final schema = File('cloud/worker/schema.sql').readAsStringSync();
+
+    expect(sync, contains('/v1/deployment-recovery/profile'));
+    expect(sync, contains('loadDeploymentRecoveryProfile'));
+    expect(sync, contains('saveDeploymentRecoveryProfile'));
+    expect(main, contains('WorkerDeploymentProfile.fromJson(recoveredJson)'));
+    expect(main, contains('publishWorkerDeploymentRecoveryProfile'));
+    expect(worker, contains('requireDeploymentRecoveryOwner'));
+    expect(worker, contains('deployment-recovery-v1'));
+    expect(worker, contains('deployment_recovery_ciphertext'));
+    expect(worker, isNot(contains('deployment_recovery_plaintext')));
+    expect(schema, contains('deployment_owner_user_id'));
   });
 
   test('release builds embed a Worker bundle generated from current Worker source', () {
