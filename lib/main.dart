@@ -1822,7 +1822,7 @@ class AppController extends ChangeNotifier {
   double _savingAccountBalance = 0;
   double _totalAccountBalance = 0;
 
-  ThemePreference themePreference = ThemePreference.system;
+  ThemePreference themePreference = ThemePreference.dark;
   String currencySymbol = '৳';
   String currencyCode = 'BDT';
   CurrencyPosition currencyPosition = CurrencyPosition.suffix;
@@ -2122,7 +2122,7 @@ class AppController extends ChangeNotifier {
     onboardingCompleted = await prefs.getBool('onboardingCompleted', false);
     starterAccountsSkipped = await prefs.getBool('starterAccountsSkipped', false);
     desktopSetupVersionCompleted = await prefs.getInt('desktopSetupVersionCompleted', 0);
-    themePreference = await prefs.getEnum('themePreference', ThemePreference.values, ThemePreference.system);
+    themePreference = await prefs.getEnum('themePreference', ThemePreference.values, ThemePreference.dark);
     currencySymbol = await prefs.getString('currencySymbol', '৳');
     currencyCode = await prefs.getString('currencyCode', 'BDT');
     currencyPosition = await prefs.getEnum('currencyPosition', CurrencyPosition.values, CurrencyPosition.suffix);
@@ -5561,6 +5561,9 @@ class KoinlyApp extends StatelessWidget {
             secondary: kSleekIncome,
             tertiary: const Color(0xFFFF5C7A),
             surface: kSleekSurface,
+            onSurface: const Color(0xFFF0F2F3),
+            onSurfaceVariant: kSleekMuted,
+            surfaceTint: Colors.transparent,
             surfaceContainerLow: kSleekSurfaceLow,
             surfaceContainer: kSleekSurfaceContainer,
             surfaceContainerHigh: kSleekSurfaceHigh,
@@ -5660,7 +5663,10 @@ class KoinlyApp extends StatelessWidget {
         color: scheme.surface,
         surfaceTintColor: scheme.surfaceTint,
         margin: EdgeInsets.zero,
-        shape: AppShapes.squircle(26),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(26),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surface,
@@ -5704,7 +5710,7 @@ class KoinlyApp extends StatelessWidget {
         unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant.withOpacity(.82), fontWeight: FontWeight.w800, fontSize: 11),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xE60B1914) : Colors.white.withOpacity(.96),
+        backgroundColor: isDark ? kSleekSurfaceLow.withOpacity(.96) : Colors.white.withOpacity(.96),
         indicatorColor: kSleekAccent.withOpacity(isDark ? .24 : .18),
         height: 78,
         elevation: 0,
@@ -5744,9 +5750,9 @@ class KoinlyApp extends StatelessWidget {
             return Colors.transparent;
           }),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 22 : 18)),
-          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 16)),
-          minimumSize: const WidgetStatePropertyAll(Size(48, 50)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900, letterSpacing: -.1)),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 22, vertical: 14)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 46)),
+          textStyle: WidgetStatePropertyAll(textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.1)),
           elevation: states(normal: 0.0, pressed: 0.0),
         ),
       ),
@@ -5760,7 +5766,7 @@ class KoinlyApp extends StatelessWidget {
           ),
           shape: WidgetStateProperty.resolveWith((state) => AppShapes.squircle(state.contains(WidgetState.pressed) ? 18 : 16)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14, vertical: 11)),
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w900)),
+          textStyle: WidgetStatePropertyAll(textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -5837,7 +5843,7 @@ class KoinlyApp extends StatelessWidget {
         secondaryLabelStyle: const TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(color: kSleekAccent, linearTrackColor: Color(0x3310B981)),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: kSleekAccent, linearTrackColor: Color(0x3300BD91)),
       switchTheme: SwitchThemeData(
         // Keep switches crisp and flat. Material 3's default track outline
         // reads as a heavy stroke in our compact dark UI, especially on
@@ -6545,7 +6551,7 @@ class _SideRailNavigation extends StatelessWidget {
       child: SafeArea(
         right: false,
         child: Container(
-          width: extended ? 238 : 92,
+          width: extended ? 214 : 92,
           decoration: BoxDecoration(
             border: Border(right: BorderSide(color: borderColor, width: 1)),
             boxShadow: kIsDesktopApp
@@ -6590,11 +6596,62 @@ class _SideRailNavigation extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: NavigationRail(
+                child: extended
+                    ? ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 46, 16, 16),
+                        itemCount: _FloatingDockNavigation.destinations.length,
+                        itemBuilder: (context, index) {
+                          final destination = _FloatingDockNavigation.destinations[index];
+                          final selected = selectedIndex == index;
+                          return Semantics(
+                            selected: selected,
+                            button: true,
+                            child: SizedBox(
+                              height: 40,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () => onSelected(index),
+                                child: Row(
+                                  children: [
+                                    AnimatedContainer(
+                                      duration: AppMotion.fast,
+                                      width: 50,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: selected ? kSleekAccent.withOpacity(.26) : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        selected ? destination.activeIcon : destination.icon,
+                                        color: selected ? kSleekAccent : scheme.onSurfaceVariant,
+                                        size: 23,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(
+                                        destination.label,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: selected ? kSleekAccent : scheme.onSurfaceVariant,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : NavigationRail(
                   selectedIndex: selectedIndex,
                   extended: extended,
                   minWidth: 92,
-                  minExtendedWidth: 238,
+                  minExtendedWidth: 214,
                   groupAlignment: -0.86,
                   backgroundColor: Colors.transparent,
                   indicatorColor: kSleekAccent.withOpacity(dark ? .26 : .16),
@@ -6655,7 +6712,7 @@ class _FloatingDockNavigation extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final active = kSleekAccent;
     final inactive = dark ? scheme.onSurface.withOpacity(.72) : scheme.onSurfaceVariant.withOpacity(.78);
-    final dockColor = dark ? const Color(0xF20B1914) : Colors.white.withOpacity(.94);
+    final dockColor = dark ? kSleekSurfaceLow.withOpacity(.95) : Colors.white.withOpacity(.94);
     final selectedColor = dark ? kSleekAccent.withOpacity(.32) : kSleekAccent.withOpacity(.18);
 
     return SafeArea(
@@ -6775,7 +6832,7 @@ class PageScaffold extends StatelessWidget {
       child: Scaffold(
         backgroundColor: scheme.background,
         appBar: AppBar(
-          toolbarHeight: desktop ? 76 : small ? 68 : 76,
+          toolbarHeight: desktop ? 70 : small ? 68 : 76,
           titleSpacing: small ? 12 : 18,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -7047,7 +7104,10 @@ class ExpressiveCard extends StatelessWidget {
     );
     final cardChild = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: Padding(padding: padding, child: child),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Padding(padding: padding, child: child),
+      ),
     );
     if (reducedMotion) {
       return Container(decoration: decoration, child: cardChild);
@@ -7073,7 +7133,7 @@ class SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 22, 4, 10),
       child: Row(
         children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -.2))),
+          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: -.2))),
           if (trailing != null) DefaultTextStyle.merge(style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800), child: trailing!),
         ],
       ),
@@ -9466,7 +9526,15 @@ class HomeDashboardScreen extends StatelessWidget {
     ];
 
     final budgetSection = <Widget>[
-      SectionHeader('Budgets', trailing: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())), child: const Text('View all'))),
+      SectionHeader('Budgets', trailing: TextButton(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(48, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        ),
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BudgetListScreen())),
+        child: const Text('View all'),
+      )),
       if (state.budgets.isEmpty)
         EmptyCard(icon: Icons.savings_rounded, title: 'No budget yet', body: 'Create a monthly budget and track spending against limits.', action: () => showBudgetEditor(context), actionLabel: 'Create budget', animated: true)
       else
@@ -9484,11 +9552,20 @@ class HomeDashboardScreen extends StatelessWidget {
           child: Column(
             children: topCategories.take(4).map((entry) {
               final category = state.categoryOf(entry.key);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
+               return ListTile(
+                 contentPadding: EdgeInsets.zero,
+                 minTileHeight: 66,
+                 minVerticalPadding: 8,
                 leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
                 title: Text(category?.name ?? 'Unknown'),
-                subtitle: LinearProgressIndicator(value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal),
+                 subtitle: Padding(
+                   padding: const EdgeInsets.only(top: 10),
+                   child: LinearProgressIndicator(
+                     minHeight: 4,
+                     borderRadius: BorderRadius.circular(2),
+                     value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
+                   ),
+                 ),
                 trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w800)),
                 onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
               );
@@ -9557,6 +9634,10 @@ class HomeDashboardScreen extends StatelessWidget {
         IconButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())), icon: const Icon(Icons.settings_rounded)),
       ],
       child: ResponsiveContent(
+        desktopMaxWidth: 1076,
+        padding: AppBreakpoints.isExpanded(context)
+            ? const EdgeInsets.fromLTRB(32, 0, 32, 36)
+            : null,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final useDesktopColumns = constraints.maxWidth >= 860;
@@ -9632,10 +9713,11 @@ class HomeNavigationTile extends StatelessWidget {
       enabled: true,
       scale: .985,
       child: ExpressiveCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: iconBubble(context, iconName, iconColor, size: 50),
+       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+       child: ListTile(
+         contentPadding: EdgeInsets.zero,
+         minTileHeight: 71,
+         leading: iconBubble(context, iconName, iconColor, size: 46),
         title: Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
         subtitle: Text(
           subtitle,
@@ -9768,7 +9850,7 @@ class MiniMetric extends StatelessWidget {
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 230;
         return Container(
-          constraints: BoxConstraints(minHeight: compact ? 82 : 66),
+          constraints: BoxConstraints(minHeight: compact ? 82 : 60),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest.withOpacity(Theme.of(context).brightness == Brightness.dark ? .42 : .48),
@@ -9840,21 +9922,21 @@ class BalanceHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = dark ? const Color(0xFFD1E8DC) : scheme.onSurface.withOpacity(.86);
+    final titleColor = scheme.onSurface;
     final valueColor = dark ? Colors.white : scheme.onSurface;
-    final subtitleColor = dark ? const Color(0xFF96ACA2) : scheme.onSurfaceVariant.withOpacity(.78);
+    final subtitleColor = scheme.onSurfaceVariant;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
         gradient: dark
             ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF0A3A28),
-                  const Color(0xFF0B281D),
+                  const Color(0xFF141A1F),
+                  const Color(0xFF12171C),
                   kSleekSurface,
                 ],
               )
@@ -9867,16 +9949,7 @@ class BalanceHeroCard extends StatelessWidget {
                   scheme.surface,
                 ],
               ),
-        border: Border.all(color: dark ? kSleekAccent.withOpacity(.28) : scheme.outline.withOpacity(.16), width: 1),
-        boxShadow: kIsDesktopApp
-            ? [
-                BoxShadow(color: Colors.black.withOpacity(dark ? .24 : .055), blurRadius: 28, offset: const Offset(0, 14)),
-                if (dark) BoxShadow(color: kSleekAccent.withOpacity(.10), blurRadius: 36, offset: const Offset(0, 5)),
-              ]
-            : [
-                BoxShadow(color: kSleekAccent.withOpacity(dark ? .13 : .05), blurRadius: 24, offset: const Offset(0, 9)),
-                BoxShadow(color: Colors.black.withOpacity(dark ? .32 : .055), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
+        border: Border.all(color: dark ? scheme.outline : scheme.outline.withOpacity(.16), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -9913,9 +9986,9 @@ class BalanceHeroCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(subtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: subtitleColor, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           const _DecorativeSparkline(),
-          const SizedBox(height: 18),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(child: MiniMetric('Total income', income, Icons.south_west_rounded)),
@@ -9981,7 +10054,7 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     return RepaintBoundary(
       child: SizedBox(
-        height: 54,
+        height: 48,
         child: AnimatedBuilder(
           animation: _controller,
           builder: (context, _) {
@@ -9989,9 +10062,9 @@ class _DecorativeSparklineState extends State<_DecorativeSparkline> with SingleT
             final pulse = reduceMotion
                 ? 0.0
                 : (math.sin(animationValue * math.pi * 2) + 1) / 2;
-            final glow = reduceMotion ? .20 : .26 + pulse * .16;
+            final glow = reduceMotion ? .025 : .025 + pulse * .015;
             final lineOpacity = reduceMotion ? 1.0 : .78 + pulse * .22;
-            final lineWidth = reduceMotion ? 3.0 : 3.1 + pulse * .9;
+            final lineWidth = reduceMotion ? 2.3 : 2.3 + pulse * .2;
             return LineChart(
               LineChartData(
                 minX: 0,
@@ -10114,10 +10187,10 @@ class _AnimatedEmptyStateIconState extends State<_AnimatedEmptyStateIcon> with S
       child: Icon(widget.icon, color: widget.color, size: 29),
     );
 
-    if (reduceMotion) return SizedBox(width: 92, height: 92, child: Center(child: iconBubble));
+    if (reduceMotion) return SizedBox(width: 80, height: 80, child: Center(child: iconBubble));
     return SizedBox(
-      width: 92,
-      height: 92,
+      width: 80,
+      height: 80,
       child: Stack(
         alignment: Alignment.center,
         children: [

@@ -3,17 +3,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-// Koinly's visual system keeps emerald accents and green-tinted surfaces on
-// a neutral near-black page background. Keep card/surface colors independent
-// so changing the page canvas never alters cards, controls, or navigation.
-const Color kSleekBackground = Color(0xFF0F1217);
-const Color kSleekSurfaceLow = Color(0xFF081510);
-const Color kSleekSurface = Color(0xFF0B1914);
-const Color kSleekSurfaceContainer = Color(0xFF0E1E18);
-const Color kSleekSurfaceHigh = Color(0xFF11251D);
-const Color kSleekSurfaceHigher = Color(0xFF183127);
-const Color kSleekOutline = Color(0xFF29463A);
-const Color kSleekOutlineVariant = Color(0xFF19372C);
+// Neutral charcoal surfaces keep the teal accent focused on actions and data.
+const Color kSleekBackground = Color(0xFF0F1216);
+const Color kSleekSurfaceLow = Color(0xFF0C1114);
+const Color kSleekSurface = Color(0xFF13181D);
+const Color kSleekSurfaceContainer = Color(0xFF14191E);
+const Color kSleekSurfaceHigh = Color(0xFF192126);
+const Color kSleekSurfaceHigher = Color(0xFF20282D);
+const Color kSleekOutline = Color(0xFF343D43);
+const Color kSleekOutlineVariant = Color(0xFF272F35);
 
 const Color kSleekLightBackground = Color(0xFFF6F9F6);
 const Color kSleekLightSurfaceLow = Color(0xFFFBFDFB);
@@ -24,13 +22,13 @@ const Color kSleekLightSurfaceHigher = Color(0xFFE3EFE7);
 const Color kSleekLightOutline = Color(0xFFB9CBC1);
 const Color kSleekLightOutlineVariant = Color(0xFFD9E7DE);
 
-const Color kSleekAccent = Color(0xFF10B981);
-const Color kSleekIncome = Color(0xFF34D399);
+const Color kSleekAccent = Color(0xFF00BD91);
+const Color kSleekIncome = Color(0xFF27C6A0);
 const Color kSleekExpense = Color(0xFFFF5353);
 const Color kSleekWarning = Color(0xFFF59E0B);
-const Color kSleekMuted = Color(0xFF8FA69C);
+const Color kSleekMuted = Color(0xFFADB5BB);
 
-const String kSleekAccentHex = '#10B981';
+const String kSleekAccentHex = '#00BD91';
 const String kLegacyStarterCashIconHex = '#78D8E8';
 
 const appTitle = 'Koinly';

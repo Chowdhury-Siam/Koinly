@@ -3,14 +3,14 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('shared visual system keeps emerald surfaces on a plain dark canvas', () {
+  test('shared visual system keeps charcoal surfaces and teal accents', () {
     final config = File('lib/app_config.dart').readAsStringSync();
     final mainSource = File('lib/main.dart').readAsStringSync();
 
-    expect(config, contains('kSleekAccent = Color(0xFF10B981)'));
-    expect(config, contains('kSleekBackground = Color(0xFF0F1217)'));
-    expect(config, contains('kSleekSurface = Color(0xFF0B1914)'));
-    expect(config, contains("kSleekAccentHex = '#10B981'"));
+    expect(config, contains('kSleekAccent = Color(0xFF00BD91)'));
+    expect(config, contains('kSleekBackground = Color(0xFF0F1216)'));
+    expect(config, contains('kSleekSurface = Color(0xFF13181D)'));
+    expect(config, contains("kSleekAccentHex = '#00BD91'"));
     expect(mainSource, contains('surfaceContainerLow: kSleekSurfaceLow'));
     expect(mainSource, contains('surfaceContainer: kSleekSurfaceContainer'));
     expect(mainSource, contains('outlineVariant: kSleekOutlineVariant'));
