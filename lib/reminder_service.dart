@@ -37,6 +37,13 @@ class ReminderService {
     if (requestPermission) await androidPlugin?.requestNotificationsPermission();
   }
 
+  static Future<void> requestNotificationPermission() async {
+    if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.requestNotificationsPermission();
+  }
+
   static Future<void> scheduleDaily(TimeOfDay time) async {
     if (!kSupportsLocalNotifications) return;
     await cancel();

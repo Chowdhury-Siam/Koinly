@@ -34,6 +34,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
+import 'android_background_permission_service.dart';
 import 'android_saf_backup_store.dart';
 import 'app_config.dart';
 import 'branding_widgets.dart';
@@ -2972,6 +2973,9 @@ class AppController extends ChangeNotifier {
 
   Future<void> setAutomaticUpdatePopupEnabled(bool enabled) async {
     if (automaticUpdatePopupEnabled == enabled) return;
+    if (enabled && Platform.isAndroid) {
+      await ReminderService.requestNotificationPermission();
+    }
     automaticUpdatePopupEnabled = enabled;
     await prefs.setBool('automaticUpdatePopupEnabled', enabled);
     await UpdateBackgroundService.setEnabled(enabled);
@@ -5352,6 +5356,7 @@ class AppController extends ChangeNotifier {
     await prefs.setInt('reminderHour', time.hour);
     await prefs.setInt('reminderMinute', time.minute);
     if (enabled) {
+      await ReminderService.requestNotificationPermission();
       await ReminderService.scheduleDaily(time);
     } else {
       await ReminderService.cancel();
@@ -16455,6 +16460,10 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.key_rounded, title: 'Credential', subtitle: 'Telegram bot and Google Drive', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()))),
             SettingsTile(icon: Icons.inventory_2_rounded, title: 'Archive', subtitle: 'Local backup, Telegram backup, and cloud report schedules', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchiveSettingsScreen()))),
             SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered reports in PDF, XLSX, or TXT', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
+            if (Platform.isAndroid) ...[
+              const SectionHeader('Permissions'),
+              const BatteryOptimizationSettingsTile(),
+            ],
             const SectionHeader('App'),
             SettingsTile(icon: Icons.system_update_alt_rounded, title: 'Updates', subtitle: state.updateStatusMessage, color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatesScreen()))),
             SettingsTile(icon: Icons.tune_rounded, title: 'Advanced settings', subtitle: 'Defaults, account order, and data health', color: '#9AD0F5', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdvancedSettingsScreen()))),
@@ -16467,10 +16476,11 @@ class SettingsScreen extends StatelessWidget {
 }
 
 class SettingsTile extends StatelessWidget {
-  const SettingsTile({super.key, required this.icon, required this.title, this.subtitle, required this.color, this.onTap});
+  const SettingsTile({super.key, required this.icon, required this.title, this.subtitle, this.subtitleColor, required this.color, this.onTap});
   final IconData icon;
   final String title;
   final String? subtitle;
+  final String? subtitleColor;
   final String color;
   final VoidCallback? onTap;
 
@@ -16502,13 +16512,83 @@ class SettingsTile extends StatelessWidget {
           subtitle: hasSubtitle
               ? Text(
                   subtitle!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekMuted, fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: subtitleColor == null ? kSleekMuted : colorFromHex(subtitleColor!),
+                    fontWeight: FontWeight.w700,
+                  ),
                 )
               : null,
           trailing: Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ),
+    );
+  }
+}
+
+class BatteryOptimizationSettingsTile extends StatefulWidget {
+  const BatteryOptimizationSettingsTile({super.key});
+
+  @override
+  State<BatteryOptimizationSettingsTile> createState() => _BatteryOptimizationSettingsTileState();
+}
+
+class _BatteryOptimizationSettingsTileState extends State<BatteryOptimizationSettingsTile> with WidgetsBindingObserver {
+  bool? _granted;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_refresh());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refresh());
+  }
+
+  Future<void> _refresh() async {
+    final granted = await AndroidBackgroundPermissionService.isIgnoringBatteryOptimizations();
+    if (!mounted) return;
+    setState(() => _granted = granted);
+  }
+
+  Future<void> _openPermission() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final opened = await AndroidBackgroundPermissionService.openBatteryOptimizationSettings();
+      if (!opened && mounted) {
+        showSnack(context, 'Could not open Android battery optimization settings.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final granted = _granted == true;
+    final subtitle = switch (_granted) {
+      true => 'Permission granted',
+      false => 'Disabled • Tap to open Android battery settings',
+      null => 'Checking permission…',
+    };
+    return SettingsTile(
+      icon: granted ? Icons.battery_charging_full_rounded : Icons.battery_alert_rounded,
+      title: 'Ignore Battery Optimization',
+      subtitle: subtitle,
+      subtitleColor: granted ? '#4FBF7F' : null,
+      color: granted ? '#86E3CE' : '#FBC879',
+      onTap: _busy ? null : _openPermission,
     );
   }
 }

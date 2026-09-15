@@ -1,3 +1,11 @@
+## [1.0.1162] - 2026-09-15
+
+- Added **Settings > Permissions > Ignore Battery Optimization** on Android, with live permission-state refresh when returning from Android settings.
+- Added a native Android battery-optimization settings bridge so users can mark Koinly unrestricted and reduce background update/subscription delays caused by Doze or aggressive OEM power management.
+- Notification-enabled settings now request Android notification permission again when the user explicitly enables them.
+- Removed the unused exact-alarm permission and stripped generated/machine-specific Flutter and Android local configuration from the packaged repository.
+- Synchronized application and bundled Worker version metadata to `1.0.1162+206`.
+
 ## [1.0.1161] - 2026-09-15
 
 - Added encrypted deployment-value recovery for Workers deployed from Koinly. After reinstalling the app, paste and validate the same Worker URL and sign in with the first sync account; Koinly restores the saved Cloudflare/Turso/JWT deployment profile to secure storage automatically.

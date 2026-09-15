@@ -12,6 +12,6 @@ void main() {
     expect(main, contains("'.SF Pro Display'"));
     expect(main, contains("'SF Pro Text'"));
     expect(worker, contains('"SF Pro Display","SF Pro Text",-apple-system,BlinkMacSystemFont'));
-    expect(pubspec, contains('version: 1.0.1161+205'));
+    expect(pubspec, contains('version: 1.0.1162+206'));
   });
 }

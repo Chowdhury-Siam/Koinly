@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
@@ -20,6 +21,7 @@ class MainActivity: FlutterFragmentActivity() {
     private val updaterChannel = "com.koinly.siam/updater"
     private val profileMediaChannel = "com.koinly.siam/profile_media"
     private val backupStorageChannel = "com.koinly.siam/backup_storage"
+    private val backgroundPermissionsChannel = "com.koinly.siam/background_permissions"
     private val profileMediaPermissionRequestCode = 4107
     private val backupDirectoryRequestCode = 4208
     private var pendingProfileMediaPermissionResult: MethodChannel.Result? = null
@@ -42,6 +44,13 @@ class MainActivity: FlutterFragmentActivity() {
                         result.success(installApk(path))
                     }
                 }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, backgroundPermissionsChannel).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isIgnoringBatteryOptimizations" -> result.success(isIgnoringBatteryOptimizations())
+                "openBatteryOptimizationSettings" -> result.success(openBatteryOptimizationSettings())
                 else -> result.notImplemented()
             }
         }
@@ -237,6 +246,22 @@ class MainActivity: FlutterFragmentActivity() {
             true
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        return powerManager.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun openBatteryOptimizationSettings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            true
+        } catch (_: Exception) {
+            openAppSettings()
         }
     }
 
