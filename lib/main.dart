@@ -61,6 +61,7 @@ part 'loans/loan_controller_part.dart';
 part 'loans/loan_screens.dart';
 part 'loans/loan_sheets.dart';
 part 'profile/profile_ui.dart';
+part 'profile/worker_profile_ui.dart';
 part 'analytics/analytics.dart';
 
 const _uuid = Uuid();
@@ -1848,6 +1849,7 @@ class AppController extends ChangeNotifier {
   bool cloudSyncEnabled = false;
   SyncDatabaseProvider syncDatabaseProvider = SyncDatabaseProvider.mongoDb;
   String selfHostedSyncApiBaseUrl = '';
+  bool selfHostedSyncEndpointValidated = false;
   String cloudSyncApiBaseUrl = '';
   String cloudSyncId = '';
   String cloudSyncPin = '';
@@ -2230,7 +2232,10 @@ class AppController extends ChangeNotifier {
       await prefs.getString('selfHostedSyncApiBaseUrl', legacyUsedSelfHostedSync ? legacySelfHostedUrl : ''),
     );
     cloudSyncApiBaseUrl = selfHostedSyncApiBaseUrl;
+    selfHostedSyncEndpointValidated = selfHostedSyncApiBaseUrl.isNotEmpty &&
+        await prefs.getBool('selfHostedSyncEndpointValidated', selfHostedSyncApiBaseUrl.isNotEmpty);
     await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
+    await prefs.setBool('selfHostedSyncEndpointValidated', selfHostedSyncEndpointValidated);
     await syncPrefs.remove('useCustomCloudSync');
     await syncPrefs.remove('customCloudSyncApiBaseUrl');
     cloudSyncId = await prefs.getString('cloudSyncId', '');
@@ -2873,6 +2878,7 @@ class AppController extends ChangeNotifier {
       'automaticUpdatePopupEnabled',
       'cloudSyncApiBaseUrl',
       'selfHostedSyncApiBaseUrl',
+      'selfHostedSyncEndpointValidated',
       'useCustomCloudSync', // legacy, ignored if an old backup contains it
       'customCloudSyncApiBaseUrl', // legacy, ignored if an old backup contains it
       'cloudSyncId',
@@ -3858,10 +3864,24 @@ class AppController extends ChangeNotifier {
     }
     selfHostedSyncApiBaseUrl = nextApiBaseUrl;
     cloudSyncApiBaseUrl = nextApiBaseUrl;
+    selfHostedSyncEndpointValidated = true;
     cloudSyncError = null;
     cloudSyncErrorCode = null;
     await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
     await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
+    await prefs.setBool('selfHostedSyncEndpointValidated', true);
+    notifyListeners();
+  }
+
+  Future<void> applyWorkerProfileUsernameRename({
+    required String previousUsername,
+    required String nextUsername,
+  }) async {
+    final previous = previousUsername.trim().toLowerCase();
+    final next = nextUsername.trim().toLowerCase();
+    if (next.isEmpty || syncAccountUsername.trim().toLowerCase() != previous) return;
+    syncAccountUsername = next;
+    await prefs.setString('syncAccountUsername', syncAccountUsername);
     notifyListeners();
   }
 
@@ -16448,14 +16468,16 @@ class SettingsScreen extends StatelessWidget {
 
   Future<void> _openWorkerProfile(BuildContext context, AppController state) async {
     final baseUrl = CloudSyncService.normalizeApiBaseUrl(state.selfHostedSyncApiBaseUrl);
-    if (baseUrl.isEmpty) return;
-    final opened = await launchUrl(
-      Uri.parse('$baseUrl/profile'),
-      mode: LaunchMode.externalApplication,
+    if (baseUrl.isEmpty || !state.selfHostedSyncEndpointValidated) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkerProfileScreen(
+          workerUrl: baseUrl,
+          suggestedUsername: state.syncAccountUsername,
+        ),
+      ),
     );
-    if (!opened && context.mounted) {
-      showSnack(context, 'Could not open the Worker profile.');
-    }
   }
 
   @override
@@ -16475,7 +16497,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             const SectionHeader('Data & cloud'),
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
-            if (state.selfHostedSyncApiBaseUrl.trim().isNotEmpty)
+            if (state.selfHostedSyncEndpointValidated && state.selfHostedSyncApiBaseUrl.trim().isNotEmpty)
               SettingsTile(
                 icon: Icons.manage_accounts_rounded,
                 title: 'Profile',
@@ -17792,17 +17814,19 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     if (shouldOpenAdmin != true || !mounted) return;
 
     final baseUrl = CloudSyncService.normalizeApiBaseUrl(state.cloudSyncApiBaseUrl);
-    if (baseUrl.isEmpty) {
+    if (baseUrl.isEmpty || !state.selfHostedSyncEndpointValidated) {
       showSnack(context, 'Validate and use the self-hosted Worker first.');
       return;
     }
-    final opened = await launchUrl(
-      Uri.parse('$baseUrl/profile'),
-      mode: LaunchMode.externalApplication,
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkerProfileScreen(
+          workerUrl: baseUrl,
+          suggestedUsername: state.syncAccountUsername,
+        ),
+      ),
     );
-    if (!opened && mounted) {
-      showSnack(context, 'Could not open the Worker admin panel.');
-    }
   }
 
   Future<void> _restoreCloudCopy() async {

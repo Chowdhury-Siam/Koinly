@@ -3,18 +3,27 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('automatic update preference controls Android background notification checks', () {
+  test('automatic updates use native Android WorkManager when Koinly is closed', () {
     final app = File('lib/main.dart').readAsStringSync();
     final background = File('lib/update_background_service.dart').readAsStringSync();
+    final nativeWorker = File('android/app/src/main/kotlin/com/koinly/siam/UpdateCheckWorker.kt').readAsStringSync();
+    final activity = File('android/app/src/main/kotlin/com/koinly/siam/MainActivity.kt').readAsStringSync();
     final reminders = File('lib/reminder_service.dart').readAsStringSync();
 
     expect(app, contains('await UpdateBackgroundService.initialize();'));
     expect(app, contains('await UpdateBackgroundService.setEnabled(enabled);'));
-    expect(background, contains('Workmanager().registerPeriodicTask('));
-    expect(background, contains('NetworkType.connected'));
-    expect(background, contains('ExistingPeriodicWorkPolicy.update'));
-    expect(background, contains("prefs.getBool(_automaticUpdatePreferenceKey) ?? true"));
-    expect(background, contains('_lastNotifiedUpdateVersionKey'));
+    expect(background, contains("MethodChannel('com.koinly.siam/update_background')"));
+    expect(background, contains("cancelByUniqueName(_legacyBackgroundUpdateUniqueName)"));
+    expect(background, contains("invokeMethod<void>('sync', {'enabled': enabled})"));
+    expect(nativeWorker, contains('PeriodicWorkRequestBuilder<UpdateCheckWorker>(15, TimeUnit.MINUTES)'));
+    expect(nativeWorker, contains('.setRequiredNetworkType(NetworkType.CONNECTED)'));
+    expect(nativeWorker, contains('ExistingPeriodicWorkPolicy.UPDATE'));
+    expect(nativeWorker, contains('.getPackageInfo(applicationContext.packageName, 0)'));
+    expect(nativeWorker, contains('https://api.github.com/repos/Chowdhury-Siam/Koinly/releases/latest'));
+    expect(nativeWorker, contains('Koinly ${release.version} is available'));
+    expect(nativeWorker, contains('lastNotifiedUpdateVersion'));
+    expect(activity, contains('NativeUpdateCheckScheduler.sync(this)'));
+    expect(activity, contains('updateBackgroundChannel'));
     expect(reminders, contains("'koinly_app_updates'"));
     expect(reminders, contains("'Koinly updates'"));
   });

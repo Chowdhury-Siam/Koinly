@@ -423,15 +423,15 @@ To connect an account to the app:
 
 1. Open Koinly and go to **Settings > Account & sync**.
 2. If you deployed through **Deploy Database**, the Worker URL is already filled and validated automatically. If you deployed through GitHub Actions, paste the Worker URL without `/profile` and select **Validate and use Worker**.
-3. On a fresh Worker with no sync accounts yet, enter the username and password you want and select **Create account**. This first account is created directly from the app even though the Worker administrator credentials are already configured.
+3. On a fresh Worker with no sync accounts yet, enter the username and password you want and select **Create account**. This first database account automatically becomes the Worker administrator.
 4. On another device, select **Login** and use that same sync-account username and password.
-5. To create a second or later account, open `/profile` and use **+ Create account**.
+5. To create a second or later account, go to **Settings > Profile** and sign in with the first account (the Worker administrator), then use **Create account**.
 
-Use `/profile` for additional sync accounts and account credential management. The first account remains the administrator and cannot be deleted, so further account creation stays administrator-managed.
+**Settings > Profile** is shown only after a Worker URL has been successfully validated. It opens Koinly's native in-app Worker administration screen rather than launching a browser. The Worker `/profile` web portal remains available for direct web access. The first account remains the administrator and cannot be deleted, so further account creation stays administrator-managed.
 
 ### 6.1 Password reset
 
-If an account holder needs a new password, open the Worker's `/profile` administration portal, select the account, and use **Change password**. The reset signs out that account's existing sessions, and the user can then sign in again with the new password.
+If an account holder needs a new password, open **Settings > Profile**, sign in as the Worker administrator, select the account, and use **Change password**. The same operation remains available from the Worker's direct `/profile` web portal. The reset signs out that account's existing sessions, and the user can then sign in again with the new password.
 
 ### 6.2 Sync controls
 
@@ -445,7 +445,7 @@ When two signed-in devices are open, the Worker uses an authenticated Durable Ob
 <a id="worker-administration-portal"></a>
 ### 6.3 Worker administration portal (`/profile`)
 
-Manage your Worker's accounts through a private web dashboard. The first Koinly account created on that Worker is the administrator. Sign in to `/profile` with that account's current username and password.
+Koinly provides the same Worker account administration directly inside the app at **Settings > Profile** after the Worker URL is validated. The first Koinly account created on that Worker is the administrator. Sign in with that account's current username and password. The Worker also continues to expose the private `/profile` web dashboard for direct web administration.
 
 > **Existing Worker owners:** Workers deployed through **Deploy Database** can now update automatically after future Koinly app updates when **Automatic Worker updates** is enabled and the saved deployment profile still matches the active Worker URL. Koinly compares the Worker's reported version with the Worker bundled into the installed app and redeploys only when the bundled Worker is newer. GitHub-based deployments continue to redeploy automatically when the fork receives the updated project. Keep the same Worker name, Turso database, and `JWT_SECRET` so the existing backend continues to use the same identity and encrypted data.
 
@@ -653,7 +653,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1166
+  --dart-define=KOINLY_APP_VERSION=1.0.1167
 ```
 
 ## 10.4 Windows build
@@ -663,7 +663,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1166
+  --dart-define=KOINLY_APP_VERSION=1.0.1167
 ```
 
 ## 10.5 Linux build
@@ -680,7 +680,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1166
+  --dart-define=KOINLY_APP_VERSION=1.0.1167
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -699,7 +699,7 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1166
+  --dart-define=KOINLY_APP_VERSION=1.0.1167
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
@@ -9,18 +10,20 @@ import 'reminder_service.dart';
 import 'subscription_background_service.dart';
 import 'update_service.dart';
 
-const _backgroundUpdateUniqueName = 'koinly-periodic-update-check';
+// Kept only so upgrades can cancel the older headless-Flutter periodic task.
+const _legacyBackgroundUpdateUniqueName = 'koinly-periodic-update-check';
 const _backgroundUpdateTaskName = 'koinlyUpdateCheck';
 const _backgroundSubscriptionUniqueName = 'koinly-periodic-subscription-check';
 const _backgroundSubscriptionTaskName = 'koinlySubscriptionCheck';
-const _backgroundUpdateFrequency = Duration(minutes: 15);
 const _automaticUpdatePreferenceKey = 'automaticUpdatePopupEnabled';
 const _lastNotifiedUpdateVersionKey = 'lastNotifiedUpdateVersion';
+const _nativeUpdateChannel = MethodChannel('com.koinly.siam/update_background');
 
 @pragma('vm:entry-point')
 void koinlyBackgroundUpdateDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     WidgetsFlutterBinding.ensureInitialized();
+    // Compatibility for an already-enqueued task from older Koinly builds.
     if (taskName == _backgroundUpdateTaskName) {
       return UpdateBackgroundService.runBackgroundCheck();
     }
@@ -37,6 +40,9 @@ class UpdateBackgroundService {
 
   static Future<void> initialize() async {
     if (!Platform.isAndroid) return;
+    // Workmanager remains used for subscription processing. App-update checks
+    // are scheduled natively so they do not depend on a headless Flutter
+    // isolate while Koinly is closed.
     await Workmanager().initialize(koinlyBackgroundUpdateDispatcher);
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool(_automaticUpdatePreferenceKey) ?? true;
@@ -52,26 +58,23 @@ class UpdateBackgroundService {
 
   static Future<void> setEnabled(bool enabled) async {
     if (!Platform.isAndroid) return;
-    if (!enabled) {
-      await Workmanager().cancelByUniqueName(_backgroundUpdateUniqueName);
-      await ReminderService.cancelUpdateAvailableNotification();
-      return;
+    // Remove the pre-1.0.1167 Dart updater if it is still present, then let
+    // Android's native Worker own future closed-app release checks.
+    await Workmanager().cancelByUniqueName(_legacyBackgroundUpdateUniqueName);
+    try {
+      await _nativeUpdateChannel.invokeMethod<void>('sync', {'enabled': enabled});
+    } on PlatformException {
+      // Foreground update checks remain available even if a vendor-specific
+      // Android build cannot install the native schedule.
+    } on MissingPluginException {
+      // Allows tests/non-Android hosts to exercise preference code safely.
     }
-    await Workmanager().registerPeriodicTask(
-      _backgroundUpdateUniqueName,
-      _backgroundUpdateTaskName,
-      // Android WorkManager's minimum periodic interval is 15 minutes.
-      // Keeping the updater at that floor means a release can be discovered
-      // while Koinly is closed instead of waiting for the next foreground launch.
-      frequency: _backgroundUpdateFrequency,
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
-      tag: 'koinly-updates',
-    );
+    if (!enabled) {
+      await ReminderService.cancelUpdateAvailableNotification();
+    }
   }
 
+  // Retained for old queued work and for deterministic foreground fallback.
   static Future<bool> runBackgroundCheck() async {
     if (!Platform.isAndroid) return true;
     try {

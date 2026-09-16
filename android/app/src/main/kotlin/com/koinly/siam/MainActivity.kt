@@ -20,6 +20,7 @@ import java.util.TimeZone
 
 class MainActivity: FlutterFragmentActivity() {
     private val updaterChannel = "com.koinly.siam/updater"
+    private val updateBackgroundChannel = "com.koinly.siam/update_background"
     private val profileMediaChannel = "com.koinly.siam/profile_media"
     private val backupStorageChannel = "com.koinly.siam/backup_storage"
     private val backgroundPermissionsChannel = "com.koinly.siam/background_permissions"
@@ -30,6 +31,17 @@ class MainActivity: FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        NativeUpdateCheckScheduler.sync(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updateBackgroundChannel).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "sync" -> {
+                    val enabled = call.argument<Boolean>("enabled")
+                    NativeUpdateCheckScheduler.sync(this, enabled)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updaterChannel).setMethodCallHandler { call, result ->
             when (call.method) {
                 "canInstallPackages" -> result.success(canInstallPackages())

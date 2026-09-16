@@ -1,3 +1,10 @@
+## [1.0.1167] - 2026-09-16
+
+- Moved Android closed-app update checks to a native WorkManager worker so update notifications no longer depend on starting a headless Flutter/plugin isolate.
+- Added an in-app Worker Profile administration screen with administrator login, account creation, username changes, password changes, account deletion, and refresh/sign-out actions.
+- Profile now appears only when the saved self-hosted Worker endpoint has been validated; managed-registration links open the same in-app Profile screen.
+- Synchronized application and bundled Worker version metadata to `1.0.1167+211`.
+
 ## [Unreleased]
 
 ## [1.0.1166] - 2026-09-16
