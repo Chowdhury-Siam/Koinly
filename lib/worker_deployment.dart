@@ -1,10 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
-import 'dart:typed_data';
 
-import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -21,9 +17,6 @@ class WorkerDeploymentConfig {
     required this.tursoDatabaseUrl,
     required this.tursoAuthToken,
     required this.jwtSecret,
-    required this.adminUsername,
-    this.adminPassword = '',
-    this.adminPasswordHash = '',
   });
 
   final String workerName;
@@ -32,20 +25,15 @@ class WorkerDeploymentConfig {
   final String tursoDatabaseUrl;
   final String tursoAuthToken;
   final String jwtSecret;
-  final String adminUsername;
-  final String adminPassword;
-  final String adminPasswordHash;
 }
 
 class WorkerDeploymentResult {
   const WorkerDeploymentResult({
     required this.workerUrl,
-    required this.adminPasswordHash,
     required this.workerVersion,
   });
 
   final String workerUrl;
-  final String adminPasswordHash;
   final String workerVersion;
 }
 
@@ -66,8 +54,6 @@ class WorkerDeploymentProfile {
     required this.tursoDatabaseUrl,
     required this.tursoAuthToken,
     required this.jwtSecret,
-    required this.adminUsername,
-    required this.adminPasswordHash,
     required this.workerUrl,
     required this.workerVersion,
   });
@@ -78,8 +64,6 @@ class WorkerDeploymentProfile {
   final String tursoDatabaseUrl;
   final String tursoAuthToken;
   final String jwtSecret;
-  final String adminUsername;
-  final String adminPasswordHash;
   final String workerUrl;
   final String workerVersion;
 
@@ -90,8 +74,6 @@ class WorkerDeploymentProfile {
         tursoDatabaseUrl: tursoDatabaseUrl,
         tursoAuthToken: tursoAuthToken,
         jwtSecret: jwtSecret,
-        adminUsername: adminUsername,
-        adminPasswordHash: adminPasswordHash,
       );
 
   WorkerDeploymentProfile copyWith({String? workerUrl, String? workerVersion}) => WorkerDeploymentProfile(
@@ -101,22 +83,18 @@ class WorkerDeploymentProfile {
         tursoDatabaseUrl: tursoDatabaseUrl,
         tursoAuthToken: tursoAuthToken,
         jwtSecret: jwtSecret,
-        adminUsername: adminUsername,
-        adminPasswordHash: adminPasswordHash,
         workerUrl: workerUrl ?? this.workerUrl,
         workerVersion: workerVersion ?? this.workerVersion,
       );
 
   Map<String, Object?> toJson() => {
-        'version': 1,
+        'version': 2,
         'workerName': workerName,
         'cloudflareAccountId': cloudflareAccountId,
         'cloudflareApiToken': cloudflareApiToken,
         'tursoDatabaseUrl': tursoDatabaseUrl,
         'tursoAuthToken': tursoAuthToken,
         'jwtSecret': jwtSecret,
-        'adminUsername': adminUsername,
-        'adminPasswordHash': adminPasswordHash,
         'workerUrl': workerUrl,
         'workerVersion': workerVersion,
       };
@@ -131,8 +109,6 @@ class WorkerDeploymentProfile {
       tursoDatabaseUrl: value('tursoDatabaseUrl'),
       tursoAuthToken: value('tursoAuthToken'),
       jwtSecret: value('jwtSecret'),
-      adminUsername: value('adminUsername'),
-      adminPasswordHash: value('adminPasswordHash'),
       workerUrl: value('workerUrl'),
       workerVersion: value('workerVersion'),
     );
@@ -142,8 +118,6 @@ class WorkerDeploymentProfile {
         profile.tursoDatabaseUrl.isEmpty ||
         profile.tursoAuthToken.isEmpty ||
         profile.jwtSecret.isEmpty ||
-        profile.adminUsername.isEmpty ||
-        profile.adminPasswordHash.isEmpty ||
         profile.workerUrl.isEmpty) {
       return null;
     }
@@ -315,17 +289,12 @@ class WorkerDeploymentService {
     onProgress('Preparing database schema…');
     await _applySchema(config);
 
-    onProgress('Preparing secure administrator credentials…');
-    final passwordHash = config.adminPasswordHash.trim().isNotEmpty
-        ? config.adminPasswordHash.trim()
-        : await compute(_pbkdf2PasswordHash, config.adminPassword);
-
     onProgress('Preparing Worker runtime…');
     final lifecycle = await _durableObjectLifecycleMetadata(config);
 
     onProgress('Uploading Koinly Sync Worker…');
     final bundle = await _loadWorkerBundle();
-    await _uploadWorker(config, bundle, passwordHash, lifecycle, onProgress: onProgress);
+    await _uploadWorker(config, bundle, lifecycle, onProgress: onProgress);
 
     onProgress('Enabling workers.dev URL…');
     await _enableWorkerSubdomain(config);
@@ -340,7 +309,6 @@ class WorkerDeploymentService {
     onProgress('Worker deployed successfully.');
     return WorkerDeploymentResult(
       workerUrl: workerUrl,
-      adminPasswordHash: passwordHash,
       workerVersion: appVersion,
     );
   }
@@ -352,9 +320,6 @@ class WorkerDeploymentService {
         tursoDatabaseUrl: c.tursoDatabaseUrl.trim(),
         tursoAuthToken: c.tursoAuthToken.trim(),
         jwtSecret: c.jwtSecret.trim(),
-        adminUsername: c.adminUsername.trim().toLowerCase(),
-        adminPassword: c.adminPassword,
-        adminPasswordHash: c.adminPasswordHash.trim(),
       );
 
   void _validate(WorkerDeploymentConfig c) {
@@ -370,16 +335,6 @@ class WorkerDeploymentService {
     }
     if (c.tursoAuthToken.isEmpty) throw const WorkerDeploymentException('Enter the Turso database auth token.');
     if (c.jwtSecret.length < 32) throw const WorkerDeploymentException('JWT secret must contain at least 32 characters.');
-    if (!RegExp(r'^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$').hasMatch(c.adminUsername)) {
-      throw const WorkerDeploymentException('Administrator username must be 3–32 lowercase letters, numbers, dots, dashes, or underscores.');
-    }
-    final passwordHashValid = RegExp(r'^pbkdf2\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$').hasMatch(c.adminPasswordHash);
-    if (c.adminPasswordHash.isNotEmpty && !passwordHashValid) {
-      throw const WorkerDeploymentException('Saved administrator credentials are invalid. Enter the administrator password again.');
-    }
-    if (c.adminPasswordHash.isEmpty && (c.adminPassword.length < 12 || c.adminPassword.length > 256)) {
-      throw const WorkerDeploymentException('Administrator password must contain 12–256 characters.');
-    }
   }
 
   Map<String, String> _cfHeaders(WorkerDeploymentConfig c) => {
@@ -822,7 +777,6 @@ class WorkerDeploymentService {
   Future<http.Response> _sendWorkerUpload(
     WorkerDeploymentConfig c,
     String bundle,
-    String adminPasswordHash,
     Map<String, Object?> lifecycle,
   ) async {
     final uri = Uri.parse('$_cloudflareApi/accounts/${c.cloudflareAccountId}/workers/scripts/${Uri.encodeComponent(c.workerName)}');
@@ -836,8 +790,6 @@ class WorkerDeploymentService {
         {'type': 'secret_text', 'name': 'TURSO_DATABASE_URL', 'text': _tursoHttpBase(c.tursoDatabaseUrl)},
         {'type': 'secret_text', 'name': 'TURSO_AUTH_TOKEN', 'text': c.tursoAuthToken},
         {'type': 'secret_text', 'name': 'JWT_SECRET', 'text': c.jwtSecret},
-        {'type': 'secret_text', 'name': 'ADMIN_USERNAME', 'text': c.adminUsername},
-        {'type': 'secret_text', 'name': 'ADMIN_PASSWORD_HASH', 'text': adminPasswordHash},
         {'type': 'plain_text', 'name': 'ACCESS_TOKEN_TTL_SECONDS', 'text': '900'},
         {'type': 'plain_text', 'name': 'REFRESH_TOKEN_TTL_SECONDS', 'text': '2592000'},
         {'type': 'plain_text', 'name': 'MAX_SYNC_BATCH_SIZE', 'text': '100'},
@@ -869,12 +821,11 @@ class WorkerDeploymentService {
   Future<void> _uploadWorker(
     WorkerDeploymentConfig c,
     String bundle,
-    String adminPasswordHash,
     Map<String, Object?> lifecycle, {
     WorkerDeploymentProgress? onProgress,
   }) async {
     var effectiveLifecycle = lifecycle;
-    var response = await _sendWorkerUpload(c, bundle, adminPasswordHash, effectiveLifecycle);
+    var response = await _sendWorkerUpload(c, bundle, effectiveLifecycle);
     var data = _decodeJson(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300 || data['success'] != true) {
@@ -890,7 +841,7 @@ class WorkerDeploymentService {
       if (!isExportsFlow && expectedTag != null && expectedTag != currentOldTag) {
         onProgress?.call('Cloudflare migration state changed; retrying the Worker update safely…');
         effectiveLifecycle = _unchangedDurableObjectMigration(expectedTag);
-        response = await _sendWorkerUpload(c, bundle, adminPasswordHash, effectiveLifecycle);
+        response = await _sendWorkerUpload(c, bundle, effectiveLifecycle);
         data = _decodeJson(response.body);
       }
     }
@@ -1116,36 +1067,4 @@ class WorkerDeploymentService {
     if (trailing.isNotEmpty) statements.add(trailing);
     return statements;
   }
-}
-
-String _pbkdf2PasswordHash(String password) {
-  final random = Random.secure();
-  final salt = Uint8List.fromList(List<int>.generate(16, (_) => random.nextInt(256)));
-  final derived = _pbkdf2HmacSha256(utf8.encode(password), salt, 100000, 32);
-  String b64url(List<int> bytes) => base64UrlEncode(bytes).replaceAll('=', '');
-  return 'pbkdf2\$100000\$${b64url(salt)}\$${b64url(derived)}';
-}
-
-Uint8List _pbkdf2HmacSha256(List<int> password, List<int> salt, int iterations, int length) {
-  final hmac = Hmac(sha256, password);
-  final blocks = (length / 32).ceil();
-  final output = BytesBuilder(copy: false);
-  for (var block = 1; block <= blocks; block++) {
-    final blockBytes = Uint8List(4)
-      ..[0] = (block >> 24) & 0xff
-      ..[1] = (block >> 16) & 0xff
-      ..[2] = (block >> 8) & 0xff
-      ..[3] = block & 0xff;
-    var u = hmac.convert([...salt, ...blockBytes]).bytes;
-    final t = Uint8List.fromList(u);
-    for (var iteration = 1; iteration < iterations; iteration++) {
-      u = hmac.convert(u).bytes;
-      for (var index = 0; index < t.length; index++) {
-        t[index] ^= u[index];
-      }
-    }
-    output.add(t);
-  }
-  final bytes = output.takeBytes();
-  return Uint8List.sublistView(bytes, 0, length);
 }

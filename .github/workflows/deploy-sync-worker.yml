@@ -52,7 +52,7 @@ jobs:
       - name: Check self-hosted deployment secrets
         run: |
           missing=0
-          for secret_name in CLOUDFLARE_NAME CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TURSO_DATABASE_URL TURSO_AUTH_TOKEN JWT_SECRET ADMIN_USERNAME ADMIN_PASSWORD; do
+          for secret_name in CLOUDFLARE_NAME CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID TURSO_DATABASE_URL TURSO_AUTH_TOKEN JWT_SECRET; do
             if [ -z "${!secret_name}" ]; then
               echo "Missing GitHub Actions value: ${secret_name}"
               missing=1
@@ -85,8 +85,6 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
       - name: Apply Turso schema
         run: npm run schema:apply
@@ -100,7 +98,6 @@ jobs:
           trap 'rm -f .worker-secrets.json "$deploy_output"' EXIT
           umask 077
           node --experimental-transform-types scripts/prepare-secrets.mjs > .worker-secrets.json
-          unset ADMIN_PASSWORD
           export WRANGLER_OUTPUT_FILE_PATH="$deploy_output"
           npx wrangler deploy --config wrangler.self-hosted.toml --name "$CLOUDFLARE_NAME" --secrets-file .worker-secrets.json
 
@@ -122,8 +119,6 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
       - name: Check self-hosted Worker health
         run: |

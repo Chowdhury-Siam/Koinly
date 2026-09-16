@@ -91,9 +91,9 @@ INSERT OR IGNORE INTO worker_state(key, value)
 SELECT 'registration_closed', '1'
 WHERE EXISTS (SELECT 1 FROM users);
 
--- The first sync account owns deployment-value recovery. Existing databases
--- are upgraded by assigning the oldest account, matching the historical
--- first-owner registration rule.
+-- The first sync account is the Worker administrator and deployment-recovery owner.
+-- Existing databases are upgraded by assigning the oldest account, matching the
+-- historical first-owner registration rule.
 INSERT OR IGNORE INTO worker_state(key, value)
 SELECT 'deployment_owner_user_id', id
 FROM users

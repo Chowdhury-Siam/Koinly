@@ -1,7 +1,21 @@
 ## [Unreleased]
 
+## [1.0.1165] - 2026-09-16
+
+- Added **Settings > Profile** for validated self-hosted Workers. It opens that Worker's `/profile` page so users can sign in and manage their Worker account from the app settings flow.
+- The **Profile** setting is hidden until a Cloudflare Worker URL has been successfully validated and saved through **Account & sync**, so an unconfigured app never shows a broken profile destination.
+- Synchronized application and bundled Worker version metadata to `1.0.1165+209`.
+
+## [1.0.1164] - 2026-09-16
+
+- The first Koinly account created in the Worker database is now the `/profile` administrator; separate `ADMIN_USERNAME` and `ADMIN_PASSWORD` deployment credentials were removed from in-app and GitHub deployments.
+- Added **Change username** to the Worker account manager. Renaming an account preserves its user ID and synchronized data, and renaming the first account keeps its administrator role.
+- Prevented deletion of the first-account administrator so Worker administration and encrypted deployment recovery cannot be orphaned.
+- Updated deployment recovery payloads to version 2 so Cloudflare, Turso, JWT, Worker URL, and version values can be restored after reinstall when the first account signs in, without storing separate administrator credentials.
+- Restyled the Worker `/profile` website to the current Koinly app palette, including the charcoal dark surfaces, light surfaces, and `#00BD91` accent.
 - Fixed automatic and manual Worker redeployments failing with `migration must include a new_tag because old_tag is set`. Code-only updates now send the existing Durable Object migration tag as both `old_tag` and `new_tag`, including the one-time migration-state retry.
 - Added mocked HTTP deployment tests covering existing Workers, first deployments, migration-state recovery, declarative exports, and automatic updates.
+- Synchronized application and bundled Worker version metadata to `1.0.1164+208`.
 
 ## [1.0.1163] - 2026-09-16
 

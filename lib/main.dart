@@ -16446,6 +16446,18 @@ class _BudgetEditorState extends State<BudgetEditor> {
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
+  Future<void> _openWorkerProfile(BuildContext context, AppController state) async {
+    final baseUrl = CloudSyncService.normalizeApiBaseUrl(state.selfHostedSyncApiBaseUrl);
+    if (baseUrl.isEmpty) return;
+    final opened = await launchUrl(
+      Uri.parse('$baseUrl/profile'),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && context.mounted) {
+      showSnack(context, 'Could not open the Worker profile.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
@@ -16463,6 +16475,14 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             const SectionHeader('Data & cloud'),
             SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            if (state.selfHostedSyncApiBaseUrl.trim().isNotEmpty)
+              SettingsTile(
+                icon: Icons.manage_accounts_rounded,
+                title: 'Profile',
+                subtitle: 'Open your Worker profile and manage accounts',
+                color: kSleekAccentHex,
+                onTap: () => _openWorkerProfile(context, state),
+              ),
             SettingsTile(icon: Icons.key_rounded, title: 'Credential', subtitle: 'Telegram bot and Google Drive', color: '#FBC879', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CredentialsScreen()))),
             SettingsTile(icon: Icons.inventory_2_rounded, title: 'Archive', subtitle: 'Local backup, Telegram backup, and cloud report schedules', color: '#86E3CE', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ArchiveSettingsScreen()))),
             SettingsTile(icon: Icons.analytics_rounded, title: 'Analytics', subtitle: 'Date-filtered reports in PDF, XLSX, or TXT', color: '#7EA6F8', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AnalyticsScreen()))),
@@ -17201,13 +17221,10 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
   final _tursoUrlController = TextEditingController();
   final _tursoTokenController = TextEditingController();
   final _jwtSecretController = TextEditingController();
-  final _adminUsernameController = TextEditingController();
-  final _adminPasswordController = TextEditingController();
 
   bool _cloudflareTokenVisible = false;
   bool _tursoTokenVisible = false;
   bool _jwtVisible = false;
-  bool _adminPasswordVisible = false;
   bool _deploying = false;
   bool _autoUpdateEnabled = true;
   bool _loadingSavedDeployment = true;
@@ -17232,7 +17249,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
       _tursoUrlController.text = profile.tursoDatabaseUrl;
       _tursoTokenController.text = profile.tursoAuthToken;
       _jwtSecretController.text = profile.jwtSecret;
-      _adminUsernameController.text = profile.adminUsername;
     }
     setState(() => _loadingSavedDeployment = false);
   }
@@ -17285,8 +17301,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
       _tursoUrlController,
       _tursoTokenController,
       _jwtSecretController,
-      _adminUsernameController,
-      _adminPasswordController,
     ]) {
       controller.clear();
       controller.dispose();
@@ -17347,9 +17361,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
 
     final service = WorkerDeploymentService();
     try {
-      final savedPasswordHash = _adminPasswordController.text.isEmpty
-          ? (_savedDeployment?.adminPasswordHash ?? '')
-          : '';
       final result = await service.deploy(
         WorkerDeploymentConfig(
           workerName: _workerNameController.text,
@@ -17358,9 +17369,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
           tursoDatabaseUrl: _tursoUrlController.text,
           tursoAuthToken: _tursoTokenController.text,
           jwtSecret: _jwtSecretController.text,
-          adminUsername: _adminUsernameController.text,
-          adminPassword: _adminPasswordController.text,
-          adminPasswordHash: savedPasswordHash,
         ),
         onProgress: (message) {
           if (!mounted) return;
@@ -17376,8 +17384,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
         tursoDatabaseUrl: _tursoUrlController.text.trim(),
         tursoAuthToken: _tursoTokenController.text.trim(),
         jwtSecret: _jwtSecretController.text.trim(),
-        adminUsername: _adminUsernameController.text.trim().toLowerCase(),
-        adminPasswordHash: result.adminPasswordHash,
         workerUrl: result.workerUrl,
         workerVersion: result.workerVersion,
       );
@@ -17399,7 +17405,6 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
         await context.read<AppController>().publishWorkerDeploymentRecoveryProfile(profile);
       }
       if (!mounted) return;
-      _adminPasswordController.clear();
       setState(() {
         _savedDeployment = automaticUpdatesSaved ? profile : null;
         _progress.add('Worker URL: ${result.workerUrl}');
@@ -17489,7 +17494,7 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
                 children: [
                   Text('3. Enter deployment values', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  Text('Koinly can securely save the deployment credentials on this device so the Worker can update automatically after future app updates. The administrator password itself is never saved.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
+                  Text('Koinly can securely save the deployment credentials on this device so the Worker can update automatically after future app updates.', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 14),
                   TextField(
                     contextMenuBuilder: koinlyTextFieldContextMenu,
@@ -17540,26 +17545,10 @@ class _WorkerDeploymentScreenState extends State<WorkerDeploymentScreen> {
                       label: const Text('Generate secure JWT secret'),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  TextField(
-                    contextMenuBuilder: koinlyTextFieldContextMenu,
-                    enableInteractiveSelection: true,
-                    controller: _adminUsernameController,
-                    readOnly: _deploying,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    textCapitalization: TextCapitalization.none,
-                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    decoration: const InputDecoration(labelText: 'Administrator username', prefixIcon: Icon(Icons.admin_panel_settings_rounded)),
-                  ),
-                  const SizedBox(height: 12),
-                  _secretField(
-                    controller: _adminPasswordController,
-                    label: 'Administrator password',
-                    icon: Icons.lock_rounded,
-                    visible: _adminPasswordVisible,
-                    onToggle: () => setState(() => _adminPasswordVisible = !_adminPasswordVisible),
-                    hint: _savedDeployment == null ? '12–256 characters' : 'Leave blank to keep the current password',
+                  const SizedBox(height: 6),
+                  Text(
+                    'The first Koinly account created on this Worker automatically becomes the administrator for /profile. When that account signs in again after reinstalling the app, Koinly restores these saved deployment values from the Worker recovery vault.',
+                    style: TextStyle(color: muted, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 10),
                   SwitchListTile.adaptive(

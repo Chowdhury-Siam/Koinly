@@ -7,13 +7,13 @@ For the easiest setup, follow the beginner-friendly guide in the repository's ma
 
 ## Registration model
 
-A fresh Worker accepts exactly one first sync account directly from the Koinly app, identified by a username. Email addresses are not used for authentication. Administrator credentials for `/profile` do not block this initial app registration. After the first sync account exists, additional devices use **Login** with the same username and password, while additional accounts are created from `/profile`. Current Koinly builds use the `/profile` administration portal for forgotten-password recovery.
+A fresh Worker accepts exactly one first sync account directly from the Koinly app. Email addresses are not used for authentication. **That first database account automatically becomes the Worker administrator** and is also the only account allowed to recover the encrypted deployment profile. After it exists, unrestricted app registration closes; additional accounts are created from `/profile`.
 
-After the first sync account has been created, registration is managed through `/profile`. Deleting every sync account does not reopen unrestricted app registration; subsequent account creation remains administrator-managed.
+The administrator role is tied to the first account's user ID, not to its username text. Renaming that account therefore keeps it as administrator. The administrator account cannot be deleted from `/profile`, preventing the Worker from losing its management owner.
 
 ## GitHub Actions deployment values
 
-Use the eight-value checklist in [Section 4.1 of the main README](../../README.md#41-the-eight-values-you-will-create). Add all values during the same setup:
+Use the six-value checklist in [Section 4.1 of the main README](../../README.md#41-the-six-deployment-values):
 
 ```text
 CLOUDFLARE_NAME
@@ -22,50 +22,38 @@ CLOUDFLARE_ACCOUNT_ID
 TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 JWT_SECRET
-ADMIN_USERNAME
-ADMIN_PASSWORD
 ```
 
-`CLOUDFLARE_NAME` may be a GitHub repository variable or secret. Save the other seven values as repository secrets. `JWT_SECRET` needs at least 32 characters. Choose a lowercase administrator username of 3–32 characters and a unique administrator password of 12–256 characters. Enter the password directly as `ADMIN_PASSWORD`; the deployment workflow creates the salted verifier automatically.
-
-The original administrator password stays in GitHub's encrypted secret storage. The workflow sends only its salted verifier to Cloudflare, alongside the administrator username and the existing Turso/JWT settings. It does not print the password or write it to the generated deployment file. Ordinary account passwords are hashed by the Worker before database storage.
+`CLOUDFLARE_NAME` may be a GitHub repository variable or secret. Save the other values as repository secrets. `JWT_SECRET` must contain at least 32 characters. There are no separate `ADMIN_USERNAME` or `ADMIN_PASSWORD` deployment secrets.
 
 ## Administration portal
 
-**Existing self-hosted Worker owners must keep the Worker current.** GitHub-based deployments redeploy automatically when the fork receives the updated project. Workers deployed from Koinly's **Deploy Database** screen can also update automatically after future app updates when **Automatic Worker updates** is enabled. Koinly keeps the deployment profile in the device secure store and, after the first sync account exists, keeps an encrypted recovery copy in `worker_state`. Only the first sync account can retrieve that copy. After reinstalling Koinly, paste the same Worker URL and sign in with that first account to restore the deployment values automatically. Existing Turso data and accounts are preserved.
+**Existing self-hosted Worker owners must keep the Worker current.** GitHub-based deployments redeploy automatically when the fork receives the updated project. Workers deployed from Koinly's **Deploy Database** screen can also update automatically after future app updates when **Automatic Worker updates** is enabled. Koinly keeps the deployment profile in the device secure store and an encrypted recovery copy in `worker_state`. Only the first sync account can retrieve that copy. After reinstalling Koinly, paste the same Worker URL and sign in with that first account to restore the deployment values automatically. Existing Turso data and accounts are preserved.
 
-Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile`. For example: `https://koinly-test.sweets-4c4.workers.dev/profile`.
+Visit `https://<worker-name>.<account-subdomain>.workers.dev/profile` and sign in with the **current username and password of the first Koinly account created on this Worker**. The portal uses the same charcoal/light surface palette and mint accent as the Koinly app.
 
-Complete the main setup once, then use the website:
+From the account list you can:
 
-1. Save all eight values from the main README's setup checklist in your GitHub repository.
-2. Open **Actions > Deploy Self-Hosted Sync Worker > Run workflow**. Choose the branch containing the updated project, start the workflow, and wait for success.
-3. Open your Worker's `/profile` address. Enter the username and password saved as `ADMIN_USERNAME` and `ADMIN_PASSWORD`, then select **Sign in**. The password field includes an eye button for temporary visibility.
-4. Select **+ Create account** to add a sync account. Fill in **Username**, **New password**, and **Confirm password**, then select **Create account**. Both password fields include the same visibility control. The account holder can use **Login** in Koinly afterward.
+- **Create account** — add another Koinly sync account.
+- **Change username** — rename any account without changing its user ID or synchronized data. Renaming the administrator does not transfer its role.
+- **Change password** — replace an account password and revoke that account's existing app sessions/recovery key. Changing the administrator password also invalidates the current portal session.
+- **Delete** — permanently remove a non-administrator account and its Worker-side data. The administrator account cannot be deleted.
 
-Use **Change password** beside an account to reset its password. Use **Delete** to open the confirmation dialog; check the username before selecting **Delete account**. Use **Sign out** when finished. There is no separate hash-generation or administrator setup page.
-
-For detailed steps, password changes, and troubleshooting, see [the main README's administration guide](../../README.md#worker-administration-portal).
-
-Account lists expose only IDs, usernames, creation/update timestamps, and status, with an exact total and 50 accounts per page. **Invited** means no device has signed in; **Active** means at least one has signed in historically, not that a session is online. The administrator is separate and excluded from this count.
-
-Creation and reset accept 8–256 character account passwords. Share new passwords privately. A reset immediately invalidates old access/refresh sessions. Confirmed deletion atomically removes the account, sync records, devices, sessions, Telegram/Google Drive backup schedules, and Analytics upload credentials; existing local copies and files already sent to Telegram or Google Drive remain.
+Account lists expose only IDs, usernames, creation/update timestamps, status, and whether the row is the administrator. **Invited** means no currently unrevoked device exists; **Active** means at least one unrevoked device exists.
 
 Security details:
 
-- Administrator authentication is required on the server for every account-management endpoint. An app bearer token cannot authorize portal access.
-- Random one-hour sessions use `__Host-koinly-admin` cookies with `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/`. Turso stores only keyed session hashes. Sign-out revokes the session; deployment refreshes the administrator verifier and invalidates portal sessions. Changing `JWT_SECRET` also invalidates them.
-- Write requests require an exact matching `Origin` and `X-Profile-Request: 1`. No portal route enables cross-origin requests. HTML/API responses are private and not cached; pages use a nonce-based CSP, frame protection, and no external assets.
-- Login is limited to eight attempts per Cloudflare-provided client IP and fifty globally per fifteen minutes, using atomic counters in Turso. Database errors fail closed and return a safe message.
-- New passwords use random 16-byte salts and PBKDF2-HMAC-SHA256 (100,000 iterations). This uses the existing verifier's format and [Cloudflare's native Web Crypto](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/), subject to the runtime's [PBKDF2 iteration limit](https://github.com/cloudflare/workerd/issues/1346). Legacy salted hashes remain usable; changing/resetting a password writes the new format. No password/hash is sent back in account API responses, embedded in HTML, or saved in browser storage.
-- Existing access tokens remain compatible until their account's session version changes. Every authenticated app request checks that version and account existence. Resets increment it and revoke refresh tokens; deletion removes the account.
+- Administrator authentication is required server-side for every account-management endpoint. An app bearer token cannot authorize portal access.
+- Random one-hour sessions use `__Host-koinly-admin` cookies with `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/`. Turso stores only keyed session hashes.
+- Write requests require an exact matching `Origin` and `X-Profile-Request: 1`. Portal responses are private/not cached and use a nonce-based CSP, frame protection, and no external assets.
+- Login is limited to eight attempts per client IP and fifty globally per fifteen minutes.
+- Passwords use salted PBKDF2-HMAC-SHA256 verifiers. Password hashes are never returned by the account API or embedded in HTML.
 
-To recover administrator access, edit `ADMIN_PASSWORD` under GitHub's **Settings > Secrets and variables > Actions**, save a new password, and run **Deploy Self-Hosted Sync Worker** again. Keep `JWT_SECRET` unchanged for a routine password reset because it also protects other credentials and encrypted Worker data. If administrator configuration is missing, the portal blocks access while ordinary app sync continues to work.
-
+If administrator access is lost, use Koinly's normal account-recovery path for that first account. A Worker redeployment does not create or replace administrator credentials.
 
 ## Administration API
 
-All routes are under `/profile` so the existing app API's wildcard CORS never applies. Send JSON for POST requests, the same-origin administrator cookie, and `X-Profile-Request: 1` for writes.
+All routes are under `/profile`. POST requests use JSON, the same-origin administrator cookie, and `X-Profile-Request: 1`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -74,18 +62,11 @@ All routes are under `/profile` so the existing app API's wildcard CORS never ap
 | POST | `/profile/api/logout` | Revokes session and clears cookie |
 | GET | `/profile/api/accounts?page=1` | `{ total, page, pageSize, accounts }` |
 | POST | `/profile/api/accounts` | `{ "username": "...", "password": "..." }`; creates account |
+| POST | `/profile/api/accounts/:id/username` | `{ "username": "..." }`; renames account |
 | POST | `/profile/api/accounts/:id/password` | `{ "password": "..." }`; resets password and revokes credentials |
-| DELETE | `/profile/api/accounts/:id` | Permanently deletes account and related cloud data |
+| DELETE | `/profile/api/accounts/:id` | Permanently deletes a non-administrator account and related cloud data |
 
-Authenticated app recovery endpoints:
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/v1/deployment-recovery/profile` | First sync account restores the encrypted in-app deployment profile |
-| POST | `/v1/deployment-recovery/profile` | First sync account refreshes the encrypted recovery profile |
-| DELETE | `/v1/deployment-recovery/profile` | First sync account removes the recovery profile |
-
-Errors return `{ "error": "..." }`: 400 invalid input, 401 invalid login/expired session, 403 rejected origin, 404 missing account, 409 duplicate username, 413 oversized request, 415 unsupported content type, 429 too many attempts, or 503 configuration/database failure. The UI presents errors and success messages and confirms deletion before sending it.
+Authenticated app deployment-recovery endpoints remain under `/v1/deployment-recovery/profile`; only the first account can use them.
 
 ## Health check
 
@@ -101,7 +82,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
-  "workerVersion": "1.0.1163",
+  "workerVersion": "1.0.1165",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,
@@ -226,8 +207,8 @@ export TURSO_AUTH_TOKEN='your-token'
 npm run schema:apply
 ```
 
-For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. It applies the schema and prepares the administrator verifier automatically.
+For deployment, use **Actions > Deploy Self-Hosted Sync Worker > Run workflow** on GitHub. It applies the schema and deploys the Worker runtime secrets. The first Koinly account created afterward becomes administrator automatically.
 
 `schema.sql` can be applied again without deleting existing sync data. `scripts/apply-schema.mjs` migrates older email-based accounts and adds the recovery-key and session-version columns.
 
-For advanced deployment integrations, `scripts/prepare-secrets.mjs` reads `ADMIN_PASSWORD` and the other required values from the process environment and emits a JSON secrets payload containing only the derived verifier. The GitHub workflow validates the inputs before applying the schema, writes this payload to a restricted temporary file, unsets the original password before calling Wrangler, and removes the file afterward. Do not invoke it in a way that displays the secrets payload in logs.
+For advanced deployment integrations, `scripts/prepare-secrets.mjs` validates and emits only `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `JWT_SECRET` for Wrangler. The GitHub workflow writes this payload to a restricted temporary file and removes it afterward.

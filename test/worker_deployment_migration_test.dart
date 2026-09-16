@@ -15,8 +15,6 @@ const _config = WorkerDeploymentConfig(
   tursoDatabaseUrl: 'libsql://test.turso.io',
   tursoAuthToken: 'test-token',
   jwtSecret: 'test-secret-with-at-least-32-characters',
-  adminUsername: 'test-admin',
-  adminPasswordHash: r'pbkdf2$100000$test-salt$test-hash',
 );
 
 // Exercise the public deployment API and inspect its serialized multipart upload.
@@ -119,7 +117,6 @@ class _MemoryCredentials extends WorkerDeploymentCredentialStore {
     workerName: _config.workerName, cloudflareAccountId: _config.cloudflareAccountId,
     cloudflareApiToken: _config.cloudflareApiToken, tursoDatabaseUrl: _config.tursoDatabaseUrl,
     tursoAuthToken: _config.tursoAuthToken, jwtSecret: _config.jwtSecret,
-    adminUsername: _config.adminUsername, adminPasswordHash: _config.adminPasswordHash,
     workerUrl: 'https://test-worker.test-account.workers.dev', workerVersion: '1.0.1',
   );
   @override
@@ -162,6 +159,8 @@ void main() {
       expect(server.uploads.single['bindings'], contains(equals({
         'type': 'durable_object_namespace', 'name': 'SYNC_HUB', 'class_name': 'SyncHub',
       })));
+      expect(server.uploads.single['bindings'].toString(), isNot(contains('ADMIN_USERNAME')));
+      expect(server.uploads.single['bindings'].toString(), isNot(contains('ADMIN_PASSWORD_HASH')));
     });
   }
 

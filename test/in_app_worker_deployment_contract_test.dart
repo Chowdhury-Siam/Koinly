@@ -14,7 +14,8 @@ void main() {
     expect(main, contains("title: 'Deploy Database'"));
     expect(main, contains("label: Text(_deploying ? 'Deploying…' : 'Deploy Worker')"));
     expect(main, contains('final _workerNameController = TextEditingController();'));
-    expect(main, contains('final _adminUsernameController = TextEditingController();'));
+    expect(main, isNot(contains('final _adminUsernameController = TextEditingController();')));
+    expect(main, contains('The first Koinly account created on this Worker automatically becomes the administrator for /profile.'));
     expect(main, isNot(contains("TextEditingController(text: 'koinly-sync')")));
     expect(main, isNot(contains("TextEditingController(text: 'worker-admin')")));
   });
@@ -54,10 +55,9 @@ void main() {
     final service = File('lib/worker_deployment.dart').readAsStringSync();
     final main = File('lib/main.dart').readAsStringSync();
 
-    expect(service, contains("'ADMIN_PASSWORD_HASH'"));
-    expect(service, isNot(contains("'ADMIN_PASSWORD', 'text'")));
-    expect(service, contains('_pbkdf2HmacSha256'));
-    expect(service, contains(r'pbkdf2\$100000\$'));
+    expect(service, isNot(contains("'ADMIN_USERNAME'")));
+    expect(service, isNot(contains("'ADMIN_PASSWORD_HASH'")));
+    expect(service, isNot(contains('_pbkdf2HmacSha256')));
     expect(service, contains('FlutterSecureStorage'));
     expect(service, contains('koinly_worker_auto_deployment_profile_v1'));
     expect(service, contains('WorkerAutoUpdateService'));

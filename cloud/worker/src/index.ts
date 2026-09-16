@@ -5,8 +5,6 @@ type Env = {
   TURSO_DATABASE_URL: string;
   TURSO_AUTH_TOKEN: string;
   JWT_SECRET: string;
-  ADMIN_USERNAME?: string;
-  ADMIN_PASSWORD_HASH?: string;
   ACCESS_TOKEN_TTL_SECONDS?: string;
   REFRESH_TOKEN_TTL_SECONDS?: string;
   MAX_SYNC_BATCH_SIZE?: string;
@@ -238,10 +236,6 @@ export async function profile(request: Request, env: Env, connect: () => Client 
   let response: Response;
   try {
     validateWorkerConfig(env);
-    if (!env.ADMIN_USERNAME || normalizeUsername(env.ADMIN_USERNAME) !== env.ADMIN_USERNAME ||
-        !/^pbkdf2\$100000\$[A-Za-z0-9_-]{22}\$[A-Za-z0-9_-]{43}$/.test(env.ADMIN_PASSWORD_HASH ?? '')) {
-      throw new HttpError(503, 'Administrator login is not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD in GitHub repository secrets, then run Deploy Self-Hosted Sync Worker.');
-    }
     if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
       throw new HttpError(400, 'Administrator access requires HTTPS.');
     }
@@ -250,19 +244,23 @@ export async function profile(request: Request, env: Env, connect: () => Client 
       throw new HttpError(403, 'This action must be submitted from the administration portal.');
     }
     db = connect();
+    const administrator = await administratorAccount(db);
     const token = (request.headers.get('cookie') ?? '').split(';').map(part => part.trim()).find(part => part.startsWith(adminCookie + '='))?.slice(adminCookie.length + 1) ?? '';
-    // Binding the hash to all credentials invalidates sessions when any administrator secret changes.
-    const sessionHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', env.ADMIN_USERNAME, env.ADMIN_PASSWORD_HASH, token]));
+    // The first sync account is the administrator. Bind web sessions to its
+    // immutable user id plus password/session state so password rotation revokes
+    // the portal session while a username rename does not unexpectedly sign out
+    // the administrator who just made the change.
+    const sessionHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', administrator.id, administrator.passwordHash, administrator.sessionVersion, token]));
     if (request.method === 'POST' && url.pathname === '/profile/api/login') {
       await enforceRateLimit(db, `admin-login:ip:${request.headers.get('cf-connecting-ip') ?? 'local'}`, 8, 900000);
       await enforceRateLimit(db, 'admin-login:global', 50, 900000);
       const body = await readProfileJson(request);
-      const username = String(body.username ?? '').trim().toLowerCase();
+      const username = normalizeUsername(body.username);
       const password = typeof body.password === 'string' ? body.password : '';
-      const validPassword = await verifyPassword(password, env.ADMIN_PASSWORD_HASH!);
-      if (!constantTimeEqual(username, env.ADMIN_USERNAME) || !validPassword) throw new HttpError(401, 'Invalid administrator username or password.');
+      const validPassword = await verifyPassword(password, administrator.passwordHash, env.JWT_SECRET);
+      if (!constantTimeEqual(username, administrator.username) || !validPassword) throw new HttpError(401, 'Invalid administrator username or password.');
       const newToken = b64urlBytes(crypto.getRandomValues(new Uint8Array(32)));
-      const newHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', env.ADMIN_USERNAME, env.ADMIN_PASSWORD_HASH, newToken]));
+      const newHash = await signDetached(env.JWT_SECRET, JSON.stringify(['profile', administrator.id, administrator.passwordHash, administrator.sessionVersion, newToken]));
       await db.batch([
         { sql: 'DELETE FROM admin_sessions WHERE expires_at <= ? OR token_hash = ?', args: [Date.now(), sessionHash] },
         { sql: 'INSERT INTO admin_sessions(token_hash, expires_at) VALUES (?, ?)', args: [newHash, Date.now() + adminSessionSeconds * 1000] },
@@ -303,6 +301,29 @@ export async function profile(request: Request, env: Env, connect: () => Client 
   return response;
 }
 
+async function administratorAccount(db: Client): Promise<{ id: string; username: string; passwordHash: string; sessionVersion: number }> {
+  let userId: string;
+  try {
+    userId = await deploymentRecoveryOwnerUserId(db);
+  } catch (error) {
+    if (error instanceof HttpError && error.code === 'DEPLOYMENT_RECOVERY_NO_OWNER') {
+      throw new HttpError(503, 'Create the first Koinly account in the app. That first account automatically becomes the Worker administrator.');
+    }
+    throw error;
+  }
+  const row = (await db.execute({
+    sql: 'SELECT id, username, password_hash, session_version FROM users WHERE id = ?',
+    args: [userId],
+  })).rows[0];
+  if (!row) throw new HttpError(503, 'The Worker administrator account is unavailable. Apply the latest database schema and try again.');
+  return {
+    id: String(row.id),
+    username: String(row.username),
+    passwordHash: String(row.password_hash),
+    sessionVersion: Number(row.session_version ?? 0),
+  };
+}
+
 function profileCookie(token: string, maxAge: number): string {
   return `${adminCookie}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
 }
@@ -337,10 +358,18 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
     const [count, accounts] = await db.batch([
       'SELECT COUNT(*) AS total FROM users',
       { sql: `SELECT id, username, created_at, updated_at,
-                CASE WHEN EXISTS (SELECT 1 FROM devices WHERE user_id = users.id) THEN 'active' ELSE 'invited' END AS status
+                CASE WHEN EXISTS (SELECT 1 FROM devices WHERE user_id = users.id AND revoked_at IS NULL) THEN 'active' ELSE 'invited' END AS status
               FROM users ORDER BY created_at DESC, id LIMIT 50 OFFSET ?`, args: [(page - 1) * 50] },
     ], 'read');
-    return privateJson({ total: Number(count.rows[0].total), page, pageSize: 50, accounts: accounts.rows.map(row => ({ id: String(row.id), username: String(row.username), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at), status: String(row.status) })) });
+    const administratorUserId = await deploymentRecoveryOwnerUserId(db);
+    return privateJson({
+      total: Number(count.rows[0].total), page, pageSize: 50,
+      accounts: accounts.rows.map(row => ({
+        id: String(row.id), username: String(row.username), createdAt: Number(row.created_at),
+        updatedAt: Number(row.updated_at), status: String(row.status),
+        isAdministrator: String(row.id) === administratorUserId,
+      })),
+    });
   }
   if (request.method === 'POST' && url.pathname === '/profile/api/accounts') {
     const body = await readProfileJson(request);
@@ -363,10 +392,29 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
     });
     return privateJson({ ok: true, message: 'Account created.' }, 201);
   }
-  const match = /^\/profile\/api\/accounts\/([A-Za-z0-9._:-]{3,120})(\/password)?$/.exec(url.pathname);
+  const match = /^\/profile\/api\/accounts\/([A-Za-z0-9._:-]{3,120})(\/(?:password|username))?$/.exec(url.pathname);
   if (!match) throw new HttpError(404, 'Not found.');
   const userId = match[1];
-  if (request.method === 'POST' && match[2]) {
+  if (request.method === 'POST' && match[2] === '/username') {
+    const body = await readProfileJson(request);
+    const username = normalizeUsername(body.username);
+    let changed;
+    try {
+      changed = await db.execute({
+        sql: 'UPDATE users SET username = ?, updated_at = ? WHERE id = ?',
+        args: [username, Date.now(), userId],
+      });
+    } catch (error) {
+      const message = databaseErrorMessage(error).toLowerCase();
+      if (message.includes('unique') || message.includes('constraint')) {
+        throw new HttpError(409, 'Duplicate username. That username is already in use.');
+      }
+      throw error;
+    }
+    if (!changed.rowsAffected) throw new HttpError(404, 'Account no longer exists.');
+    return privateJson({ ok: true, message: `Username changed to ${username}.` });
+  }
+  if (request.method === 'POST' && match[2] === '/password') {
     const body = await readProfileJson(request);
     const hash = await hashPassword(profilePassword(body.password), env.JWT_SECRET);
     const now = Date.now();
@@ -379,27 +427,15 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
     return privateJson({ ok: true, message: 'Password changed. Existing sessions and recovery key revoked.' });
   }
   if (request.method === 'DELETE' && !match[2]) {
+    if (userId === await deploymentRecoveryOwnerUserId(db)) {
+      throw new HttpError(409, 'The administrator account cannot be deleted. Change its username or password instead.');
+    }
     // Delete children before their parent. The batch rolls back completely on any error.
     const results = await db.batch([
       ...['profile_media_chunks', 'profile_media', 'analytics_pdf_schedules', 'analytics_upload_settings', 'google_drive_backup_settings', 'telegram_backup_settings', 'processed_operations', 'sync_changes', 'sync_entities', 'refresh_tokens', 'devices'].map(table => ({ sql: `DELETE FROM ${table} WHERE user_id = ?`, args: [userId] })),
       { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
     ], 'write');
     if (!results[results.length - 1].rowsAffected) throw new HttpError(404, 'Account no longer exists.');
-    const owner = await db.execute({
-      sql: `SELECT value FROM worker_state WHERE key = 'deployment_owner_user_id'`,
-      args: [],
-    });
-    if (String(owner.rows[0]?.value ?? '') === userId) {
-      await db.batch(
-        [
-          { sql: `DELETE FROM worker_state WHERE key = 'deployment_owner_user_id'`, args: [] },
-          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_ciphertext'`, args: [] },
-          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_iv'`, args: [] },
-          { sql: `DELETE FROM worker_state WHERE key = 'deployment_recovery_updated_at'`, args: [] },
-        ],
-        'write',
-      );
-    }
     return privateJson({ ok: true, message: 'Account deleted.' });
   }
   throw new HttpError(405, 'Method not allowed.');
@@ -3155,16 +3191,12 @@ export async function register(request: Request, env: Env, db: Client): Promise<
   const transaction = await db.transaction('write');
   try {
     const userCount = Number((await transaction.execute('SELECT COUNT(*) AS count FROM users')).rows[0]?.count ?? 0);
-    const registrationState = (await transaction.execute({
-      sql: 'SELECT value FROM worker_state WHERE key = ?',
-      args: ['registration_closed'],
-    })).rows[0];
-    const registrationClosed = String(registrationState?.value ?? '') === '1';
-    if (registrationClosed || userCount > 0) {
-      if (env.ADMIN_USERNAME || env.ADMIN_PASSWORD_HASH) {
-        throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.', 'REGISTRATION_MANAGED');
-      }
-      throw new HttpError(403, 'Self-hosted registration is closed. Sign in with the first account.');
+    // The first database account is the administrator. If an older Worker was
+    // left with zero users but a historical registration_closed marker, allow
+    // one new first account to recover ownership. Once an account exists,
+    // additional account creation is always managed from /profile.
+    if (userCount > 0) {
+      throw new HttpError(403, 'Registration is managed by the Worker administrator at /profile.', 'REGISTRATION_MANAGED');
     }
     await transaction.execute({
       sql: 'INSERT INTO users(id, username, password_hash, recovery_key_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -3200,7 +3232,11 @@ async function deploymentRecoveryOwnerUserId(db: Client): Promise<string> {
     args: [],
   });
   const configured = String(owner.rows[0]?.value ?? '').trim();
-  if (configured) return configured;
+  if (configured) {
+    const existing = await db.execute({ sql: 'SELECT id FROM users WHERE id = ? LIMIT 1', args: [configured] });
+    if (existing.rows[0]) return configured;
+    await db.execute({ sql: `DELETE FROM worker_state WHERE key = 'deployment_owner_user_id'`, args: [] });
+  }
 
   const firstUser = await db.execute({
     sql: `SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1`,
@@ -3242,8 +3278,6 @@ function deploymentRecoveryProfilePayload(raw: unknown): Record<string, string |
   const tursoDatabaseUrl = value('tursoDatabaseUrl', 2048);
   const tursoAuthToken = value('tursoAuthToken', 4096);
   const jwtSecret = value('jwtSecret', 1024);
-  const adminUsername = value('adminUsername', 120).toLowerCase();
-  const adminPasswordHash = value('adminPasswordHash', 256);
   const workerUrl = value('workerUrl', 2048);
   const workerVersion = value('workerVersion', 64);
 
@@ -3257,9 +3291,6 @@ function deploymentRecoveryProfilePayload(raw: unknown): Record<string, string |
     throw new HttpError(400, 'Invalid Turso database URL in the deployment recovery profile.');
   }
   if (jwtSecret.length < 32) throw new HttpError(400, 'Invalid JWT secret in the deployment recovery profile.');
-  if (!/^pbkdf2\$100000\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$/.test(adminPasswordHash)) {
-    throw new HttpError(400, 'Invalid administrator password verifier in the deployment recovery profile.');
-  }
   let parsedWorkerUrl: URL;
   try {
     parsedWorkerUrl = new URL(workerUrl);
@@ -3272,15 +3303,13 @@ function deploymentRecoveryProfilePayload(raw: unknown): Record<string, string |
   }
 
   return {
-    version: 1,
+    version: 2,
     workerName,
     cloudflareAccountId,
     cloudflareApiToken,
     tursoDatabaseUrl,
     tursoAuthToken,
     jwtSecret,
-    adminUsername,
-    adminPasswordHash,
     workerUrl: workerUrl.replace(/\/+$/, ''),
     workerVersion,
   };

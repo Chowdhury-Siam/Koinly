@@ -14,6 +14,8 @@ test('deployment recovery is encrypted and restricted to the first sync account'
   assert.match(source, /deployment_recovery_ciphertext/);
   assert.match(source, /deployment_recovery_iv/);
   assert.match(source, /deploymentRecoveryAvailable/);
+  assert.match(source, /version: 2/);
+  assert.doesNotMatch(source, /adminUsername|adminPasswordHash/);
   assert.doesNotMatch(source, /deployment_recovery_plaintext/);
 });
 
