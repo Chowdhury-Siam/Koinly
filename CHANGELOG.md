@@ -1,3 +1,11 @@
+## [1.0.1168] - 2026-09-16
+
+- Show an explicit `Administrator` title under the first account in both the in-app Worker Profile and the `/profile` website.
+- Make administrator identity strictly follow the earliest account in the Worker database and repair stale cached administrator ownership automatically.
+- Return `administratorUserId` from the profile accounts API and pin the administrator to the top of the account list for deterministic rendering.
+- Added backward-compatible administrator detection for a single-account Worker when talking to an older profile API.
+- Synchronized application and bundled Worker version metadata to `1.0.1168+212`.
+
 ## [1.0.1167] - 2026-09-16
 
 - Moved Android closed-app update checks to a native WorkManager worker so update notifications no longer depend on starting a headless Flutter/plugin isolate.

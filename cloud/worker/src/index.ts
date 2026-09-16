@@ -355,15 +355,17 @@ async function manageAccounts(request: Request, url: URL, env: Env, db: Client):
   if (request.method === 'GET' && url.pathname === '/profile/api/accounts') {
     const page = Math.max(1, Number(url.searchParams.get('page') ?? 1));
     if (!Number.isSafeInteger(page) || page > 1000000) throw new HttpError(400, 'Invalid page.');
+    const administratorUserId = await deploymentRecoveryOwnerUserId(db);
     const [count, accounts] = await db.batch([
       'SELECT COUNT(*) AS total FROM users',
       { sql: `SELECT id, username, created_at, updated_at,
                 CASE WHEN EXISTS (SELECT 1 FROM devices WHERE user_id = users.id AND revoked_at IS NULL) THEN 'active' ELSE 'invited' END AS status
-              FROM users ORDER BY created_at DESC, id LIMIT 50 OFFSET ?`, args: [(page - 1) * 50] },
+              FROM users
+              ORDER BY CASE WHEN id = ? THEN 0 ELSE 1 END, created_at DESC, id
+              LIMIT 50 OFFSET ?`, args: [administratorUserId, (page - 1) * 50] },
     ], 'read');
-    const administratorUserId = await deploymentRecoveryOwnerUserId(db);
     return privateJson({
-      total: Number(count.rows[0].total), page, pageSize: 50,
+      total: Number(count.rows[0].total), page, pageSize: 50, administratorUserId,
       accounts: accounts.rows.map(row => ({
         id: String(row.id), username: String(row.username), createdAt: Number(row.created_at),
         updatedAt: Number(row.updated_at), status: String(row.status),
@@ -3227,27 +3229,28 @@ export async function register(request: Request, env: Env, db: Client): Promise<
 
 
 async function deploymentRecoveryOwnerUserId(db: Client): Promise<string> {
-  const owner = await db.execute({
-    sql: `SELECT value FROM worker_state WHERE key = 'deployment_owner_user_id'`,
-    args: [],
-  });
-  const configured = String(owner.rows[0]?.value ?? '').trim();
-  if (configured) {
-    const existing = await db.execute({ sql: 'SELECT id FROM users WHERE id = ? LIMIT 1', args: [configured] });
-    if (existing.rows[0]) return configured;
-    await db.execute({ sql: `DELETE FROM worker_state WHERE key = 'deployment_owner_user_id'`, args: [] });
-  }
-
+  // Administrator identity is derived from the database itself: the earliest
+  // account is always the administrator. worker_state is only a cached pointer
+  // used by deployment recovery and is repaired if an older deployment stored
+  // a different account id.
   const firstUser = await db.execute({
     sql: `SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT 1`,
     args: [],
   });
   const userId = String(firstUser.rows[0]?.id ?? '').trim();
   if (!userId) throw new HttpError(404, 'No sync account exists yet.', 'DEPLOYMENT_RECOVERY_NO_OWNER');
-  await db.execute({
-    sql: `INSERT OR IGNORE INTO worker_state(key, value) VALUES ('deployment_owner_user_id', ?)`,
-    args: [userId],
+
+  const owner = await db.execute({
+    sql: `SELECT value FROM worker_state WHERE key = 'deployment_owner_user_id'`,
+    args: [],
   });
+  const configured = String(owner.rows[0]?.value ?? '').trim();
+  if (configured !== userId) {
+    await db.execute({
+      sql: `INSERT OR REPLACE INTO worker_state(key, value) VALUES ('deployment_owner_user_id', ?)`,
+      args: [userId],
+    });
+  }
   return userId;
 }
 

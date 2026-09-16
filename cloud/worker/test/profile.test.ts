@@ -83,7 +83,7 @@ test('first sync account owns the profile portal and account lifecycle', async t
     assert.match(html, /id="username-dialog"/);
     assert.match(html, /Change username/);
     assert.match(html, /First-account administrator/);
-    assert.match(html, /administrator-badge/);
+    assert.match(html, /account-role/);
     assert.doesNotMatch(html, /ADMIN_USERNAME|ADMIN_PASSWORD/);
 
     const protectedRequest = await call('/profile/api/accounts', 'GET', undefined, { cookie: '' });
@@ -93,6 +93,7 @@ test('first sync account owns the profile portal and account lifecycle', async t
     assert.equal(listed.accounts[0].id, administratorId);
     assert.equal(listed.accounts[0].username, 'first-owner');
     assert.equal(listed.accounts[0].isAdministrator, true);
+    assert.equal(listed.administratorUserId, administratorId);
     assert.equal((await call('/profile/api/accounts/' + administratorId, 'DELETE')).status, 409);
   });
 

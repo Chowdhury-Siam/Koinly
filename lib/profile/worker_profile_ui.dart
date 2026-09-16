@@ -27,13 +27,17 @@ class _WorkerProfileAccount {
   final String status;
   final bool isAdministrator;
 
-  factory _WorkerProfileAccount.fromJson(Map<String, dynamic> json) => _WorkerProfileAccount(
+  factory _WorkerProfileAccount.fromJson(
+    Map<String, dynamic> json, {
+    bool administratorFallback = false,
+  }) =>
+      _WorkerProfileAccount(
         id: json['id']?.toString() ?? '',
         username: json['username']?.toString() ?? '',
         createdAt: (json['createdAt'] as num? ?? 0).toInt(),
         updatedAt: (json['updatedAt'] as num? ?? 0).toInt(),
         status: json['status']?.toString() ?? 'invited',
-        isAdministrator: json['isAdministrator'] == true,
+        isAdministrator: json['isAdministrator'] == true || administratorFallback,
       );
 }
 
@@ -101,11 +105,20 @@ class _WorkerProfileApi {
         .timeout(const Duration(seconds: 15));
     final decoded = _decode(response);
     final rawAccounts = decoded['accounts'];
+    final total = (decoded['total'] as num? ?? 0).toInt();
+    final administratorUserId = decoded['administratorUserId']?.toString().trim() ?? '';
+    final accountMaps = rawAccounts is List
+        ? rawAccounts.whereType<Map>().map((entry) => Map<String, dynamic>.from(entry)).toList()
+        : <Map<String, dynamic>>[];
     return _WorkerProfileAccountsPage(
-      total: (decoded['total'] as num? ?? 0).toInt(),
-      accounts: rawAccounts is List
-          ? rawAccounts.whereType<Map>().map((entry) => _WorkerProfileAccount.fromJson(Map<String, dynamic>.from(entry))).toList()
-          : const [],
+      total: total,
+      accounts: accountMaps.map((entry) {
+        final id = entry['id']?.toString() ?? '';
+        final fallback = administratorUserId.isNotEmpty
+            ? id == administratorUserId
+            : total == 1 && accountMaps.length == 1;
+        return _WorkerProfileAccount.fromJson(entry, administratorFallback: fallback);
+      }).toList(),
     );
   }
 
@@ -548,21 +561,18 @@ class _WorkerProfileScreenState extends State<WorkerProfileScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(account.username, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                      if (account.isAdministrator) ...[
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Administrator',
+                          style: TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900, fontSize: 13),
+                        ),
+                      ],
                       const SizedBox(height: 3),
                       Text('Created $created', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
-                if (account.isAdministrator)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: kSleekAccent.withOpacity(.12),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(color: kSleekAccent.withOpacity(.28)),
-                    ),
-                    child: const Text('Administrator', style: TextStyle(color: kSleekAccent, fontWeight: FontWeight.w900, fontSize: 12)),
-                  ),
               ],
             ),
             const SizedBox(height: 12),

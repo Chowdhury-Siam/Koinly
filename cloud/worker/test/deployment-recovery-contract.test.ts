@@ -9,6 +9,7 @@ test('deployment recovery is encrypted and restricted to the first sync account'
   assert.match(source, /\/v1\/deployment-recovery\/profile/);
   assert.match(source, /requireDeploymentRecoveryOwner/);
   assert.match(source, /deployment_owner_user_id/);
+  assert.match(source, /ORDER BY created_at ASC, id ASC LIMIT 1/);
   assert.match(source, /encryptWorkerSecret\([\s\S]*deployment-recovery-v1/);
   assert.match(source, /decryptWorkerSecret\([\s\S]*deployment-recovery-v1/);
   assert.match(source, /deployment_recovery_ciphertext/);
