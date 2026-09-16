@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [1.0.1166] - 2026-09-16
+
+- Fixed cross-platform release compilation in `worker_deployment.dart` by using the namespaced `dart:math` `min` function when batching Turso schema statements.
+- Synchronized application and bundled Worker version metadata to `1.0.1166+210`.
+
 ## [1.0.1165] - 2026-09-16
 
 - Added **Settings > Profile** for validated self-hosted Workers. It opens that Worker's `/profile` page so users can sign in and manage their Worker account from the app settings flow.

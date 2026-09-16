@@ -82,7 +82,7 @@ A ready Worker returns values equivalent to:
 {
   "ok": true,
   "service": "koinly-sync",
-  "workerVersion": "1.0.1165",
+  "workerVersion": "1.0.1166",
   "configured": true,
   "registrationMode": "first-user",
   "telegramBackupAvailable": true,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -424,7 +425,7 @@ class WorkerDeploymentService {
     // Apply idempotent CREATE/INDEX statements in small pipelines. Existing
     // installations keep their rows because schema.sql uses IF NOT EXISTS.
     for (var index = 0; index < statements.length; index += 18) {
-      final end = min(index + 18, statements.length);
+      final end = math.min(index + 18, statements.length);
       await _tursoExecuteMany(c, statements.sublist(index, end));
     }
 
