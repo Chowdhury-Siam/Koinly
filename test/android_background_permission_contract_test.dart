@@ -18,7 +18,7 @@ void main() {
     expect(activity, contains('Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS'));
     expect(activity, contains('PowerManager'));
     expect(manifest, isNot(contains('android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS')));
-    expect(manifest, isNot(contains('android.permission.SCHEDULE_EXACT_ALARM')));
+    expect(manifest, contains('android.permission.SCHEDULE_EXACT_ALARM'));
   });
 
   test('notification feature toggles request notification permission on Android', () {

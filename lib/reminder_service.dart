@@ -2,10 +2,12 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'android_background_permission_service.dart';
 import 'app_config.dart';
 
 class LoanDueReminder {
@@ -26,15 +28,43 @@ class LoanDueReminder {
 
 class ReminderService {
   static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  static bool _initialized = false;
 
   static Future<void> ensureInitialized({bool requestPermission = true}) async {
     if (!kSupportsLocalNotifications) return;
-    tzdata.initializeTimeZones();
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
-    await _notifications.initialize(settings);
+    await _configureLocalTimeZone();
+    if (!_initialized) {
+      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const settings = InitializationSettings(android: android);
+      await _notifications.initialize(settings);
+      _initialized = true;
+    }
     final androidPlugin = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     if (requestPermission) await androidPlugin?.requestNotificationsPermission();
+  }
+
+  static Future<void> _configureLocalTimeZone() async {
+    tzdata.initializeTimeZones();
+    final deviceTimeZoneId = await AndroidBackgroundPermissionService.deviceTimeZoneId();
+    if (deviceTimeZoneId != null) {
+      try {
+        tz.setLocalLocation(tz.getLocation(deviceTimeZoneId));
+        return;
+      } on tz.LocationNotFoundException {
+        // Some OEMs return fixed-offset IDs instead of an IANA zone. Fall
+        // through to an offset match so reminders still use local wall time.
+      }
+    }
+
+    final now = DateTime.now();
+    final nowUtcMillis = now.toUtc().millisecondsSinceEpoch;
+    final offsetMillis = now.timeZoneOffset.inMilliseconds;
+    for (final location in tz.timeZoneDatabase.locations.values) {
+      if (location.timeZone(nowUtcMillis).offset == offsetMillis) {
+        tz.setLocalLocation(location);
+        return;
+      }
+    }
   }
 
   static Future<void> requestNotificationPermission() async {
@@ -44,8 +74,54 @@ class ReminderService {
     await androidPlugin?.requestNotificationsPermission();
   }
 
+  static Future<bool> requestExactAlarmPermission() async {
+    if (!kSupportsLocalNotifications) return true;
+    await ensureInitialized(requestPermission: false);
+    final androidPlugin = _notifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    try {
+      return await androidPlugin?.requestExactAlarmsPermission() ?? true;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static bool _isExactAlarmPermissionError(PlatformException error) =>
+      error.code == 'exact_alarms_not_permitted';
+
+  static Future<void> _zonedScheduleWithExactFallback({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime scheduledDate,
+    required NotificationDetails details,
+    String? payload,
+    DateTimeComponents? matchDateTimeComponents,
+  }) async {
+    Future<void> schedule(AndroidScheduleMode mode) => _notifications.zonedSchedule(
+          id,
+          title,
+          body,
+          scheduledDate,
+          details,
+          payload: payload,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: matchDateTimeComponents,
+        );
+
+    try {
+      await schedule(AndroidScheduleMode.exactAllowWhileIdle);
+    } on PlatformException catch (error) {
+      if (!_isExactAlarmPermissionError(error)) rethrow;
+      // Android 12+ can deny exact-alarm special access. Do not drop the
+      // reminder in that case: keep a best-effort inexact alarm scheduled.
+      await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+    }
+  }
+
   static Future<void> scheduleDaily(TimeOfDay time) async {
     if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
     await cancel();
     final scheduled = _next(time);
     const details = NotificationDetails(
@@ -57,14 +133,12 @@ class ReminderService {
         priority: Priority.high,
       ),
     );
-    await _notifications.zonedSchedule(
-      501,
-      'Koinly',
-      "Don’t forget to record your expenses",
-      scheduled,
-      details,
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    await _zonedScheduleWithExactFallback(
+      id: 501,
+      title: 'Koinly',
+      body: "Don’t forget to record your expenses",
+      scheduledDate: scheduled,
+      details: details,
       matchDateTimeComponents: DateTimeComponents.time,
     );
   }
@@ -89,6 +163,7 @@ class ReminderService {
 
   static Future<void> scheduleLoanDueReminders(List<LoanDueReminder> reminders) async {
     if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
     await cancelLoanDueReminders();
     final now = tz.TZDateTime.now(tz.local);
     const details = NotificationDetails(
@@ -112,17 +187,15 @@ class ReminderService {
         scheduled = tz.TZDateTime(tz.local, reminder.dueDate.year, reminder.dueDate.month, reminder.dueDate.day, 10);
       }
       if (!scheduled.isAfter(now)) continue;
-      await _notifications.zonedSchedule(
-        _stableLoanNotificationId(reminder.id),
-        reminder.toCollect ? 'Payment due from ${reminder.personName}' : 'Payment due to ${reminder.personName}',
-        reminder.toCollect
+      await _zonedScheduleWithExactFallback(
+        id: _stableLoanNotificationId(reminder.id),
+        title: reminder.toCollect ? 'Payment due from ${reminder.personName}' : 'Payment due to ${reminder.personName}',
+        body: reminder.toCollect
             ? '${reminder.amountText} is still expected.'
             : '${reminder.amountText} is still due.',
-        scheduled,
-        details,
+        scheduledDate: scheduled,
+        details: details,
         payload: 'loan:${reminder.id}',
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
     }
   }

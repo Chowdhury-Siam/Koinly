@@ -16,6 +16,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.TimeZone
 
 class MainActivity: FlutterFragmentActivity() {
     private val updaterChannel = "com.koinly.siam/updater"
@@ -50,6 +51,7 @@ class MainActivity: FlutterFragmentActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, backgroundPermissionsChannel).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isIgnoringBatteryOptimizations" -> result.success(isIgnoringBatteryOptimizations())
+                "deviceTimeZoneId" -> result.success(TimeZone.getDefault().id)
                 "openBatteryOptimizationSettings" -> result.success(openBatteryOptimizationSettings())
                 else -> result.notImplemented()
             }

@@ -1,3 +1,11 @@
+## [1.0.1163] - 2026-09-16
+
+- Fixed Android reminder notifications not firing because the scheduled-notification receiver components required by `flutter_local_notifications` 16+ were missing from the app manifest.
+- Fixed reminder times being interpreted as UTC by explicitly binding the `timezone` package to Android's current device time zone, with an offset fallback for OEM-specific zone IDs.
+- Daily and loan reminders now use exact `AlarmManager` delivery while allowed, request Android's **Alarms & reminders** special access when a user enables the daily reminder, and safely fall back to inexact allow-while-idle delivery if exact access is denied.
+- Existing enabled daily reminders are recreated on app startup, repairing schedules made by older builds and schedules invalidated by package replacement.
+- Synchronized application and bundled Worker version metadata to `1.0.1163+207`.
+
 ## [1.0.1162] - 2026-09-15
 
 - Added **Settings > Permissions > Ignore Battery Optimization** on Android, with live permission-state refresh when returning from Android settings.

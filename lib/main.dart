@@ -2200,6 +2200,11 @@ class AppController extends ChangeNotifier {
     final hour = await prefs.getInt('reminderHour', 21);
     final minute = await prefs.getInt('reminderMinute', 0);
     reminderTime = TimeOfDay(hour: hour, minute: minute);
+    if (reminderEnabled && kSupportsLocalNotifications) {
+      // Recreate the alarm at startup. This repairs schedules from older
+      // builds and rebinds the reminder after app/package replacement.
+      await ReminderService.scheduleDaily(reminderTime);
+    }
     loanRecordTransactionsByDefault = await prefs.getBool('loanRecordTransactionsByDefault', true);
     loanRemindersEnabled = await prefs.getBool('loanRemindersEnabled', true);
     loanShowWrittenOff = await prefs.getBool('loanShowWrittenOff', false);
@@ -5357,6 +5362,7 @@ class AppController extends ChangeNotifier {
     await prefs.setInt('reminderMinute', time.minute);
     if (enabled) {
       await ReminderService.requestNotificationPermission();
+      await ReminderService.requestExactAlarmPermission();
       await ReminderService.scheduleDaily(time);
     } else {
       await ReminderService.cancel();
