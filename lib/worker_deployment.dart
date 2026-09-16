@@ -721,21 +721,18 @@ class WorkerDeploymentService {
     // Script settings do not reliably expose the currently applied Durable
     // Object migration tag. The versions API does, so resolve the latest
     // version detail before uploading an update. Cloudflare requires old_tag
-    // to match the current tag on every subsequent migration-backed upload.
+    // to match the current tag and requires new_tag whenever old_tag is set.
+    // A code-only update keeps both tags equal and performs no class changes.
     final versionTag = await _currentDurableObjectMigrationTag(c);
     if (versionTag != null && versionTag.isNotEmpty) {
-      return {
-        'migrations': {'old_tag': versionTag},
-      };
+      return _unchangedDurableObjectMigration(versionTag);
     }
 
     // Older API responses sometimes include migration metadata directly in
     // settings. Keep this as a compatibility fallback.
     final settingsTag = _findMigrationTag(data);
     if (settingsTag != null && settingsTag.isNotEmpty) {
-      return {
-        'migrations': {'old_tag': settingsTag},
-      };
+      return _unchangedDurableObjectMigration(settingsTag);
     }
 
     return const {
@@ -745,6 +742,13 @@ class WorkerDeploymentService {
       },
     };
   }
+
+  Map<String, Object?> _unchangedDurableObjectMigration(String tag) => {
+        'migrations': {
+          'old_tag': tag,
+          'new_tag': tag,
+        },
+      };
 
   Future<String?> _currentDurableObjectMigrationTag(WorkerDeploymentConfig c) async {
     final base = '$_cloudflareApi/accounts/${c.cloudflareAccountId}/workers/scripts/${Uri.encodeComponent(c.workerName)}/versions';
@@ -877,17 +881,15 @@ class WorkerDeploymentService {
       // Cloudflare protects Durable Object state with an optimistic migration
       // precondition. If an older Koinly/Wrangler deployment already created
       // SyncHub, Cloudflare tells us the exact current tag. Retry once using
-      // that tag as old_tag instead of forcing the user to delete/recreate the
-      // Worker (which could orphan Durable Object state).
+      // that tag as both old_tag and new_tag. This is a code-only update:
+      // do not recreate SyncHub or advance/reset its existing migration tag.
       final expectedTag = _expectedMigrationTagFromCloudflareError(data);
       final isExportsFlow = effectiveLifecycle.containsKey('exports');
       final currentMigrations = effectiveLifecycle['migrations'];
       final currentOldTag = currentMigrations is Map ? '${currentMigrations['old_tag'] ?? ''}'.trim() : '';
       if (!isExportsFlow && expectedTag != null && expectedTag != currentOldTag) {
         onProgress?.call('Cloudflare migration state changed; retrying the Worker update safely…');
-        effectiveLifecycle = {
-          'migrations': {'old_tag': expectedTag},
-        };
+        effectiveLifecycle = _unchangedDurableObjectMigration(expectedTag);
         response = await _sendWorkerUpload(c, bundle, adminPasswordHash, effectiveLifecycle);
         data = _decodeJson(response.body);
       }

@@ -20,7 +20,8 @@ robocopy $ProjectRoot $stagingProject /E `
       android\.gradle android\app\build `
       windows\flutter\ephemeral linux\flutter\ephemeral `
       cloud\worker\node_modules cloud\worker\.wrangler cloud\worker\dist cloud\worker\build `
-  /XF *.zip *.log .env .dev.vars | Out-Null
+  /XF *.zip *.log .env .dev.vars .flutter-plugins .flutter-plugins-dependencies `
+      local.properties GeneratedPluginRegistrant.java | Out-Null
 
 if ($LASTEXITCODE -gt 7) {
   throw "robocopy failed with exit code $LASTEXITCODE"

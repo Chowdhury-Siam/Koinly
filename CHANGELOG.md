@@ -1,3 +1,8 @@
+## [Unreleased]
+
+- Fixed automatic and manual Worker redeployments failing with `migration must include a new_tag because old_tag is set`. Code-only updates now send the existing Durable Object migration tag as both `old_tag` and `new_tag`, including the one-time migration-state retry.
+- Added mocked HTTP deployment tests covering existing Workers, first deployments, migration-state recovery, declarative exports, and automatic updates.
+
 ## [1.0.1163] - 2026-09-16
 
 - Fixed Android reminder notifications not firing because the scheduled-notification receiver components required by `flutter_local_notifications` 16+ were missing from the app manifest.

@@ -22,7 +22,7 @@ void main() {
   test('in-app deployment provisions database, Worker, route, cron and health', () {
     final service = File('lib/worker_deployment.dart').readAsStringSync();
 
-    expect(service, contains("'/v2/pipeline'"));
+    expect(service, contains(r'_tursoHttpBase(c.tursoDatabaseUrl)}/v2/pipeline'));
     expect(service, contains('SELECT 1 AS koinly_connection_test'));
     expect(service, contains("'baton': null"));
     expect(service, contains("'want_rows': true"));
@@ -31,7 +31,7 @@ void main() {
     expect(service, contains("'durable_object_namespace'"));
     expect(service, contains("_initialDurableObjectMigrationTag = 'v1-realtime-sync-hub'"));
     expect(service, contains("'new_sqlite_classes': ['SyncHub']"));
-    expect(service, contains("'old_tag': versionTag"));
+    expect(service, contains('_unchangedDurableObjectMigration(versionTag)'));
     expect(service, contains('/versions'));
     expect(service, contains("value['migration_tag']"));
     expect(service, contains('_expectedMigrationTagFromCloudflareError'));
@@ -44,7 +44,7 @@ void main() {
     expect(service, contains("data['workerVersion'] == appVersion"));
     expect(service, contains("'KOINLY_WORKER_VERSION'"));
     expect(service, contains('const maxAttempts = 24'));
-    expect(service, contains('Worker health check $attempt/$maxAttempts'));
+    expect(service, contains(r'Worker health check $attempt/$maxAttempts'));
     expect(service, contains('_healthDiagnostic('));
     expect(service, contains("'TURSO_DATABASE_URL', 'text': _tursoHttpBase(c.tursoDatabaseUrl)"));
     expect(service, contains('Worker deployed successfully.'));
