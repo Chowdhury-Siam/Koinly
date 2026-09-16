@@ -2285,6 +2285,24 @@ class AppController extends ChangeNotifier {
     cloudSyncPending = await prefs.getBool('cloudSyncPending', false);
     authoritativeCloudUploadPending = await prefs.getBool('authoritativeCloudUploadPending', false);
     newSyncAccountAwaitingSetupChoice = await prefs.getBool('newSyncAccountAwaitingSetupChoice', false);
+
+    // A successfully authenticated existing account is already a configured
+    // Koinly setup. Older builds could persist the sync session before the
+    // onboarding completion flag, which left returning users trapped on the
+    // first-run "Continue setup" screen after an app restart. Keep the
+    // explicit setup choice only for a newly registered account.
+    if (!onboardingCompleted &&
+        cloudSyncEnabled &&
+        syncAccountUsername.trim().isNotEmpty &&
+        !newSyncAccountAwaitingSetupChoice) {
+      onboardingCompleted = true;
+      await prefs.setBool('onboardingCompleted', true);
+      if (kIsDesktopApp) {
+        desktopSetupVersionCompleted = kRequiredDesktopSetupVersion;
+        await prefs.setInt('desktopSetupVersionCompleted', desktopSetupVersionCompleted);
+      }
+    }
+
     syncStatus = cloudSyncEnabled ? cloudSyncStatusText : 'Offline';
     pendingAndroidUpdatePath = await prefs.getString('pendingAndroidUpdatePath', '');
     pendingAndroidUpdateVersion = await prefs.getString('pendingAndroidUpdateVersion', '');
@@ -3958,6 +3976,14 @@ class AppController extends ChangeNotifier {
         await performMultiDeviceSync(silent: true);
       } else {
         await _mergeAfterExistingAccountAuth(preferCloudData: preferCloudData);
+
+        // Logging in to an existing account must finish first-run onboarding
+        // regardless of which screen initiated authentication. Previously the
+        // UI route was responsible for setting this flag, so a valid login
+        // could still return to the "Continue setup" page.
+        if (!onboardingCompleted) {
+          await completeOnboarding();
+        }
       }
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();

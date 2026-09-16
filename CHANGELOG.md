@@ -1,3 +1,10 @@
+## [1.0.1169] - 2026-09-16
+
+- Fixed returning users being left on first-run onboarding after a successful existing-account login.
+- Existing-account authentication now marks onboarding complete in the controller, independent of the login screen route.
+- Added startup recovery for valid persisted sync sessions created by older builds, while preserving the Restore/Start new choice for newly registered accounts.
+- Synchronized application and bundled Worker version metadata to `1.0.1169+213`.
+
 ## [1.0.1168] - 2026-09-16
 
 - Show an explicit `Administrator` title under the first account in both the in-app Worker Profile and the `/profile` website.
