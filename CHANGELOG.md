@@ -1,3 +1,9 @@
+## [1.0.1170] - 2026-09-16
+
+- Fixed the Home **Category spending** layout so every progress track uses the same available width regardless of the formatted amount length.
+- Added a shared dynamically measured amount column so longer currency values no longer shorten only their own progress track on Windows or responsive layouts.
+- Synchronized application and bundled Worker version metadata to `1.0.1170+214`.
+
 ## [1.0.1169] - 2026-09-16
 
 - Fixed returning users being left on first-run onboarding after a successful existing-account login.

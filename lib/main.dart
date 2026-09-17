@@ -9564,6 +9564,17 @@ class HomeDashboardScreen extends StatelessWidget {
     final categoryTotals = state.categoryTotals(CategoryType.expense, source: txs);
     final topCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final categoryGrandTotal = categoryTotals.values.fold<double>(0, (sum, value) => sum + value);
+    final displayedCategoryEntries = topCategories.take(4).toList();
+    final categoryAmountStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w800) ?? const TextStyle(fontWeight: FontWeight.w800);
+    final categoryAmountWidth = displayedCategoryEntries.fold<double>(0, (currentMax, entry) {
+      final painter = TextPainter(
+        text: TextSpan(text: state.format(entry.value), style: categoryAmountStyle),
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+        maxLines: 1,
+      )..layout();
+      return math.max(currentMax, painter.width);
+    });
 
     final balanceCard = BalanceHeroCard(
       balance: state.format(accountBalance),
@@ -9620,7 +9631,7 @@ class HomeDashboardScreen extends StatelessWidget {
       else
         ExpressiveCard(
           child: Column(
-            children: topCategories.take(4).map((entry) {
+            children: displayedCategoryEntries.map((entry) {
               final category = state.categoryOf(entry.key);
                return ListTile(
                  contentPadding: EdgeInsets.zero,
@@ -9636,7 +9647,15 @@ class HomeDashboardScreen extends StatelessWidget {
                      value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
                    ),
                  ),
-                trailing: Text(state.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w800)),
+                trailing: SizedBox(
+                  width: categoryAmountWidth,
+                  child: Text(
+                    state.format(entry.value),
+                    maxLines: 1,
+                    textAlign: TextAlign.end,
+                    style: categoryAmountStyle,
+                  ),
+                ),
                 onTap: category == null ? null : () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryTransactionScreen(category: category))),
               );
             }).toList(),
