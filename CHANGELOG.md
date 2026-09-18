@@ -1,3 +1,9 @@
+## [1.0.1173] - 2026-09-18
+
+- Fixed transaction history ordering so the complete transaction date/time is sorted newest-first.
+- Transactions on the same day now correctly show late-evening entries above afternoon entries.
+- Synchronized application and bundled Worker version metadata to `1.0.1173+217`.
+
 ## [1.0.1172] - 2026-09-18
 
 - Fixed transaction time ordering so each calendar day remains newest-first while transactions inside that day are listed chronologically from earlier to later.

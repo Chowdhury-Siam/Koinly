@@ -5282,23 +5282,18 @@ class AppController extends ChangeNotifier {
       return true;
     }).toList()
       ..sort((a, b) {
-        final aListOn = a.listOn;
-        final bListOn = b.listOn;
-        final aDay = DateTime(aListOn.year, aListOn.month, aListOn.day);
-        final bDay = DateTime(bListOn.year, bListOn.month, bListOn.day);
+        // Transaction history is reverse chronological: the newest effective
+        // transaction date/time is always shown first. Compare the complete
+        // DateTime instead of formatting or splitting date/time components so
+        // 11:02 PM correctly sorts above 2:06 PM and 12:59 PM on the same day.
+        final byListDateTime = b.listOn.compareTo(a.listOn);
+        if (byListDateTime != 0) return byListDateTime;
 
-        // Keep the newest calendar day first, but show transactions inside
-        // each day in chronological time order. For example, 12:57 PM must
-        // appear above 11:01 PM when both transactions are on the same date.
-        final byDay = bDay.compareTo(aDay);
-        if (byDay != 0) return byDay;
-
-        final byTime = aListOn.compareTo(bListOn);
-        if (byTime != 0) return byTime;
-
-        final byCreatedTime = a.createdOn.compareTo(b.createdOn);
+        // Use the original creation timestamp as a stable secondary ordering
+        // for ranged transactions that share the same effective end time.
+        final byCreatedTime = b.createdOn.compareTo(a.createdOn);
         if (byCreatedTime != 0) return byCreatedTime;
-        return a.id.compareTo(b.id);
+        return b.id.compareTo(a.id);
       });
   }
 
