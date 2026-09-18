@@ -1,3 +1,16 @@
+## [1.0.1172] - 2026-09-18
+
+- Fixed transaction time ordering so each calendar day remains newest-first while transactions inside that day are listed chronologically from earlier to later.
+- Transactions at 12:57 PM now correctly appear above transactions at 11:01 PM when they share the same date.
+- Applied the ordering in the shared filtered transaction list so Transaction and category transaction screens stay consistent, with deterministic tie-breaking for identical timestamps.
+- Synchronized application and bundled Worker version metadata to `1.0.1172+216`.
+
+## [1.0.1171] - 2026-09-18
+
+- Fixed the desktop **Category spending** hover field so its hover/focus surface spans the complete category row width instead of stopping at the card's horizontal content inset.
+- Preserved the existing 18 px content alignment by moving horizontal spacing into each `ListTile`, while keeping the card's vertical breathing room unchanged.
+- Kept the shared amount-column progress-width fix from 1.0.1170 intact and synchronized application and bundled Worker version metadata to `1.0.1171+215`.
+
 ## [1.0.1170] - 2026-09-16
 
 - Fixed the Home **Category spending** layout so every progress track uses the same available width regardless of the formatted amount length.

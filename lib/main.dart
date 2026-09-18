@@ -5282,10 +5282,23 @@ class AppController extends ChangeNotifier {
       return true;
     }).toList()
       ..sort((a, b) {
-        final byListDate = b.listOn.compareTo(a.listOn);
-        if (byListDate != 0) return byListDate;
-        final byStartDate = b.createdOn.compareTo(a.createdOn);
-        return byStartDate != 0 ? byStartDate : b.updatedOn.compareTo(a.updatedOn);
+        final aListOn = a.listOn;
+        final bListOn = b.listOn;
+        final aDay = DateTime(aListOn.year, aListOn.month, aListOn.day);
+        final bDay = DateTime(bListOn.year, bListOn.month, bListOn.day);
+
+        // Keep the newest calendar day first, but show transactions inside
+        // each day in chronological time order. For example, 12:57 PM must
+        // appear above 11:01 PM when both transactions are on the same date.
+        final byDay = bDay.compareTo(aDay);
+        if (byDay != 0) return byDay;
+
+        final byTime = aListOn.compareTo(bListOn);
+        if (byTime != 0) return byTime;
+
+        final byCreatedTime = a.createdOn.compareTo(b.createdOn);
+        if (byCreatedTime != 0) return byCreatedTime;
+        return a.id.compareTo(b.id);
       });
   }
 
@@ -9630,23 +9643,28 @@ class HomeDashboardScreen extends StatelessWidget {
         const EmptyCard(icon: Icons.pie_chart_rounded, title: 'No spending data', body: 'Add expenses to see where money is going.', animated: true)
       else
         ExpressiveCard(
+          // Keep only the vertical breathing room at the card level. The
+          // category rows themselves own the horizontal inset so ListTile's
+          // desktop hover/focus ink can span the complete row width instead
+          // of being clipped to the card's old 18 px content inset.
+          padding: const EdgeInsets.symmetric(vertical: 18),
           child: Column(
             children: displayedCategoryEntries.map((entry) {
               final category = state.categoryOf(entry.key);
-               return ListTile(
-                 contentPadding: EdgeInsets.zero,
-                 minTileHeight: 66,
-                 minVerticalPadding: 8,
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+                minTileHeight: 66,
+                minVerticalPadding: 8,
                 leading: category == null ? null : iconBubble(context, category.iconName, category.iconColor),
                 title: Text(category?.name ?? 'Unknown'),
-                 subtitle: Padding(
-                   padding: const EdgeInsets.only(top: 10),
-                   child: LinearProgressIndicator(
-                     minHeight: 4,
-                     borderRadius: BorderRadius.circular(2),
-                     value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
-                   ),
-                 ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: LinearProgressIndicator(
+                    minHeight: 4,
+                    borderRadius: BorderRadius.circular(2),
+                    value: categoryGrandTotal <= 0 ? 0 : entry.value / categoryGrandTotal,
+                  ),
+                ),
                 trailing: SizedBox(
                   width: categoryAmountWidth,
                   child: Text(
