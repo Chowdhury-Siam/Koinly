@@ -1,3 +1,10 @@
+## [1.0.1174] - 2026-09-20
+
+- Added a persistent Transaction sort control with newest/oldest, category, amount, and title ordering. Changing the sort rebuilds a fresh list immediately, so existing transactions are reorganized without rewriting financial data.
+- Fixed legacy transaction ordering by using the visible transaction start timestamp (`createdOn`) rather than historical range-end metadata (`endOn`/`listOn`) for date sorting.
+- Applied the selected transaction ordering consistently to category transaction lists and synchronized the preference through Koinly settings sync.
+- Synchronized application and bundled Worker version metadata to `1.0.1174+218`.
+
 ## [1.0.1173] - 2026-09-18
 
 - Fixed transaction history ordering so the complete transaction date/time is sorted newest-first.

@@ -822,7 +822,7 @@ class KoinlyDatabase {
   Future<List<MoneyTransaction>> transactions() async {
     final maps = await (await db).query(
       'transactions',
-      orderBy: 'CASE WHEN end_on IS NOT NULL AND end_on >= created_on THEN end_on ELSE created_on END DESC, created_on DESC, updated_on DESC',
+      orderBy: 'created_on DESC, updated_on DESC, id DESC',
     );
     return maps.map(MoneyTransaction.fromMap).toList();
   }
@@ -1836,6 +1836,7 @@ class AppController extends ChangeNotifier {
   List<String> filterAccountIds = [];
   List<String> filterCategoryIds = [];
   List<MoneyTransactionType> filterTypes = [];
+  TransactionSortMode transactionSortMode = TransactionSortMode.dateNewest;
   String? defaultAccountId;
   String? defaultExpenseCategoryId;
   String? defaultIncomeCategoryId;
@@ -2188,6 +2189,15 @@ class AppController extends ChangeNotifier {
     filterAccountIds = await prefs.getStringList('filterAccountIds');
     filterCategoryIds = await prefs.getStringList('filterCategoryIds');
     filterTypes = (await prefs.getStringList('filterTypes')).map((e) => enumByName(MoneyTransactionType.values, e, MoneyTransactionType.expense)).toList();
+    // Older releases had no explicit transaction-list sort preference and also
+    // used range end timestamps for ordering. Default every existing install to
+    // a deterministic start-timestamp newest-first view; once the user chooses
+    // another sort, that preference is persisted and reapplied on every rebuild.
+    transactionSortMode = await prefs.getEnum(
+      'transactionSortMode',
+      TransactionSortMode.values,
+      TransactionSortMode.dateNewest,
+    );
     defaultAccountId = await prefs.getString('defaultAccountId', '');
     if (defaultAccountId?.isEmpty == true) defaultAccountId = null;
     defaultExpenseCategoryId = await prefs.getString('defaultExpenseCategoryId', '');
@@ -2865,6 +2875,7 @@ class AppController extends ChangeNotifier {
         'filterAccountIds': filterAccountIds,
         'filterCategoryIds': filterCategoryIds,
         'filterTypes': filterTypes.map(enumName).toList(),
+        'transactionSortMode': enumName(transactionSortMode),
         'defaultAccountId': defaultAccountId ?? '',
         'defaultExpenseCategoryId': defaultExpenseCategoryId ?? '',
         'defaultIncomeCategoryId': defaultIncomeCategoryId ?? '',
@@ -5281,26 +5292,102 @@ class AppController extends ChangeNotifier {
       if (types != null && !types.contains(tx.type)) return false;
       return true;
     }).toList()
-      ..sort((a, b) {
-        // Transaction history is reverse chronological: the newest effective
-        // transaction date/time is always shown first. Compare the complete
-        // DateTime instead of formatting or splitting date/time components so
-        // 11:02 PM correctly sorts above 2:06 PM and 12:59 PM on the same day.
-        final byListDateTime = b.listOn.compareTo(a.listOn);
-        if (byListDateTime != 0) return byListDateTime;
-
-        // Use the original creation timestamp as a stable secondary ordering
-        // for ranged transactions that share the same effective end time.
-        final byCreatedTime = b.createdOn.compareTo(a.createdOn);
-        if (byCreatedTime != 0) return byCreatedTime;
-        return b.id.compareTo(a.id);
-      });
+      ..sort(_compareTransactionDateNewest);
   }
 
-  List<MoneyTransaction> transactionListTransactions() {
-    final visible = filteredTransactions();
-    if (loanTransactionsVisibleInTransactionList) return visible;
-    return visible.where((tx) => !tx.isLoanTransaction).toList();
+  int _compareTransactionDateNewest(MoneyTransaction a, MoneyTransaction b) {
+    // Sort from the transaction's displayed start timestamp, not `listOn`.
+    // Legacy transactions can contain an end_on value from the old range UI;
+    // using that field made existing users appear incorrectly ordered even
+    // though the visible start time was correct.
+    final byCreatedTime = b.createdOn.compareTo(a.createdOn);
+    if (byCreatedTime != 0) return byCreatedTime;
+    final byUpdatedTime = b.updatedOn.compareTo(a.updatedOn);
+    if (byUpdatedTime != 0) return byUpdatedTime;
+    return b.id.compareTo(a.id);
+  }
+
+  int _compareTransactionDateOldest(MoneyTransaction a, MoneyTransaction b) {
+    final byCreatedTime = a.createdOn.compareTo(b.createdOn);
+    if (byCreatedTime != 0) return byCreatedTime;
+    final byUpdatedTime = a.updatedOn.compareTo(b.updatedOn);
+    if (byUpdatedTime != 0) return byUpdatedTime;
+    return a.id.compareTo(b.id);
+  }
+
+  String _transactionCategorySortLabel(MoneyTransaction tx) {
+    if (tx.type == MoneyTransactionType.transfer) return 'Transfer';
+    if (tx.isLoanTransaction && tx.categoryId.isEmpty) return 'Loan';
+    return categoryOf(tx.categoryId)?.name.trim().isNotEmpty == true
+        ? categoryOf(tx.categoryId)!.name.trim()
+        : 'Uncategorized';
+  }
+
+  String _transactionTitleSortLabel(MoneyTransaction tx) {
+    final savedTitle = tx.title.trim();
+    if (tx.type == MoneyTransactionType.transfer) {
+      final from = accountOf(tx.fromAccountId)?.name.trim() ?? '';
+      final to = tx.toAccountId == null ? '' : accountOf(tx.toAccountId!)?.name.trim() ?? '';
+      return '$from → $to'.trim();
+    }
+    if (savedTitle.isNotEmpty) return savedTitle;
+    return _transactionCategorySortLabel(tx);
+  }
+
+  int _compareTransactionText(String first, String second) =>
+      first.toLowerCase().compareTo(second.toLowerCase());
+
+  void _sortTransactionList(List<MoneyTransaction> items) {
+    int newestTieBreak(MoneyTransaction a, MoneyTransaction b) => _compareTransactionDateNewest(a, b);
+    items.sort((a, b) {
+      switch (transactionSortMode) {
+        case TransactionSortMode.dateNewest:
+          return _compareTransactionDateNewest(a, b);
+        case TransactionSortMode.dateOldest:
+          return _compareTransactionDateOldest(a, b);
+        case TransactionSortMode.categoryAsc:
+        case TransactionSortMode.categoryDesc:
+          final first = _transactionCategorySortLabel(a);
+          final second = _transactionCategorySortLabel(b);
+          final byCategory = _compareTransactionText(first, second);
+          if (byCategory != 0) {
+            return transactionSortMode == TransactionSortMode.categoryAsc ? byCategory : -byCategory;
+          }
+          return newestTieBreak(a, b);
+        case TransactionSortMode.amountHigh:
+        case TransactionSortMode.amountLow:
+          final byAmount = a.amount.compareTo(b.amount);
+          if (byAmount != 0) {
+            return transactionSortMode == TransactionSortMode.amountLow ? byAmount : -byAmount;
+          }
+          return newestTieBreak(a, b);
+        case TransactionSortMode.titleAsc:
+        case TransactionSortMode.titleDesc:
+          final first = _transactionTitleSortLabel(a);
+          final second = _transactionTitleSortLabel(b);
+          final byTitle = _compareTransactionText(first, second);
+          if (byTitle != 0) {
+            return transactionSortMode == TransactionSortMode.titleAsc ? byTitle : -byTitle;
+          }
+          return newestTieBreak(a, b);
+      }
+    });
+  }
+
+  List<MoneyTransaction> transactionListTransactions({
+    String? categoryId,
+    bool ignoreDate = false,
+    bool respectLoanVisibility = true,
+  }) {
+    final visible = filteredTransactions(categoryId: categoryId, ignoreDate: ignoreDate);
+    final result = !respectLoanVisibility || loanTransactionsVisibleInTransactionList
+        ? List<MoneyTransaction>.of(visible)
+        : visible.where((tx) => !tx.isLoanTransaction).toList();
+    // Always sort a fresh list. This deliberately ignores any historical row
+    // order from SQLite/cloud payloads, so changing the sort immediately
+    // reorganizes old as well as newly-created transactions.
+    _sortTransactionList(result);
+    return result;
   }
 
   Summary summaryFor(List<MoneyTransaction> list) {
@@ -5389,6 +5476,17 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> clearFilters() => saveFilters(accounts: [], categories: [], types: []);
+
+  Future<void> setTransactionSortMode(TransactionSortMode mode) async {
+    if (transactionSortMode == mode) return;
+    transactionSortMode = mode;
+    // Rebuild first so even a large legacy transaction history visibly
+    // reorganizes as soon as the user chooses a sort. Persistence/sync can
+    // finish afterward without controlling the in-memory ordering.
+    notifyListeners();
+    await prefs.setEnum('transactionSortMode', mode);
+    await queuePreferenceSync();
+  }
 
   Future<void> saveDefaults({String? accountId, String? incomeCategoryId, String? expenseCategoryId}) async {
     defaultAccountId = accountId ?? defaultAccountId;
@@ -13154,6 +13252,163 @@ class _SubscriptionEditorState extends State<SubscriptionEditor> {
 // Transactions and filters
 // -----------------------------------------------------------------------------
 
+String transactionSortModeLabel(TransactionSortMode mode) {
+  switch (mode) {
+    case TransactionSortMode.dateNewest:
+      return 'Newest first';
+    case TransactionSortMode.dateOldest:
+      return 'Oldest first';
+    case TransactionSortMode.categoryAsc:
+      return 'Category A–Z';
+    case TransactionSortMode.categoryDesc:
+      return 'Category Z–A';
+    case TransactionSortMode.amountHigh:
+      return 'Amount high–low';
+    case TransactionSortMode.amountLow:
+      return 'Amount low–high';
+    case TransactionSortMode.titleAsc:
+      return 'Title A–Z';
+    case TransactionSortMode.titleDesc:
+      return 'Title Z–A';
+  }
+}
+
+String transactionSortModeSubtitle(TransactionSortMode mode) {
+  switch (mode) {
+    case TransactionSortMode.dateNewest:
+      return 'Date and time • latest to earliest';
+    case TransactionSortMode.dateOldest:
+      return 'Date and time • earliest to latest';
+    case TransactionSortMode.categoryAsc:
+      return 'Category name • A to Z';
+    case TransactionSortMode.categoryDesc:
+      return 'Category name • Z to A';
+    case TransactionSortMode.amountHigh:
+      return 'Transaction amount • highest first';
+    case TransactionSortMode.amountLow:
+      return 'Transaction amount • lowest first';
+    case TransactionSortMode.titleAsc:
+      return 'Transaction title • A to Z';
+    case TransactionSortMode.titleDesc:
+      return 'Transaction title • Z to A';
+  }
+}
+
+IconData transactionSortModeIcon(TransactionSortMode mode) {
+  switch (mode) {
+    case TransactionSortMode.dateNewest:
+      return Icons.arrow_downward_rounded;
+    case TransactionSortMode.dateOldest:
+      return Icons.arrow_upward_rounded;
+    case TransactionSortMode.categoryAsc:
+    case TransactionSortMode.categoryDesc:
+      return Icons.category_rounded;
+    case TransactionSortMode.amountHigh:
+    case TransactionSortMode.amountLow:
+      return Icons.payments_rounded;
+    case TransactionSortMode.titleAsc:
+    case TransactionSortMode.titleDesc:
+      return Icons.sort_by_alpha_rounded;
+  }
+}
+
+Future<void> showTransactionSortSheet(BuildContext context) async {
+  await showKoinlyPopup<void>(
+    context,
+    maxWidth: 520,
+    maxHeight: 660,
+    child: const TransactionSortSheet(),
+  );
+}
+
+class TransactionSortSheet extends StatelessWidget {
+  const TransactionSortSheet({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: KoinlyPopupContent(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Sort transactions',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 14),
+            for (final mode in TransactionSortMode.values) ...[
+              _TransactionSortOption(
+                mode: mode,
+                selected: state.transactionSortMode == mode,
+                onTap: () async {
+                  await state.setTransactionSortMode(mode);
+                  if (context.mounted) Navigator.pop(context);
+                },
+              ),
+              if (mode != TransactionSortMode.values.last) const SizedBox(height: 7),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TransactionSortOption extends StatelessWidget {
+  const _TransactionSortOption({required this.mode, required this.selected, required this.onTap});
+
+  final TransactionSortMode mode;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? kSleekAccent.withOpacity(.12) : scheme.surfaceContainerHighest.withOpacity(.24),
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Icon(transactionSortModeIcon(mode), color: selected ? kSleekAccent : scheme.onSurfaceVariant),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(transactionSortModeLabel(mode), style: const TextStyle(fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text(
+                      transactionSortModeSubtitle(mode),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Icon(
+                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                color: selected ? kSleekAccent : scheme.outline,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class TransactionListScreen extends StatelessWidget {
   const TransactionListScreen({super.key});
 
@@ -13163,10 +13418,24 @@ class TransactionListScreen extends StatelessWidget {
     final txs = state.transactionListTransactions();
     return PageScaffold(
       title: 'Transaction',
-      subtitle: '${txs.length} records • ${state.activeRange().label}',
+      subtitle: '${txs.length} records • ${state.activeRange().label} • ${transactionSortModeLabel(state.transactionSortMode)}',
       actions: [
-        IconButton(onPressed: () => showDateRangeSheet(context), icon: const Icon(Icons.date_range_rounded)),
-        IconButton(onPressed: () => showFilterSheet(context), icon: const Icon(Icons.filter_alt_rounded)),
+        IconButton(
+          tooltip: 'Date range',
+          onPressed: () => showDateRangeSheet(context),
+          icon: const Icon(Icons.date_range_rounded),
+        ),
+        IconButton(
+          key: const ValueKey('transaction-sort-button'),
+          tooltip: 'Sort: ${transactionSortModeLabel(state.transactionSortMode)}',
+          onPressed: () => showTransactionSortSheet(context),
+          icon: const Icon(Icons.sort_rounded),
+        ),
+        IconButton(
+          tooltip: 'Filters',
+          onPressed: () => showFilterSheet(context),
+          icon: const Icon(Icons.filter_alt_rounded),
+        ),
       ],
       child: ResponsiveListContent(
         header: [ActiveFilterChips(state: state)],
@@ -16329,11 +16598,26 @@ class CategoryTransactionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final txs = state.filteredTransactions(categoryId: category.id, ignoreDate: true);
+    final txs = state.transactionListTransactions(
+      categoryId: category.id,
+      ignoreDate: true,
+      respectLoanVisibility: false,
+    );
     return PageScaffold(
       title: category.name,
       subtitle: '${txs.length} transactions',
-      actions: [IconButton(onPressed: () => showTransactionEditor(context, lockedCategory: category), icon: const Icon(Icons.add_rounded))],
+      actions: [
+        IconButton(
+          tooltip: 'Sort: ${transactionSortModeLabel(state.transactionSortMode)}',
+          onPressed: () => showTransactionSortSheet(context),
+          icon: const Icon(Icons.sort_rounded),
+        ),
+        IconButton(
+          tooltip: 'Add transaction',
+          onPressed: () => showTransactionEditor(context, lockedCategory: category),
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
       child: ResponsiveListContent(
         itemCount: txs.length,
         empty: const EmptyCard(icon: Icons.receipt_long_rounded, title: 'No transactions', body: 'Transactions for this category will appear here.'),

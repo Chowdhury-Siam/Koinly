@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 enum AccountType { regular, credit, savings }
 enum CategoryType { income, expense }
 enum MoneyTransactionType { income, expense, transfer }
+enum TransactionSortMode { dateNewest, dateOldest, categoryAsc, categoryDesc, amountHigh, amountLow, titleAsc, titleDesc }
 enum SubscriptionFrequency { daily, weekly, monthly, yearly }
 enum DateRangeType { today, thisWeek, thisMonth, thisYear, allTime, custom }
 enum FinancialHealthPeriod { monthly, yearly }
