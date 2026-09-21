@@ -136,6 +136,7 @@ class ProfileAvatarButton extends StatelessWidget {
             child: ProfileMediaView(
               path: state.hasProfileMedia ? state.profileMediaPath : '',
               kind: state.hasProfileMedia ? state.profileMediaKind : null,
+              imageProvider: state.hasProfileMedia ? state.profileMediaAvatarImageProvider : null,
               displayName: state.profileDisplayLabel,
               scale: state.profileMediaScale,
               alignmentX: state.profileMediaAlignmentX,
@@ -638,6 +639,7 @@ class ProfileMediaView extends StatelessWidget {
     required this.path,
     required this.kind,
     required this.displayName,
+    this.imageProvider,
     this.fit = BoxFit.cover,
     this.scale = 1.0,
     this.alignmentX = 0.0,
@@ -648,6 +650,7 @@ class ProfileMediaView extends StatelessWidget {
   final String path;
   final ProfileMediaKind? kind;
   final String displayName;
+  final ImageProvider? imageProvider;
   final BoxFit fit;
   final double scale;
   final double alignmentX;
@@ -689,8 +692,9 @@ class ProfileMediaView extends StatelessWidget {
         ),
       );
     } else {
-      child = Image.file(
-        File(path),
+      final provider = imageProvider ?? FileImage(File(path));
+      child = Image(
+        image: provider,
         fit: fit,
         alignment: Alignment(
           alignmentX.clamp(-1.0, 1.0).toDouble(),
@@ -698,6 +702,10 @@ class ProfileMediaView extends StatelessWidget {
         ),
         gaplessPlayback: true,
         filterQuality: FilterQuality.medium,
+        frameBuilder: (context, imageChild, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded || frame != null) return imageChild;
+          return _fallback(context);
+        },
         errorBuilder: (_, __, ___) => _fallback(context),
       );
     }

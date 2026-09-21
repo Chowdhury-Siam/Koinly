@@ -172,7 +172,7 @@ class KoinlyDatabase {
     final path = p.join(dir, 'koinly_flutter.db');
     _db = await sql.openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seed(database);
@@ -181,11 +181,13 @@ class KoinlyDatabase {
         await _createSchema(database);
         await _ensureTransactionMetadataColumns(database);
         await _ensureSubscriptionColumns(database);
+        await _ensurePlannedPurchaseColumns(database);
       },
       onOpen: (database) async {
         await _createSchema(database);
         await _ensureTransactionMetadataColumns(database);
         await _ensureSubscriptionColumns(database);
+        await _ensurePlannedPurchaseColumns(database);
       },
     );
     return _db!;
@@ -223,6 +225,7 @@ class KoinlyDatabase {
         name TEXT NOT NULL,
         amount REAL NOT NULL,
         category_id TEXT NOT NULL,
+        reminder_on INTEGER,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
       )
@@ -387,6 +390,15 @@ class KoinlyDatabase {
     await database.execute('CREATE INDEX IF NOT EXISTS idx_loan_contacts_name ON loan_contacts(name COLLATE NOCASE)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_transactions_linked_entity ON transactions(linked_entity_type, linked_entity_id)');
     await database.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_next_due ON subscriptions(next_due_on)');
+  }
+
+  Future<void> _ensurePlannedPurchaseColumns(sql.Database database) async {
+    final columns = (await database.rawQuery('PRAGMA table_info(planned_purchases)'))
+        .map((row) => row['name']?.toString() ?? '')
+        .toSet();
+    if (!columns.contains('reminder_on')) {
+      await database.execute('ALTER TABLE planned_purchases ADD COLUMN reminder_on INTEGER');
+    }
   }
 
   Future<void> _ensureSubscriptionColumns(sql.Database database) async {
@@ -1804,6 +1816,10 @@ class AppController extends ChangeNotifier {
   double profileMediaAlignmentY = 0.0;
   String profileMediaRemoteVersion = '';
   int profileMediaRemoteUpdatedAt = 0;
+  ImageProvider? profileMediaAvatarImageProvider;
+  ImageStream? _profileMediaAvatarImageStream;
+  ImageStreamListener? _profileMediaAvatarImageListener;
+  String _profileMediaAvatarImagePath = '';
   bool profileMediaCloudUploadPending = false;
   bool profileMediaCloudFramingPending = false;
   bool profileMediaCloudDeletePending = false;
@@ -2168,6 +2184,7 @@ class AppController extends ChangeNotifier {
       await sharedPreferences.remove('profileMediaAlignmentX');
       await sharedPreferences.remove('profileMediaAlignmentY');
     }
+    _primeProfileMediaAvatarImage();
     // Removed profile/savings fields are explicitly purged so old backups or
     // cloud preference payloads cannot bring the retired feature back.
     final legacyProfilePrefs = await prefs.prefs;
@@ -2978,6 +2995,26 @@ class AppController extends ChangeNotifier {
     if (!cloudSyncEnabled) return 'Sign in required';
     if (cloudSyncLastAt == null) return 'Signed in • Not synced yet';
     return 'Synced • ${DateFormat('yyyy-MM-dd HH:mm').format(cloudSyncLastAt!.toLocal())}';
+  }
+
+  String get cloudflareWorkerDisplayName {
+    final rawUrl = selfHostedSyncApiBaseUrl.trim().isNotEmpty
+        ? selfHostedSyncApiBaseUrl.trim()
+        : cloudSyncApiBaseUrl.trim();
+    final uri = Uri.tryParse(rawUrl);
+    final host = uri?.host.trim() ?? '';
+    if (host.isEmpty) return 'Cloudflare Worker';
+
+    final normalizedHost = host.toLowerCase();
+    if (normalizedHost.endsWith('.workers.dev')) {
+      final labels = host.split('.');
+      if (labels.isNotEmpty && labels.first.trim().isNotEmpty) {
+        return labels.first.trim();
+      }
+    }
+    // Custom Worker domains do not expose the underlying Cloudflare script
+    // name, so show the configured host rather than inventing one.
+    return host;
   }
 
   bool get cloudSyncApprovalRequired => cloudSyncErrorCode == 'SYNC_APPROVAL_REQUIRED';
@@ -4033,16 +4070,20 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> logoutSyncAccount() async {
+  Future<void> logoutSyncAccount({bool keepLocalData = true}) async {
     syncAuthBusy = true;
     notifyListeners();
     try {
       if (syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty && cloudSyncApiBaseUrl.isNotEmpty) {
+        // The Worker logout endpoint revokes only this refresh token. It never
+        // deletes the user's cloud rows, so either local sign-out choice keeps
+        // the server-side account data safe.
         await KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl).logout(accessToken: syncAccessToken, refreshToken: syncRefreshToken);
       }
     } catch (_) {
-      // Local logout should still clear this device even if the server is offline.
+      // Local logout should still complete even if the Worker is offline.
     }
+
     await secureCredentials.clearAccountTokens();
     syncAccessToken = '';
     syncRefreshToken = '';
@@ -4050,18 +4091,62 @@ class AppController extends ChangeNotifier {
     cloudSyncEnabled = false;
     newSyncAccountAwaitingSetupChoice = false;
     syncStatus = 'Offline';
+    cloudSyncLastAt = null;
+    cloudSyncError = null;
+    cloudSyncErrorCode = null;
     await prefs.setString('syncAccountUsername', '');
     await prefs.setBool('cloudSyncEnabled', false);
     await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
+    await prefs.setString('cloudSyncLastAt', '');
+
+    // Stop every sync path before optional local deletion. This is important:
+    // choosing "No, clear local data" must never upload delete operations to
+    // the Worker. The cloud copy remains untouched and can be restored later.
+    _stopCloudAutoPull();
+    _cloudSyncDebounce?.cancel();
+    _cloudSyncRetryTimer?.cancel();
+    await _setCloudSyncPending(false);
+
+    if (!keepLocalData) {
+      await _clearSignedOutCloudAccountLocalData();
+    }
+
     // Entity versions/cursors belong to one authenticated backend/account.
-    // Never carry them into another self-hosted account; finance rows
-    // stay local and will be merged/adopted again after the next login.
+    // Never carry them into another self-hosted account. When local finance
+    // data is kept, it can be merged/adopted again after the next login.
     await database.resetLocalSyncTracking();
     await database.writeSyncState('serverCursor', '0');
-    await _setCloudSyncPending(false);
-    _stopCloudAutoPull();
     syncAuthBusy = false;
     notifyListeners();
+  }
+
+  Future<void> _clearSignedOutCloudAccountLocalData() async {
+    // Clear only the account's local copy. Do not call any cloud delete API and
+    // do not remove the validated Worker URL/deployment configuration, so the
+    // user can sign back in and restore the cloud copy at any time.
+    await database.clearFinanceDataForRemoteLogin();
+
+    filterAccountIds = [];
+    filterCategoryIds = [];
+    filterTypes = [];
+    defaultAccountId = null;
+    defaultExpenseCategoryId = null;
+    defaultIncomeCategoryId = null;
+    profileDisplayName = '';
+
+    await prefs.setStringList('filterAccountIds', const []);
+    await prefs.setStringList('filterCategoryIds', const []);
+    await prefs.setStringList('filterTypes', const []);
+    await prefs.setString('defaultAccountId', '');
+    await prefs.setString('defaultExpenseCategoryId', '');
+    await prefs.setString('defaultIncomeCategoryId', '');
+    await prefs.setString('profileDisplayName', '');
+
+    // Profile media is account data too. Clear only the local cached copy and
+    // remote-tracking metadata after authentication is gone, which guarantees
+    // this cannot be interpreted as a cloud deletion request.
+    await _clearLocalProfileMedia(clearRemoteTracking: true);
+    await reload(queueSync: false);
   }
 
   Future<void> _saveSyncSession(SyncAuthSession session) async {
@@ -4640,6 +4725,7 @@ class AppController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _releaseProfileMediaAvatarImage();
     _cloudSyncDebounce?.cancel();
     _cloudSyncRetryTimer?.cancel();
     _cloudSyncAutoPullTimer?.cancel();
@@ -4741,6 +4827,33 @@ class AppController extends ChangeNotifier {
     return deletedStarterAccountIds.isNotEmpty;
   }
 
+  bool _plannedReminderRefreshRunning = false;
+  bool _plannedReminderRefreshRequested = false;
+
+  Future<void> refreshPlannedPurchaseReminders() async {
+    if (!kSupportsLocalNotifications) return;
+    _plannedReminderRefreshRequested = true;
+    if (_plannedReminderRefreshRunning) return;
+    _plannedReminderRefreshRunning = true;
+    try {
+      do {
+        _plannedReminderRefreshRequested = false;
+        final snapshot = plannedPurchases
+            .where((item) => item.reminderOn != null)
+            .map((item) => PlannedPurchaseReminder(
+                  id: item.id,
+                  name: item.name,
+                  reminderOn: item.reminderOn!,
+                  amountText: format(item.amount),
+                ))
+            .toList(growable: false);
+        await ReminderService.schedulePlannedPurchaseReminders(snapshot);
+      } while (_plannedReminderRefreshRequested);
+    } finally {
+      _plannedReminderRefreshRunning = false;
+    }
+  }
+
   Future<void> reload({bool queueSync = false}) async {
     final categoryMerge = await _repairDuplicateCategories();
     if (categoryMerge.hasChanges) queueSync = true;
@@ -4762,6 +4875,7 @@ class AppController extends ChangeNotifier {
     defaultIncomeCategoryId ??= categories.where((c) => c.type == CategoryType.income).firstOrNull?.id;
     notifyListeners();
     unawaited(refreshLoanReminders());
+    unawaited(refreshPlannedPurchaseReminders());
     if (queueSync) queueCloudSync();
   }
 
@@ -4886,6 +5000,57 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _releaseProfileMediaAvatarImage({bool evict = false}) {
+    final stream = _profileMediaAvatarImageStream;
+    final listener = _profileMediaAvatarImageListener;
+    if (stream != null && listener != null) {
+      stream.removeListener(listener);
+    }
+    final provider = profileMediaAvatarImageProvider;
+    profileMediaAvatarImageProvider = null;
+    _profileMediaAvatarImageStream = null;
+    _profileMediaAvatarImageListener = null;
+    _profileMediaAvatarImagePath = '';
+    if (evict && provider != null) {
+      unawaited(provider.evict());
+    }
+  }
+
+  void _primeProfileMediaAvatarImage() {
+    final path = profileMediaPath.trim();
+    if (profileMediaKind != ProfileMediaKind.photo || path.isEmpty || !File(path).existsSync()) {
+      _releaseProfileMediaAvatarImage();
+      return;
+    }
+    if (_profileMediaAvatarImagePath == path && profileMediaAvatarImageProvider != null) return;
+
+    final candidate = FileImage(File(path));
+    final stream = candidate.resolve(const ImageConfiguration());
+    late final ImageStreamListener listener;
+    listener = ImageStreamListener(
+      (image, synchronousCall) {
+        if (profileMediaPath != path || profileMediaKind != ProfileMediaKind.photo) {
+          stream.removeListener(listener);
+          return;
+        }
+        final previousStream = _profileMediaAvatarImageStream;
+        final previousListener = _profileMediaAvatarImageListener;
+        if (previousStream != null && previousListener != null) {
+          previousStream.removeListener(previousListener);
+        }
+        profileMediaAvatarImageProvider = candidate;
+        _profileMediaAvatarImageStream = stream;
+        _profileMediaAvatarImageListener = listener;
+        _profileMediaAvatarImagePath = path;
+        notifyListeners();
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        stream.removeListener(listener);
+      },
+    );
+    stream.addListener(listener);
+  }
+
   Future<void> saveUserProfile({
     required String displayName,
   }) async {
@@ -4925,6 +5090,7 @@ class AppController extends ChangeNotifier {
     await prefs.setString('profileMediaAlignmentX', '0.0');
     await prefs.setString('profileMediaAlignmentY', '0.0');
     await _persistProfileMediaCloudState();
+    _primeProfileMediaAvatarImage();
     notifyListeners();
     if (_hasConfiguredSyncTarget()) {
       await _setCloudSyncPending(true);
@@ -4979,6 +5145,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> _clearLocalProfileMedia({required bool clearRemoteTracking}) async {
     final previousPath = profileMediaPath;
+    _releaseProfileMediaAvatarImage(evict: true);
     profileMediaPath = '';
     profileMediaOriginalName = '';
     profileMediaKind = null;
@@ -5222,6 +5389,7 @@ class AppController extends ChangeNotifier {
       await prefs.setString('profileMediaAlignmentX', profileMediaAlignmentX.toStringAsFixed(4));
       await prefs.setString('profileMediaAlignmentY', profileMediaAlignmentY.toStringAsFixed(4));
       await _persistProfileMediaCloudState();
+      _primeProfileMediaAvatarImage();
       notifyListeners();
     } finally {
       if (sink != null) await sink.close();
@@ -5563,12 +5731,27 @@ class AppController extends ChangeNotifier {
   Future<void> savePlannedPurchase(PlannedPurchase item) async {
     await database.upsertPlannedPurchase(item);
     await database.enqueueTableRow('planned_purchases', item.id);
+    if (kSupportsLocalNotifications) {
+      if (item.reminderOn?.isAfter(DateTime.now()) == true) {
+        await ReminderService.schedulePlannedPurchaseReminder(
+          PlannedPurchaseReminder(
+            id: item.id,
+            name: item.name,
+            reminderOn: item.reminderOn!,
+            amountText: format(item.amount),
+          ),
+        );
+      } else {
+        await ReminderService.cancelPlannedPurchaseReminder(item.id);
+      }
+    }
     await reload(queueSync: true);
   }
 
   Future<void> deletePlannedPurchase(String id) async {
     await database.enqueueDelete('planned_purchases', id);
     await database.deletePlannedPurchase(id);
+    await ReminderService.cancelPlannedPurchaseReminder(id);
     await reload(queueSync: true);
   }
 
@@ -5616,6 +5799,7 @@ class AppController extends ChangeNotifier {
     await database.enqueueTableRow('transactions', transaction.id);
     await database.enqueueDelete('planned_purchases', item.id);
     await database.enqueueRowsForTable('accounts');
+    await ReminderService.cancelPlannedPurchaseReminder(item.id);
     await reload(queueSync: true);
   }
 
@@ -12162,6 +12346,30 @@ class PlannedPurchaseTile extends StatelessWidget {
                             fontWeight: FontWeight.w700,
                           ),
                     ),
+                    if (item.reminderOn?.isAfter(DateTime.now()) == true) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_active_outlined,
+                            size: 15,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              'Reminder • ${DateFormat('MMM d, yyyy • h:mm a').format(item.reminderOn!)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -12229,7 +12437,7 @@ Future<void> showPlannedPurchaseEditor(
   await showKoinlyPopup<void>(
     context,
     maxWidth: 560,
-    maxHeight: 600,
+    maxHeight: 760,
     child: PlannedPurchaseEditor(item: item),
   );
 }
@@ -12247,21 +12455,60 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
   final name = TextEditingController();
   final amount = TextEditingController();
   String? categoryId;
+  bool reminderEnabled = false;
+  late DateTime reminderAt;
 
   @override
   void initState() {
     super.initState();
     final state = context.read<AppController>();
     final item = widget.item;
+    final now = DateTime.now();
     if (item != null) {
       name.text = item.name;
       amount.text = item.amount.toStringAsFixed(2);
       categoryId = item.categoryId;
+      reminderEnabled = item.reminderOn?.isAfter(now) == true;
+      reminderAt = reminderEnabled ? item.reminderOn! : now.add(const Duration(days: 1));
     } else {
       amount.text = '';
       categoryId = state.defaultExpenseCategoryId ??
           state.categories.where((category) => category.type == CategoryType.expense).firstOrNull?.id;
+      final tomorrow = now.add(const Duration(days: 1));
+      reminderAt = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, now.hour, now.minute);
     }
+  }
+
+  Future<void> _setReminderEnabled(bool value) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (value && kSupportsLocalNotifications) {
+      await ReminderService.requestNotificationPermission();
+      await ReminderService.requestExactAlarmPermission();
+    }
+    if (!mounted) return;
+    if (value && !reminderAt.isAfter(DateTime.now())) {
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      reminderAt = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, tomorrow.hour, tomorrow.minute);
+    }
+    setState(() => reminderEnabled = value);
+  }
+
+  Future<void> _pickReminderDate() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await pickDate(context, reminderAt);
+    if (picked == null || !mounted) return;
+    setState(() {
+      reminderAt = DateTime(picked.year, picked.month, picked.day, reminderAt.hour, reminderAt.minute);
+    });
+  }
+
+  Future<void> _pickReminderTime() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final picked = await pickTime(context, TimeOfDay.fromDateTime(reminderAt));
+    if (picked == null || !mounted) return;
+    setState(() {
+      reminderAt = DateTime(reminderAt.year, reminderAt.month, reminderAt.day, picked.hour, picked.minute);
+    });
   }
 
   @override
@@ -12342,6 +12589,52 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
                 if (selected != null && mounted) setState(() => categoryId = selected);
               },
             ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(.34),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_outlined, color: kSleekAccent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Reminder',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                  Switch(
+                    value: reminderEnabled,
+                    onChanged: _setReminderEnabled,
+                  ),
+                ],
+              ),
+            ),
+            if (reminderEnabled) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickReminderDate,
+                      icon: const Icon(Icons.calendar_month_rounded),
+                      label: Text(DateFormat('MMM d, yyyy').format(reminderAt)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickReminderTime,
+                      icon: const Icon(Icons.schedule_rounded),
+                      label: Text(DateFormat('h:mm a').format(reminderAt)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 18),
             Row(
               children: [
@@ -12367,12 +12660,16 @@ class _PlannedPurchaseEditorState extends State<PlannedPurchaseEditor> {
                       if (categoryId == null || !expenseCategories.any((category) => category.id == categoryId)) {
                         return showSnack(context, 'Choose an expense category.');
                       }
+                      if (reminderEnabled && !reminderAt.isAfter(DateTime.now())) {
+                        return showSnack(context, 'Choose a future reminder date and time.');
+                      }
                       final now = DateTime.now();
                       final planned = PlannedPurchase(
                         id: widget.item?.id ?? _uuid.v4(),
                         name: itemName,
                         amount: price,
                         categoryId: categoryId!,
+                        reminderOn: reminderEnabled ? reminderAt : null,
                         createdOn: widget.item?.createdOn ?? now,
                         updatedOn: now,
                       );
@@ -16838,7 +17135,7 @@ class SettingsScreen extends StatelessWidget {
             SettingsTile(icon: Icons.notifications_active_rounded, title: 'Reminder notification', subtitle: state.reminderEnabled ? 'Daily at ${state.reminderTime.format(context)}' : 'Disabled', color: '#FBC879', onTap: () => showReminderSheet(context)),
             SettingsTile(icon: Icons.filter_alt_rounded, title: 'Default date filter', subtitle: _dateRangeLabel(state.dateRangeType), color: '#B4A5FF', onTap: () => showDateRangeSheet(context)),
             const SectionHeader('Data & cloud'),
-            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudSyncStatusText} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
+            SettingsTile(icon: Icons.cloud_sync_rounded, title: 'Account & sync', subtitle: state.cloudSyncEnabled ? '${state.cloudflareWorkerDisplayName} • ${state.syncAccountUsername}' : 'Sign in for multi-device sync', color: kSleekAccentHex, onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MultiDeviceSyncScreen()))),
             if (state.selfHostedSyncEndpointValidated && state.selfHostedSyncApiBaseUrl.trim().isNotEmpty)
               SettingsTile(
                 icon: Icons.manage_accounts_rounded,
@@ -18002,6 +18299,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
   bool _obscurePassword = true;
   bool _endpointBusy = false;
   late bool _registerMode;
+  late bool _workerCardExpanded;
 
   @override
   void initState() {
@@ -18011,6 +18309,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     _passwordController = TextEditingController();
     _workerUrlController = TextEditingController(text: state.selfHostedSyncApiBaseUrl);
     _registerMode = widget.initialRegisterMode;
+    // Once an account is already synchronized, keep the deployment controls
+    // tucked behind the app-bar button. Signed-out users still see the card so
+    // they can configure a Worker before logging in.
+    _workerCardExpanded = !state.cloudSyncEnabled;
   }
 
   @override
@@ -18104,6 +18406,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
       final deploymentValuesRestored =
           state.workerAutoUpdateStatus.contains('Deployment values restored');
       _passwordController.clear();
+      setState(() => _workerCardExpanded = false);
       showSnack(
         context,
         register
@@ -18202,6 +18505,45 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     showSnack(context, state.cloudSyncError == null ? successMessage : state.cloudSyncError!);
   }
 
+  Future<void> _confirmSignOut() async {
+    final state = context.read<AppController>();
+    final keepLocalData = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Keep cloud data on this device?'),
+        content: const Text(
+          'Do you want to keep this cloud account’s data in Koinly’s local store after signing out? '
+          'Your data in the cloud will remain safe either way.',
+        ),
+        actions: [
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(foregroundColor: kSleekExpense),
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('No, clear local data'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Yes, keep data'),
+          ),
+        ],
+      ),
+    );
+    if (keepLocalData == null || !mounted) return;
+
+    await state.logoutSyncAccount(keepLocalData: keepLocalData);
+    if (!mounted) return;
+    _usernameController.clear();
+    _passwordController.clear();
+    setState(() => _workerCardExpanded = true);
+    showSnack(
+      context,
+      keepLocalData
+          ? 'Signed out. Cloud account data is still stored on this device.'
+          : 'Signed out. Local account data was cleared; cloud data remains safe.',
+    );
+  }
+
   bool _isWorkerActive(AppController state) {
     final activeUrl = CloudSyncService.normalizeApiBaseUrl(state.cloudSyncApiBaseUrl);
     final selectedUrl = CloudSyncService.normalizeApiBaseUrl(_workerUrlController.text);
@@ -18218,73 +18560,116 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     return PageScaffold(
       title: 'Account & sync',
       subtitle: signedIn ? state.syncAccountUsername : null,
+      actions: signedIn
+          ? [
+              IconButton(
+                tooltip: _workerCardExpanded ? 'Hide Worker settings' : 'Show Worker settings',
+                onPressed: () => setState(() => _workerCardExpanded = !_workerCardExpanded),
+                icon: AnimatedRotation(
+                  turns: _workerCardExpanded ? .5 : 0,
+                  duration: const Duration(milliseconds: 450),
+                  curve: Curves.easeInOutCubic,
+                  child: const Icon(Icons.cloud_sync_rounded),
+                ),
+              ),
+            ]
+          : const [],
       child: ResponsiveContent(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ExpressiveCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Self-hosted Sync Worker', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 12),
-                  TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
-                    onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                    controller: _workerUrlController,
-                    readOnly: busy,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(
-                      labelText: 'Cloudflare Worker URL',
-                      hintText: 'https://my-sync.example.workers.dev',
-                      prefixIcon: Icon(Icons.link_rounded),
-                    ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 520),
+              reverseDuration: const Duration(milliseconds: 460),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final curved = CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeInOutCubic,
+                );
+                return ClipRect(
+                  child: SizeTransition(
+                    sizeFactor: curved,
+                    axisAlignment: -1,
+                    child: FadeTransition(opacity: curved, child: child),
                   ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : _saveSyncEndpoint,
-                    icon: _endpointBusy
-                        ? const KoinlyInlineLoader(size: 18)
-                        : const Icon(Icons.verified_rounded),
-                    label: const Text('Validate and use Worker'),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : _openWorkerDeployment,
-                    icon: state.workerAutoUpdateBusy
-                        ? const KoinlyInlineLoader(size: 18)
-                        : const Icon(Icons.rocket_launch_rounded),
-                    label: Text(state.workerAutoUpdateBusy ? 'Updating Worker…' : 'Deploy Database'),
-                  ),
-                  if (state.workerAutoUpdateStatus.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      state.workerAutoUpdateStatus,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                  if (state.workerAutoUpdateError != null && state.workerAutoUpdateError!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      state.workerAutoUpdateError!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: state.workerAutoUpdateBusy ? null : () => unawaited(state.checkForAutomaticWorkerUpdate()),
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Retry Worker update'),
+                );
+              },
+              child: (!signedIn || _workerCardExpanded)
+                  ? Column(
+                      key: const ValueKey('sync-worker-card-visible'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                    ExpressiveCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text('Self-hosted Sync Worker', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 12),
+                          TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
+                            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                            controller: _workerUrlController,
+                            readOnly: busy,
+                            keyboardType: TextInputType.url,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            onChanged: (_) => setState(() {}),
+                            decoration: const InputDecoration(
+                              labelText: 'Cloudflare Worker URL',
+                              hintText: 'https://my-sync.example.workers.dev',
+                              prefixIcon: Icon(Icons.link_rounded),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: busy ? null : _saveSyncEndpoint,
+                            icon: _endpointBusy
+                                ? const KoinlyInlineLoader(size: 18)
+                                : const Icon(Icons.verified_rounded),
+                            label: const Text('Validate and use Worker'),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            onPressed: busy ? null : _openWorkerDeployment,
+                            icon: state.workerAutoUpdateBusy
+                                ? const KoinlyInlineLoader(size: 18)
+                                : const Icon(Icons.rocket_launch_rounded),
+                            label: Text(state.workerAutoUpdateBusy ? 'Updating Worker…' : 'Deploy Database'),
+                          ),
+                          if (state.workerAutoUpdateStatus.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              state.workerAutoUpdateStatus,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekAccent, fontWeight: FontWeight.w800),
+                            ),
+                          ],
+                          if (state.workerAutoUpdateError != null && state.workerAutoUpdateError!.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              state.workerAutoUpdateError!,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: kSleekExpense, fontWeight: FontWeight.w800),
+                            ),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: state.workerAutoUpdateBusy ? null : () => unawaited(state.checkForAutomaticWorkerUpdate()),
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry Worker update'),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  ],
-                ],
-              ),
+                        const SizedBox(height: 12),
+                      ],
+                    )
+                  : const SizedBox(
+                      key: ValueKey('sync-worker-card-hidden'),
+                    ),
             ),
-            const SizedBox(height: 12),
             ExpressiveCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -18306,7 +18691,10 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(state.cloudSyncStatusText, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                            Text(
+                              signedIn ? state.cloudflareWorkerDisplayName : state.cloudSyncStatusText,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                            ),
                           ],
                         ),
                       ),
@@ -18381,7 +18769,7 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
-                    onPressed: busy ? null : () => state.logoutSyncAccount(),
+                    onPressed: busy ? null : _confirmSignOut,
                     icon: const Icon(Icons.logout_rounded),
                     label: const Text('Sign out'),
                   ),

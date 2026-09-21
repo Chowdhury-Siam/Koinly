@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+      Android status-bar notification icons must be a single-color silhouette.
+      Keep this resource separate from the full-color launcher/adaptive icon.
+    -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5,3H9V10.15L15.65,3H21L13.15,11.4L21.35,21H16L10.35,14.25L9,15.7V21H5Z" />
+</vector>

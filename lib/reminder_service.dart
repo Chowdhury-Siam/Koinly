@@ -10,6 +10,20 @@ import 'package:timezone/timezone.dart' as tz;
 import 'android_background_permission_service.dart';
 import 'app_config.dart';
 
+class PlannedPurchaseReminder {
+  const PlannedPurchaseReminder({
+    required this.id,
+    required this.name,
+    required this.reminderOn,
+    required this.amountText,
+  });
+
+  final String id;
+  final String name;
+  final DateTime reminderOn;
+  final String amountText;
+}
+
 class LoanDueReminder {
   const LoanDueReminder({
     required this.id,
@@ -34,7 +48,7 @@ class ReminderService {
     if (!kSupportsLocalNotifications) return;
     await _configureLocalTimeZone();
     if (!_initialized) {
-      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const android = AndroidInitializationSettings('ic_stat_koinly');
       const settings = InitializationSettings(android: android);
       await _notifications.initialize(settings);
       _initialized = true;
@@ -129,6 +143,7 @@ class ReminderService {
         'daily_expense_reminder',
         'Daily expense reminder',
         channelDescription: 'Reminder to add daily expenses.',
+        icon: 'ic_stat_koinly',
         importance: Importance.high,
         priority: Priority.high,
       ),
@@ -155,6 +170,73 @@ class ReminderService {
     await _notifications.cancel(501);
   }
 
+  static int _stablePlannedPurchaseNotificationId(String id) {
+    final bytes = sha256.convert(utf8.encode('plan:$id')).bytes;
+    final value = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+    return 1200000000 + (value & 0x1FFFFFFF);
+  }
+
+  static const NotificationDetails _plannedPurchaseNotificationDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'planned_purchase_reminder',
+      'Plan reminders',
+      channelDescription: 'Optional reminders for items saved in Plan.',
+      icon: 'ic_stat_koinly',
+      importance: Importance.high,
+      priority: Priority.high,
+    ),
+  );
+
+  static Future<void> _schedulePlannedPurchaseReminderInitialized(PlannedPurchaseReminder reminder) async {
+    final scheduled = tz.TZDateTime(
+      tz.local,
+      reminder.reminderOn.year,
+      reminder.reminderOn.month,
+      reminder.reminderOn.day,
+      reminder.reminderOn.hour,
+      reminder.reminderOn.minute,
+    );
+    if (!scheduled.isAfter(tz.TZDateTime.now(tz.local))) return;
+    await _zonedScheduleWithExactFallback(
+      id: _stablePlannedPurchaseNotificationId(reminder.id),
+      title: 'Plan reminder: ${reminder.name}',
+      body: 'Planned price: ${reminder.amountText}',
+      scheduledDate: scheduled,
+      details: _plannedPurchaseNotificationDetails,
+      payload: 'plan:${reminder.id}',
+    );
+  }
+
+  static Future<void> schedulePlannedPurchaseReminder(PlannedPurchaseReminder reminder) async {
+    if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
+    await _notifications.cancel(_stablePlannedPurchaseNotificationId(reminder.id));
+    await _schedulePlannedPurchaseReminderInitialized(reminder);
+  }
+
+  static Future<void> schedulePlannedPurchaseReminders(List<PlannedPurchaseReminder> reminders) async {
+    if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
+    await cancelPlannedPurchaseReminders();
+    for (final reminder in reminders) {
+      await _schedulePlannedPurchaseReminderInitialized(reminder);
+    }
+  }
+
+  static Future<void> cancelPlannedPurchaseReminder(String id) async {
+    if (!kSupportsLocalNotifications) return;
+    await ensureInitialized(requestPermission: false);
+    await _notifications.cancel(_stablePlannedPurchaseNotificationId(id));
+  }
+
+  static Future<void> cancelPlannedPurchaseReminders() async {
+    if (!kSupportsLocalNotifications) return;
+    final pending = await _notifications.pendingNotificationRequests();
+    for (final request in pending.where((item) => item.payload?.startsWith('plan:') == true)) {
+      await _notifications.cancel(request.id);
+    }
+  }
+
   static int _stableLoanNotificationId(String id) {
     final bytes = sha256.convert(utf8.encode(id)).bytes;
     final value = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
@@ -171,6 +253,7 @@ class ReminderService {
         'loan_due_reminder',
         'Loan due reminders',
         channelDescription: 'Reminders for upcoming lending and borrowing due dates.',
+        icon: 'ic_stat_koinly',
         importance: Importance.high,
         priority: Priority.high,
       ),
@@ -219,6 +302,7 @@ class ReminderService {
         'koinly_app_updates',
         'Koinly updates',
         channelDescription: 'Notifications when a newer Koinly release is available.',
+        icon: 'ic_stat_koinly',
         importance: Importance.high,
         priority: Priority.high,
       ),

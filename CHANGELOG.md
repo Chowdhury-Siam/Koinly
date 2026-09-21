@@ -1,3 +1,34 @@
+## [1.0.1178] - 2026-09-21
+
+- Collapsed the Self-hosted Sync Worker controls by default for signed-in accounts and added an animated top-right Worker settings toggle.
+- Replaced the signed-in sync timestamp card title with the configured Cloudflare Worker name (or custom Worker host).
+- Added a centered sign-out choice to keep the cloud account's data locally or clear only the device copy; either option leaves all cloud data untouched.
+- Clearing local data after sign-out also removes local profile media, filters, defaults, and finance rows without queuing cloud deletions.
+- Synchronized application and bundled Worker version metadata to `1.0.1178+222`.
+
+## [1.0.1177] - 2026-09-21
+
+- Added optional reminders to Plan items. Users can enable a reminder while adding or editing a plan and choose its date and time.
+- Plan reminder timestamps are stored with the planned purchase, included in backup/cloud synchronization, restored on existing devices, and re-scheduled after sync or app restart.
+- Plan cards show the configured reminder, and buying/deleting a plan automatically removes its pending notification.
+- Added a dedicated Android notification channel for Plan reminders with exact-alarm fallback behavior.
+- Migrated existing databases safely with a nullable `reminder_on` column; existing Plan items remain unchanged with reminders off.
+- Synchronized application and bundled Worker version metadata to `1.0.1177+221`.
+
+## [1.0.1176] - 2026-09-21
+
+- Fixed profile-photo flashing when returning to Categories by keeping the decoded static avatar image live in Flutter's image cache across tab rebuilds.
+- Profile photo widgets now render the existing fallback avatar while an image frame is decoding instead of exposing an empty circular field.
+- Profile-media replacement and cloud download prime the new avatar before switching the cached provider, preventing navigation and sync refreshes from clearing the visible photo first.
+- Synchronized application and bundled Worker version metadata to `1.0.1176+220`.
+
+## [1.0.1175] - 2026-09-21
+
+- Fixed the Android status-bar notification icon appearing as a solid white circle by adding a dedicated monochrome Koinly `K` notification icon.
+- Applied the status icon to daily expense reminders, loan reminders, Flutter update notifications, native background update notifications, and Android default notification metadata.
+- Kept the full-color launcher/adaptive icon unchanged; only Android's small notification icon now uses the required transparent monochrome resource.
+- Synchronized application and bundled Worker version metadata to `1.0.1175+219`.
+
 ## [1.0.1174] - 2026-09-20
 
 - Added a persistent Transaction sort control with newest/oldest, category, amount, and title ordering. Changing the sort rebuilds a fresh list immediately, so existing transactions are reorganized without rewriting financial data.

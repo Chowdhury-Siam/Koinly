@@ -265,6 +265,7 @@ class PlannedPurchase {
     required this.name,
     required this.amount,
     required this.categoryId,
+    this.reminderOn,
     required this.createdOn,
     required this.updatedOn,
   });
@@ -273,6 +274,7 @@ class PlannedPurchase {
   final String name;
   final double amount;
   final String categoryId;
+  final DateTime? reminderOn;
   final DateTime createdOn;
   final DateTime updatedOn;
 
@@ -281,6 +283,8 @@ class PlannedPurchase {
     String? name,
     double? amount,
     String? categoryId,
+    DateTime? reminderOn,
+    bool clearReminder = false,
     DateTime? createdOn,
     DateTime? updatedOn,
   }) => PlannedPurchase(
@@ -288,6 +292,7 @@ class PlannedPurchase {
         name: name ?? this.name,
         amount: amount ?? this.amount,
         categoryId: categoryId ?? this.categoryId,
+        reminderOn: clearReminder ? null : reminderOn ?? this.reminderOn,
         createdOn: createdOn ?? this.createdOn,
         updatedOn: updatedOn ?? this.updatedOn,
       );
@@ -297,6 +302,7 @@ class PlannedPurchase {
         'name': name,
         'amount': amount,
         'category_id': categoryId,
+        'reminder_on': reminderOn == null ? null : dateToDb(reminderOn!),
         'created_on': dateToDb(createdOn),
         'updated_on': dateToDb(updatedOn),
       };
@@ -306,6 +312,7 @@ class PlannedPurchase {
         name: map['name'] as String? ?? '',
         amount: (map['amount'] as num? ?? 0).toDouble(),
         categoryId: map['category_id'] as String? ?? '',
+        reminderOn: nullableDateFromDb(map['reminder_on']),
         createdOn: dateFromDb(map['created_on']),
         updatedOn: dateFromDb(map['updated_on']),
       );

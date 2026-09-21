@@ -85,4 +85,23 @@ void main() {
     expect(source, contains("final now = DateTime.now();"));
     expect(source, contains("await txn.delete('planned_purchases'"));
   });
+  test('planned purchases support optional synchronized reminders', () {
+    final model = File('lib/models.dart').readAsStringSync();
+    final main = File('lib/main.dart').readAsStringSync();
+    final reminders = File('lib/reminder_service.dart').readAsStringSync();
+
+    expect(model, contains('final DateTime? reminderOn;'));
+    expect(model, contains("'reminder_on': reminderOn == null ? null : dateToDb(reminderOn!)"));
+    expect(model, contains("reminderOn: nullableDateFromDb(map['reminder_on'])"));
+    expect(main, contains('ALTER TABLE planned_purchases ADD COLUMN reminder_on INTEGER'));
+    expect(main, contains("'Reminder'"));
+    expect(main, contains('reminderOn: reminderEnabled ? reminderAt : null'));
+    expect(main, contains('unawaited(refreshPlannedPurchaseReminders())'));
+    expect(reminders, contains("'planned_purchase_reminder'"));
+    expect(reminders, contains("payload: 'plan:\${reminder.id}'"));
+    expect(reminders, contains("item.payload?.startsWith('plan:') == true"));
+    expect(main, contains('await ReminderService.cancelPlannedPurchaseReminder(item.id)'));
+    expect(main, contains('await ReminderService.schedulePlannedPurchaseReminder('));
+  });
+
 }

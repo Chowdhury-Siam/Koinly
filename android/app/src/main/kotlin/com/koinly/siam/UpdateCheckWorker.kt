@@ -196,7 +196,7 @@ class UpdateCheckWorker(
             "${release.name} is ready. Open Koinly to review what changed."
         }
         val notification = NotificationCompat.Builder(applicationContext, updateChannelId)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_stat_koinly)
             .setContentTitle("Koinly ${release.version} is available")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
