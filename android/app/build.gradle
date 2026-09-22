@@ -22,7 +22,7 @@ android {
         minSdk = 23
         targetSdk = 36
         versionCode = 223
-        versionName = "1.0.1180"
+        versionName = "1.0.1179"
         multiDexEnabled true
     }
 

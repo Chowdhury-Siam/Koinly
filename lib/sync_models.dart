@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class CloudSyncException implements Exception {
   const CloudSyncException(this.message, {this.code});
 
@@ -26,6 +28,56 @@ class SyncAuthSession {
   final String userId;
   final String deviceId;
   final DateTime accessExpiresAt;
+}
+
+class SyncAccountProfile {
+  const SyncAccountProfile({
+    required this.apiBaseUrl,
+    required this.username,
+    required this.deviceId,
+    required this.updatedAt,
+  });
+
+  final String apiBaseUrl;
+  final String username;
+  final String deviceId;
+  final DateTime updatedAt;
+
+  String get key => keyFor(apiBaseUrl: apiBaseUrl, username: username);
+
+  SyncAccountProfile copyWith({DateTime? updatedAt}) => SyncAccountProfile(
+        apiBaseUrl: apiBaseUrl,
+        username: username,
+        deviceId: deviceId,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+
+  static String keyFor({required String apiBaseUrl, required String username}) {
+    var url = apiBaseUrl.trim().toLowerCase();
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    final user = username.trim().toLowerCase();
+    return base64Url.encode(utf8.encode('$url\n$user')).replaceAll('=', '');
+  }
+
+  Map<String, dynamic> toJson() => {
+        'apiBaseUrl': apiBaseUrl,
+        'username': username,
+        'deviceId': deviceId,
+        'updatedAt': updatedAt.toUtc().toIso8601String(),
+      };
+
+  factory SyncAccountProfile.fromJson(Map<String, dynamic> data) {
+    final apiBaseUrl = data['apiBaseUrl']?.toString().trim() ?? '';
+    final username = data['username']?.toString().trim().toLowerCase() ?? '';
+    return SyncAccountProfile(
+      apiBaseUrl: apiBaseUrl,
+      username: username,
+      deviceId: data['deviceId']?.toString() ?? '',
+      updatedAt: DateTime.tryParse(data['updatedAt']?.toString() ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    );
+  }
 }
 
 enum TelegramBackupFrequency { daily, weekly, monthly }

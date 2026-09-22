@@ -1912,8 +1912,8 @@ class AppController extends ChangeNotifier {
   String syncAccountUsername = '';
   String syncAccessToken = '';
   String syncRefreshToken = '';
+  List<SyncAccountProfile> syncAccountProfiles = [];
   String syncDeviceId = '';
-  List<SavedSyncAccount> syncAccountConnections = const [];
   String syncStatus = 'Offline';
   bool syncAuthBusy = false;
   bool workerAutoUpdateBusy = false;
@@ -1925,6 +1925,7 @@ class AppController extends ChangeNotifier {
   bool automaticUpdatePopupEnabled = true;
 
   bool get cloudSyncOperationBusy => _syncInProgress || cloudSyncBusy || syncAuthBusy;
+  List<SyncAccountProfile> get savedSyncAccountProfiles => List.unmodifiable(syncAccountProfiles);
   bool updateDownloadBusy = false;
   String updateStatusMessage = 'Not checked yet.';
   DateTime? updateLastCheckedAt;
@@ -2295,9 +2296,9 @@ class AppController extends ChangeNotifier {
       syncDeviceId = _uuid.v4();
       await prefs.setString('syncDeviceId', syncDeviceId);
     }
+    syncAccountProfiles = _decodeSyncAccountProfiles(await prefs.getString('syncAccountProfiles', ''));
     syncAccessToken = await secureCredentials.readAccessToken();
     syncRefreshToken = await secureCredentials.readRefreshToken();
-    syncAccountConnections = await secureCredentials.readSavedSyncAccounts();
     if (hadLegacyCustomSyncFlag && !legacyUsedSelfHostedSync && (syncAccessToken.isNotEmpty || syncRefreshToken.isNotEmpty)) {
       await secureCredentials.clearAccountTokens();
       syncAccessToken = '';
@@ -2309,8 +2310,17 @@ class AppController extends ChangeNotifier {
       await database.writeSyncState('serverCursor', '0');
     }
     cloudSyncEnabled = syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty && selfHostedSyncApiBaseUrl.isNotEmpty;
-    if (cloudSyncEnabled) {
-      await _rememberActiveSyncAccount();
+    if (cloudSyncEnabled && syncAccountUsername.trim().isNotEmpty) {
+      await _rememberSyncAccountProfile(
+        SyncAccountProfile(
+          apiBaseUrl: selfHostedSyncApiBaseUrl,
+          username: syncAccountUsername,
+          deviceId: syncDeviceId,
+          updatedAt: DateTime.now().toUtc(),
+        ),
+        accessToken: syncAccessToken,
+        refreshToken: syncRefreshToken,
+      );
     }
     final lastSyncRaw = await prefs.getString('cloudSyncLastAt', '');
     cloudSyncLastAt = lastSyncRaw.isEmpty ? null : DateTime.tryParse(lastSyncRaw);
@@ -3926,117 +3936,80 @@ class AppController extends ChangeNotifier {
         ));
   }
 
-  String _syncAccountConnectionKey({required String workerUrl, required String username}) =>
-      '${CloudSyncService.normalizeApiBaseUrl(workerUrl).toLowerCase()}\u0000${username.trim().toLowerCase()}';
-
-  bool isActiveSyncAccount(SavedSyncAccount account) =>
-      _hasConfiguredSyncTarget() &&
-      _syncAccountConnectionKey(workerUrl: account.workerUrl, username: account.username) ==
-          _syncAccountConnectionKey(workerUrl: cloudSyncApiBaseUrl, username: syncAccountUsername);
-
-  Future<void> _rememberActiveSyncAccount({bool notify = false}) async {
-    if (!_hasConfiguredSyncTarget() || syncAccountUsername.trim().isEmpty || syncDeviceId.trim().isEmpty) return;
-    final current = SavedSyncAccount(
-      workerUrl: CloudSyncService.normalizeApiBaseUrl(cloudSyncApiBaseUrl),
-      username: syncAccountUsername.trim().toLowerCase(),
-      accessToken: syncAccessToken,
-      refreshToken: syncRefreshToken,
-      deviceId: syncDeviceId,
-      lastUsedAt: DateTime.now(),
-    );
-    final byKey = <String, SavedSyncAccount>{
-      for (final account in syncAccountConnections)
-        _syncAccountConnectionKey(workerUrl: account.workerUrl, username: account.username): account,
-    };
-    byKey[_syncAccountConnectionKey(workerUrl: current.workerUrl, username: current.username)] = current;
-    syncAccountConnections = byKey.values.toList()
-      ..sort((a, b) => b.lastUsedAt.compareTo(a.lastUsedAt));
-    await secureCredentials.writeSavedSyncAccounts(syncAccountConnections);
-    if (notify) notifyListeners();
-  }
-
-  Future<void> _removeSavedSyncAccount({
-    required String workerUrl,
-    required String username,
-    bool notify = false,
-  }) async {
-    final key = _syncAccountConnectionKey(workerUrl: workerUrl, username: username);
-    syncAccountConnections = syncAccountConnections
-        .where((account) => _syncAccountConnectionKey(workerUrl: account.workerUrl, username: account.username) != key)
-        .toList();
-    await secureCredentials.writeSavedSyncAccounts(syncAccountConnections);
-    if (notify) notifyListeners();
-  }
-
-  Future<void> switchSyncAccount(SavedSyncAccount account) async {
-    final nextUrl = CloudSyncService.validateApiBaseUrl(account.workerUrl);
-    final nextUsername = account.username.trim().toLowerCase();
-    if (isActiveSyncAccount(account)) return;
-    if (_syncUsernameValidationError(nextUsername) != null) {
-      throw StateError('This saved account has an invalid username. Sign in again.');
-    }
-
-    syncAuthBusy = true;
-    syncStatus = 'Switching account...';
-    cloudSyncError = null;
-    cloudSyncErrorCode = null;
-    notifyListeners();
+  List<SyncAccountProfile> _decodeSyncAccountProfiles(String encoded) {
+    if (encoded.trim().isEmpty) return const [];
     try {
-      if (_hasConfiguredSyncTarget()) {
-        await syncToCloud(force: true, silent: true);
-        if (cloudSyncError != null) {
-          throw StateError('Could not switch accounts until the current account finishes syncing: $cloudSyncError');
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) return const [];
+      final profiles = <String, SyncAccountProfile>{};
+      for (final item in decoded.whereType<Map>()) {
+        final profile = SyncAccountProfile.fromJson(item.cast<String, dynamic>());
+        if (profile.apiBaseUrl.isNotEmpty && profile.username.isNotEmpty) {
+          profiles[profile.key] = profile;
         }
-        await _rememberActiveSyncAccount();
       }
-
-      _stopCloudAutoPull();
-      _cloudSyncDebounce?.cancel();
-      _cloudSyncRetryTimer?.cancel();
-      await _setCloudSyncPending(false);
-      await _clearSignedOutCloudAccountLocalData();
-
-      selfHostedSyncApiBaseUrl = nextUrl;
-      cloudSyncApiBaseUrl = nextUrl;
-      selfHostedSyncEndpointValidated = true;
-      syncAccountUsername = nextUsername;
-      syncAccessToken = account.accessToken;
-      syncRefreshToken = account.refreshToken;
-      syncDeviceId = account.deviceId;
-      cloudSyncEnabled = true;
-      newSyncAccountAwaitingSetupChoice = false;
-      cloudSyncLastAt = null;
-      syncStatus = 'Loading cloud data...';
-
-      await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
-      await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
-      await prefs.setBool('selfHostedSyncEndpointValidated', true);
-      await prefs.setString('syncAccountUsername', syncAccountUsername);
-      await prefs.setString('syncDeviceId', syncDeviceId);
-      await prefs.setBool('cloudSyncEnabled', true);
-      await prefs.setBool('newSyncAccountAwaitingSetupChoice', false);
-      await prefs.setString('cloudSyncLastAt', '');
-      await secureCredentials.writeAccessToken(syncAccessToken);
-      await secureCredentials.writeRefreshToken(syncRefreshToken);
-      await database.resetLocalSyncTracking();
-      await database.writeSyncState('serverCursor', '0');
-      await _rememberActiveSyncAccount();
-
-      await performMultiDeviceSync(silent: true, pushLocalChanges: false, pullFullCloudCopy: true);
-      if (cloudSyncError != null) throw StateError(cloudSyncError!);
-      _startCloudAutoPull();
-    } finally {
-      syncAuthBusy = false;
-      notifyListeners();
+      return profiles.values.toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    } catch (_) {
+      return const [];
     }
   }
+
+  Future<void> _saveSyncAccountProfiles() async {
+    await prefs.setString('syncAccountProfiles', jsonEncode(syncAccountProfiles.map((profile) => profile.toJson()).toList()));
+  }
+
+  Future<void> _rememberSyncAccountProfile(
+    SyncAccountProfile profile, {
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    syncAccountProfiles = [
+      profile,
+      ...syncAccountProfiles.where((saved) => saved.key != profile.key),
+    ];
+    await _saveSyncAccountProfiles();
+    await secureCredentials.writeProfileTokens(
+      profileKey: profile.key,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+  }
+
+  Future<void> _forgetSyncAccountProfile(String profileKey) async {
+    syncAccountProfiles = syncAccountProfiles.where((profile) => profile.key != profileKey).toList();
+    await _saveSyncAccountProfiles();
+    await secureCredentials.clearProfileTokens(profileKey);
+  }
+
+  bool isActiveSyncAccountProfile(SyncAccountProfile profile) =>
+      cloudSyncEnabled &&
+      profile.key ==
+          SyncAccountProfile.keyFor(
+            apiBaseUrl: cloudSyncApiBaseUrl,
+            username: syncAccountUsername,
+          );
 
   Future<void> configureSelfHostedSyncEndpoint(String apiBaseUrl) async {
     final nextApiBaseUrl = CloudSyncService.validateApiBaseUrl(apiBaseUrl);
     await KoinlySyncApi(baseUrl: nextApiBaseUrl).validateBackend();
     final endpointChanged = CloudSyncService.normalizeApiBaseUrl(cloudSyncApiBaseUrl) != nextApiBaseUrl;
     if (endpointChanged && cloudSyncEnabled) {
-      await logoutSyncAccount();
+      _stopCloudAutoPull();
+      _cloudSyncDebounce?.cancel();
+      _cloudSyncRetryTimer?.cancel();
+      await secureCredentials.clearAccountTokens();
+      syncAccessToken = '';
+      syncRefreshToken = '';
+      syncAccountUsername = '';
+      cloudSyncEnabled = false;
+      cloudSyncLastAt = null;
+      await prefs.setString('syncAccountUsername', '');
+      await prefs.setBool('cloudSyncEnabled', false);
+      await prefs.setString('cloudSyncLastAt', '');
+      await _setCloudSyncPending(false);
+      await database.resetLocalSyncTracking();
+      await database.writeSyncState('serverCursor', '0');
     }
     selfHostedSyncApiBaseUrl = nextApiBaseUrl;
     cloudSyncApiBaseUrl = nextApiBaseUrl;
@@ -4057,15 +4030,7 @@ class AppController extends ChangeNotifier {
     final next = nextUsername.trim().toLowerCase();
     if (next.isEmpty || syncAccountUsername.trim().toLowerCase() != previous) return;
     syncAccountUsername = next;
-    syncAccountConnections = syncAccountConnections
-        .map((account) => _syncAccountConnectionKey(workerUrl: account.workerUrl, username: account.username) ==
-                _syncAccountConnectionKey(workerUrl: cloudSyncApiBaseUrl, username: previous)
-            ? account.copyWith(username: next, lastUsedAt: DateTime.now())
-            : account)
-        .toList()
-      ..sort((a, b) => b.lastUsedAt.compareTo(a.lastUsedAt));
     await prefs.setString('syncAccountUsername', syncAccountUsername);
-    await secureCredentials.writeSavedSyncAccounts(syncAccountConnections);
     notifyListeners();
   }
 
@@ -4108,6 +4073,9 @@ class AppController extends ChangeNotifier {
       if (cloudSyncApiBaseUrl.isEmpty) {
         throw StateError('Validate your self-hosted Sync Worker first.');
       }
+      final previousProfileKey = syncAccountUsername.trim().isEmpty || cloudSyncApiBaseUrl.trim().isEmpty
+          ? ''
+          : SyncAccountProfile.keyFor(apiBaseUrl: cloudSyncApiBaseUrl, username: syncAccountUsername);
       final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
       final session = register
           ? await api.register(
@@ -4118,6 +4086,8 @@ class AppController extends ChangeNotifier {
               platform: _platformName(),
             )
           : await api.login(username: username, password: password, deviceId: syncDeviceId, deviceName: _deviceName(), platform: _platformName());
+      final nextProfileKey = SyncAccountProfile.keyFor(apiBaseUrl: cloudSyncApiBaseUrl, username: session.username);
+      final accountChanged = previousProfileKey.isNotEmpty && previousProfileKey != nextProfileKey;
       await _saveSyncSession(session);
       final deploymentValuesRestored = await synchronizeWorkerDeploymentRecoveryProfile();
       if (deploymentValuesRestored) {
@@ -4140,6 +4110,8 @@ class AppController extends ChangeNotifier {
         await _repairDuplicateCategories(queueSyncChanges: false);
         await database.enqueueAllForAdoption(await exportPreferences());
         await performMultiDeviceSync(silent: true);
+      } else if (accountChanged) {
+        await _replaceLocalDataFromActiveCloudAccount(silent: true);
       } else {
         await _mergeAfterExistingAccountAuth(preferCloudData: preferCloudData);
 
@@ -4150,6 +4122,9 @@ class AppController extends ChangeNotifier {
         if (!onboardingCompleted) {
           await completeOnboarding();
         }
+      }
+      if (!register && !onboardingCompleted) {
+        await completeOnboarding();
       }
       if (!(register && deferInitialDataSync)) {
         _startCloudAutoPull();
@@ -4167,6 +4142,70 @@ class AppController extends ChangeNotifier {
       syncAuthBusy = false;
       notifyListeners();
     }
+  }
+
+  Future<void> switchSyncAccountProfile(SyncAccountProfile profile) async {
+    if (isActiveSyncAccountProfile(profile)) return;
+    syncAuthBusy = true;
+    cloudSyncError = null;
+    cloudSyncErrorCode = null;
+    syncStatus = 'Switching account...';
+    notifyListeners();
+    try {
+      final accessToken = await secureCredentials.readProfileAccessToken(profile.key);
+      final refreshToken = await secureCredentials.readProfileRefreshToken(profile.key);
+      if (accessToken.isEmpty || refreshToken.isEmpty) {
+        throw StateError('Sign in to this saved account again.');
+      }
+      _stopCloudAutoPull();
+      cloudSyncApiBaseUrl = profile.apiBaseUrl;
+      selfHostedSyncApiBaseUrl = profile.apiBaseUrl;
+      selfHostedSyncEndpointValidated = true;
+      syncAccessToken = accessToken;
+      syncRefreshToken = refreshToken;
+      syncAccountUsername = profile.username;
+      if (profile.deviceId.trim().isNotEmpty) syncDeviceId = profile.deviceId;
+      cloudSyncEnabled = true;
+      await secureCredentials.writeAccessToken(syncAccessToken);
+      await secureCredentials.writeRefreshToken(syncRefreshToken);
+      await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
+      await prefs.setString('selfHostedSyncApiBaseUrl', selfHostedSyncApiBaseUrl);
+      await prefs.setBool('selfHostedSyncEndpointValidated', true);
+      await prefs.setString('syncAccountUsername', syncAccountUsername);
+      await prefs.setString('syncDeviceId', syncDeviceId);
+      await prefs.setBool('cloudSyncEnabled', true);
+      await _rememberSyncAccountProfile(
+        profile.copyWith(updatedAt: DateTime.now().toUtc()),
+        accessToken: syncAccessToken,
+        refreshToken: syncRefreshToken,
+      );
+      await _replaceLocalDataFromActiveCloudAccount();
+      if (cloudSyncError == null) _startCloudAutoPull();
+    } catch (error) {
+      cloudSyncError = _cleanSyncError(error);
+      cloudSyncErrorCode = error is CloudSyncException ? error.code : null;
+      syncStatus = 'Sync error';
+    } finally {
+      syncAuthBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _replaceLocalDataFromActiveCloudAccount({bool silent = false}) async {
+    _stopCloudAutoPull();
+    _cloudSyncDebounce?.cancel();
+    _cloudSyncRetryTimer?.cancel();
+    await _setCloudSyncPending(false);
+    await _clearSignedOutCloudAccountLocalData();
+    await database.resetLocalSyncTracking();
+    await database.writeSyncState('serverCursor', '0');
+    cloudSyncLastAt = null;
+    await prefs.setString('cloudSyncLastAt', '');
+    await performMultiDeviceSync(
+      silent: silent,
+      pushLocalChanges: false,
+      pullFullCloudCopy: true,
+    );
   }
 
   Future<void> _mergeAfterExistingAccountAuth({required bool preferCloudData}) async {
@@ -4190,9 +4229,10 @@ class AppController extends ChangeNotifier {
 
   Future<void> logoutSyncAccount({bool keepLocalData = true}) async {
     syncAuthBusy = true;
-    final signedOutWorkerUrl = cloudSyncApiBaseUrl;
-    final signedOutUsername = syncAccountUsername;
     notifyListeners();
+    final signedOutProfileKey = syncAccountUsername.trim().isEmpty || cloudSyncApiBaseUrl.trim().isEmpty
+        ? ''
+        : SyncAccountProfile.keyFor(apiBaseUrl: cloudSyncApiBaseUrl, username: syncAccountUsername);
     try {
       if (syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty && cloudSyncApiBaseUrl.isNotEmpty) {
         // The Worker logout endpoint revokes only this refresh token. It never
@@ -4205,7 +4245,9 @@ class AppController extends ChangeNotifier {
     }
 
     await secureCredentials.clearAccountTokens();
-    await _removeSavedSyncAccount(workerUrl: signedOutWorkerUrl, username: signedOutUsername);
+    if (signedOutProfileKey.isNotEmpty) {
+      await _forgetSyncAccountProfile(signedOutProfileKey);
+    }
     syncAccessToken = '';
     syncRefreshToken = '';
     syncAccountUsername = '';
@@ -4276,13 +4318,23 @@ class AppController extends ChangeNotifier {
     syncAccountUsername = session.username;
     syncDeviceId = session.deviceId.isNotEmpty ? session.deviceId : syncDeviceId;
     cloudSyncEnabled = syncAccessToken.isNotEmpty && syncRefreshToken.isNotEmpty;
+    final profile = SyncAccountProfile(
+      apiBaseUrl: cloudSyncApiBaseUrl,
+      username: syncAccountUsername,
+      deviceId: syncDeviceId,
+      updatedAt: DateTime.now().toUtc(),
+    );
     await secureCredentials.writeAccessToken(syncAccessToken);
     await secureCredentials.writeRefreshToken(syncRefreshToken);
+    await _rememberSyncAccountProfile(
+      profile,
+      accessToken: syncAccessToken,
+      refreshToken: syncRefreshToken,
+    );
     await prefs.setString('syncAccountUsername', syncAccountUsername);
     await prefs.setString('syncDeviceId', syncDeviceId);
     await prefs.setString('cloudSyncApiBaseUrl', cloudSyncApiBaseUrl);
     await prefs.setBool('cloudSyncEnabled', cloudSyncEnabled);
-    await _rememberActiveSyncAccount();
   }
 
   Future<void> _refreshSyncSession() async {
@@ -18694,110 +18746,47 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
     );
   }
 
-  Future<void> _openWorkerProfile(AppController state) async {
-    final baseUrl = CloudSyncService.normalizeApiBaseUrl(state.cloudSyncApiBaseUrl);
-    if (baseUrl.isEmpty || !state.selfHostedSyncEndpointValidated) {
-      showSnack(context, 'Validate and use the self-hosted Worker first.');
-      return;
-    }
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkerProfileScreen(
-          workerUrl: baseUrl,
-          suggestedUsername: state.syncAccountUsername,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmSwitchAccount(SavedSyncAccount account) async {
+  Future<void> _switchToProfile(SyncAccountProfile profile) async {
     final state = context.read<AppController>();
-    if (state.isActiveSyncAccount(account)) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Switch to ${account.username}?'),
-        content: const Text(
-          'Koinly syncs the current account first, clears this device’s local account data, '
-          'then loads the selected account from its Worker. Cloud data is not deleted.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Switch')),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await state.switchSyncAccount(account);
-      if (!mounted) return;
-      _workerUrlController.text = state.selfHostedSyncApiBaseUrl;
-      _usernameController.text = state.syncAccountUsername;
-      _passwordController.clear();
-      setState(() => _workerCardExpanded = false);
-      showSnack(context, state.cloudSyncError == null ? 'Switched to ${account.username}.' : state.cloudSyncError!);
-    } catch (error) {
-      if (mounted) {
-        showSnack(context, error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', ''));
-      }
-    }
+    await state.switchSyncAccountProfile(profile);
+    if (!mounted) return;
+    _workerUrlController.text = state.selfHostedSyncApiBaseUrl;
+    _usernameController.text = state.syncAccountUsername;
+    _passwordController.clear();
+    setState(() => _workerCardExpanded = false);
+    showSnack(context, state.cloudSyncError == null ? 'Switched account. Cloud data loaded.' : state.cloudSyncError!);
   }
 
-  Widget _cloudAccountsCard(AppController state, {required bool busy}) {
-    final accounts = state.syncAccountConnections;
-    final scheme = Theme.of(context).colorScheme;
-    String hostLabel(String url) => Uri.tryParse(url)?.host ?? url;
+  String _workerLabel(String apiBaseUrl) {
+    final uri = Uri.tryParse(apiBaseUrl);
+    return uri?.host.isNotEmpty == true ? uri!.host : apiBaseUrl;
+  }
+
+  Widget _savedSyncAccounts(AppController state, bool busy) {
+    final profiles = state.savedSyncAccountProfiles;
+    if (profiles.isEmpty) return const SizedBox.shrink();
     return ExpressiveCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: kSleekAccent.withOpacity(.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(Icons.switch_account_rounded, color: kSleekAccent),
+          Text('Saved sync accounts', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          for (final profile in profiles)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                state.isActiveSyncAccountProfile(profile) ? Icons.check_circle_rounded : Icons.account_circle_rounded,
+                color: state.isActiveSyncAccountProfile(profile) ? kSleekAccent : kSleekMuted,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text('Cloud accounts', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-              ),
-              if (state.cloudSyncEnabled)
-                IconButton(
-                  tooltip: 'Manage Worker accounts',
-                  onPressed: busy ? null : () => _openWorkerProfile(state),
-                  icon: const Icon(Icons.admin_panel_settings_rounded),
-                ),
-            ],
-          ),
-          if (accounts.isEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Sign in to remember this account for switching.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+              title: Text(profile.username, style: const TextStyle(fontWeight: FontWeight.w900)),
+              subtitle: Text(_workerLabel(profile.apiBaseUrl)),
+              trailing: state.isActiveSyncAccountProfile(profile)
+                  ? const Text('Active', style: TextStyle(fontWeight: FontWeight.w800))
+                  : TextButton(
+                      onPressed: busy ? null : () => _switchToProfile(profile),
+                      child: const Text('Switch'),
+                    ),
             ),
-          ] else ...[
-            const SizedBox(height: 8),
-            ...accounts.map((account) {
-              final active = state.isActiveSyncAccount(account);
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(active ? Icons.check_circle_rounded : Icons.cloud_queue_rounded, color: active ? kSleekAccent : scheme.onSurfaceVariant),
-                title: Text(account.username, style: const TextStyle(fontWeight: FontWeight.w900)),
-                subtitle: Text(hostLabel(account.workerUrl)),
-                trailing: OutlinedButton.icon(
-                  onPressed: busy || active ? null : () => _confirmSwitchAccount(account),
-                  icon: Icon(active ? Icons.done_rounded : Icons.swap_horiz_rounded),
-                  label: Text(active ? 'Active' : 'Switch'),
-                ),
-              );
-            }),
-          ],
         ],
       ),
     );
@@ -18966,11 +18955,9 @@ class _MultiDeviceSyncScreenState extends State<MultiDeviceSyncScreen> {
                 ],
               ),
             ),
-            if (signedIn || state.syncAccountConnections.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _cloudAccountsCard(state, busy: busy),
-            ],
             const SizedBox(height: 12),
+            _savedSyncAccounts(state, busy),
+            if (state.savedSyncAccountProfiles.isNotEmpty) const SizedBox(height: 12),
             TextField(contextMenuBuilder: koinlyTextFieldContextMenu, enableInteractiveSelection: true, 
               onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
               controller: _usernameController,
