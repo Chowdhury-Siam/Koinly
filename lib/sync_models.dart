@@ -422,3 +422,89 @@ class RemoteProfileMediaMetadata {
     );
   }
 }
+
+class SavedSyncWorker {
+  const SavedSyncWorker({
+    required this.id,
+    required this.url,
+    required this.lastUsedAt,
+  });
+
+  final String id;
+  final String url;
+  final int lastUsedAt;
+
+  SavedSyncWorker copyWith({String? id, String? url, int? lastUsedAt}) => SavedSyncWorker(
+        id: id ?? this.id,
+        url: url ?? this.url,
+        lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        'lastUsedAt': lastUsedAt,
+      };
+
+  factory SavedSyncWorker.fromJson(Map<String, dynamic> data) => SavedSyncWorker(
+        id: data['id']?.toString() ?? '',
+        url: data['url']?.toString() ?? '',
+        lastUsedAt: (data['lastUsedAt'] as num? ?? 0).toInt(),
+      );
+}
+
+class SavedSyncAccount {
+  const SavedSyncAccount({
+    required this.id,
+    required this.workerId,
+    required this.workerUrl,
+    required this.username,
+    required this.lastUsedAt,
+  });
+
+  final String id;
+  final String workerId;
+  final String workerUrl;
+  final String username;
+  final int lastUsedAt;
+
+  SavedSyncAccount copyWith({
+    String? id,
+    String? workerId,
+    String? workerUrl,
+    String? username,
+    int? lastUsedAt,
+  }) => SavedSyncAccount(
+        id: id ?? this.id,
+        workerId: workerId ?? this.workerId,
+        workerUrl: workerUrl ?? this.workerUrl,
+        username: username ?? this.username,
+        lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'workerId': workerId,
+        'workerUrl': workerUrl,
+        'username': username,
+        'lastUsedAt': lastUsedAt,
+      };
+
+  factory SavedSyncAccount.fromJson(Map<String, dynamic> data) => SavedSyncAccount(
+        id: data['id']?.toString() ?? '',
+        workerId: data['workerId']?.toString() ?? '',
+        workerUrl: data['workerUrl']?.toString() ?? '',
+        username: data['username']?.toString() ?? '',
+        lastUsedAt: (data['lastUsedAt'] as num? ?? 0).toInt(),
+      );
+}
+
+class SavedSyncAccountTokens {
+  const SavedSyncAccountTokens({
+    required this.accessToken,
+    required this.refreshToken,
+  });
+
+  final String accessToken;
+  final String refreshToken;
+}

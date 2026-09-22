@@ -130,11 +130,25 @@ class WorkerDeploymentCredentialStore {
   WorkerDeploymentCredentialStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
 
   static const _profileKey = 'koinly_worker_auto_deployment_profile_v1';
+  static const _profileKeyPrefix = 'koinly_worker_auto_deployment_profile_v2_';
   final FlutterSecureStorage _storage;
 
-  Future<WorkerDeploymentProfile?> read() async {
+  Future<WorkerDeploymentProfile?> read({String workerUrl = ''}) async {
+    final normalizedWorkerUrl = _normalizeWorkerUrl(workerUrl);
+    if (normalizedWorkerUrl.isNotEmpty) {
+      final keyed = await _readKey(_keyForWorkerUrl(normalizedWorkerUrl));
+      if (keyed != null) return keyed;
+    }
+    final legacy = await _readKey(_profileKey);
+    if (legacy == null || normalizedWorkerUrl.isEmpty || _normalizeWorkerUrl(legacy.workerUrl) == normalizedWorkerUrl) {
+      return legacy;
+    }
+    return null;
+  }
+
+  Future<WorkerDeploymentProfile?> _readKey(String key) async {
     try {
-      final encoded = await _storage.read(key: _profileKey);
+      final encoded = await _storage.read(key: key);
       if (encoded == null || encoded.trim().isEmpty) return null;
       return WorkerDeploymentProfile.fromJson(jsonDecode(encoded));
     } catch (_) {
@@ -143,10 +157,28 @@ class WorkerDeploymentCredentialStore {
   }
 
   Future<void> write(WorkerDeploymentProfile profile) async {
-    await _storage.write(key: _profileKey, value: jsonEncode(profile.toJson()));
+    final encoded = jsonEncode(profile.toJson());
+    final normalizedWorkerUrl = _normalizeWorkerUrl(profile.workerUrl);
+    if (normalizedWorkerUrl.isNotEmpty) {
+      await _storage.write(key: _keyForWorkerUrl(normalizedWorkerUrl), value: encoded);
+    }
+    await _storage.write(key: _profileKey, value: encoded);
   }
 
-  Future<void> clear() => _storage.delete(key: _profileKey);
+  Future<void> clear({String workerUrl = ''}) async {
+    final normalizedWorkerUrl = _normalizeWorkerUrl(workerUrl);
+    if (normalizedWorkerUrl.isNotEmpty) {
+      await _storage.delete(key: _keyForWorkerUrl(normalizedWorkerUrl));
+      final legacy = await read();
+      if (_normalizeWorkerUrl(legacy?.workerUrl ?? '') == normalizedWorkerUrl) {
+        await _storage.delete(key: _profileKey);
+      }
+      return;
+    }
+    await _storage.delete(key: _profileKey);
+  }
+
+  String _keyForWorkerUrl(String workerUrl) => '$_profileKeyPrefix${base64Url.encode(utf8.encode(workerUrl))}';
 }
 
 enum WorkerAutoUpdateOutcome { noSavedDeployment, inactiveDeployment, alreadyCurrent, updated }
@@ -175,7 +207,7 @@ class WorkerAutoUpdateService {
     required String activeWorkerUrl,
     WorkerDeploymentProgress? onProgress,
   }) async {
-    final profile = await _credentialStore.read();
+    final profile = await _credentialStore.read(workerUrl: activeWorkerUrl);
     if (profile == null) {
       return const WorkerAutoUpdateResult(WorkerAutoUpdateOutcome.noSavedDeployment);
     }

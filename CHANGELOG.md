@@ -1,7 +1,11 @@
-## [1.0.1179] - 2026-09-22
+## [1.0.1180] - 2026-09-22
 
+- Added saved self-hosted Sync Workers and saved account profiles so one installation can switch between multiple Worker/account combinations.
+- Account switching now stages the target account first, downloads its full cloud history, creates a safety backup, then replaces local account-scoped finance data, preferences, profile media, credentials, and server cursor without using the normal merge sync path.
+- Added Account & sync controls to switch accounts, add another account, validate a Worker, and create-and-switch to a new account without adopting the current local dataset.
+- Stored automatic Worker deployment credentials per Worker while preserving legacy credential fallback.
 - Fixed the Account & sync sign-out confirmation so the long keep/clear actions are centered, equal-width, and vertically aligned on phones instead of wrapping into a staggered right-aligned layout.
-- Synchronized application and bundled Worker version metadata to `1.0.1179+223`.
+- Synchronized application and bundled Worker version metadata to `1.0.1180+224`.
 
 ## [1.0.1178] - 2026-09-21
 

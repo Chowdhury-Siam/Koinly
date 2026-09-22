@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+import 'sync_models.dart';
 
 class PrefsStore {
   SharedPreferences? _prefs;
@@ -62,4 +65,82 @@ class SecureCredentialStore {
       await _storage.write(key: key, value: normalized);
     }
   }
+}
+
+class SyncProfileStore {
+  SyncProfileStore() : _storage = const FlutterSecureStorage();
+
+  final FlutterSecureStorage _storage;
+
+  static const _workersKey = 'koinly_saved_sync_workers_v1';
+  static const _accountsKey = 'koinly_saved_sync_accounts_v1';
+  static const _activeAccountKey = 'koinly_active_sync_account_profile_v1';
+  static const _activeWorkerKey = 'koinly_active_sync_worker_profile_v1';
+
+  Future<List<SavedSyncWorker>> readWorkers() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _readList(prefs.getString(_workersKey), SavedSyncWorker.fromJson)
+        .where((worker) => worker.id.isNotEmpty && worker.url.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> writeWorkers(List<SavedSyncWorker> workers) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_workersKey, jsonEncode(workers.map((worker) => worker.toJson()).toList()));
+  }
+
+  Future<List<SavedSyncAccount>> readAccounts() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _readList(prefs.getString(_accountsKey), SavedSyncAccount.fromJson)
+        .where((account) => account.id.isNotEmpty && account.workerId.isNotEmpty && account.username.isNotEmpty)
+        .toList();
+  }
+
+  Future<void> writeAccounts(List<SavedSyncAccount> accounts) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_accountsKey, jsonEncode(accounts.map((account) => account.toJson()).toList()));
+  }
+
+  Future<String> readActiveAccountId() async => (await SharedPreferences.getInstance()).getString(_activeAccountKey) ?? '';
+  Future<void> writeActiveAccountId(String value) async => (await SharedPreferences.getInstance()).setString(_activeAccountKey, value.trim());
+
+  Future<String> readActiveWorkerId() async => (await SharedPreferences.getInstance()).getString(_activeWorkerKey) ?? '';
+  Future<void> writeActiveWorkerId(String value) async => (await SharedPreferences.getInstance()).setString(_activeWorkerKey, value.trim());
+
+  Future<SavedSyncAccountTokens> readAccountTokens(String profileId) async => SavedSyncAccountTokens(
+        accessToken: await _storage.read(key: _accessKey(profileId)) ?? '',
+        refreshToken: await _storage.read(key: _refreshKey(profileId)) ?? '',
+      );
+
+  Future<void> writeAccountTokens(String profileId, SavedSyncAccountTokens tokens) async {
+    await _writeOrDelete(_accessKey(profileId), tokens.accessToken);
+    await _writeOrDelete(_refreshKey(profileId), tokens.refreshToken);
+  }
+
+  Future<void> deleteAccountTokens(String profileId) async {
+    await _storage.delete(key: _accessKey(profileId));
+    await _storage.delete(key: _refreshKey(profileId));
+  }
+
+  List<T> _readList<T>(String? raw, T Function(Map<String, dynamic>) parse) {
+    try {
+      final decoded = jsonDecode(raw ?? '[]');
+      if (decoded is! List) return const [];
+      return decoded.whereType<Map>().map((item) => parse(item.cast<String, dynamic>())).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> _writeOrDelete(String key, String value) async {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      await _storage.delete(key: key);
+    } else {
+      await _storage.write(key: key, value: normalized);
+    }
+  }
+
+  String _accessKey(String profileId) => 'koinly_sync_profile_access_v1_$profileId';
+  String _refreshKey(String profileId) => 'koinly_sync_profile_refresh_v1_$profileId';
 }
