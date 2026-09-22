@@ -1,3 +1,15 @@
+## [1.0.1180] - 2026-09-22
+
+- Added remembered Cloud accounts for multiple self-hosted Workers and usernames from Account & sync.
+- Added safe account switching that syncs the current account first, clears local account data without cloud deletes, resets sync tracking, and pulls the selected account from its Worker.
+- Integrated the Worker account administration screen into Account & sync for signed-in users.
+- Synchronized application and bundled Worker version metadata to `1.0.1180+224`.
+
+## [1.0.1179] - 2026-09-22
+
+- Fixed the Account & sync sign-out confirmation so the long keep/clear actions are centered, equal-width, and vertically aligned on phones instead of wrapping into a staggered right-aligned layout.
+- Synchronized application and bundled Worker version metadata to `1.0.1179+223`.
+
 ## [1.0.1178] - 2026-09-21
 
 - Collapsed the Self-hosted Sync Worker controls by default for signed-in accounts and added an animated top-right Worker settings toggle.

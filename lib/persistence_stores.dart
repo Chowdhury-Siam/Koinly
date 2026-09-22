@@ -1,7 +1,74 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models.dart';
+
+class SavedSyncAccount {
+  const SavedSyncAccount({
+    required this.workerUrl,
+    required this.username,
+    required this.accessToken,
+    required this.refreshToken,
+    required this.deviceId,
+    required this.lastUsedAt,
+  });
+
+  final String workerUrl;
+  final String username;
+  final String accessToken;
+  final String refreshToken;
+  final String deviceId;
+  final DateTime lastUsedAt;
+
+  SavedSyncAccount copyWith({
+    String? workerUrl,
+    String? username,
+    String? accessToken,
+    String? refreshToken,
+    String? deviceId,
+    DateTime? lastUsedAt,
+  }) =>
+      SavedSyncAccount(
+        workerUrl: workerUrl ?? this.workerUrl,
+        username: username ?? this.username,
+        accessToken: accessToken ?? this.accessToken,
+        refreshToken: refreshToken ?? this.refreshToken,
+        deviceId: deviceId ?? this.deviceId,
+        lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+      );
+
+  Map<String, Object?> toJson() => {
+        'workerUrl': workerUrl,
+        'username': username,
+        'accessToken': accessToken,
+        'refreshToken': refreshToken,
+        'deviceId': deviceId,
+        'lastUsedAt': lastUsedAt.toIso8601String(),
+      };
+
+  static SavedSyncAccount? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    String value(String key) => '${raw[key] ?? ''}'.trim();
+    final account = SavedSyncAccount(
+      workerUrl: value('workerUrl'),
+      username: value('username').toLowerCase(),
+      accessToken: value('accessToken'),
+      refreshToken: value('refreshToken'),
+      deviceId: value('deviceId'),
+      lastUsedAt: DateTime.tryParse(value('lastUsedAt')) ?? DateTime.fromMillisecondsSinceEpoch(0),
+    );
+    if (account.workerUrl.isEmpty ||
+        account.username.isEmpty ||
+        account.accessToken.isEmpty ||
+        account.refreshToken.isEmpty ||
+        account.deviceId.isEmpty) {
+      return null;
+    }
+    return account;
+  }
+}
 
 class PrefsStore {
   SharedPreferences? _prefs;
@@ -30,6 +97,7 @@ class SecureCredentialStore {
   static const _tursoAuthTokenKey = 'koinly_sync_turso_auth_token';
   static const _accessTokenKey = 'koinly_account_access_token';
   static const _refreshTokenKey = 'koinly_account_refresh_token';
+  static const _savedSyncAccountsKey = 'koinly_saved_sync_accounts_v1';
 
   Future<String> readCloudSyncPin() async => await _storage.read(key: _cloudSyncPinKey) ?? '';
   Future<void> writeCloudSyncPin(String value) => _writeOrDelete(_cloudSyncPinKey, value);
@@ -52,6 +120,28 @@ class SecureCredentialStore {
   Future<void> clearAccountTokens() async {
     await _storage.delete(key: _accessTokenKey);
     await _storage.delete(key: _refreshTokenKey);
+  }
+
+  Future<List<SavedSyncAccount>> readSavedSyncAccounts() async {
+    try {
+      final encoded = await _storage.read(key: _savedSyncAccountsKey);
+      final raw = encoded == null || encoded.trim().isEmpty ? null : jsonDecode(encoded);
+      if (raw is! List) return const [];
+      return raw.map(SavedSyncAccount.fromJson).whereType<SavedSyncAccount>().toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> writeSavedSyncAccounts(List<SavedSyncAccount> accounts) async {
+    if (accounts.isEmpty) {
+      await _storage.delete(key: _savedSyncAccountsKey);
+    } else {
+      await _storage.write(
+        key: _savedSyncAccountsKey,
+        value: jsonEncode(accounts.map((account) => account.toJson()).toList()),
+      );
+    }
   }
 
   Future<void> _writeOrDelete(String key, String value) async {

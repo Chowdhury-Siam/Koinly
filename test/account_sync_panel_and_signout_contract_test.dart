@@ -23,6 +23,10 @@ void main() {
     expect(source, contains("title: const Text('Keep cloud data on this device?')"));
     expect(source, contains("child: const Text('No, clear local data')"));
     expect(source, contains("child: const Text('Yes, keep data')"));
+    expect(source, contains('actionsAlignment: MainAxisAlignment.center'));
+    expect(source, contains('width: actionWidth'));
+    expect(source, contains('crossAxisAlignment: CrossAxisAlignment.stretch'));
+    expect(source, contains('minimumSize: const Size.fromHeight(52)'));
     expect(source, contains('Future<void> logoutSyncAccount({bool keepLocalData = true})'));
     expect(source, contains('if (!keepLocalData) {'));
     expect(source, contains('await _clearSignedOutCloudAccountLocalData();'));
