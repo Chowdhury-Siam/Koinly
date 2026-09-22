@@ -37,22 +37,4 @@ void main() {
     // account finance rows when the device chooses to clear its local copy.
     expect(worker, contains("UPDATE refresh_tokens SET revoked_at = ? WHERE user_id = ? AND token_hash = ?"));
   });
-
-  test('saved Worker accounts can switch by replacing local data from cloud', () {
-    final source = File('lib/main.dart').readAsStringSync();
-    final models = File('lib/sync_models.dart').readAsStringSync();
-    final stores = File('lib/persistence_stores.dart').readAsStringSync();
-
-    expect(models, contains('class SyncAccountProfile'));
-    expect(stores, contains('readProfileAccessToken'));
-    expect(stores, contains('writeProfileTokens'));
-    expect(source, contains('List<SyncAccountProfile> syncAccountProfiles = [];'));
-    expect(source, contains('Future<void> switchSyncAccountProfile(SyncAccountProfile profile)'));
-    expect(source, contains('await _replaceLocalDataFromActiveCloudAccount();'));
-    expect(source, contains('await _clearSignedOutCloudAccountLocalData();'));
-    expect(source, contains('pushLocalChanges: false'));
-    expect(source, contains('pullFullCloudCopy: true'));
-    expect(source, contains("Text('Saved sync accounts'"));
-    expect(source, contains("child: const Text('Switch')"));
-  });
 }

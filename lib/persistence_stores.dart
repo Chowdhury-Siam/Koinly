@@ -30,8 +30,6 @@ class SecureCredentialStore {
   static const _tursoAuthTokenKey = 'koinly_sync_turso_auth_token';
   static const _accessTokenKey = 'koinly_account_access_token';
   static const _refreshTokenKey = 'koinly_account_refresh_token';
-  static const _profileAccessTokenPrefix = 'koinly_account_access_token_';
-  static const _profileRefreshTokenPrefix = 'koinly_account_refresh_token_';
 
   Future<String> readCloudSyncPin() async => await _storage.read(key: _cloudSyncPinKey) ?? '';
   Future<void> writeCloudSyncPin(String value) => _writeOrDelete(_cloudSyncPinKey, value);
@@ -50,23 +48,6 @@ class SecureCredentialStore {
 
   Future<String> readRefreshToken() async => await _storage.read(key: _refreshTokenKey) ?? '';
   Future<void> writeRefreshToken(String value) => _writeOrDelete(_refreshTokenKey, value);
-
-  Future<String> readProfileAccessToken(String profileKey) async => await _storage.read(key: '$_profileAccessTokenPrefix$profileKey') ?? '';
-  Future<String> readProfileRefreshToken(String profileKey) async => await _storage.read(key: '$_profileRefreshTokenPrefix$profileKey') ?? '';
-
-  Future<void> writeProfileTokens({
-    required String profileKey,
-    required String accessToken,
-    required String refreshToken,
-  }) async {
-    await _writeOrDelete('$_profileAccessTokenPrefix$profileKey', accessToken);
-    await _writeOrDelete('$_profileRefreshTokenPrefix$profileKey', refreshToken);
-  }
-
-  Future<void> clearProfileTokens(String profileKey) async {
-    await _storage.delete(key: '$_profileAccessTokenPrefix$profileKey');
-    await _storage.delete(key: '$_profileRefreshTokenPrefix$profileKey');
-  }
 
   Future<void> clearAccountTokens() async {
     await _storage.delete(key: _accessTokenKey);
