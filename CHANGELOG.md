@@ -1,6 +1,16 @@
+## [1.0.1185] - 2026-09-24
+
+- Updated the Note editor to match the June-style full-screen canvas with a large title prompt, date/time chips, tag action, hidden formatting tools, and a dots menu.
+- Synchronized application and bundled Worker version metadata to `1.0.1185+229`.
+
+## [1.0.1184] - 2026-09-24
+
+- Removed the visible `is:Bookmarked` and `is:Draft` filter chips from the Note list.
+- Synchronized application and bundled Worker version metadata to `1.0.1184+228`.
+
 ## [1.0.1183] - 2026-09-24
 
-- Added June-style Note list features: search, `is:Bookmarked` and `is:Draft` filter chips, Recent/More entries grouping, dated note cards, bookmark toggles, and draft/publish swipe actions.
+- Added June-style Note list features: search, Recent/More entries grouping, dated note cards, bookmark toggles, and draft/publish swipe actions.
 - Notes now persist bookmark and draft state in the local database and local backup payload.
 - Synchronized application and bundled Worker version metadata to `1.0.1183+227`.
 

@@ -12899,8 +12899,6 @@ class _CategoryEditorState extends State<CategoryEditor> {
 // Notes
 // -----------------------------------------------------------------------------
 
-enum _NoteFilter { bookmarked, draft }
-
 class NoteScreen extends StatefulWidget {
   const NoteScreen({super.key});
 
@@ -12910,7 +12908,6 @@ class NoteScreen extends StatefulWidget {
 
 class _NoteScreenState extends State<NoteScreen> {
   final search = TextEditingController();
-  final filters = <_NoteFilter>{};
   bool searchOpen = false;
 
   @override
@@ -12919,19 +12916,11 @@ class _NoteScreenState extends State<NoteScreen> {
     super.dispose();
   }
 
-  void _toggleFilter(_NoteFilter filter) {
-    setState(() {
-      filters.contains(filter) ? filters.remove(filter) : filters.add(filter);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
     final query = search.text.trim().toLowerCase();
     var items = state.notes.where((note) {
-      if (filters.contains(_NoteFilter.bookmarked) && !note.bookmarked) return false;
-      if (filters.contains(_NoteFilter.draft) && !note.draft) return false;
       if (query.isEmpty) return true;
       return '${note.title} ${note.body}'.toLowerCase().contains(query);
     }).toList();
@@ -12968,32 +12957,14 @@ class _NoteScreenState extends State<NoteScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _NoteFilterChip(
-                  label: 'is:Bookmarked',
-                  selected: filters.contains(_NoteFilter.bookmarked),
-                  onSelected: () => _toggleFilter(_NoteFilter.bookmarked),
-                ),
-                const SizedBox(width: 8),
-                _NoteFilterChip(
-                  label: 'is:Draft',
-                  selected: filters.contains(_NoteFilter.draft),
-                  onSelected: () => _toggleFilter(_NoteFilter.draft),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 10),
           if (items.isEmpty)
             EmptyCard(
               icon: Icons.edit_note_rounded,
               title: state.notes.isEmpty ? 'No notes yet' : 'No matching notes',
               body: state.notes.isEmpty
                   ? 'Save a quick thought, reminder, or anything you want to keep outside transactions.'
-                  : 'Try another search or clear the filters.',
+                  : 'Try another search.',
               action: state.notes.isEmpty ? () => showNoteEditor(context) : null,
               actionLabel: state.notes.isEmpty ? 'Add note' : null,
               animated: true,
@@ -13034,35 +13005,6 @@ class _NoteSectionTitle extends StatelessWidget {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w900,
             ),
-      ),
-    );
-  }
-}
-
-class _NoteFilterChip extends StatelessWidget {
-  const _NoteFilterChip({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onSelected(),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      selectedColor: kSleekAccent.withOpacity(.22),
-      backgroundColor: scheme.surfaceContainerHighest.withOpacity(.64),
-      labelStyle: TextStyle(
-        color: selected ? kSleekAccent : scheme.onSurfaceVariant,
-        fontWeight: FontWeight.w900,
       ),
     );
   }
@@ -13250,6 +13192,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final _redo = <String>[];
   bool bookmarked = false;
   bool draft = false;
+  bool toolsOpen = false;
 
   @override
   void initState() {
@@ -13359,13 +13302,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final noteDate = widget.note?.createdOn ?? DateTime.now();
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
               child: Row(
                 children: [
                   _NoteCircleButton(
@@ -13383,27 +13327,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   _NoteCircleButton(
                     tooltip: 'Add checklist item',
                     icon: Icons.add_circle_outline_rounded,
-                    onPressed: () => _prefixLine('- [ ] '),
+                    selected: toolsOpen,
+                    onPressed: () => setState(() => toolsOpen = !toolsOpen),
                   ),
                   const Spacer(),
-                  FilledButton(
-                    onPressed: _save,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
-                      shape: const StadiumBorder(),
-                    ),
-                    child: const Text('Save'),
-                  ),
                   PopupMenuButton<String>(
                     tooltip: 'More',
-                    icon: Icon(bookmarked ? Icons.bookmark_rounded : Icons.more_vert_rounded),
+                    icon: const Icon(Icons.more_vert_rounded),
                     onSelected: (value) {
+                      if (value == 'save') _save();
                       if (value == 'delete') _delete();
                       if (value == 'title') title.selection = TextSelection(baseOffset: 0, extentOffset: title.text.length);
                       if (value == 'bookmark') setState(() => bookmarked = !bookmarked);
                       if (value == 'draft') setState(() => draft = !draft);
                     },
                     itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'save', child: Text('Save note')),
                       CheckedPopupMenuItem(value: 'bookmark', checked: bookmarked, child: const Text('Bookmarked')),
                       CheckedPopupMenuItem(value: 'draft', checked: draft, child: const Text('Draft')),
                       const PopupMenuItem(value: 'title', child: Text('Select title')),
@@ -13414,23 +13353,57 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 38),
               child: TextField(
                 contextMenuBuilder: koinlyTextFieldContextMenu,
                 controller: title,
                 textCapitalization: TextCapitalization.sentences,
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                style: theme.textTheme.displaySmall?.copyWith(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w900,
+                ),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
-                  hintText: 'Title',
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  hintText: 'Add title',
                   counterText: '',
                 ),
                 maxLength: 100,
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(30, 14, 30, 26),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _NoteMetaChip(icon: Icons.calendar_month_rounded),
+                          const SizedBox(width: 6),
+                          _NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate)),
+                          const SizedBox(width: 6),
+                          _NoteMetaChip(label: DateFormat('h:mm a').format(noteDate)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _NoteCircleButton(
+                    tooltip: bookmarked ? 'Remove bookmark' : 'Bookmark',
+                    icon: bookmarked ? Icons.bookmark_rounded : Icons.sell_outlined,
+                    selected: bookmarked,
+                    onPressed: () => setState(() => bookmarked = !bookmarked),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
+                padding: const EdgeInsets.symmetric(horizontal: 38),
                 child: TextField(
                   focusNode: bodyFocus,
                   contextMenuBuilder: koinlyTextFieldContextMenu,
@@ -13448,28 +13421,64 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   ),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    hintText: 'Note',
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    hintText: "What's on your mind?",
                   ),
                 ),
               ),
             ),
-            _NoteFormatBar(
-              onBold: () => _wrapSelection('**', '**'),
-              onItalic: () => _wrapSelection('_', '_'),
-              onUnderline: () => _wrapSelection('<u>', '</u>'),
-              onStrike: () => _wrapSelection('~~', '~~'),
-              onHighlight: () => _wrapSelection('==', '=='),
-              onLink: () => _wrapSelection('[', '](https://)'),
-              onQuote: () => _prefixLine('> '),
-              onBullet: () => _prefixLine('- '),
-              onCode: () => _wrapSelection('`', '`'),
-              onHeading: (level) => _prefixLine('${List.filled(level, '#').join()} '),
-              onUndo: _undoBody,
-              onRedo: _redoBody,
-            ),
+            if (toolsOpen)
+              _NoteFormatBar(
+                onBold: () => _wrapSelection('**', '**'),
+                onItalic: () => _wrapSelection('_', '_'),
+                onUnderline: () => _wrapSelection('<u>', '</u>'),
+                onStrike: () => _wrapSelection('~~', '~~'),
+                onHighlight: () => _wrapSelection('==', '=='),
+                onLink: () => _wrapSelection('[', '](https://)'),
+                onQuote: () => _prefixLine('> '),
+                onBullet: () => _prefixLine('- '),
+                onCode: () => _wrapSelection('`', '`'),
+                onHeading: (level) => _prefixLine('${List.filled(level, '#').join()} '),
+                onUndo: _undoBody,
+                onRedo: _redoBody,
+              ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NoteMetaChip extends StatelessWidget {
+  const _NoteMetaChip({this.icon, this.label});
+
+  final IconData? icon;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      height: 58,
+      padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withOpacity(.8),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      alignment: Alignment.center,
+      child: icon == null
+          ? Text(
+              label!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: scheme.onSurface.withOpacity(.82),
+                    fontWeight: FontWeight.w900,
+                  ),
+            )
+          : Icon(icon, color: scheme.onSurface.withOpacity(.74)),
     );
   }
 }
@@ -13479,11 +13488,13 @@ class _NoteCircleButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
+    this.selected = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -13493,6 +13504,8 @@ class _NoteCircleButton extends StatelessWidget {
         onPressed: onPressed,
         icon: Icon(icon),
         style: IconButton.styleFrom(
+          backgroundColor: selected ? kSleekAccent.withOpacity(.18) : null,
+          foregroundColor: selected ? kSleekAccent : null,
           fixedSize: const Size.square(58),
           shape: const CircleBorder(),
         ),

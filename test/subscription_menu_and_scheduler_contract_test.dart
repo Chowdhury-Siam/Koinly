@@ -44,9 +44,9 @@ void main() {
     expect(app, contains('class NoteScreen'));
     expect(app, contains('class NoteEditorScreen'));
     expect(app, contains('class _NoteFormatBar'));
-    expect(app, contains('enum _NoteFilter { bookmarked, draft }'));
-    expect(app, contains("label: 'is:Bookmarked'"));
-    expect(app, contains("label: 'is:Draft'"));
+    expect(app, isNot(contains('enum _NoteFilter')));
+    expect(app, isNot(contains("label: 'is:Bookmarked'")));
+    expect(app, isNot(contains("label: 'is:Draft'")));
     expect(app, contains("_NoteSectionTitle('Recent')"));
     expect(app, contains("_NoteSectionTitle('More entries')"));
     expect(app, contains('Future<void> toggleNoteBookmark(KoinlyNote note)'));
