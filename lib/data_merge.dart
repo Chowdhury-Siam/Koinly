@@ -13,6 +13,7 @@ class FinanceDatabaseMergeResult {
 const _entityTables = <String>[
   'accounts',
   'categories',
+  'notes',
   'planned_purchases',
   'subscriptions',
   'transactions',

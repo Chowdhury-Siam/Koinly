@@ -318,6 +318,38 @@ class PlannedPurchase {
       );
 }
 
+class KoinlyNote {
+  KoinlyNote({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.createdOn,
+    required this.updatedOn,
+  });
+
+  final String id;
+  final String title;
+  final String body;
+  final DateTime createdOn;
+  final DateTime updatedOn;
+
+  Map<String, Object?> toMap() => {
+        'id': id,
+        'title': title,
+        'body': body,
+        'created_on': dateToDb(createdOn),
+        'updated_on': dateToDb(updatedOn),
+      };
+
+  static KoinlyNote fromMap(Map<String, Object?> map) => KoinlyNote(
+        id: map['id'] as String,
+        title: map['title'] as String? ?? '',
+        body: map['body'] as String? ?? '',
+        createdOn: dateFromDb(map['created_on']),
+        updatedOn: dateFromDb(map['updated_on']),
+      );
+}
+
 class RecurringSubscription {
   RecurringSubscription({
     required this.id,

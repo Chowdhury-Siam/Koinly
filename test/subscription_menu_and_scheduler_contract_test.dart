@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:koinly/data_merge.dart';
 
 void main() {
-  test('transaction quick menu expands to Plan and Subscription over blur', () {
+  test('transaction quick menu expands to Plan, Subscription, and Note over blur', () {
     final app = File('lib/main.dart').readAsStringSync();
 
     expect(app, contains("heroTag: 'transactionMenuFab'"));
@@ -12,17 +12,41 @@ void main() {
     expect(app, contains('ui.ImageFilter.blur'));
     expect(app, contains("heroTag: 'transactionPlanFab'"));
     expect(app, contains("heroTag: 'transactionSubscriptionFab'"));
+    expect(app, contains("heroTag: 'transactionNoteFab'"));
     expect(app, contains("label: const Text('Subscription')"));
+    expect(app, contains("label: const Text('Note')"));
+    expect(app, contains('MaterialPageRoute(builder: (_) => const NoteScreen())'));
     expect(app, contains('MaterialPageRoute(builder: (_) => const SubscriptionScreen())'));
-    expect(app, contains('Opening: Plan appears first, then Subscription above it.'));
-    expect(app, contains('start: .55'));
-    expect(app, contains('end: .95'));
+    expect(app, contains('Opening: Plan appears first, then Subscription, then Note.'));
+    expect(app, contains('start: .68'));
+    expect(app, contains('end: 1'));
+    expect(app, contains('start: .38'));
+    expect(app, contains('end: .78'));
     expect(app, contains('start: .08'));
-    expect(app, contains('end: .50'));
+    expect(app, contains('end: .48'));
+    final noteIndex = app.indexOf("heroTag: 'transactionNoteFab'");
     final subscriptionIndex = app.indexOf("heroTag: 'transactionSubscriptionFab'");
     final planIndex = app.indexOf("heroTag: 'transactionPlanFab'");
+    expect(noteIndex, greaterThanOrEqualTo(0));
     expect(subscriptionIndex, greaterThanOrEqualTo(0));
+    expect(subscriptionIndex, greaterThan(noteIndex));
     expect(planIndex, greaterThan(subscriptionIndex));
+  });
+
+  test('notes are local, editable, and included in backup merge', () {
+    final app = File('lib/main.dart').readAsStringSync();
+    final models = File('lib/models.dart').readAsStringSync();
+    final merge = File('lib/data_merge.dart').readAsStringSync();
+
+    expect(models, contains('class KoinlyNote'));
+    expect(app, contains('class NoteScreen'));
+    expect(app, contains('class NoteEditor'));
+    expect(app, contains("CREATE TABLE IF NOT EXISTS notes"));
+    expect(app, contains('Future<void> saveNote(KoinlyNote note)'));
+    expect(app, contains("await database.deleteNote(id);"));
+    expect(app, contains("'notes', 'planned_purchases'"));
+    expect(merge, contains("'notes',"));
+    expect(app, isNot(contains("await database.enqueueTableRow('notes'")));
   });
 
   test('subscriptions persist, select account/category, and can record manually', () {

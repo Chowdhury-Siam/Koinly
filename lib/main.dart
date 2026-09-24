@@ -172,7 +172,7 @@ class KoinlyDatabase {
     final path = p.join(dir, 'koinly_flutter.db');
     _db = await sql.openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: (database, version) async {
         await _createSchema(database);
         await _seed(database);
@@ -226,6 +226,15 @@ class KoinlyDatabase {
         amount REAL NOT NULL,
         category_id TEXT NOT NULL,
         reminder_on INTEGER,
+        created_on INTEGER NOT NULL,
+        updated_on INTEGER NOT NULL
+      )
+    ''');
+    await database.execute('''
+      CREATE TABLE IF NOT EXISTS notes(
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL DEFAULT '',
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
       )
@@ -773,6 +782,26 @@ class KoinlyDatabase {
     await (await db).delete('planned_purchases', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<List<KoinlyNote>> notes() async {
+    final maps = await (await db).query(
+      'notes',
+      orderBy: 'updated_on DESC, created_on DESC',
+    );
+    return maps.map(KoinlyNote.fromMap).toList();
+  }
+
+  Future<void> upsertNote(KoinlyNote note) async {
+    await (await db).insert(
+      'notes',
+      note.toMap(),
+      conflictAlgorithm: sql.ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteNote(String id) async {
+    await (await db).delete('notes', where: 'id = ?', whereArgs: [id]);
+  }
+
   Future<List<RecurringSubscription>> subscriptions() async {
     final maps = await (await db).query(
       'subscriptions',
@@ -948,7 +977,7 @@ class KoinlyDatabase {
 
   Future<Map<String, dynamic>> exportAll() async {
     final database = await db;
-    final tables = ['accounts', 'categories', 'planned_purchases', 'subscriptions', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
+    final tables = ['accounts', 'categories', 'notes', 'planned_purchases', 'subscriptions', 'transactions', 'budgets', 'budget_accounts', 'budget_categories', 'loan_contacts', 'loans', 'loan_payments'];
     final data = <String, dynamic>{};
     for (final table in tables) {
       data[table] = await database.query(table);
@@ -959,7 +988,7 @@ class KoinlyDatabase {
   Future<CategoryMergePlan> importAll(Map<String, dynamic> data) async {
     final database = await db;
     final normalized = normalizeCategoryDatabasePayload(data);
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'notes', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -984,7 +1013,7 @@ class KoinlyDatabase {
 
   Future<bool> hasLocalUserActivity() async {
     final database = await db;
-    for (final table in ['planned_purchases', 'subscriptions', 'transactions', 'budgets', 'loans']) {
+    for (final table in ['notes', 'planned_purchases', 'subscriptions', 'transactions', 'budgets', 'loans']) {
       final rows = await database.query(table, columns: ['COUNT(*) AS count']);
       if ((rows.first['count'] as num? ?? 0).toInt() > 0) return true;
     }
@@ -993,7 +1022,7 @@ class KoinlyDatabase {
 
   Future<void> clearFinanceDataForRemoteLogin() async {
     final database = await db;
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'notes', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -1006,7 +1035,7 @@ class KoinlyDatabase {
 
   Future<void> replaceFinanceDataWithRemoteChanges(List<Map<String, dynamic>> changes) async {
     final database = await db;
-    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'categories', 'accounts'];
+    final tables = ['loan_payments', 'loans', 'loan_contacts', 'budget_categories', 'budget_accounts', 'budgets', 'transactions', 'subscriptions', 'planned_purchases', 'notes', 'categories', 'accounts'];
     await database.transaction((txn) async {
       for (final table in tables) {
         await txn.delete(table);
@@ -1616,6 +1645,7 @@ class BackupService {
   static const List<String> _backupFinanceTables = <String>[
     'accounts',
     'categories',
+    'notes',
     'planned_purchases',
     'subscriptions',
     'transactions',
@@ -1840,6 +1870,7 @@ class AppController extends ChangeNotifier {
 
   List<Account> accounts = [];
   List<Category> categories = [];
+  List<KoinlyNote> notes = [];
   List<PlannedPurchase> plannedPurchases = [];
   List<RecurringSubscription> subscriptions = [];
   List<MoneyTransaction> transactions = [];
@@ -5229,6 +5260,7 @@ class AppController extends ChangeNotifier {
     }
     accounts = await database.accounts();
     categories = await database.categories();
+    notes = await database.notes();
     plannedPurchases = await database.plannedPurchases();
     subscriptions = await database.subscriptions();
     transactions = await database.transactions();
@@ -6122,6 +6154,16 @@ class AppController extends ChangeNotifier {
     await reload(queueSync: true);
   }
 
+  Future<void> saveNote(KoinlyNote note) async {
+    await database.upsertNote(note);
+    await reload();
+  }
+
+  Future<void> deleteNote(String id) async {
+    await database.deleteNote(id);
+    await reload();
+  }
+
   Future<void> saveSubscription(RecurringSubscription item) async {
     await database.upsertSubscription(item);
     await database.enqueueTableRow('subscriptions', item.id);
@@ -6983,6 +7025,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchasePlanScreen()));
   }
 
+  Future<void> _openNotesFromMenu() async {
+    _closeTransactionMenu();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const NoteScreen()));
+  }
+
   Future<void> _openSubscriptionsFromMenu() async {
     _closeTransactionMenu();
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
@@ -7027,7 +7074,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
             child: FloatingActionButton(
               heroTag: 'transactionMenuFab',
               onPressed: _toggleTransactionMenu,
-              tooltip: 'Plan and subscriptions',
+              tooltip: 'Note, plan, and subscriptions',
               child: AnimatedIcon(
                 icon: AnimatedIcons.menu_close,
                 progress: _transactionMenuController,
@@ -7112,10 +7159,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                               builder: (context, child) {
                                 final raw = _transactionMenuController.value;
 
-                                // The quick menu intentionally uses two non-overlapping stages.
-                                // Opening: Plan appears first, then Subscription above it.
-                                // Closing reverses the same controller, so Subscription leaves
-                                // first and Plan follows. Keep this order/spacing in sync with
+                                // The quick menu intentionally uses non-overlapping stages.
+                                // Opening: Plan appears first, then Subscription, then Note.
+                                // Closing reverses the same controller. Keep this order/spacing in sync with
                                 // subscription_menu_and_scheduler_contract_test.dart.
                                 Widget stagedButton({
                                   required double start,
@@ -7148,8 +7194,19 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     stagedButton(
-                                      start: .55,
-                                      end: .95,
+                                      start: .68,
+                                      end: 1,
+                                      child: FloatingActionButton.extended(
+                                        heroTag: 'transactionNoteFab',
+                                        onPressed: _openNotesFromMenu,
+                                        icon: const Icon(Icons.edit_note_rounded),
+                                        label: const Text('Note'),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    stagedButton(
+                                      start: .38,
+                                      end: .78,
                                       child: FloatingActionButton.extended(
                                         heroTag: 'transactionSubscriptionFab',
                                         onPressed: _openSubscriptionsFromMenu,
@@ -7160,7 +7217,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Sing
                                     const SizedBox(height: 10),
                                     stagedButton(
                                       start: .08,
-                                      end: .50,
+                                      end: .48,
                                       child: FloatingActionButton.extended(
                                         heroTag: 'transactionPlanFab',
                                         onPressed: _openPlanFromMenu,
@@ -12577,6 +12634,282 @@ class _CategoryEditorState extends State<CategoryEditor> {
   }
 }
 
+
+// -----------------------------------------------------------------------------
+// Notes
+// -----------------------------------------------------------------------------
+
+class NoteScreen extends StatelessWidget {
+  const NoteScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    final items = state.notes;
+    return PageScaffold(
+      title: 'Note',
+      subtitle: '${items.length} saved ${items.length == 1 ? 'note' : 'notes'}',
+      actions: [
+        IconButton(
+          tooltip: 'Add note',
+          onPressed: () => showNoteEditor(context),
+          icon: const Icon(Icons.add_rounded),
+        ),
+      ],
+      child: ResponsiveListContent(
+        itemCount: items.length,
+        empty: EmptyCard(
+          icon: Icons.edit_note_rounded,
+          title: 'No notes yet',
+          body: 'Save a quick thought, reminder, or anything you want to keep outside transactions.',
+          action: () => showNoteEditor(context),
+          actionLabel: 'Add note',
+          animated: true,
+        ),
+        itemBuilder: (context, index) => NoteTile(note: items[index]),
+      ),
+    );
+  }
+}
+
+Future<void> _confirmDeleteNote(BuildContext context, KoinlyNote note) async {
+  final state = context.read<AppController>();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Delete note?'),
+      content: Text('"${note.title}" will be removed.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          style: FilledButton.styleFrom(backgroundColor: kSleekExpense),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  await state.deleteNote(note.id);
+  if (context.mounted) showSnack(context, 'Note deleted.');
+}
+
+class NoteTile extends StatelessWidget {
+  const NoteTile({super.key, required this.note});
+
+  final KoinlyNote note;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = note.body.trim();
+    final card = ExpressiveCard(
+      padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+      onTap: () => showNoteEditor(context, note: note),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: kSleekAccent.withOpacity(.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(Icons.edit_note_rounded, color: kSleekAccent),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  note.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body.isEmpty ? DateFormat('MMM d, yyyy - h:mm a').format(note.updatedOn) : body,
+                  maxLines: body.isEmpty ? 1 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Slidable(
+        key: ValueKey('note-${note.id}'),
+        groupTag: 'notes',
+        closeOnScroll: true,
+        endActionPane: ActionPane(
+          motion: const ScrollMotion(),
+          extentRatio: .48,
+          dragDismissible: false,
+          openThreshold: .34,
+          closeThreshold: .16,
+          children: [
+            _KoinlySlidableAction(
+              onPressed: (_) => showNoteEditor(context, note: note),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              icon: Icons.edit_rounded,
+              label: 'Edit',
+            ),
+            _KoinlySlidableAction(
+              onPressed: (_) => _confirmDeleteNote(context, note),
+              backgroundColor: kSleekExpense,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete',
+            ),
+          ],
+        ),
+        child: card,
+      ),
+    );
+  }
+}
+
+Future<void> showNoteEditor(
+  BuildContext context, {
+  KoinlyNote? note,
+}) async {
+  await showKoinlyPopup<void>(
+    context,
+    maxWidth: 560,
+    maxHeight: 700,
+    child: NoteEditor(note: note),
+  );
+}
+
+class NoteEditor extends StatefulWidget {
+  const NoteEditor({super.key, this.note});
+
+  final KoinlyNote? note;
+
+  @override
+  State<NoteEditor> createState() => _NoteEditorState();
+}
+
+class _NoteEditorState extends State<NoteEditor> {
+  final title = TextEditingController();
+  final body = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    title.text = widget.note?.title ?? '';
+    body.text = widget.note?.body ?? '';
+  }
+
+  @override
+  void dispose() {
+    title.dispose();
+    body.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppController>();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      child: KoinlyPopupContent(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.note == null ? 'Add note' : 'Edit note',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              contextMenuBuilder: koinlyTextFieldContextMenu,
+              enableInteractiveSelection: true,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: title,
+              textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.sentences,
+              maxLength: 100,
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.title_rounded),
+                labelText: 'Title',
+                counterText: '',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              contextMenuBuilder: koinlyTextFieldContextMenu,
+              enableInteractiveSelection: true,
+              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+              controller: body,
+              minLines: 6,
+              maxLines: 12,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                alignLabelWithHint: true,
+                prefixIcon: Icon(Icons.edit_note_rounded),
+                labelText: 'Note',
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                if (widget.note != null)
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await state.deleteNote(widget.note!.id);
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                if (widget.note != null) const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: FilledButton(
+                    onPressed: () async {
+                      final noteTitle = title.text.trim();
+                      final noteBody = body.text.trim();
+                      if (noteTitle.isEmpty && noteBody.isEmpty) {
+                        return showSnack(context, 'Write a title or note.');
+                      }
+                      final now = DateTime.now();
+                      final note = KoinlyNote(
+                        id: widget.note?.id ?? _uuid.v4(),
+                        title: noteTitle.isEmpty ? 'Untitled note' : noteTitle,
+                        body: noteBody,
+                        createdOn: widget.note?.createdOn ?? now,
+                        updatedOn: now,
+                      );
+                      await state.saveNote(note);
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    child: const Text('Save'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Purchase plan
