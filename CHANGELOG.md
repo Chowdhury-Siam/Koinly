@@ -1,3 +1,13 @@
+## [1.0.1188] - 2026-09-24
+
+- Removed the H1-H6 heading controls from the Note editor toolbar.
+- Synchronized application and bundled Worker version metadata to `1.0.1188+232`.
+
+## [1.0.1187] - 2026-09-24
+
+- Fixed the Note editor dots menu so it opens as a compact icon menu instead of the oversized checked popup.
+- Synchronized application and bundled Worker version metadata to `1.0.1187+231`.
+
 ## [1.0.1186] - 2026-09-24
 
 - Made the Note editor controls functional: date chips open date picking, time chips open time picking, emoji opens a picker, and the tag/bookmark action gives feedback.

@@ -13380,6 +13380,12 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   PopupMenuButton<String>(
                     tooltip: 'More',
                     icon: const Icon(Icons.more_vert_rounded),
+                    position: PopupMenuPosition.under,
+                    offset: const Offset(0, 8),
+                    constraints: const BoxConstraints.tightFor(width: 188),
+                    color: scheme.surfaceContainerHighest,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    clipBehavior: Clip.antiAlias,
                     onSelected: (value) {
                       if (value == 'save') _save();
                       if (value == 'delete') _delete();
@@ -13388,11 +13394,22 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       if (value == 'draft') setState(() => draft = !draft);
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem(value: 'save', child: Text('Save note')),
-                      CheckedPopupMenuItem(value: 'bookmark', checked: bookmarked, child: const Text('Bookmarked')),
-                      CheckedPopupMenuItem(value: 'draft', checked: draft, child: const Text('Draft')),
-                      const PopupMenuItem(value: 'title', child: Text('Select title')),
-                      if (widget.note != null) const PopupMenuItem(value: 'delete', child: Text('Delete note')),
+                      const PopupMenuItem(value: 'save', height: 44, padding: EdgeInsets.zero, child: _NoteMenuItem(icon: Icons.save_rounded, label: 'Save')),
+                      PopupMenuItem(
+                        value: 'bookmark',
+                        height: 44,
+                        padding: EdgeInsets.zero,
+                        child: _NoteMenuItem(icon: bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, label: bookmarked ? 'Bookmarked' : 'Bookmark'),
+                      ),
+                      PopupMenuItem(
+                        value: 'draft',
+                        height: 44,
+                        padding: EdgeInsets.zero,
+                        child: _NoteMenuItem(icon: draft ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded, label: draft ? 'Draft' : 'Mark draft'),
+                      ),
+                      const PopupMenuItem(value: 'title', height: 44, padding: EdgeInsets.zero, child: _NoteMenuItem(icon: Icons.title_rounded, label: 'Select title')),
+                      if (widget.note != null) const PopupMenuDivider(height: 8),
+                      if (widget.note != null) const PopupMenuItem(value: 'delete', height: 44, padding: EdgeInsets.zero, child: _NoteMenuItem(icon: Icons.delete_outline_rounded, label: 'Delete')),
                     ],
                   ),
                 ],
@@ -13486,7 +13503,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 onQuote: () => _prefixLine('> '),
                 onBullet: () => _prefixLine('- '),
                 onCode: () => _wrapSelection('`', '`'),
-                onHeading: (level) => _prefixLine('${List.filled(level, '#').join()} '),
                 onUndo: _undoBody,
                 onRedo: _redoBody,
               ),
@@ -13536,6 +13552,35 @@ class _NoteMetaChip extends StatelessWidget {
   }
 }
 
+class _NoteMenuItem extends StatelessWidget {
+  const _NoteMenuItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NoteCircleButton extends StatelessWidget {
   const _NoteCircleButton({
     required this.tooltip,
@@ -13578,7 +13623,6 @@ class _NoteFormatBar extends StatelessWidget {
     required this.onQuote,
     required this.onBullet,
     required this.onCode,
-    required this.onHeading,
     required this.onUndo,
     required this.onRedo,
   });
@@ -13592,7 +13636,6 @@ class _NoteFormatBar extends StatelessWidget {
   final VoidCallback onQuote;
   final VoidCallback onBullet;
   final VoidCallback onCode;
-  final ValueChanged<int> onHeading;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
 
@@ -13619,8 +13662,6 @@ class _NoteFormatBar extends StatelessWidget {
           _NoteIconFormatButton(icon: Icons.format_quote_rounded, onPressed: onQuote, tooltip: 'Quote'),
           _NoteIconFormatButton(icon: Icons.format_list_bulleted_rounded, onPressed: onBullet, tooltip: 'Bullet list'),
           _NoteIconFormatButton(icon: Icons.code_rounded, onPressed: onCode, tooltip: 'Inline code'),
-          _NoteDivider(),
-          for (var level = 1; level <= 6; level++) _NoteFormatButton(label: 'H$level', onPressed: () => onHeading(level)),
           _NoteDivider(),
           _NoteIconFormatButton(icon: Icons.undo_rounded, onPressed: onUndo, tooltip: 'Undo'),
           _NoteIconFormatButton(icon: Icons.redo_rounded, onPressed: onRedo, tooltip: 'Redo'),
