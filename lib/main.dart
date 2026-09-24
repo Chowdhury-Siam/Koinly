@@ -5836,8 +5836,8 @@ class AppController extends ChangeNotifier {
         final label = start == null
             ? 'Custom range'
             : end == null || DateUtils.isSameDay(start, end)
-                ? DateFormat('MMM d, yyyy').format(start)
-                : '${DateFormat('MMM d').format(start)} – ${DateFormat('MMM d, yyyy').format(end)}';
+                ? 'Start: ${DateFormat('MMM d, yyyy').format(start)} - End: ${DateFormat('MMM d, yyyy').format(start)}'
+                : 'Start: ${DateFormat('MMM d, yyyy').format(start)} - End: ${DateFormat('MMM d, yyyy').format(end)}';
         return DateRange(start, end?.add(const Duration(days: 1)), label);
     }
   }
@@ -8555,6 +8555,7 @@ class _CenteredDateRangePicker extends StatefulWidget {
 class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
   late DateTime _start;
   late DateTime _end;
+  late DateTime _visibleMonth;
   late bool _useRange;
   _RangeEndpoint _activeEndpoint = _RangeEndpoint.start;
 
@@ -8563,6 +8564,7 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
     super.initState();
     _start = widget.initialRange.start;
     _end = widget.initialRange.end;
+    _visibleMonth = DateTime(_start.year, _start.month);
     _useRange = widget.rangeOnly || widget.initialUseRange;
     if (!_useRange) _end = _start;
   }
@@ -8582,7 +8584,10 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
 
   void _selectEndpoint(_RangeEndpoint endpoint) {
     if (!_useRange || _activeEndpoint == endpoint) return;
-    setState(() => _activeEndpoint = endpoint);
+    setState(() {
+      _activeEndpoint = endpoint;
+      _visibleMonth = DateTime(_activeDate.year, _activeDate.month);
+    });
   }
 
   void _onDateChanged(DateTime value) {
@@ -8590,6 +8595,8 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
     setState(() {
       if (!_useRange) {
         _start = date;
+        _end = date;
+        _visibleMonth = DateTime(date.year, date.month);
         _activeEndpoint = _RangeEndpoint.start;
         return;
       }
@@ -8597,12 +8604,23 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
       if (_activeEndpoint == _RangeEndpoint.start) {
         _start = date;
         if (_end.isBefore(_start)) _end = _start;
+        _visibleMonth = DateTime(_end.year, _end.month);
         _activeEndpoint = _RangeEndpoint.end;
       } else {
         _end = date;
         if (_end.isBefore(_start)) _start = _end;
+        _visibleMonth = DateTime(date.year, date.month);
       }
     });
+  }
+
+  void _changeMonth(int offset) {
+    final next = DateTime(_visibleMonth.year, _visibleMonth.month + offset);
+    if (next.isBefore(DateTime(widget.firstDate.year, widget.firstDate.month)) ||
+        next.isAfter(DateTime(widget.lastDate.year, widget.lastDate.month))) {
+      return;
+    }
+    setState(() => _visibleMonth = next);
   }
 
   void _apply() {
@@ -8708,20 +8726,17 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
                   onTap: () {},
                 ),
               const SizedBox(height: 10),
-              Container(
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest.withOpacity(.34),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: scheme.outline.withOpacity(.18)),
-                ),
-                child: CalendarDatePicker(
-                  key: ValueKey('${_useRange ? _activeEndpoint.name : 'single'}-${_activeDate.millisecondsSinceEpoch}'),
-                  initialDate: _activeDate,
-                  firstDate: widget.firstDate,
-                  lastDate: widget.lastDate,
-                  currentDate: DateTime.now(),
-                  onDateChanged: _onDateChanged,
-                ),
+              _InlineRangeCalendar(
+                month: _visibleMonth,
+                start: _start,
+                end: _useRange ? _end : _start,
+                activeDate: _activeDate,
+                useRange: _useRange,
+                firstDate: widget.firstDate,
+                lastDate: widget.lastDate,
+                onDateChanged: _onDateChanged,
+                onPreviousMonth: () => _changeMonth(-1),
+                onNextMonth: () => _changeMonth(1),
               ),
             ],
           ),
@@ -8752,6 +8767,228 @@ class _CenteredDateRangePickerState extends State<_CenteredDateRangePicker> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _InlineRangeCalendar extends StatelessWidget {
+  const _InlineRangeCalendar({
+    required this.month,
+    required this.start,
+    required this.end,
+    required this.activeDate,
+    required this.useRange,
+    required this.firstDate,
+    required this.lastDate,
+    required this.onDateChanged,
+    required this.onPreviousMonth,
+    required this.onNextMonth,
+  });
+
+  final DateTime month;
+  final DateTime start;
+  final DateTime end;
+  final DateTime activeDate;
+  final bool useRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final ValueChanged<DateTime> onDateChanged;
+  final VoidCallback onPreviousMonth;
+  final VoidCallback onNextMonth;
+
+  DateTime get _firstDay => DateTime(month.year, month.month);
+  int get _daysInMonth => DateTime(month.year, month.month + 1, 0).day;
+
+  bool _sameDay(DateTime first, DateTime second) =>
+      first.year == second.year && first.month == second.month && first.day == second.day;
+
+  bool _isSelectable(DateTime day) {
+    final value = DateTime(day.year, day.month, day.day);
+    final first = DateTime(firstDate.year, firstDate.month, firstDate.day);
+    final last = DateTime(lastDate.year, lastDate.month, lastDate.day);
+    return !value.isBefore(first) && !value.isAfter(last);
+  }
+
+  bool _insideRange(DateTime day) {
+    final value = DateTime(day.year, day.month, day.day);
+    final rangeStart = DateTime(start.year, start.month, start.day);
+    final rangeEnd = DateTime(end.year, end.month, end.day);
+    return !value.isBefore(rangeStart) && !value.isAfter(rangeEnd);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final leadingBlanks = _firstDay.weekday % 7;
+    final cellCount = leadingBlanks + _daysInMonth;
+    final rowCount = (cellCount + 6) ~/ 7;
+    final currentMonth = DateTime(month.year, month.month);
+    final canGoBack = currentMonth.isAfter(DateTime(firstDate.year, firstDate.month));
+    final canGoNext = currentMonth.isBefore(DateTime(lastDate.year, lastDate.month));
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withOpacity(.34),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outline.withOpacity(.18)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(month),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Previous month',
+                onPressed: canGoBack ? onPreviousMonth : null,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              IconButton(
+                tooltip: 'Next month',
+                onPressed: canGoNext ? onNextMonth : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                .map(
+                  (day) => Expanded(
+                    child: Center(
+                      child: Text(day, style: const TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          ),
+          const SizedBox(height: 12),
+          for (var row = 0; row < rowCount; row++)
+            Row(
+              children: [
+                for (var column = 0; column < 7; column++)
+                  Expanded(
+                    child: _InlineRangeCalendarDay(
+                      day: _dayForCell(row * 7 + column, leadingBlanks),
+                      rowColumn: column,
+                      isSelectable: (day) => day != null && _isSelectable(day),
+                      isStart: (day) => day != null && _sameDay(day, start),
+                      isEnd: (day) => day != null && _sameDay(day, end),
+                      isActive: (day) => day != null && _sameDay(day, activeDate),
+                      isInRange: (day) => day != null && useRange && _insideRange(day),
+                      onTap: onDateChanged,
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  DateTime? _dayForCell(int index, int leadingBlanks) {
+    final dayNumber = index - leadingBlanks + 1;
+    if (dayNumber < 1 || dayNumber > _daysInMonth) return null;
+    return DateTime(month.year, month.month, dayNumber);
+  }
+}
+
+class _InlineRangeCalendarDay extends StatelessWidget {
+  const _InlineRangeCalendarDay({
+    required this.day,
+    required this.rowColumn,
+    required this.isSelectable,
+    required this.isStart,
+    required this.isEnd,
+    required this.isActive,
+    required this.isInRange,
+    required this.onTap,
+  });
+
+  final DateTime? day;
+  final int rowColumn;
+  final bool Function(DateTime?) isSelectable;
+  final bool Function(DateTime?) isStart;
+  final bool Function(DateTime?) isEnd;
+  final bool Function(DateTime?) isActive;
+  final bool Function(DateTime?) isInRange;
+  final ValueChanged<DateTime> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final value = day;
+    if (value == null) return const SizedBox(height: 44);
+
+    final selectable = isSelectable(value);
+    final start = isStart(value);
+    final end = isEnd(value);
+    final endpoint = start || end;
+    final active = isActive(value);
+    final inRange = isInRange(value);
+    final drawLeft = inRange && !start && rowColumn != 0;
+    final drawRight = inRange && !end && rowColumn != 6;
+
+    final child = SizedBox(
+      height: 44,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (drawLeft || drawRight)
+            Positioned(
+              left: drawLeft ? 0 : 22,
+              right: drawRight ? 0 : 22,
+              top: 20,
+              height: 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: kSleekAccent.withOpacity(.92),
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+          AnimatedContainer(
+            duration: AppMotion.short,
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: active ? kSleekAccent : Colors.transparent,
+              shape: BoxShape.circle,
+              border: endpoint && !active ? Border.all(color: kSleekAccent, width: 2) : null,
+            ),
+            child: Center(
+              child: Text(
+                '${value.day}',
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: selectable
+                      ? active
+                          ? Colors.white
+                          : scheme.onSurface
+                      : scheme.onSurfaceVariant.withOpacity(.45),
+                  fontWeight: endpoint ? FontWeight.w900 : FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!selectable) return child;
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () => onTap(value),
+      child: child,
     );
   }
 }

@@ -3,6 +3,19 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('centered date range picker draws the selected span inline', () {
+    final source = File('lib/main.dart').readAsStringSync();
+
+    expect(source, contains('class _InlineRangeCalendar'));
+    expect(source, contains('class _InlineRangeCalendarDay'));
+    expect(source, contains('final drawLeft = inRange && !start'));
+    expect(source, contains('final drawRight = inRange && !end'));
+    expect(source, contains('color: kSleekAccent.withOpacity(.92)'));
+    expect(source, contains('border: endpoint && !active ? Border.all(color: kSleekAccent, width: 2) : null'));
+    expect(source, contains('_InlineRangeCalendar('));
+    expect(source, isNot(contains('child: CalendarDatePicker(')));
+  });
+
   test('transaction date and time pickers support opt-in ranges and scrolling', () {
     final source = File('lib/main.dart').readAsStringSync();
 
@@ -21,6 +34,7 @@ void main() {
     expect(source, contains('rangeOnly: true'));
     expect(source, contains("title = 'Select custom range'"));
     expect(source, contains("title: 'Custom range'"));
+    expect(source, contains("'Start: \${DateFormat('MMM d, yyyy').format(start)} - End: \${DateFormat('MMM d, yyyy').format(end)}'"));
   });
 
   test('new transaction amount uses a focus-aware placeholder instead of a real zero', () {
