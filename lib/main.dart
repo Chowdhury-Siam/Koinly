@@ -8958,7 +8958,7 @@ class _InlineRangeCalendarDay extends StatelessWidget {
               ),
             ),
           AnimatedContainer(
-            duration: AppMotion.short,
+            duration: AppMotion.fast,
             width: 38,
             height: 38,
             decoration: BoxDecoration(
