@@ -13193,6 +13193,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   bool bookmarked = false;
   bool draft = false;
   bool toolsOpen = false;
+  late DateTime noteDate;
 
   @override
   void initState() {
@@ -13201,6 +13202,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     body.text = widget.note?.body ?? '';
     bookmarked = widget.note?.bookmarked ?? false;
     draft = widget.note?.draft ?? false;
+    noteDate = widget.note?.createdOn ?? DateTime.now();
     _undo.add(body.text);
     body.addListener(_recordBodyHistory);
   }
@@ -13270,6 +13272,51 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     setState(() {});
   }
 
+  Future<void> _pickNoteDate() async {
+    final picked = await pickDate(context, noteDate);
+    if (picked == null) return;
+    setState(() {
+      noteDate = DateTime(picked.year, picked.month, picked.day, noteDate.hour, noteDate.minute);
+    });
+  }
+
+  Future<void> _pickNoteTime() async {
+    final picked = await pickTime(context, TimeOfDay.fromDateTime(noteDate));
+    if (picked == null) return;
+    setState(() {
+      noteDate = DateTime(noteDate.year, noteDate.month, noteDate.day, picked.hour, picked.minute);
+    });
+  }
+
+  Future<void> _pickEmoji() async {
+    const emojis = ['🙂', '😂', '😍', '🔥', '✅', '⭐', '💡', '📌', '💰', '🙏', '🎯', '⚠️'];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final emoji in emojis)
+                ActionChip(
+                  label: Text(emoji, style: const TextStyle(fontSize: 24)),
+                  onPressed: () => Navigator.pop(sheetContext, emoji),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) _wrapSelection('', selected);
+  }
+
+  void _toggleBookmark() {
+    setState(() => bookmarked = !bookmarked);
+    showSnack(context, bookmarked ? 'Note bookmarked.' : 'Bookmark removed.');
+  }
+
   Future<void> _save() async {
     final state = context.read<AppController>();
     final noteTitle = title.text.trim();
@@ -13284,7 +13331,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       body: noteBody,
       bookmarked: bookmarked,
       draft: draft,
-      createdOn: widget.note?.createdOn ?? now,
+      createdOn: noteDate,
       updatedOn: now,
     );
     await state.saveNote(note);
@@ -13302,7 +13349,6 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final noteDate = widget.note?.createdOn ?? DateTime.now();
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
@@ -13321,7 +13367,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   _NoteCircleButton(
                     tooltip: 'Insert emoji',
                     icon: Icons.emoji_emotions_outlined,
-                    onPressed: () => _wrapSelection('', ' 🙂'),
+                    onPressed: _pickEmoji,
                   ),
                   const SizedBox(width: 10),
                   _NoteCircleButton(
@@ -13338,7 +13384,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       if (value == 'save') _save();
                       if (value == 'delete') _delete();
                       if (value == 'title') title.selection = TextSelection(baseOffset: 0, extentOffset: title.text.length);
-                      if (value == 'bookmark') setState(() => bookmarked = !bookmarked);
+                      if (value == 'bookmark') _toggleBookmark();
                       if (value == 'draft') setState(() => draft = !draft);
                     },
                     itemBuilder: (context) => [
@@ -13382,11 +13428,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _NoteMetaChip(icon: Icons.calendar_month_rounded),
+                          _NoteMetaChip(icon: Icons.calendar_month_rounded, tooltip: 'Choose date', onTap: _pickNoteDate),
                           const SizedBox(width: 6),
-                          _NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate)),
+                          _NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate),
                           const SizedBox(width: 6),
-                          _NoteMetaChip(label: DateFormat('h:mm a').format(noteDate)),
+                          _NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime),
                         ],
                       ),
                     ),
@@ -13396,7 +13442,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     tooltip: bookmarked ? 'Remove bookmark' : 'Bookmark',
                     icon: bookmarked ? Icons.bookmark_rounded : Icons.sell_outlined,
                     selected: bookmarked,
-                    onPressed: () => setState(() => bookmarked = !bookmarked),
+                    onPressed: _toggleBookmark,
                   ),
                 ],
               ),
@@ -13452,34 +13498,41 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 }
 
 class _NoteMetaChip extends StatelessWidget {
-  const _NoteMetaChip({this.icon, this.label});
+  const _NoteMetaChip({this.icon, this.label, this.tooltip, this.onTap});
 
   final IconData? icon;
   final String? label;
+  final String? tooltip;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      height: 58,
-      padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 20),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withOpacity(.8),
+    final chip = Material(
+      color: scheme.surfaceContainerHighest.withOpacity(.8),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
+        child: Container(
+          height: 58,
+          padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 20),
+          alignment: Alignment.center,
+          child: icon == null
+              ? Text(
+                  label!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: scheme.onSurface.withOpacity(.82),
+                        fontWeight: FontWeight.w900,
+                      ),
+                )
+              : Icon(icon, color: scheme.onSurface.withOpacity(.74)),
+        ),
       ),
-      alignment: Alignment.center,
-      child: icon == null
-          ? Text(
-              label!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: scheme.onSurface.withOpacity(.82),
-                    fontWeight: FontWeight.w900,
-                  ),
-            )
-          : Icon(icon, color: scheme.onSurface.withOpacity(.74)),
     );
+    return tooltip == null ? chip : Tooltip(message: tooltip!, child: chip);
   }
 }
 

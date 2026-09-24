@@ -1,3 +1,8 @@
+## [1.0.1186] - 2026-09-24
+
+- Made the Note editor controls functional: date chips open date picking, time chips open time picking, emoji opens a picker, and the tag/bookmark action gives feedback.
+- Synchronized application and bundled Worker version metadata to `1.0.1186+230`.
+
 ## [1.0.1185] - 2026-09-24
 
 - Updated the Note editor to match the June-style full-screen canvas with a large title prompt, date/time chips, tag action, hidden formatting tools, and a dots menu.

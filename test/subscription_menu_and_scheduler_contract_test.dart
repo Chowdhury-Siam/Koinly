@@ -49,6 +49,11 @@ void main() {
     expect(app, isNot(contains("label: 'is:Draft'")));
     expect(app, contains("_NoteSectionTitle('Recent')"));
     expect(app, contains("_NoteSectionTitle('More entries')"));
+    expect(app, contains('Future<void> _pickNoteDate()'));
+    expect(app, contains('Future<void> _pickNoteTime()'));
+    expect(app, contains('Future<void> _pickEmoji()'));
+    expect(app, contains("_NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate)"));
+    expect(app, contains("_NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime)"));
     expect(app, contains('Future<void> toggleNoteBookmark(KoinlyNote note)'));
     expect(app, contains('Future<void> toggleNoteDraft(KoinlyNote note)'));
     expect(app, contains('ALTER TABLE notes ADD COLUMN bookmarked'));
