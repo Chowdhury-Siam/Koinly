@@ -1,3 +1,22 @@
+## [1.0.1183] - 2026-09-24
+
+- Added June-style Note list features: search, `is:Bookmarked` and `is:Draft` filter chips, Recent/More entries grouping, dated note cards, bookmark toggles, and draft/publish swipe actions.
+- Notes now persist bookmark and draft state in the local database and local backup payload.
+- Synchronized application and bundled Worker version metadata to `1.0.1183+227`.
+
+## [1.0.1182] - 2026-09-24
+
+- Changed Note add/edit from a centered popup to a full-screen editor page.
+- Added June-style markdown editing controls for bold, italic, underline, strikethrough, highlight, links, quotes, bullets, inline code, headings, checklist insertion, emoji insertion, undo, and redo.
+- Synchronized application and bundled Worker version metadata to `1.0.1182+226`.
+
+## [1.0.1181] - 2026-09-24
+
+- Added a Note feature from the transaction quick menu with local note list, add/edit popup, swipe edit/delete, and local backup/restore support.
+- Reworked the centered date range picker to draw the selected span inline across calendar rows, making the chosen start and end dates visually connected.
+- Fixed the new range calendar animation to use Koinly's existing `AppMotion.fast` duration.
+- Synchronized application and bundled Worker version metadata to `1.0.1181+225`.
+
 ## [1.0.1180] - 2026-09-22
 
 - Added saved self-hosted Sync Workers and saved account profiles so one installation can switch between multiple Worker/account combinations.

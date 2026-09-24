@@ -235,10 +235,13 @@ class KoinlyDatabase {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT '',
         body TEXT NOT NULL DEFAULT '',
+        bookmarked INTEGER NOT NULL DEFAULT 0,
+        draft INTEGER NOT NULL DEFAULT 0,
         created_on INTEGER NOT NULL,
         updated_on INTEGER NOT NULL
       )
     ''');
+    await _ensureNoteColumns(database);
     await database.execute('''
       CREATE TABLE IF NOT EXISTS subscriptions(
         id TEXT PRIMARY KEY,
@@ -407,6 +410,18 @@ class KoinlyDatabase {
         .toSet();
     if (!columns.contains('reminder_on')) {
       await database.execute('ALTER TABLE planned_purchases ADD COLUMN reminder_on INTEGER');
+    }
+  }
+
+  Future<void> _ensureNoteColumns(sql.Database database) async {
+    final columns = (await database.rawQuery('PRAGMA table_info(notes)'))
+        .map((row) => row['name']?.toString() ?? '')
+        .toSet();
+    if (!columns.contains('bookmarked')) {
+      await database.execute('ALTER TABLE notes ADD COLUMN bookmarked INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!columns.contains('draft')) {
+      await database.execute('ALTER TABLE notes ADD COLUMN draft INTEGER NOT NULL DEFAULT 0');
     }
   }
 
@@ -6157,6 +6172,14 @@ class AppController extends ChangeNotifier {
   Future<void> saveNote(KoinlyNote note) async {
     await database.upsertNote(note);
     await reload();
+  }
+
+  Future<void> toggleNoteBookmark(KoinlyNote note) async {
+    await saveNote(note.copyWith(bookmarked: !note.bookmarked, updatedOn: DateTime.now()));
+  }
+
+  Future<void> toggleNoteDraft(KoinlyNote note) async {
+    await saveNote(note.copyWith(draft: !note.draft, updatedOn: DateTime.now()));
   }
 
   Future<void> deleteNote(String id) async {
@@ -12876,34 +12899,170 @@ class _CategoryEditorState extends State<CategoryEditor> {
 // Notes
 // -----------------------------------------------------------------------------
 
-class NoteScreen extends StatelessWidget {
+enum _NoteFilter { bookmarked, draft }
+
+class NoteScreen extends StatefulWidget {
   const NoteScreen({super.key});
+
+  @override
+  State<NoteScreen> createState() => _NoteScreenState();
+}
+
+class _NoteScreenState extends State<NoteScreen> {
+  final search = TextEditingController();
+  final filters = <_NoteFilter>{};
+  bool searchOpen = false;
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  void _toggleFilter(_NoteFilter filter) {
+    setState(() {
+      filters.contains(filter) ? filters.remove(filter) : filters.add(filter);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppController>();
-    final items = state.notes;
+    final query = search.text.trim().toLowerCase();
+    var items = state.notes.where((note) {
+      if (filters.contains(_NoteFilter.bookmarked) && !note.bookmarked) return false;
+      if (filters.contains(_NoteFilter.draft) && !note.draft) return false;
+      if (query.isEmpty) return true;
+      return '${note.title} ${note.body}'.toLowerCase().contains(query);
+    }).toList();
+    final recent = items.take(2).toList();
+    final more = items.skip(2).toList();
     return PageScaffold(
       title: 'Note',
       subtitle: '${items.length} saved ${items.length == 1 ? 'note' : 'notes'}',
       actions: [
+        IconButton(
+          tooltip: 'Search notes',
+          onPressed: () => setState(() => searchOpen = !searchOpen),
+          icon: const Icon(Icons.search_rounded),
+        ),
         IconButton(
           tooltip: 'Add note',
           onPressed: () => showNoteEditor(context),
           icon: const Icon(Icons.add_rounded),
         ),
       ],
-      child: ResponsiveListContent(
-        itemCount: items.length,
-        empty: EmptyCard(
-          icon: Icons.edit_note_rounded,
-          title: 'No notes yet',
-          body: 'Save a quick thought, reminder, or anything you want to keep outside transactions.',
-          action: () => showNoteEditor(context),
-          actionLabel: 'Add note',
-          animated: true,
-        ),
-        itemBuilder: (context, index) => NoteTile(note: items[index]),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+        children: [
+          if (searchOpen) ...[
+            TextField(
+              controller: search,
+              autofocus: true,
+              contextMenuBuilder: koinlyTextFieldContextMenu,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded),
+                hintText: 'Search notes',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _NoteFilterChip(
+                  label: 'is:Bookmarked',
+                  selected: filters.contains(_NoteFilter.bookmarked),
+                  onSelected: () => _toggleFilter(_NoteFilter.bookmarked),
+                ),
+                const SizedBox(width: 8),
+                _NoteFilterChip(
+                  label: 'is:Draft',
+                  selected: filters.contains(_NoteFilter.draft),
+                  onSelected: () => _toggleFilter(_NoteFilter.draft),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          if (items.isEmpty)
+            EmptyCard(
+              icon: Icons.edit_note_rounded,
+              title: state.notes.isEmpty ? 'No notes yet' : 'No matching notes',
+              body: state.notes.isEmpty
+                  ? 'Save a quick thought, reminder, or anything you want to keep outside transactions.'
+                  : 'Try another search or clear the filters.',
+              action: state.notes.isEmpty ? () => showNoteEditor(context) : null,
+              actionLabel: state.notes.isEmpty ? 'Add note' : null,
+              animated: true,
+            )
+          else ...[
+            _NoteSectionTitle('Recent'),
+            for (final note in recent) ...[
+              NoteTile(note: note),
+              const SizedBox(height: 10),
+            ],
+            if (more.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _NoteSectionTitle('More entries'),
+              for (final note in more) ...[
+                NoteTile(note: note),
+                const SizedBox(height: 10),
+              ],
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteSectionTitle extends StatelessWidget {
+  const _NoteSectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 12),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w900,
+            ),
+      ),
+    );
+  }
+}
+
+class _NoteFilterChip extends StatelessWidget {
+  const _NoteFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      selectedColor: kSleekAccent.withOpacity(.22),
+      backgroundColor: scheme.surfaceContainerHighest.withOpacity(.64),
+      labelStyle: TextStyle(
+        color: selected ? kSleekAccent : scheme.onSurfaceVariant,
+        fontWeight: FontWeight.w900,
       ),
     );
   }
@@ -12938,7 +13097,9 @@ class NoteTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.read<AppController>();
     final body = note.body.trim();
+    final title = note.title.trim().isEmpty ? 'Untitled note' : note.title.trim();
     final card = ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
       onTap: () => showNoteEditor(context, note: note),
@@ -12959,24 +13120,64 @@ class NoteTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      DateFormat('MMMM d, yyyy').format(note.updatedOn),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: kSleekAccent,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    if (note.draft)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: kSleekAccent.withOpacity(.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Draft',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: kSleekAccent,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  note.title,
+                  title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  body.isEmpty ? DateFormat('MMM d, yyyy - h:mm a').format(note.updatedOn) : body,
-                  maxLines: body.isEmpty ? 1 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
+                if (body.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
               ],
             ),
+          ),
+          const SizedBox(width: 10),
+          IconButton.filledTonal(
+            tooltip: note.bookmarked ? 'Remove bookmark' : 'Bookmark',
+            onPressed: () => state.toggleNoteBookmark(note),
+            icon: Icon(note.bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded),
           ),
         ],
       ),
@@ -12991,7 +13192,7 @@ class NoteTile extends StatelessWidget {
         closeOnScroll: true,
         endActionPane: ActionPane(
           motion: const ScrollMotion(),
-          extentRatio: .48,
+          extentRatio: .66,
           dragDismissible: false,
           openThreshold: .34,
           closeThreshold: .16,
@@ -13002,6 +13203,13 @@ class NoteTile extends StatelessWidget {
               foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
               icon: Icons.edit_rounded,
               label: 'Edit',
+            ),
+            _KoinlySlidableAction(
+              onPressed: (_) => state.toggleNoteDraft(note),
+              backgroundColor: kSleekAccent,
+              foregroundColor: Colors.white,
+              icon: note.draft ? Icons.publish_rounded : Icons.edit_note_rounded,
+              label: note.draft ? 'Publish' : 'Draft',
             ),
             _KoinlySlidableAction(
               onPressed: (_) => _confirmDeleteNote(context, note),
@@ -13022,128 +13230,387 @@ Future<void> showNoteEditor(
   BuildContext context, {
   KoinlyNote? note,
 }) async {
-  await showKoinlyPopup<void>(
-    context,
-    maxWidth: 560,
-    maxHeight: 700,
-    child: NoteEditor(note: note),
-  );
+  await Navigator.push(context, MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)));
 }
 
-class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, this.note});
+class NoteEditorScreen extends StatefulWidget {
+  const NoteEditorScreen({super.key, this.note});
 
   final KoinlyNote? note;
 
   @override
-  State<NoteEditor> createState() => _NoteEditorState();
+  State<NoteEditorScreen> createState() => _NoteEditorScreenState();
 }
 
-class _NoteEditorState extends State<NoteEditor> {
+class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final title = TextEditingController();
   final body = TextEditingController();
+  final bodyFocus = FocusNode();
+  final _undo = <String>[];
+  final _redo = <String>[];
+  bool bookmarked = false;
+  bool draft = false;
 
   @override
   void initState() {
     super.initState();
     title.text = widget.note?.title ?? '';
     body.text = widget.note?.body ?? '';
+    bookmarked = widget.note?.bookmarked ?? false;
+    draft = widget.note?.draft ?? false;
+    _undo.add(body.text);
+    body.addListener(_recordBodyHistory);
   }
 
   @override
   void dispose() {
+    body.removeListener(_recordBodyHistory);
     title.dispose();
     body.dispose();
+    bodyFocus.dispose();
     super.dispose();
+  }
+
+  void _recordBodyHistory() {
+    if (_undo.isEmpty || _undo.last != body.text) {
+      _undo.add(body.text);
+      _redo.clear();
+      if (_undo.length > 60) _undo.removeAt(0);
+    }
+  }
+
+  void _replaceBodyText(String value) {
+    body.removeListener(_recordBodyHistory);
+    body.text = value;
+    body.selection = TextSelection.collapsed(offset: value.length);
+    body.addListener(_recordBodyHistory);
+    setState(() {});
+  }
+
+  void _undoBody() {
+    if (_undo.length < 2) return;
+    _redo.add(_undo.removeLast());
+    _replaceBodyText(_undo.last);
+  }
+
+  void _redoBody() {
+    if (_redo.isEmpty) return;
+    final value = _redo.removeLast();
+    _undo.add(value);
+    _replaceBodyText(value);
+  }
+
+  void _wrapSelection(String before, String after) {
+    final selection = body.selection;
+    final text = body.text;
+    final start = selection.start < 0 ? text.length : selection.start;
+    final end = selection.end < 0 ? text.length : selection.end;
+    final selected = text.substring(start, end);
+    final replacement = '$before$selected$after';
+    body.value = TextEditingValue(
+      text: text.replaceRange(start, end, replacement),
+      selection: TextSelection.collapsed(offset: start + replacement.length - after.length),
+    );
+    bodyFocus.requestFocus();
+    setState(() {});
+  }
+
+  void _prefixLine(String prefix) {
+    final text = body.text;
+    final offset = body.selection.start < 0 ? text.length : body.selection.start;
+    final lineStart = text.lastIndexOf('\n', math.max(0, offset - 1)) + 1;
+    body.value = TextEditingValue(
+      text: text.replaceRange(lineStart, lineStart, prefix),
+      selection: TextSelection.collapsed(offset: offset + prefix.length),
+    );
+    bodyFocus.requestFocus();
+    setState(() {});
+  }
+
+  Future<void> _save() async {
+    final state = context.read<AppController>();
+    final noteTitle = title.text.trim();
+    final noteBody = body.text.trim();
+    if (noteTitle.isEmpty && noteBody.isEmpty) {
+      return showSnack(context, 'Write a title or note.');
+    }
+    final now = DateTime.now();
+    final note = KoinlyNote(
+      id: widget.note?.id ?? _uuid.v4(),
+      title: noteTitle.isEmpty ? 'Untitled note' : noteTitle,
+      body: noteBody,
+      bookmarked: bookmarked,
+      draft: draft,
+      createdOn: widget.note?.createdOn ?? now,
+      updatedOn: now,
+    );
+    await state.saveNote(note);
+    if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _delete() async {
+    final note = widget.note;
+    if (note == null) return;
+    await context.read<AppController>().deleteNote(note.id);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppController>();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
-      child: KoinlyPopupContent(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.note == null ? 'Add note' : 'Edit note',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              contextMenuBuilder: koinlyTextFieldContextMenu,
-              enableInteractiveSelection: true,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              controller: title,
-              textInputAction: TextInputAction.next,
-              textCapitalization: TextCapitalization.sentences,
-              maxLength: 100,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.title_rounded),
-                labelText: 'Title',
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              contextMenuBuilder: koinlyTextFieldContextMenu,
-              enableInteractiveSelection: true,
-              onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-              controller: body,
-              minLines: 6,
-              maxLines: 12,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                alignLabelWithHint: true,
-                prefixIcon: Icon(Icons.edit_note_rounded),
-                labelText: 'Note',
-              ),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                if (widget.note != null)
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () async {
-                        await state.deleteNote(widget.note!.id);
-                        if (context.mounted) Navigator.pop(context);
-                      },
-                      child: const Text('Delete'),
-                    ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+              child: Row(
+                children: [
+                  _NoteCircleButton(
+                    tooltip: 'Close',
+                    icon: Icons.close_rounded,
+                    onPressed: () => Navigator.pop(context),
                   ),
-                if (widget.note != null) const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: () async {
-                      final noteTitle = title.text.trim();
-                      final noteBody = body.text.trim();
-                      if (noteTitle.isEmpty && noteBody.isEmpty) {
-                        return showSnack(context, 'Write a title or note.');
-                      }
-                      final now = DateTime.now();
-                      final note = KoinlyNote(
-                        id: widget.note?.id ?? _uuid.v4(),
-                        title: noteTitle.isEmpty ? 'Untitled note' : noteTitle,
-                        body: noteBody,
-                        createdOn: widget.note?.createdOn ?? now,
-                        updatedOn: now,
-                      );
-                      await state.saveNote(note);
-                      if (context.mounted) Navigator.pop(context);
-                    },
+                  const SizedBox(width: 10),
+                  _NoteCircleButton(
+                    tooltip: 'Insert emoji',
+                    icon: Icons.emoji_emotions_outlined,
+                    onPressed: () => _wrapSelection('', ' 🙂'),
+                  ),
+                  const SizedBox(width: 10),
+                  _NoteCircleButton(
+                    tooltip: 'Add checklist item',
+                    icon: Icons.add_circle_outline_rounded,
+                    onPressed: () => _prefixLine('- [ ] '),
+                  ),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: _save,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
+                      shape: const StadiumBorder(),
+                    ),
                     child: const Text('Save'),
                   ),
+                  PopupMenuButton<String>(
+                    tooltip: 'More',
+                    icon: Icon(bookmarked ? Icons.bookmark_rounded : Icons.more_vert_rounded),
+                    onSelected: (value) {
+                      if (value == 'delete') _delete();
+                      if (value == 'title') title.selection = TextSelection(baseOffset: 0, extentOffset: title.text.length);
+                      if (value == 'bookmark') setState(() => bookmarked = !bookmarked);
+                      if (value == 'draft') setState(() => draft = !draft);
+                    },
+                    itemBuilder: (context) => [
+                      CheckedPopupMenuItem(value: 'bookmark', checked: bookmarked, child: const Text('Bookmarked')),
+                      CheckedPopupMenuItem(value: 'draft', checked: draft, child: const Text('Draft')),
+                      const PopupMenuItem(value: 'title', child: Text('Select title')),
+                      if (widget.note != null) const PopupMenuItem(value: 'delete', child: Text('Delete note')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: TextField(
+                contextMenuBuilder: koinlyTextFieldContextMenu,
+                controller: title,
+                textCapitalization: TextCapitalization.sentences,
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Title',
+                  counterText: '',
                 ),
-              ],
+                maxLength: 100,
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: TextField(
+                  focusNode: bodyFocus,
+                  contextMenuBuilder: koinlyTextFieldContextMenu,
+                  enableInteractiveSelection: true,
+                  controller: body,
+                  expands: true,
+                  maxLines: null,
+                  minLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textCapitalization: TextCapitalization.sentences,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    color: scheme.onSurface.withOpacity(.78),
+                    height: 1.55,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    hintText: 'Note',
+                  ),
+                ),
+              ),
+            ),
+            _NoteFormatBar(
+              onBold: () => _wrapSelection('**', '**'),
+              onItalic: () => _wrapSelection('_', '_'),
+              onUnderline: () => _wrapSelection('<u>', '</u>'),
+              onStrike: () => _wrapSelection('~~', '~~'),
+              onHighlight: () => _wrapSelection('==', '=='),
+              onLink: () => _wrapSelection('[', '](https://)'),
+              onQuote: () => _prefixLine('> '),
+              onBullet: () => _prefixLine('- '),
+              onCode: () => _wrapSelection('`', '`'),
+              onHeading: (level) => _prefixLine('${List.filled(level, '#').join()} '),
+              onUndo: _undoBody,
+              onRedo: _redoBody,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NoteCircleButton extends StatelessWidget {
+  const _NoteCircleButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton.filledTonal(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        style: IconButton.styleFrom(
+          fixedSize: const Size.square(58),
+          shape: const CircleBorder(),
+        ),
+      ),
+    );
+  }
+}
+
+class _NoteFormatBar extends StatelessWidget {
+  const _NoteFormatBar({
+    required this.onBold,
+    required this.onItalic,
+    required this.onUnderline,
+    required this.onStrike,
+    required this.onHighlight,
+    required this.onLink,
+    required this.onQuote,
+    required this.onBullet,
+    required this.onCode,
+    required this.onHeading,
+    required this.onUndo,
+    required this.onRedo,
+  });
+
+  final VoidCallback onBold;
+  final VoidCallback onItalic;
+  final VoidCallback onUnderline;
+  final VoidCallback onStrike;
+  final VoidCallback onHighlight;
+  final VoidCallback onLink;
+  final VoidCallback onQuote;
+  final VoidCallback onBullet;
+  final VoidCallback onCode;
+  final ValueChanged<int> onHeading;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withOpacity(.72),
+        border: Border(top: BorderSide(color: scheme.outline.withOpacity(.12))),
+      ),
+      height: 64,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        children: [
+          _NoteFormatButton(label: 'B', onPressed: onBold, style: const TextStyle(fontWeight: FontWeight.w900)),
+          _NoteFormatButton(label: 'I', onPressed: onItalic, style: const TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w800)),
+          _NoteFormatButton(label: 'U', onPressed: onUnderline, style: const TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
+          _NoteFormatButton(label: 'S', onPressed: onStrike, style: const TextStyle(decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w900)),
+          _NoteIconFormatButton(icon: Icons.border_color_rounded, onPressed: onHighlight, tooltip: 'Highlight'),
+          _NoteIconFormatButton(icon: Icons.link_rounded, onPressed: onLink, tooltip: 'Link'),
+          _NoteDivider(),
+          _NoteIconFormatButton(icon: Icons.format_quote_rounded, onPressed: onQuote, tooltip: 'Quote'),
+          _NoteIconFormatButton(icon: Icons.format_list_bulleted_rounded, onPressed: onBullet, tooltip: 'Bullet list'),
+          _NoteIconFormatButton(icon: Icons.code_rounded, onPressed: onCode, tooltip: 'Inline code'),
+          _NoteDivider(),
+          for (var level = 1; level <= 6; level++) _NoteFormatButton(label: 'H$level', onPressed: () => onHeading(level)),
+          _NoteDivider(),
+          _NoteIconFormatButton(icon: Icons.undo_rounded, onPressed: onUndo, tooltip: 'Undo'),
+          _NoteIconFormatButton(icon: Icons.redo_rounded, onPressed: onRedo, tooltip: 'Redo'),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoteDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => VerticalDivider(
+        width: 18,
+        indent: 18,
+        endIndent: 18,
+        color: Theme.of(context).colorScheme.outline.withOpacity(.18),
+      );
+}
+
+class _NoteFormatButton extends StatelessWidget {
+  const _NoteFormatButton({
+    required this.label,
+    required this.onPressed,
+    this.style,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      child: Text(label, style: style),
+    );
+  }
+}
+
+class _NoteIconFormatButton extends StatelessWidget {
+  const _NoteIconFormatButton({
+    required this.icon,
+    required this.onPressed,
+    required this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon),
     );
   }
 }

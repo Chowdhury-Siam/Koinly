@@ -323,6 +323,8 @@ class KoinlyNote {
     required this.id,
     required this.title,
     required this.body,
+    this.bookmarked = false,
+    this.draft = false,
     required this.createdOn,
     required this.updatedOn,
   });
@@ -330,13 +332,34 @@ class KoinlyNote {
   final String id;
   final String title;
   final String body;
+  final bool bookmarked;
+  final bool draft;
   final DateTime createdOn;
   final DateTime updatedOn;
+
+  KoinlyNote copyWith({
+    String? title,
+    String? body,
+    bool? bookmarked,
+    bool? draft,
+    DateTime? createdOn,
+    DateTime? updatedOn,
+  }) => KoinlyNote(
+        id: id,
+        title: title ?? this.title,
+        body: body ?? this.body,
+        bookmarked: bookmarked ?? this.bookmarked,
+        draft: draft ?? this.draft,
+        createdOn: createdOn ?? this.createdOn,
+        updatedOn: updatedOn ?? this.updatedOn,
+      );
 
   Map<String, Object?> toMap() => {
         'id': id,
         'title': title,
         'body': body,
+        'bookmarked': bookmarked ? 1 : 0,
+        'draft': draft ? 1 : 0,
         'created_on': dateToDb(createdOn),
         'updated_on': dateToDb(updatedOn),
       };
@@ -345,6 +368,8 @@ class KoinlyNote {
         id: map['id'] as String,
         title: map['title'] as String? ?? '',
         body: map['body'] as String? ?? '',
+        bookmarked: (map['bookmarked'] as num? ?? 0).toInt() != 0,
+        draft: (map['draft'] as num? ?? 0).toInt() != 0,
         createdOn: dateFromDb(map['created_on']),
         updatedOn: dateFromDb(map['updated_on']),
       );

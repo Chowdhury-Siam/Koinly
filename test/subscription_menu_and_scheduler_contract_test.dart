@@ -39,8 +39,22 @@ void main() {
     final merge = File('lib/data_merge.dart').readAsStringSync();
 
     expect(models, contains('class KoinlyNote'));
+    expect(models, contains('final bool bookmarked;'));
+    expect(models, contains('final bool draft;'));
     expect(app, contains('class NoteScreen'));
-    expect(app, contains('class NoteEditor'));
+    expect(app, contains('class NoteEditorScreen'));
+    expect(app, contains('class _NoteFormatBar'));
+    expect(app, contains('enum _NoteFilter { bookmarked, draft }'));
+    expect(app, contains("label: 'is:Bookmarked'"));
+    expect(app, contains("label: 'is:Draft'"));
+    expect(app, contains("_NoteSectionTitle('Recent')"));
+    expect(app, contains("_NoteSectionTitle('More entries')"));
+    expect(app, contains('Future<void> toggleNoteBookmark(KoinlyNote note)'));
+    expect(app, contains('Future<void> toggleNoteDraft(KoinlyNote note)'));
+    expect(app, contains('ALTER TABLE notes ADD COLUMN bookmarked'));
+    expect(app, contains('ALTER TABLE notes ADD COLUMN draft'));
+    expect(app, contains("await Navigator.push(context, MaterialPageRoute(builder: (_) => NoteEditorScreen(note: note)))"));
+    expect(app, isNot(contains('child: NoteEditor(')));
     expect(app, contains("CREATE TABLE IF NOT EXISTS notes"));
     expect(app, contains('Future<void> saveNote(KoinlyNote note)'));
     expect(app, contains("await database.deleteNote(id);"));
