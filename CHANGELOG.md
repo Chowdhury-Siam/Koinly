@@ -1,3 +1,10 @@
+## [1.0.1191] - 2026-09-25
+
+- Fixed Note editor toolbar formatting losing or collapsing the selected text on Android; bold, italic and other styles can now be combined on the same selection.
+- Fixed formatting being inherited incorrectly when typing after moving the cursor or replacing a different styled range.
+- Added live selected-state indicators for the Note editor's inline formatting buttons and preserved IME composition styling.
+- Added focused formatting-selection regression tests and synchronized application and bundled Worker version metadata to `1.0.1191+235`.
+
 ## [1.0.1190] - 2026-09-25
 
 - Fixed Note editor formatting so bold, italic, underline, strikethrough, highlight, link-style, and inline code render directly instead of inserting visible Markdown/HTML markers.

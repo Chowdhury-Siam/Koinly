@@ -12900,14 +12900,14 @@ class _CategoryEditorState extends State<CategoryEditor> {
 
 const _koinlyRichNotePrefix = 'KOINLY_RICH_NOTE_V1:';
 
-enum _NoteInlineStyle { bold, italic, underline, strike, highlight, link, code }
+enum NoteInlineStyle { bold, italic, underline, strike, highlight, link, code }
 
 class _NoteStyleRange {
   const _NoteStyleRange(this.start, this.end, this.style);
 
   final int start;
   final int end;
-  final _NoteInlineStyle style;
+  final NoteInlineStyle style;
 
   Map<String, Object> toJson() => {
         'start': start,
@@ -12916,22 +12916,23 @@ class _NoteStyleRange {
       };
 }
 
-class _NoteRichTextController extends TextEditingController {
-  _NoteRichTextController._(String text, List<_NoteStyleRange> ranges)
+class NoteRichTextController extends TextEditingController {
+  NoteRichTextController._(String text, List<_NoteStyleRange> ranges)
       : _ranges = ranges,
         _lastText = text,
         super(text: text) {
+    _lastObservedSelection = selection;
     addListener(_syncRangesAfterTextEdit);
   }
 
-  factory _NoteRichTextController.fromStored(String stored) {
+  factory NoteRichTextController.fromStored(String stored) {
     if (!stored.startsWith(_koinlyRichNotePrefix)) {
-      return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+      return NoteRichTextController._(stored, <_NoteStyleRange>[]);
     }
     try {
       final decoded = jsonDecode(stored.substring(_koinlyRichNotePrefix.length));
       if (decoded is! Map<String, dynamic>) {
-        return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+        return NoteRichTextController._(stored, <_NoteStyleRange>[]);
       }
       final text = decoded['text'] as String? ?? '';
       final rawRanges = decoded['styles'];
@@ -12943,8 +12944,8 @@ class _NoteRichTextController extends TextEditingController {
           final end = (item['end'] as num?)?.toInt();
           final styleName = item['style']?.toString();
           if (start == null || end == null || start < 0 || end <= start || end > text.length) continue;
-          _NoteInlineStyle? style;
-          for (final candidate in _NoteInlineStyle.values) {
+          NoteInlineStyle? style;
+          for (final candidate in NoteInlineStyle.values) {
             if (candidate.name == styleName) {
               style = candidate;
               break;
@@ -12953,15 +12954,18 @@ class _NoteRichTextController extends TextEditingController {
           if (style != null) ranges.add(_NoteStyleRange(start, end, style));
         }
       }
-      return _NoteRichTextController._(text, ranges);
+      return NoteRichTextController._(text, ranges);
     } catch (_) {
-      return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+      return NoteRichTextController._(stored, <_NoteStyleRange>[]);
     }
   }
 
   final List<_NoteStyleRange> _ranges;
-  final Set<_NoteInlineStyle> _typingStyles = <_NoteInlineStyle>{};
+  // null means inherit the style at the caret. An explicit empty set means
+  // the user turned the surrounding styles off before typing.
+  Set<NoteInlineStyle>? _typingStylesOverride;
   String _lastText;
+  late TextSelection _lastObservedSelection;
   bool _restoring = false;
 
   static String plainTextFromStored(String stored) {
@@ -12983,7 +12987,7 @@ class _NoteRichTextController extends TextEditingController {
   }
 
   void restoreStored(String stored) {
-    final restored = _NoteRichTextController.fromStored(stored);
+    final restored = NoteRichTextController.fromStored(stored);
     _restoring = true;
     value = TextEditingValue(
       text: restored.text,
@@ -12992,29 +12996,58 @@ class _NoteRichTextController extends TextEditingController {
     _ranges
       ..clear()
       ..addAll(restored._ranges);
-    _typingStyles.clear();
+    _typingStylesOverride = null;
     _lastText = restored.text;
+    _lastObservedSelection = selection;
     _restoring = false;
     notifyListeners();
     restored.dispose();
   }
 
-  bool isStyleActive(_NoteInlineStyle style) {
+  bool isStyleActive(NoteInlineStyle style) {
     final selection = this.selection;
-    if (!selection.isValid || selection.isCollapsed) return _typingStyles.contains(style);
+    if (!selection.isValid) return _typingStylesOverride?.contains(style) ?? false;
+    if (selection.isCollapsed) {
+      return (_typingStylesOverride ?? _stylesForCaret(selection.extentOffset)).contains(style);
+    }
     final start = selection.start < selection.end ? selection.start : selection.end;
     final end = selection.start < selection.end ? selection.end : selection.start;
-    if (start == end) return _typingStyles.contains(style);
-    for (var i = start; i < end; i++) {
-      if (!_stylesAt(i).contains(style)) return false;
+    // Walk style ranges instead of every character; selecting a long note
+    // must not freeze the formatting bar.
+    var coveredTo = start;
+    for (final range in _ranges) {
+      if (range.style != style || range.end <= coveredTo) continue;
+      if (range.start > coveredTo) return false;
+      coveredTo = math.max(coveredTo, range.end);
+      if (coveredTo >= end) return true;
     }
-    return true;
+    return false;
   }
 
-  void toggleStyle(_NoteInlineStyle style) {
+  Set<NoteInlineStyle> _stylesForCaret(int offset) {
+    if (offset < 0 || offset > text.length) return <NoteInlineStyle>{};
+    if (offset == 0) return _stylesAt(0);
+    final preceding = _stylesAt(offset - 1);
+    return preceding.isNotEmpty ? preceding : _stylesAt(offset);
+  }
+
+  void toggleStyle(NoteInlineStyle style, {TextSelection? selectionOverride}) {
+    // Text selection can collapse when Android transfers focus to a toolbar
+    // button. Restore the selection captured on pointer-down before styling.
+    if (selectionOverride != null && selectionOverride.isValid &&
+        selectionOverride != this.selection && selectionOverride.end <= text.length) {
+      this.selection = selectionOverride;
+    }
     final selection = this.selection;
     if (!selection.isValid || selection.isCollapsed) {
-      if (!_typingStyles.add(style)) _typingStyles.remove(style);
+      final next = <NoteInlineStyle>{
+        ...?_typingStylesOverride,
+      };
+      if (_typingStylesOverride == null && selection.isValid) {
+        next.addAll(_stylesForCaret(selection.extentOffset));
+      }
+      if (!next.add(style)) next.remove(style);
+      _typingStylesOverride = next;
       notifyListeners();
       return;
     }
@@ -13027,10 +13060,11 @@ class _NoteRichTextController extends TextEditingController {
       _ranges.add(_NoteStyleRange(start, end, style));
       _mergeRanges();
     }
+    _typingStylesOverride = null;
     notifyListeners();
   }
 
-  void _removeStyle(int start, int end, _NoteInlineStyle style) {
+  void _removeStyle(int start, int end, NoteInlineStyle style) {
     final next = <_NoteStyleRange>[];
     for (final range in _ranges) {
       if (range.style != style || range.end <= start || range.start >= end) {
@@ -13046,8 +13080,8 @@ class _NoteRichTextController extends TextEditingController {
     _mergeRanges();
   }
 
-  Set<_NoteInlineStyle> _stylesAt(int offset) {
-    final result = <_NoteInlineStyle>{};
+  Set<NoteInlineStyle> _stylesAt(int offset) {
+    final result = <NoteInlineStyle>{};
     for (final range in _ranges) {
       if (range.start <= offset && offset < range.end) result.add(range.style);
     }
@@ -13055,7 +13089,15 @@ class _NoteRichTextController extends TextEditingController {
   }
 
   void _syncRangesAfterTextEdit() {
-    if (_restoring || _lastText == text) return;
+    if (_restoring) return;
+    if (_lastText == text) {
+      // Moving the caret or selecting another span ends a temporary typing
+      // mode. Merely repainting after a style toggle leaves it unchanged.
+      if (_lastObservedSelection != selection) _typingStylesOverride = null;
+      _lastObservedSelection = selection;
+      return;
+    }
+    _lastObservedSelection = selection;
     final oldText = _lastText;
     final newText = text;
     var prefix = 0;
@@ -13072,7 +13114,11 @@ class _NoteRichTextController extends TextEditingController {
     final oldEnd = oldText.length - suffix;
     final newEnd = newText.length - suffix;
     final delta = (newEnd - prefix) - (oldEnd - prefix);
-    final inherited = prefix > 0 ? _stylesAt(prefix - 1) : <_NoteInlineStyle>{};
+    // Replacement inherits the style of the replaced text, not of an
+    // unrelated formatted word just before the selection.
+    final inherited = oldEnd > prefix
+        ? _stylesAt(prefix)
+        : _stylesForCaret(prefix);
     final next = <_NoteStyleRange>[];
     for (final range in _ranges) {
       if (range.end <= prefix) {
@@ -13091,7 +13137,7 @@ class _NoteRichTextController extends TextEditingController {
       ..addAll(next.where((range) => range.start >= 0 && range.end <= newText.length && range.end > range.start));
 
     if (newEnd > prefix) {
-      final styles = _typingStyles.isNotEmpty ? _typingStyles : inherited;
+      final styles = _typingStylesOverride ?? inherited;
       for (final style in styles) {
         _ranges.add(_NoteStyleRange(prefix, newEnd, style));
       }
@@ -13127,20 +13173,20 @@ class _NoteRichTextController extends TextEditingController {
       ..addAll(merged);
   }
 
-  TextStyle _styleFor(Set<_NoteInlineStyle> styles, TextStyle baseStyle, ColorScheme scheme) {
+  TextStyle _styleFor(Set<NoteInlineStyle> styles, TextStyle baseStyle, ColorScheme scheme) {
     final decorations = <TextDecoration>[
-      if (styles.contains(_NoteInlineStyle.underline) || styles.contains(_NoteInlineStyle.link)) TextDecoration.underline,
-      if (styles.contains(_NoteInlineStyle.strike)) TextDecoration.lineThrough,
+      if (styles.contains(NoteInlineStyle.underline) || styles.contains(NoteInlineStyle.link)) TextDecoration.underline,
+      if (styles.contains(NoteInlineStyle.strike)) TextDecoration.lineThrough,
     ];
     return baseStyle.copyWith(
-      fontWeight: styles.contains(_NoteInlineStyle.bold) ? FontWeight.w900 : baseStyle.fontWeight,
-      fontStyle: styles.contains(_NoteInlineStyle.italic) ? FontStyle.italic : baseStyle.fontStyle,
+      fontWeight: styles.contains(NoteInlineStyle.bold) ? FontWeight.w900 : baseStyle.fontWeight,
+      fontStyle: styles.contains(NoteInlineStyle.italic) ? FontStyle.italic : baseStyle.fontStyle,
       decoration: decorations.isEmpty ? baseStyle.decoration : TextDecoration.combine(decorations),
-      decorationColor: styles.contains(_NoteInlineStyle.link) ? scheme.primary : baseStyle.decorationColor,
-      color: styles.contains(_NoteInlineStyle.link) ? scheme.primary : baseStyle.color,
-      backgroundColor: styles.contains(_NoteInlineStyle.highlight) ? scheme.primary.withOpacity(.20) : baseStyle.backgroundColor,
-      fontFamily: styles.contains(_NoteInlineStyle.code) ? 'monospace' : baseStyle.fontFamily,
-      fontFamilyFallback: styles.contains(_NoteInlineStyle.code) ? const ['Courier New', 'Courier'] : baseStyle.fontFamilyFallback,
+      decorationColor: styles.contains(NoteInlineStyle.link) ? scheme.primary : baseStyle.decorationColor,
+      color: styles.contains(NoteInlineStyle.link) ? scheme.primary : baseStyle.color,
+      backgroundColor: styles.contains(NoteInlineStyle.highlight) ? scheme.primary.withOpacity(.20) : baseStyle.backgroundColor,
+      fontFamily: styles.contains(NoteInlineStyle.code) ? 'monospace' : baseStyle.fontFamily,
+      fontFamilyFallback: styles.contains(NoteInlineStyle.code) ? const ['Courier New', 'Courier'] : baseStyle.fontFamilyFallback,
     );
   }
 
@@ -13148,12 +13194,21 @@ class _NoteRichTextController extends TextEditingController {
   TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
     final baseStyle = style ?? const TextStyle();
     final scheme = Theme.of(context).colorScheme;
-    if (text.isEmpty || _ranges.isEmpty) return TextSpan(style: baseStyle, text: text);
+    final composing = value.composing;
+    final hasComposing = withComposing && composing.isValid && !composing.isCollapsed;
+    if (text.isEmpty || (_ranges.isEmpty && !hasComposing)) {
+      return TextSpan(style: baseStyle, text: text);
+    }
     final boundaries = <int>{0, text.length};
     for (final range in _ranges) {
       boundaries
         ..add(range.start.clamp(0, text.length).toInt())
         ..add(range.end.clamp(0, text.length).toInt());
+    }
+    if (hasComposing) {
+      boundaries
+        ..add(composing.start.clamp(0, text.length).toInt())
+        ..add(composing.end.clamp(0, text.length).toInt());
     }
     final sorted = boundaries.toList()..sort();
     final children = <InlineSpan>[];
@@ -13161,9 +13216,18 @@ class _NoteRichTextController extends TextEditingController {
       final start = sorted[i];
       final end = sorted[i + 1];
       if (end <= start) continue;
+      var spanStyle = _styleFor(_stylesAt(start), baseStyle, scheme);
+      if (hasComposing && start >= composing.start && end <= composing.end) {
+        spanStyle = spanStyle.copyWith(
+          decoration: TextDecoration.combine([
+            if (spanStyle.decoration != null) spanStyle.decoration!,
+            TextDecoration.underline,
+          ]),
+        );
+      }
       children.add(TextSpan(
         text: text.substring(start, end),
-        style: _styleFor(_stylesAt(start), baseStyle, scheme),
+        style: spanStyle,
       ));
     }
     return TextSpan(style: baseStyle, children: children);
@@ -13200,7 +13264,7 @@ class _NoteScreenState extends State<NoteScreen> {
     final query = search.text.trim().toLowerCase();
     var items = state.notes.where((note) {
       if (query.isEmpty) return true;
-      return '${note.title} ${_NoteRichTextController.plainTextFromStored(note.body)}'.toLowerCase().contains(query);
+      return '${note.title} ${NoteRichTextController.plainTextFromStored(note.body)}'.toLowerCase().contains(query);
     }).toList();
     final recent = items.take(2).toList();
     final more = items.skip(2).toList();
@@ -13318,7 +13382,7 @@ class NoteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final body = _NoteRichTextController.plainTextFromStored(note.body).trim();
+    final body = NoteRichTextController.plainTextFromStored(note.body).trim();
     final title = note.title.trim().isEmpty ? 'Untitled note' : note.title.trim();
     final card = ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -13464,8 +13528,9 @@ class NoteEditorScreen extends StatefulWidget {
 
 class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final title = TextEditingController();
-  late final _NoteRichTextController body;
+  late final NoteRichTextController body;
   final bodyFocus = FocusNode();
+  TextSelection? _selectionBeforeToolbar;
   final _undo = <String>[];
   final _redo = <String>[];
   bool bookmarked = false;
@@ -13477,7 +13542,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void initState() {
     super.initState();
     title.text = widget.note?.title ?? '';
-    body = _NoteRichTextController.fromStored(widget.note?.body ?? '');
+    body = NoteRichTextController.fromStored(widget.note?.body ?? '');
     bookmarked = widget.note?.bookmarked ?? false;
     draft = widget.note?.draft ?? false;
     noteDate = widget.note?.createdOn ?? DateTime.now();
@@ -13523,11 +13588,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _replaceBodyText(value);
   }
 
-  void _toggleInlineStyle(_NoteInlineStyle style) {
-    body.toggleStyle(style);
+  void _toggleInlineStyle(NoteInlineStyle style) {
+    final selectedText = _selectionBeforeToolbar;
+    _selectionBeforeToolbar = null;
     bodyFocus.requestFocus();
+    body.toggleStyle(style, selectionOverride: selectedText);
     _recordBodyHistory();
     setState(() {});
+  }
+
+  void _rememberSelectionBeforeToolbar() {
+    final selection = body.selection;
+    _selectionBeforeToolbar = selection.isValid && !selection.isCollapsed
+        ? selection
+        : null;
   }
 
   void _insertAtSelection(String value) {
@@ -13763,6 +13837,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 padding: EdgeInsets.symmetric(horizontal: sidePadding),
                 child: TextField(
                   focusNode: bodyFocus,
+                  onTap: () => _selectionBeforeToolbar = null,
                   contextMenuBuilder: koinlyTextFieldContextMenu,
                   enableInteractiveSelection: true,
                   controller: body,
@@ -13788,18 +13863,28 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             if (toolsOpen)
-              _NoteFormatBar(
-                onBold: () => _toggleInlineStyle(_NoteInlineStyle.bold),
-                onItalic: () => _toggleInlineStyle(_NoteInlineStyle.italic),
-                onUnderline: () => _toggleInlineStyle(_NoteInlineStyle.underline),
-                onStrike: () => _toggleInlineStyle(_NoteInlineStyle.strike),
-                onHighlight: () => _toggleInlineStyle(_NoteInlineStyle.highlight),
-                onLink: () => _toggleInlineStyle(_NoteInlineStyle.link),
-                onQuote: () => _prefixLine('❝ '),
-                onBullet: () => _prefixLine('• '),
-                onCode: () => _toggleInlineStyle(_NoteInlineStyle.code),
-                onUndo: _undoBody,
-                onRedo: _redoBody,
+              Listener(
+                onPointerDown: (_) => _rememberSelectionBeforeToolbar(),
+                child: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: body,
+                  builder: (context, _, __) => _NoteFormatBar(
+                    activeStyles: {
+                      for (final style in NoteInlineStyle.values)
+                        if (body.isStyleActive(style)) style,
+                    },
+                    onBold: () => _toggleInlineStyle(NoteInlineStyle.bold),
+                    onItalic: () => _toggleInlineStyle(NoteInlineStyle.italic),
+                    onUnderline: () => _toggleInlineStyle(NoteInlineStyle.underline),
+                    onStrike: () => _toggleInlineStyle(NoteInlineStyle.strike),
+                    onHighlight: () => _toggleInlineStyle(NoteInlineStyle.highlight),
+                    onLink: () => _toggleInlineStyle(NoteInlineStyle.link),
+                    onQuote: () => _prefixLine('❝ '),
+                    onBullet: () => _prefixLine('• '),
+                    onCode: () => _toggleInlineStyle(NoteInlineStyle.code),
+                    onUndo: _undoBody,
+                    onRedo: _redoBody,
+                  ),
+                ),
               ),
           ],
         ),
@@ -13922,6 +14007,7 @@ class _NoteCircleButton extends StatelessWidget {
 
 class _NoteFormatBar extends StatelessWidget {
   const _NoteFormatBar({
+    required this.activeStyles,
     required this.onBold,
     required this.onItalic,
     required this.onUnderline,
@@ -13935,6 +14021,7 @@ class _NoteFormatBar extends StatelessWidget {
     required this.onRedo,
   });
 
+  final Set<NoteInlineStyle> activeStyles;
   final VoidCallback onBold;
   final VoidCallback onItalic;
   final VoidCallback onUnderline;
@@ -13960,16 +14047,16 @@ class _NoteFormatBar extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         children: [
-          _NoteFormatButton(label: 'B', onPressed: onBold, style: const TextStyle(fontWeight: FontWeight.w900)),
-          _NoteFormatButton(label: 'I', onPressed: onItalic, style: const TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w800)),
-          _NoteFormatButton(label: 'U', onPressed: onUnderline, style: const TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
-          _NoteFormatButton(label: 'S', onPressed: onStrike, style: const TextStyle(decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w900)),
-          _NoteIconFormatButton(icon: Icons.border_color_rounded, onPressed: onHighlight, tooltip: 'Highlight'),
-          _NoteIconFormatButton(icon: Icons.link_rounded, onPressed: onLink, tooltip: 'Link'),
+          _NoteFormatButton(label: 'B', selected: activeStyles.contains(NoteInlineStyle.bold), onPressed: onBold, style: const TextStyle(fontWeight: FontWeight.w900)),
+          _NoteFormatButton(label: 'I', selected: activeStyles.contains(NoteInlineStyle.italic), onPressed: onItalic, style: const TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w800)),
+          _NoteFormatButton(label: 'U', selected: activeStyles.contains(NoteInlineStyle.underline), onPressed: onUnderline, style: const TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
+          _NoteFormatButton(label: 'S', selected: activeStyles.contains(NoteInlineStyle.strike), onPressed: onStrike, style: const TextStyle(decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w900)),
+          _NoteIconFormatButton(icon: Icons.border_color_rounded, selected: activeStyles.contains(NoteInlineStyle.highlight), onPressed: onHighlight, tooltip: 'Highlight'),
+          _NoteIconFormatButton(icon: Icons.link_rounded, selected: activeStyles.contains(NoteInlineStyle.link), onPressed: onLink, tooltip: 'Link'),
           _NoteDivider(),
           _NoteIconFormatButton(icon: Icons.format_quote_rounded, onPressed: onQuote, tooltip: 'Quote'),
           _NoteIconFormatButton(icon: Icons.format_list_bulleted_rounded, onPressed: onBullet, tooltip: 'Bullet list'),
-          _NoteIconFormatButton(icon: Icons.code_rounded, onPressed: onCode, tooltip: 'Inline code'),
+          _NoteIconFormatButton(icon: Icons.code_rounded, selected: activeStyles.contains(NoteInlineStyle.code), onPressed: onCode, tooltip: 'Inline code'),
           _NoteDivider(),
           _NoteIconFormatButton(icon: Icons.undo_rounded, onPressed: onUndo, tooltip: 'Undo'),
           _NoteIconFormatButton(icon: Icons.redo_rounded, onPressed: onRedo, tooltip: 'Redo'),
@@ -13993,17 +14080,23 @@ class _NoteFormatButton extends StatelessWidget {
   const _NoteFormatButton({
     required this.label,
     required this.onPressed,
+    this.selected = false,
     this.style,
   });
 
   final String label;
   final VoidCallback onPressed;
+  final bool selected;
   final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
     return TextButton(
       onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: selected ? kSleekAccent.withOpacity(.18) : null,
+        foregroundColor: selected ? kSleekAccent : null,
+      ),
       child: Text(label, style: style),
     );
   }
@@ -14014,17 +14107,23 @@ class _NoteIconFormatButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     required this.tooltip,
+    this.selected = false,
   });
 
   final IconData icon;
   final VoidCallback onPressed;
   final String tooltip;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
+      style: IconButton.styleFrom(
+        backgroundColor: selected ? kSleekAccent.withOpacity(.18) : null,
+        foregroundColor: selected ? kSleekAccent : null,
+      ),
       icon: Icon(icon),
     );
   }
