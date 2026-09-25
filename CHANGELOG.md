@@ -1,3 +1,8 @@
+## [1.0.1189] - 2026-09-25
+
+- Fixed the Note editor phone layout with compact button, text, and chip sizing so the date/time row no longer clips.
+- Synchronized application and bundled Worker version metadata to `1.0.1189+233`.
+
 ## [1.0.1188] - 2026-09-24
 
 - Removed the H1-H6 heading controls from the Note editor toolbar.

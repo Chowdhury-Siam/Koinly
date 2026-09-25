@@ -52,8 +52,10 @@ void main() {
     expect(app, contains('Future<void> _pickNoteDate()'));
     expect(app, contains('Future<void> _pickNoteTime()'));
     expect(app, contains('Future<void> _pickEmoji()'));
-    expect(app, contains("_NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate)"));
-    expect(app, contains("_NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime)"));
+    expect(app, contains('final compact = MediaQuery.sizeOf(context).width < 520;'));
+    expect(app, contains('final circleSize = compact ? 48.0 : 58.0;'));
+    expect(app, contains("_NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate, height: chipHeight, compact: compact)"));
+    expect(app, contains("_NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime, height: chipHeight, compact: compact)"));
     expect(app, contains('Future<void> toggleNoteBookmark(KoinlyNote note)'));
     expect(app, contains('Future<void> toggleNoteDraft(KoinlyNote note)'));
     expect(app, contains('ALTER TABLE notes ADD COLUMN bookmarked'));

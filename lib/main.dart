@@ -13349,31 +13349,38 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final compact = MediaQuery.sizeOf(context).width < 520;
+    final sidePadding = compact ? 28.0 : 38.0;
+    final circleSize = compact ? 48.0 : 58.0;
+    final chipHeight = compact ? 46.0 : 58.0;
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
+              padding: EdgeInsets.fromLTRB(compact ? 12 : 14, compact ? 10 : 12, compact ? 12 : 14, compact ? 18 : 18),
               child: Row(
                 children: [
                   _NoteCircleButton(
                     tooltip: 'Close',
                     icon: Icons.close_rounded,
+                    size: circleSize,
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: compact ? 8 : 10),
                   _NoteCircleButton(
                     tooltip: 'Insert emoji',
                     icon: Icons.emoji_emotions_outlined,
+                    size: circleSize,
                     onPressed: _pickEmoji,
                   ),
-                  const SizedBox(width: 10),
+                  SizedBox(width: compact ? 8 : 10),
                   _NoteCircleButton(
                     tooltip: 'Add checklist item',
                     icon: Icons.add_circle_outline_rounded,
                     selected: toolsOpen,
+                    size: circleSize,
                     onPressed: () => setState(() => toolsOpen = !toolsOpen),
                   ),
                   const Spacer(),
@@ -13416,7 +13423,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 38),
+              padding: EdgeInsets.symmetric(horizontal: sidePadding),
               child: TextField(
                 contextMenuBuilder: koinlyTextFieldContextMenu,
                 controller: title,
@@ -13424,6 +13431,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 style: theme.textTheme.displaySmall?.copyWith(
                   color: scheme.onSurface,
                   fontWeight: FontWeight.w900,
+                  fontSize: compact ? 34 : null,
                 ),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
@@ -13437,7 +13445,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(30, 14, 30, 26),
+              padding: EdgeInsets.fromLTRB(sidePadding, compact ? 10 : 14, sidePadding, compact ? 22 : 26),
               child: Row(
                 children: [
                   Expanded(
@@ -13445,20 +13453,23 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _NoteMetaChip(icon: Icons.calendar_month_rounded, tooltip: 'Choose date', onTap: _pickNoteDate),
-                          const SizedBox(width: 6),
-                          _NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate),
-                          const SizedBox(width: 6),
-                          _NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime),
+                          if (!compact) ...[
+                            _NoteMetaChip(icon: Icons.calendar_month_rounded, tooltip: 'Choose date', onTap: _pickNoteDate, height: chipHeight),
+                            const SizedBox(width: 6),
+                          ],
+                          _NoteMetaChip(label: DateFormat('EEE, MMM d, yyyy').format(noteDate), tooltip: 'Choose date', onTap: _pickNoteDate, height: chipHeight, compact: compact),
+                          SizedBox(width: compact ? 5 : 6),
+                          _NoteMetaChip(label: DateFormat('h:mm a').format(noteDate), tooltip: 'Choose time', onTap: _pickNoteTime, height: chipHeight, compact: compact),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: compact ? 8 : 12),
                   _NoteCircleButton(
                     tooltip: bookmarked ? 'Remove bookmark' : 'Bookmark',
                     icon: bookmarked ? Icons.bookmark_rounded : Icons.sell_outlined,
                     selected: bookmarked,
+                    size: circleSize,
                     onPressed: _toggleBookmark,
                   ),
                 ],
@@ -13466,7 +13477,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 38),
+                padding: EdgeInsets.symmetric(horizontal: sidePadding),
                 child: TextField(
                   focusNode: bodyFocus,
                   contextMenuBuilder: koinlyTextFieldContextMenu,
@@ -13481,6 +13492,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     color: scheme.onSurface.withOpacity(.78),
                     height: 1.55,
                     fontWeight: FontWeight.w500,
+                    fontSize: compact ? 24 : null,
                   ),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
@@ -13514,12 +13526,21 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 }
 
 class _NoteMetaChip extends StatelessWidget {
-  const _NoteMetaChip({this.icon, this.label, this.tooltip, this.onTap});
+  const _NoteMetaChip({
+    this.icon,
+    this.label,
+    this.tooltip,
+    this.onTap,
+    this.height = 58,
+    this.compact = false,
+  });
 
   final IconData? icon;
   final String? label;
   final String? tooltip;
   final VoidCallback? onTap;
+  final double height;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -13531,8 +13552,8 @@ class _NoteMetaChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: Container(
-          height: 58,
-          padding: EdgeInsets.symmetric(horizontal: label == null ? 18 : 20),
+          height: height,
+          padding: EdgeInsets.symmetric(horizontal: label == null ? (compact ? 14 : 18) : (compact ? 14 : 20)),
           alignment: Alignment.center,
           child: icon == null
               ? Text(
@@ -13542,9 +13563,10 @@ class _NoteMetaChip extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: scheme.onSurface.withOpacity(.82),
                         fontWeight: FontWeight.w900,
+                        fontSize: compact ? 15 : null,
                       ),
                 )
-              : Icon(icon, color: scheme.onSurface.withOpacity(.74)),
+              : Icon(icon, size: compact ? 20 : null, color: scheme.onSurface.withOpacity(.74)),
         ),
       ),
     );
@@ -13587,12 +13609,14 @@ class _NoteCircleButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.selected = false,
+    this.size = 58,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
   final bool selected;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -13604,7 +13628,8 @@ class _NoteCircleButton extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: selected ? kSleekAccent.withOpacity(.18) : null,
           foregroundColor: selected ? kSleekAccent : null,
-          fixedSize: const Size.square(58),
+          fixedSize: Size.square(size),
+          iconSize: size <= 48 ? 24 : null,
           shape: const CircleBorder(),
         ),
       ),
