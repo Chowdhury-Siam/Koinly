@@ -12897,6 +12897,284 @@ class _CategoryEditorState extends State<CategoryEditor> {
 
 // -----------------------------------------------------------------------------
 // Notes
+
+const _koinlyRichNotePrefix = 'KOINLY_RICH_NOTE_V1:';
+
+enum _NoteInlineStyle { bold, italic, underline, strike, highlight, link, code }
+
+class _NoteStyleRange {
+  const _NoteStyleRange(this.start, this.end, this.style);
+
+  final int start;
+  final int end;
+  final _NoteInlineStyle style;
+
+  Map<String, Object> toJson() => {
+        'start': start,
+        'end': end,
+        'style': style.name,
+      };
+}
+
+class _NoteRichTextController extends TextEditingController {
+  _NoteRichTextController._(String text, List<_NoteStyleRange> ranges)
+      : _ranges = ranges,
+        _lastText = text,
+        super(text: text) {
+    addListener(_syncRangesAfterTextEdit);
+  }
+
+  factory _NoteRichTextController.fromStored(String stored) {
+    if (!stored.startsWith(_koinlyRichNotePrefix)) {
+      return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+    }
+    try {
+      final decoded = jsonDecode(stored.substring(_koinlyRichNotePrefix.length));
+      if (decoded is! Map<String, dynamic>) {
+        return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+      }
+      final text = decoded['text'] as String? ?? '';
+      final rawRanges = decoded['styles'];
+      final ranges = <_NoteStyleRange>[];
+      if (rawRanges is List) {
+        for (final item in rawRanges) {
+          if (item is! Map) continue;
+          final start = (item['start'] as num?)?.toInt();
+          final end = (item['end'] as num?)?.toInt();
+          final styleName = item['style']?.toString();
+          if (start == null || end == null || start < 0 || end <= start || end > text.length) continue;
+          _NoteInlineStyle? style;
+          for (final candidate in _NoteInlineStyle.values) {
+            if (candidate.name == styleName) {
+              style = candidate;
+              break;
+            }
+          }
+          if (style != null) ranges.add(_NoteStyleRange(start, end, style));
+        }
+      }
+      return _NoteRichTextController._(text, ranges);
+    } catch (_) {
+      return _NoteRichTextController._(stored, <_NoteStyleRange>[]);
+    }
+  }
+
+  final List<_NoteStyleRange> _ranges;
+  final Set<_NoteInlineStyle> _typingStyles = <_NoteInlineStyle>{};
+  String _lastText;
+  bool _restoring = false;
+
+  static String plainTextFromStored(String stored) {
+    if (!stored.startsWith(_koinlyRichNotePrefix)) return stored;
+    try {
+      final decoded = jsonDecode(stored.substring(_koinlyRichNotePrefix.length));
+      if (decoded is Map) return decoded['text']?.toString() ?? '';
+    } catch (_) {}
+    return stored;
+  }
+
+  String toStoredBody() {
+    final cleanRanges = _normalizedRanges();
+    if (cleanRanges.isEmpty) return text;
+    return '$_koinlyRichNotePrefix${jsonEncode({
+      'text': text,
+      'styles': cleanRanges.map((range) => range.toJson()).toList(),
+    })}';
+  }
+
+  void restoreStored(String stored) {
+    final restored = _NoteRichTextController.fromStored(stored);
+    _restoring = true;
+    value = TextEditingValue(
+      text: restored.text,
+      selection: TextSelection.collapsed(offset: restored.text.length),
+    );
+    _ranges
+      ..clear()
+      ..addAll(restored._ranges);
+    _typingStyles.clear();
+    _lastText = restored.text;
+    _restoring = false;
+    notifyListeners();
+    restored.dispose();
+  }
+
+  bool isStyleActive(_NoteInlineStyle style) {
+    final selection = this.selection;
+    if (!selection.isValid || selection.isCollapsed) return _typingStyles.contains(style);
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    if (start == end) return _typingStyles.contains(style);
+    for (var i = start; i < end; i++) {
+      if (!_stylesAt(i).contains(style)) return false;
+    }
+    return true;
+  }
+
+  void toggleStyle(_NoteInlineStyle style) {
+    final selection = this.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      if (!_typingStyles.add(style)) _typingStyles.remove(style);
+      notifyListeners();
+      return;
+    }
+    final start = selection.start < selection.end ? selection.start : selection.end;
+    final end = selection.start < selection.end ? selection.end : selection.start;
+    if (start == end) return;
+    if (isStyleActive(style)) {
+      _removeStyle(start, end, style);
+    } else {
+      _ranges.add(_NoteStyleRange(start, end, style));
+      _mergeRanges();
+    }
+    notifyListeners();
+  }
+
+  void _removeStyle(int start, int end, _NoteInlineStyle style) {
+    final next = <_NoteStyleRange>[];
+    for (final range in _ranges) {
+      if (range.style != style || range.end <= start || range.start >= end) {
+        next.add(range);
+        continue;
+      }
+      if (range.start < start) next.add(_NoteStyleRange(range.start, start, style));
+      if (range.end > end) next.add(_NoteStyleRange(end, range.end, style));
+    }
+    _ranges
+      ..clear()
+      ..addAll(next);
+    _mergeRanges();
+  }
+
+  Set<_NoteInlineStyle> _stylesAt(int offset) {
+    final result = <_NoteInlineStyle>{};
+    for (final range in _ranges) {
+      if (range.start <= offset && offset < range.end) result.add(range.style);
+    }
+    return result;
+  }
+
+  void _syncRangesAfterTextEdit() {
+    if (_restoring || _lastText == text) return;
+    final oldText = _lastText;
+    final newText = text;
+    var prefix = 0;
+    final minLength = math.min(oldText.length, newText.length);
+    while (prefix < minLength && oldText.codeUnitAt(prefix) == newText.codeUnitAt(prefix)) {
+      prefix++;
+    }
+    var suffix = 0;
+    while (suffix < oldText.length - prefix &&
+        suffix < newText.length - prefix &&
+        oldText.codeUnitAt(oldText.length - 1 - suffix) == newText.codeUnitAt(newText.length - 1 - suffix)) {
+      suffix++;
+    }
+    final oldEnd = oldText.length - suffix;
+    final newEnd = newText.length - suffix;
+    final delta = (newEnd - prefix) - (oldEnd - prefix);
+    final inherited = prefix > 0 ? _stylesAt(prefix - 1) : <_NoteInlineStyle>{};
+    final next = <_NoteStyleRange>[];
+    for (final range in _ranges) {
+      if (range.end <= prefix) {
+        next.add(range);
+      } else if (range.start >= oldEnd) {
+        next.add(_NoteStyleRange(range.start + delta, range.end + delta, range.style));
+      } else {
+        if (range.start < prefix) next.add(_NoteStyleRange(range.start, prefix, range.style));
+        if (range.end > oldEnd) {
+          next.add(_NoteStyleRange(newEnd, range.end + delta, range.style));
+        }
+      }
+    }
+    _ranges
+      ..clear()
+      ..addAll(next.where((range) => range.start >= 0 && range.end <= newText.length && range.end > range.start));
+
+    if (newEnd > prefix) {
+      final styles = _typingStyles.isNotEmpty ? _typingStyles : inherited;
+      for (final style in styles) {
+        _ranges.add(_NoteStyleRange(prefix, newEnd, style));
+      }
+    }
+    _mergeRanges();
+    _lastText = newText;
+  }
+
+  List<_NoteStyleRange> _normalizedRanges() {
+    _mergeRanges();
+    return List<_NoteStyleRange>.unmodifiable(_ranges);
+  }
+
+  void _mergeRanges() {
+    _ranges.sort((a, b) {
+      final styleCompare = a.style.index.compareTo(b.style.index);
+      return styleCompare != 0 ? styleCompare : a.start.compareTo(b.start);
+    });
+    final merged = <_NoteStyleRange>[];
+    for (final range in _ranges) {
+      if (range.start < 0 || range.end > text.length || range.end <= range.start) continue;
+      if (merged.isNotEmpty) {
+        final previous = merged.last;
+        if (previous.style == range.style && range.start <= previous.end) {
+          merged[merged.length - 1] = _NoteStyleRange(previous.start, math.max(previous.end, range.end), range.style);
+          continue;
+        }
+      }
+      merged.add(range);
+    }
+    _ranges
+      ..clear()
+      ..addAll(merged);
+  }
+
+  TextStyle _styleFor(Set<_NoteInlineStyle> styles, TextStyle baseStyle, ColorScheme scheme) {
+    final decorations = <TextDecoration>[
+      if (styles.contains(_NoteInlineStyle.underline) || styles.contains(_NoteInlineStyle.link)) TextDecoration.underline,
+      if (styles.contains(_NoteInlineStyle.strike)) TextDecoration.lineThrough,
+    ];
+    return baseStyle.copyWith(
+      fontWeight: styles.contains(_NoteInlineStyle.bold) ? FontWeight.w900 : baseStyle.fontWeight,
+      fontStyle: styles.contains(_NoteInlineStyle.italic) ? FontStyle.italic : baseStyle.fontStyle,
+      decoration: decorations.isEmpty ? baseStyle.decoration : TextDecoration.combine(decorations),
+      decorationColor: styles.contains(_NoteInlineStyle.link) ? scheme.primary : baseStyle.decorationColor,
+      color: styles.contains(_NoteInlineStyle.link) ? scheme.primary : baseStyle.color,
+      backgroundColor: styles.contains(_NoteInlineStyle.highlight) ? scheme.primary.withOpacity(.20) : baseStyle.backgroundColor,
+      fontFamily: styles.contains(_NoteInlineStyle.code) ? 'monospace' : baseStyle.fontFamily,
+      fontFamilyFallback: styles.contains(_NoteInlineStyle.code) ? const ['Courier New', 'Courier'] : baseStyle.fontFamilyFallback,
+    );
+  }
+
+  @override
+  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+    final baseStyle = style ?? const TextStyle();
+    final scheme = Theme.of(context).colorScheme;
+    if (text.isEmpty || _ranges.isEmpty) return TextSpan(style: baseStyle, text: text);
+    final boundaries = <int>{0, text.length};
+    for (final range in _ranges) {
+      boundaries
+        ..add(range.start.clamp(0, text.length).toInt())
+        ..add(range.end.clamp(0, text.length).toInt());
+    }
+    final sorted = boundaries.toList()..sort();
+    final children = <InlineSpan>[];
+    for (var i = 0; i < sorted.length - 1; i++) {
+      final start = sorted[i];
+      final end = sorted[i + 1];
+      if (end <= start) continue;
+      children.add(TextSpan(
+        text: text.substring(start, end),
+        style: _styleFor(_stylesAt(start), baseStyle, scheme),
+      ));
+    }
+    return TextSpan(style: baseStyle, children: children);
+  }
+
+  @override
+  void dispose() {
+    removeListener(_syncRangesAfterTextEdit);
+    super.dispose();
+  }
+}
 // -----------------------------------------------------------------------------
 
 class NoteScreen extends StatefulWidget {
@@ -12922,7 +13200,7 @@ class _NoteScreenState extends State<NoteScreen> {
     final query = search.text.trim().toLowerCase();
     var items = state.notes.where((note) {
       if (query.isEmpty) return true;
-      return '${note.title} ${note.body}'.toLowerCase().contains(query);
+      return '${note.title} ${_NoteRichTextController.plainTextFromStored(note.body)}'.toLowerCase().contains(query);
     }).toList();
     final recent = items.take(2).toList();
     final more = items.skip(2).toList();
@@ -13040,7 +13318,7 @@ class NoteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.read<AppController>();
-    final body = note.body.trim();
+    final body = _NoteRichTextController.plainTextFromStored(note.body).trim();
     final title = note.title.trim().isEmpty ? 'Untitled note' : note.title.trim();
     final card = ExpressiveCard(
       padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
@@ -13186,7 +13464,7 @@ class NoteEditorScreen extends StatefulWidget {
 
 class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final title = TextEditingController();
-  final body = TextEditingController();
+  late final _NoteRichTextController body;
   final bodyFocus = FocusNode();
   final _undo = <String>[];
   final _redo = <String>[];
@@ -13199,11 +13477,11 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   void initState() {
     super.initState();
     title.text = widget.note?.title ?? '';
-    body.text = widget.note?.body ?? '';
+    body = _NoteRichTextController.fromStored(widget.note?.body ?? '');
     bookmarked = widget.note?.bookmarked ?? false;
     draft = widget.note?.draft ?? false;
     noteDate = widget.note?.createdOn ?? DateTime.now();
-    _undo.add(body.text);
+    _undo.add(body.toStoredBody());
     body.addListener(_recordBodyHistory);
   }
 
@@ -13217,8 +13495,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   }
 
   void _recordBodyHistory() {
-    if (_undo.isEmpty || _undo.last != body.text) {
-      _undo.add(body.text);
+    final snapshot = body.toStoredBody();
+    if (_undo.isEmpty || _undo.last != snapshot) {
+      _undo.add(snapshot);
       _redo.clear();
       if (_undo.length > 60) _undo.removeAt(0);
     }
@@ -13226,8 +13505,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
 
   void _replaceBodyText(String value) {
     body.removeListener(_recordBodyHistory);
-    body.text = value;
-    body.selection = TextSelection.collapsed(offset: value.length);
+    body.restoreStored(value);
     body.addListener(_recordBodyHistory);
     setState(() {});
   }
@@ -13245,16 +13523,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     _replaceBodyText(value);
   }
 
-  void _wrapSelection(String before, String after) {
+  void _toggleInlineStyle(_NoteInlineStyle style) {
+    body.toggleStyle(style);
+    bodyFocus.requestFocus();
+    _recordBodyHistory();
+    setState(() {});
+  }
+
+  void _insertAtSelection(String value) {
     final selection = body.selection;
-    final text = body.text;
-    final start = selection.start < 0 ? text.length : selection.start;
-    final end = selection.end < 0 ? text.length : selection.end;
-    final selected = text.substring(start, end);
-    final replacement = '$before$selected$after';
+    final start = selection.start < 0 ? body.text.length : math.min(selection.start, selection.end);
+    final end = selection.end < 0 ? body.text.length : math.max(selection.start, selection.end);
     body.value = TextEditingValue(
-      text: text.replaceRange(start, end, replacement),
-      selection: TextSelection.collapsed(offset: start + replacement.length - after.length),
+      text: body.text.replaceRange(start, end, value),
+      selection: TextSelection.collapsed(offset: start + value.length),
     );
     bodyFocus.requestFocus();
     setState(() {});
@@ -13309,7 +13591,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
         ),
       ),
     );
-    if (selected != null) _wrapSelection('', selected);
+    if (selected != null) _insertAtSelection(selected);
   }
 
   void _toggleBookmark() {
@@ -13320,8 +13602,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   Future<void> _save() async {
     final state = context.read<AppController>();
     final noteTitle = title.text.trim();
-    final noteBody = body.text.trim();
-    if (noteTitle.isEmpty && noteBody.isEmpty) {
+    final noteBodyText = body.text.trim();
+    final noteBody = body.toStoredBody();
+    if (noteTitle.isEmpty && noteBodyText.isEmpty) {
       return showSnack(context, 'Write a title or note.');
     }
     final now = DateTime.now();
@@ -13506,15 +13789,15 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             ),
             if (toolsOpen)
               _NoteFormatBar(
-                onBold: () => _wrapSelection('**', '**'),
-                onItalic: () => _wrapSelection('_', '_'),
-                onUnderline: () => _wrapSelection('<u>', '</u>'),
-                onStrike: () => _wrapSelection('~~', '~~'),
-                onHighlight: () => _wrapSelection('==', '=='),
-                onLink: () => _wrapSelection('[', '](https://)'),
-                onQuote: () => _prefixLine('> '),
-                onBullet: () => _prefixLine('- '),
-                onCode: () => _wrapSelection('`', '`'),
+                onBold: () => _toggleInlineStyle(_NoteInlineStyle.bold),
+                onItalic: () => _toggleInlineStyle(_NoteInlineStyle.italic),
+                onUnderline: () => _toggleInlineStyle(_NoteInlineStyle.underline),
+                onStrike: () => _toggleInlineStyle(_NoteInlineStyle.strike),
+                onHighlight: () => _toggleInlineStyle(_NoteInlineStyle.highlight),
+                onLink: () => _toggleInlineStyle(_NoteInlineStyle.link),
+                onQuote: () => _prefixLine('❝ '),
+                onBullet: () => _prefixLine('• '),
+                onCode: () => _toggleInlineStyle(_NoteInlineStyle.code),
                 onUndo: _undoBody,
                 onRedo: _redoBody,
               ),

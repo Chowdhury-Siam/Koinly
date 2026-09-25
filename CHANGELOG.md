@@ -1,3 +1,10 @@
+## [1.0.1190] - 2026-09-25
+
+- Fixed Note editor formatting so bold, italic, underline, strikethrough, highlight, link-style, and inline code render directly instead of inserting visible Markdown/HTML markers.
+- Added persistent rich-text range storage for notes while keeping note search and previews plain-text friendly.
+- Updated quote and bullet actions to use visible typographic markers rather than raw Markdown prefixes.
+- Synchronized application and bundled Worker version metadata to `1.0.1190+234`.
+
 ## [1.0.1189] - 2026-09-25
 
 - Fixed the Note editor phone layout with compact button, text, and chip sizing so the date/time row no longer clips.
