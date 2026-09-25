@@ -1,3 +1,18 @@
+## [1.0.1193] - 2026-09-25
+
+- Fixed Notes not appearing on other devices signed into the same self-hosted sync account: notes now participate in incremental upload, remote pull, and realtime update notifications.
+- Creating, editing, bookmarking, changing draft status, and deleting notes now enqueue the corresponding cloud operations.
+- Added atomic one-time migration for notes saved by old local-only versions. Existing local notes are queued on the next authenticated push without duplicating already-pending or downloaded entries.
+- Kept newer cloud deletions from being overwritten by a stale pre-upgrade note during conflict resolution.
+- Included Notes in Telegram and Google Drive cloud-generated `.koinlybackup` snapshots (redeploy Worker to enable backup inclusion).
+- Added regression contracts for the end-to-end Note sync path and synchronized app/Worker version metadata to `1.0.1193+237`.
+
+## [1.0.1192] - 2026-09-25
+
+- Removed the Underline (U) and Quote actions from the Note editor toolbar.
+- Existing underlined notes and previously inserted quote characters remain readable and unchanged.
+- Synchronized application and bundled Worker version metadata to `1.0.1192+236`.
+
 ## [1.0.1191] - 2026-09-25
 
 - Fixed Note editor toolbar formatting losing or collapsing the selected text on Android; bold, italic and other styles can now be combined on the same selection.

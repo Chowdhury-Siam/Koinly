@@ -33,7 +33,7 @@ void main() {
     expect(planIndex, greaterThan(subscriptionIndex));
   });
 
-  test('notes are local, editable, and included in backup merge', () {
+  test('notes sync across devices, remain editable, and are included in backup merge', () {
     final app = File('lib/main.dart').readAsStringSync();
     final models = File('lib/models.dart').readAsStringSync();
     final merge = File('lib/data_merge.dart').readAsStringSync();
@@ -67,7 +67,8 @@ void main() {
     expect(app, contains("await database.deleteNote(id);"));
     expect(app, contains("'notes', 'planned_purchases'"));
     expect(merge, contains("'notes',"));
-    expect(app, isNot(contains("await database.enqueueTableRow('notes'")));
+    expect(app, contains("await database.enqueueTableRow('notes', note.id);"));
+    expect(app, contains("await database.enqueueDelete('notes', id);"));
   });
 
   test('subscriptions persist, select account/category, and can record manually', () {

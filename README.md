@@ -654,7 +654,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1191
+  --dart-define=KOINLY_APP_VERSION=1.0.1193
 ```
 
 ## 10.4 Windows build
@@ -664,7 +664,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1191
+  --dart-define=KOINLY_APP_VERSION=1.0.1193
 ```
 
 ## 10.5 Linux build
@@ -681,7 +681,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1191
+  --dart-define=KOINLY_APP_VERSION=1.0.1193
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -700,7 +700,7 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1191
+  --dart-define=KOINLY_APP_VERSION=1.0.1193
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.
@@ -838,7 +838,11 @@ Confirm that `TURSO_DATABASE_URL` is your Turso `libsql://...turso.io` URL, not 
 
 A fresh Worker allows its first sync account to be created directly from **Settings > Account & sync > Create account**. After that first account exists, create any additional accounts from the Worker's `/profile` website with **+ Create account**. To use an existing account on another device, choose **Login** in Koinly with that account's username and password.
 
-## 12.7 Telegram backup is empty or fails
+## 12.7 Notes do not appear on another device
+
+Install Koinly 1.0.1193 or later on **both** devices and sign in to the **same Worker URL and username**. Open the app on the device containing your existing notes and use **Account & sync > Upload local changes**. Existing notes created by the older local-only editor are queued automatically on that first authenticated upload. Then open Koinly on the other device and run sync (or leave automatic sync enabled). Edits, formatting, bookmarks, draft state, and deletes will synchronize afterward. Keep the source device's notes until you can see them on the second device. Redeploy the bundled Worker to include notes in automatically generated Telegram and Google Drive backup files; ordinary note sync uses the existing Worker sync endpoint without a schema migration.
+
+## 12.8 Telegram backup is empty or fails
 
 1. Make sure the latest Worker is deployed.
 2. In Koinly, use **Upload local changes** once.
@@ -846,7 +850,7 @@ A fresh Worker allows its first sync account to be created directly from **Setti
 
 The Worker rejects an empty finance backup instead of intentionally sending an empty file.
 
-## 12.8 Android automatic folder backup fails
+## 12.9 Android automatic folder backup fails
 
 Open **Archive > Local**, choose the destination again with Android's system folder picker, then save the settings. This renews the persistent folder permission and re-registers the native background job.
 

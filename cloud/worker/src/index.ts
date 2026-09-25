@@ -523,6 +523,7 @@ type GoogleDriveBackupSettings = {
 const telegramBackupEntityTables = [
   'accounts',
   'categories',
+  'notes',
   'planned_purchases',
   'subscriptions',
   'transactions',

@@ -1082,6 +1082,7 @@ class KoinlyDatabase {
   static const syncTables = [
     'accounts',
     'categories',
+    'notes',
     'planned_purchases',
     'subscriptions',
     'transactions',
@@ -1137,6 +1138,48 @@ class KoinlyDatabase {
     }
   }
 
+  /// One-time, account-scoped migration for notes saved by releases that kept
+  /// notes local-only. The marker and queued operations are committed together:
+  /// a crash cannot mark old notes as migrated without queuing their upload.
+  /// Already-queued or remotely-versioned notes must not be uploaded twice.
+  Future<void> enqueueLegacyNotesForCloudSync(String accountScope) async {
+    if (accountScope.isEmpty) return;
+    final marker = 'notesSyncBackfillV1:$accountScope';
+    final database = await db;
+    await database.transaction((txn) async {
+      final migrated = await txn.query('sync_state',
+          columns: ['value'], where: 'key = ?', whereArgs: [marker], limit: 1);
+      if (migrated.isNotEmpty) return;
+
+      final legacyNotes = await txn.rawQuery('''
+        SELECT n.* FROM notes AS n
+        WHERE NOT EXISTS (
+          SELECT 1 FROM sync_outbox AS o
+          WHERE o.entity_type = 'notes' AND o.entity_id = n.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM sync_entity_versions AS v
+          WHERE v.entity_type = 'notes' AND v.entity_id = n.id
+        )
+      ''');
+      final now = DateTime.now().millisecondsSinceEpoch;
+      for (var index = 0; index < legacyNotes.length; index++) {
+        final note = legacyNotes[index];
+        await txn.insert('sync_outbox', {
+          'id': _uuid.v4(),
+          'entity_type': 'notes',
+          'entity_id': note['id'],
+          'operation': 'upsert',
+          'payload_json': jsonEncode(note),
+          'base_version': 0,
+          'created_at': now + index,
+        });
+      }
+      await txn.insert('sync_state', {'key': marker, 'value': '1'},
+          conflictAlgorithm: sql.ConflictAlgorithm.replace);
+    });
+  }
+
   Future<void> enqueueDelete(String table, String entityId) async {
     await enqueueSyncOperation(entityType: table, entityId: entityId, operation: 'delete', payload: null);
   }
@@ -1158,6 +1201,9 @@ class KoinlyDatabase {
       await txn.delete('sync_outbox');
       await txn.delete('sync_entity_versions');
       await txn.delete('sync_conflicts');
+      // Signing out while keeping local data discards the pending outbox.
+      // Permit legacy notes to be adopted again on the next account login.
+      await txn.delete('sync_state', where: 'key LIKE ?', whereArgs: ['notesSyncBackfillV1:%']);
     });
   }
 
@@ -1169,6 +1215,33 @@ class KoinlyDatabase {
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final id = _uuid.v4();
+    if (entityType == 'notes') {
+      // Keep only the final pending mutation for a note. Otherwise a quick
+      // create/edit/delete before a push sends multiple writes with the same
+      // base version, and the later delete can conflict with its own create.
+      final database = await db;
+      await database.transaction((txn) async {
+        final versions = await txn.query('sync_entity_versions',
+            columns: ['version'],
+            where: 'entity_type = ? AND entity_id = ?',
+            whereArgs: [entityType, entityId],
+            limit: 1);
+        final baseVersion = versions.isEmpty ? 0 : (versions.first['version'] as num? ?? 0).toInt();
+        await txn.delete('sync_outbox',
+            where: 'entity_type = ? AND entity_id = ?',
+            whereArgs: [entityType, entityId]);
+        await txn.insert('sync_outbox', {
+          'id': id,
+          'entity_type': entityType,
+          'entity_id': entityId,
+          'operation': operation,
+          'payload_json': payload == null ? null : jsonEncode(payload),
+          'base_version': baseVersion,
+          'created_at': now,
+        });
+      });
+      return;
+    }
     await (await db).insert('sync_outbox', {
       'id': id,
       'entity_type': entityType,
@@ -4634,6 +4707,9 @@ class AppController extends ChangeNotifier {
       final api = KoinlySyncApi(baseUrl: cloudSyncApiBaseUrl);
       final conflictedLocalOperations = <String, Map<String, dynamic>>{};
       if (pushLocalChanges) {
+        await database.enqueueLegacyNotesForCloudSync(
+          '${cloudSyncApiBaseUrl.trim().toLowerCase()}|${syncAccountUsername.trim().toLowerCase()}',
+        );
         if (!silent) {
           syncStatus = 'Uploading local changes...';
           notifyListeners();
@@ -4712,6 +4788,11 @@ class AppController extends ChangeNotifier {
         remoteChanges.removeRange(0, lastResetIndex + 1);
       }
       final mergedRemoteChanges = _latestRemoteChangePerEntity(remoteChanges);
+      final remotelyDeletedNoteIds = mergedRemoteChanges
+          .where((change) => change['entityType'] == 'notes' && change['operation'] == 'delete')
+          .map((change) => change['entityId']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
       var preservedNewerLocal = false;
       if (mergedRemoteChanges.isNotEmpty) {
@@ -4732,7 +4813,10 @@ class AppController extends ChangeNotifier {
       // change rows in this pull. This prevents a newer local edit from being
       // dropped simply because the conflicting server version was already at
       // the cursor boundary.
-      final rebased = await _reapplyNewerConflictedLocalChanges(conflictedLocalOperations);
+      final rebased = await _reapplyNewerConflictedLocalChanges(
+        conflictedLocalOperations,
+        remotelyDeletedNoteIds: remotelyDeletedNoteIds,
+      );
       final repair = await _repairDuplicateCategories(queueSyncChanges: true);
       final needsMergeCleanupUpload = preservedNewerLocal || rebased || repair.hasChanges;
       await database.writeSyncState('serverCursor', '$cursor');
@@ -4863,14 +4947,30 @@ class AppController extends ChangeNotifier {
     await performMultiDeviceSync(silent: silent, pullFullCloudCopy: true);
   }
 
-  Future<bool> _reapplyNewerConflictedLocalChanges(Map<String, Map<String, dynamic>> conflicts) async {
+  Future<bool> _reapplyNewerConflictedLocalChanges(
+    Map<String, Map<String, dynamic>> conflicts, {
+    Set<String> remotelyDeletedNoteIds = const {},
+  }) async {
     var queued = false;
     for (final candidate in conflicts.values) {
       final entityType = candidate['entityType']?.toString() ?? '';
       final entityId = candidate['entityId']?.toString() ?? '';
       final operation = candidate['operation']?.toString() ?? '';
       final serverVersion = (candidate['serverVersion'] as num? ?? 0).toInt();
-      if (entityType.isEmpty || entityId.isEmpty || operation != 'upsert') continue;
+      if (entityType.isEmpty || entityId.isEmpty) continue;
+
+      if (entityType == 'notes' && operation == 'delete') {
+        // If the server accepted an earlier note edit before this deletion,
+        // retry the explicit local delete against the newly pulled version.
+        // A deletion already present on the server needs no retry.
+        if (remotelyDeletedNoteIds.contains(entityId)) continue;
+        await database.deleteNote(entityId);
+        await database.saveEntityVersion('notes', entityId, serverVersion);
+        await database.enqueueDelete('notes', entityId);
+        queued = true;
+        continue;
+      }
+      if (operation != 'upsert') continue;
 
       final rawPayload = candidate['payload'];
       if (rawPayload is! Map) continue;
@@ -4886,6 +4986,9 @@ class AppController extends ChangeNotifier {
         continue;
       }
       if (!KoinlyDatabase.syncTables.contains(entityType)) continue;
+      // A stale legacy copy must not resurrect a note that another device
+      // explicitly deleted while this device was offline.
+      if (entityType == 'notes' && serverVersion > 0 && remotelyDeletedNoteIds.contains(entityId)) continue;
 
       final currentRow = await database.syncEntityRow(entityType, entityId);
       final localTimestamp = _mergeRowTimestamp(payload);
@@ -6171,7 +6274,8 @@ class AppController extends ChangeNotifier {
 
   Future<void> saveNote(KoinlyNote note) async {
     await database.upsertNote(note);
-    await reload();
+    await database.enqueueTableRow('notes', note.id);
+    await reload(queueSync: true);
   }
 
   Future<void> toggleNoteBookmark(KoinlyNote note) async {
@@ -6183,8 +6287,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> deleteNote(String id) async {
+    await database.enqueueDelete('notes', id);
     await database.deleteNote(id);
-    await reload();
+    await reload(queueSync: true);
   }
 
   Future<void> saveSubscription(RecurringSubscription item) async {
@@ -13874,11 +13979,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                     },
                     onBold: () => _toggleInlineStyle(NoteInlineStyle.bold),
                     onItalic: () => _toggleInlineStyle(NoteInlineStyle.italic),
-                    onUnderline: () => _toggleInlineStyle(NoteInlineStyle.underline),
                     onStrike: () => _toggleInlineStyle(NoteInlineStyle.strike),
                     onHighlight: () => _toggleInlineStyle(NoteInlineStyle.highlight),
                     onLink: () => _toggleInlineStyle(NoteInlineStyle.link),
-                    onQuote: () => _prefixLine('❝ '),
                     onBullet: () => _prefixLine('• '),
                     onCode: () => _toggleInlineStyle(NoteInlineStyle.code),
                     onUndo: _undoBody,
@@ -14010,11 +14113,9 @@ class _NoteFormatBar extends StatelessWidget {
     required this.activeStyles,
     required this.onBold,
     required this.onItalic,
-    required this.onUnderline,
     required this.onStrike,
     required this.onHighlight,
     required this.onLink,
-    required this.onQuote,
     required this.onBullet,
     required this.onCode,
     required this.onUndo,
@@ -14024,11 +14125,9 @@ class _NoteFormatBar extends StatelessWidget {
   final Set<NoteInlineStyle> activeStyles;
   final VoidCallback onBold;
   final VoidCallback onItalic;
-  final VoidCallback onUnderline;
   final VoidCallback onStrike;
   final VoidCallback onHighlight;
   final VoidCallback onLink;
-  final VoidCallback onQuote;
   final VoidCallback onBullet;
   final VoidCallback onCode;
   final VoidCallback onUndo;
@@ -14049,12 +14148,10 @@ class _NoteFormatBar extends StatelessWidget {
         children: [
           _NoteFormatButton(label: 'B', selected: activeStyles.contains(NoteInlineStyle.bold), onPressed: onBold, style: const TextStyle(fontWeight: FontWeight.w900)),
           _NoteFormatButton(label: 'I', selected: activeStyles.contains(NoteInlineStyle.italic), onPressed: onItalic, style: const TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.w800)),
-          _NoteFormatButton(label: 'U', selected: activeStyles.contains(NoteInlineStyle.underline), onPressed: onUnderline, style: const TextStyle(decoration: TextDecoration.underline, fontWeight: FontWeight.w900)),
           _NoteFormatButton(label: 'S', selected: activeStyles.contains(NoteInlineStyle.strike), onPressed: onStrike, style: const TextStyle(decoration: TextDecoration.lineThrough, fontWeight: FontWeight.w900)),
           _NoteIconFormatButton(icon: Icons.border_color_rounded, selected: activeStyles.contains(NoteInlineStyle.highlight), onPressed: onHighlight, tooltip: 'Highlight'),
           _NoteIconFormatButton(icon: Icons.link_rounded, selected: activeStyles.contains(NoteInlineStyle.link), onPressed: onLink, tooltip: 'Link'),
           _NoteDivider(),
-          _NoteIconFormatButton(icon: Icons.format_quote_rounded, onPressed: onQuote, tooltip: 'Quote'),
           _NoteIconFormatButton(icon: Icons.format_list_bulleted_rounded, onPressed: onBullet, tooltip: 'Bullet list'),
           _NoteIconFormatButton(icon: Icons.code_rounded, selected: activeStyles.contains(NoteInlineStyle.code), onPressed: onCode, tooltip: 'Inline code'),
           _NoteDivider(),
