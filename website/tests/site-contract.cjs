@@ -1,0 +1,27 @@
+'use strict';
+const {readFileSync,existsSync} = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname,'..');
+const read = p=>readFileSync(path.join(root,p),'utf8');
+const html = read('index.html');
+const css = read('styles.css');
+const js = read('app.js');
+const cfg = read('site-config.js');
+const workflow = read('../.github/workflows/deploy-website.yml');
+for (const id of ['top','features','experience','demo','platforms','questions','download','demo-app','demo-content','site-nav'])assert.ok(html.includes(`id="${id}"`),`missing ${id}`);
+for (const file of ['index.html','privacy.html','support.html','styles.css','app.js','site-config.js','assets/koinly-mark.png','assets/koinly-banner.png'])assert.ok(existsSync(path.join(root,file)),`missing ${file}`);
+for (const page of ['index.html','privacy.html','support.html']) {const source=read(page);for (const attr of [...source.matchAll(/(?:href|src)="([^\"]+)"/g)].map(x=>x[1])) {if(!attr||/^(?:#|https?:|mailto:)/.test(attr))continue;const local=attr.split('#')[0];assert.ok(existsSync(path.join(root,local)),`${page}: missing relative asset/link ${attr}`);}}
+assert.match(html,/fictional|sample/i);
+assert.match(html,/GOOGLE PLAY|Google Play/);
+assert.match(cfg,/googlePlayUrl: ''/);
+assert.match(cfg,/microsoftStoreUrl: ''/);
+assert.match(js,/sessionStorage/);
+assert.doesNotMatch(js,/\b(fetch|XMLHttpRequest|WebSocket|sendBeacon)\s*\(/);
+assert.match(read('privacy.html'),/Not ready for store submission/);
+assert.match(read('privacy.html'),/noindex/);
+assert.match(workflow,/path: website/);
+assert.match(workflow,/github\.event\.repository\.fork == false/);
+assert.match(css,/@media\(max-width:640px\)/);
+assert.match(css, /prefers-reduced-motion/);
+console.log('PASS: website pages, local assets, section navigation, disabled unpublished stores, isolated demo, responsive CSS, draft policy and Pages deployment.');

@@ -16,6 +16,12 @@
   Use it completely offline, or connect your own Cloudflare Worker for optional multi-device sync.
 </p>
 
+## Public website and browser demo
+
+The new [`website/`](website/) directory contains Koinly's public landing page and an interactive **fictional-data browser demo**. Visitors can try transactions, budgets, analytics, plans, subscriptions and notes without installing the app or connecting a Worker. The demo is an illustration rather than a Flutter web build and does not use real account data.
+
+Preview locally with `python3 -m http.server 8000 --directory website`, then open `http://localhost:8000`. See [the website deployment guide](website/README.md) to publish through GitHub Pages or Cloudflare Pages. Store URLs are intentionally marked *Coming soon* until the actual listings are available. The included privacy policy is a draft and needs publisher verification before launch.
+
 ## Quick navigation
 
 | Start here | Self-hosted sync | App & backups | Developers |
@@ -654,7 +660,7 @@ A Worker is not required for local/offline use.
 ```bash
 flutter build apk --release \
   --no-tree-shake-icons \
-  --dart-define=KOINLY_APP_VERSION=1.0.1193
+  --dart-define=KOINLY_APP_VERSION=1.0.1194
 ```
 
 ## 10.4 Windows build
@@ -664,7 +670,7 @@ flutter config --enable-windows-desktop
 flutter create --platforms=windows --project-name koinly --no-pub .
 flutter pub get
 flutter build windows --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1193
+  --dart-define=KOINLY_APP_VERSION=1.0.1194
 ```
 
 ## 10.5 Linux build
@@ -681,7 +687,7 @@ flutter config --enable-linux-desktop
 flutter create --platforms=linux --project-name koinly --no-pub .
 flutter pub get
 flutter build linux --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1193
+  --dart-define=KOINLY_APP_VERSION=1.0.1194
 ```
 
 The release workflow builds both **x64** and **ARM64** Linux packages on Ubuntu 22.04. The x64 runner uses the pinned Flutter SDK release directly; the ARM64 runner bootstraps the same pinned Flutter tag from source so it does not depend on missing prebuilt ARM64 SDK archive entries. Each architecture gets:
@@ -700,7 +706,7 @@ flutter config --enable-macos-desktop
 flutter create --platforms=macos --project-name koinly --org com.koinly --no-pub .
 flutter pub get
 flutter build macos --release \
-  --dart-define=KOINLY_APP_VERSION=1.0.1193
+  --dart-define=KOINLY_APP_VERSION=1.0.1194
 ```
 
 The release workflow builds one **universal macOS package** containing both **Apple Silicon (ARM64)** and **Intel (x64)** slices. GitHub Releases publish `Koinly-v<version>-macos-universal.dmg` and a matching `.zip` containing `Koinly.app`. CI runs on GitHub's Apple Silicon `macos-15` runner for faster Xcode/Flutter compilation, bootstraps the pinned Flutter `3.47.4` source tag into a reusable SDK cache, keeps Flutter's universal macOS mode enabled, verifies both architecture slices with `lipo`, and reuses CocoaPods plus incremental macOS build caches between releases. It also applies Koinly's icon and `com.koinly.siam` bundle identifier and enables network access plus user-selected file read/write access for sync, import, and backup workflows.

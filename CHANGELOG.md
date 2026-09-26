@@ -1,3 +1,11 @@
+## [1.0.1194] - 2026-09-26
+
+- Added an independent static public website in `website/`, using the existing Koinly branding, responsive landing sections, feature directory, platform overview, support page and release-aware store buttons.
+- Added a self-contained, fictional-data browser demo for transactions, budgets, analytics, plans, subscriptions and formatted notes. Demo changes are tab-local and never contact the self-hosted Worker or real Koinly accounts.
+- Added a GitHub Pages deployment workflow that uploads only public website assets; documented Cloudflare Pages as an alternative.
+- Added a non-indexed privacy-policy **draft** and a pre-launch checklist. Store links remain "Coming soon" until actual listings are supplied.
+- Synchronized version metadata to `1.0.1194+238` without changing native Flutter app behavior or Worker endpoints.
+
 ## [1.0.1193] - 2026-09-25
 
 - Fixed Notes not appearing on other devices signed into the same self-hosted sync account: notes now participate in incremental upload, remote pull, and realtime update notifications.
